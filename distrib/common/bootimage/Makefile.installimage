@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.installimage,v 1.4 2012/11/03 14:25:32 tsutsui Exp $
+#	$NetBSD: Makefile.installimage,v 1.8 2020/05/28 19:20:57 jmcneill Exp $
 #
 # Common Makefile to create a bootable installation image for USB flash etc.
 #
@@ -30,12 +30,13 @@ check_INSTIMGBASE: .PHONY .NOTMAIN
 IMAGEMB=	${INSTIMAGEMB}
 .endif
 SWAPMB=		0			# no swap
-OMIT_SWAPIMG=	yes			# nothing to write
 
 KERN_SET?=	kern-GENERIC
 SETS?=		modules base etc
 
 FSTAB_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/fstab.install.in
+
+USE_MBR?=	no
 
 .if ${USE_MBR} != "no"
 DISKPROTO_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/diskproto.noswap.mbr.in
@@ -48,6 +49,9 @@ IMGDIR_EXTRA=	${RELEASEDIR}/${RELEASEMACHINEDIR}	${RELEASEMACHINEDIR}
 IMGDIR_EXCLUDE= 	-s ',./installation/cdrom.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/installimage.*,,gp'
+.if defined(MD_IMGDIR_EXCLUDE)
+IMGDIR_EXCLUDE+=	${MD_IMGDIR_EXCLUDE}
+.endif
 
 IMGBASE=        ${INSTIMGBASE}
 
@@ -62,7 +66,7 @@ INSTIMG_RELEASEDIR?=	${RELEASEMACHINEDIR}/installation/installimage
 MKDIR?=		mkdir -p
 
 install_image: check_INSTIMGBASE check_RELEASEDIR ${IMGBASE}.img.gz
-	${MKDIR} ${INSTIMG_RELEASEDIR}
+	${MKDIR} ${MKDIRPERM} ${INSTIMG_RELEASEDIR}
 	${RELEASE_INSTALL} ${IMGBASE}.img.gz ${INSTIMG_RELEASEDIR}
 	# note ${MAKESUM} will be calculated in src/etc/Makefile
 

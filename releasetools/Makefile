@@ -87,9 +87,6 @@ do-hdboot:
 	@${INSTALL_FILE} ${KERNEL} ${DESTDIR}/boot/minix/.temp/
 	@if [ "${MKINSTALLBOOT:Uno}" != "no" ] ; then		\
 	${STRIP} -s ${DESTDIR}/boot/minix/.temp/* ;		\
-	gzip ${DESTDIR}/boot/minix/.temp/mod* ;			\
-	${HOST_SH} mkboot hdboot ${DESTDIR};			\
-	${HOST_SH} ../minix/commands/update_bootcfg/update_bootcfg.sh;\
 	fi
 
 hdboot: services .WAIT do-hdboot
