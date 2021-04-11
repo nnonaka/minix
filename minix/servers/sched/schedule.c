@@ -29,6 +29,11 @@ static int schedule_process(struct schedproc * rmp, unsigned flags);
 		SCHEDULE_CHANGE_CPU		\
 		)
 
+#define schedule_process_local(p)	\
+	schedule_process(p, SCHEDULE_CHANGE_PRIO | SCHEDULE_CHANGE_QUANTUM)
+#define schedule_process_migrate(p)	\
+	schedule_process(p, SCHEDULE_CHANGE_CPU)
+
 #define CPU_DEAD	-1
 
 #define cpu_is_available(c)	(cpu_proc[c] >= 0)
@@ -40,41 +45,38 @@ static int schedule_process(struct schedproc * rmp, unsigned flags);
 
 static unsigned cpu_proc[CONFIG_MAX_CPUS];
 
-static void allow_all_cpus(struct schedproc *proc)
-{
-	int i;
-	for(i=0;i<BITMAP_CHUNKS(CONFIG_MAX_CPUS);++i) {
-		bit_fill(proc->cpu_mask[i]);
-	}
-}
-
-static int next_cpu = 0;
-static int pick_cpu(struct schedproc * proc)
+static void pick_cpu(struct schedproc * proc)
 {
 #ifdef CONFIG_SMP
 	unsigned cpu, c;
 	unsigned cpu_load = (unsigned) -1;
 	
-	if (machine.processors_count == 1)
-		return machine.bsp_id;
+	if (machine.processors_count == 1) {
+		proc->cpu = machine.bsp_id;
+		return;
+	}
+
+	/* schedule sysytem processes only on the boot cpu */
+	if (is_system_proc(proc)) {
+		proc->cpu = machine.bsp_id;
+		return;
+	}
 
 	/* if no other cpu available, try BSP */
 	cpu = machine.bsp_id;
-	cpu_load = cpu_proc[machine.bsp_id];
 	for (c = 0; c < machine.processors_count; c++) {
 		/* skip dead cpus */
 		if (!cpu_is_available(c))
-			continue;
-		if(!GET_BIT(proc->cpu_mask,c))
 			continue;
 		if (c != machine.bsp_id && cpu_load > cpu_proc[c]) {
 			cpu_load = cpu_proc[c];
 			cpu = c;
 		}
 	}
-	return cpu;
+	proc->cpu = cpu;
+	cpu_proc[cpu]++;
 #else
-	return 0;
+	proc->cpu = 0;
 #endif
 }
 
@@ -98,8 +100,7 @@ int do_noquantum(message *m_ptr)
 		rmp->priority += 1; /* lower priority */
 	}
 
-	rv = schedule_process(rmp,SCHEDULE_CHANGE_PRIO|SCHEDULE_CHANGE_QUANTUM);
-	if (rv != OK) {
+	if ((rv = schedule_process_local(rmp)) != OK) {
 		return rv;
 	}
 	return OK;
@@ -125,8 +126,10 @@ int do_stop_scheduling(message *m_ptr)
 	}
 
 	rmp = &schedproc[proc_nr_n];
-	rmp->flags = 0; /*&= ~IN_USE;*/
+#ifdef CONFIG_SMP
 	cpu_proc[rmp->cpu]--;
+#endif
+	rmp->flags = 0; /*&= ~IN_USE;*/
 
 	return OK;
 }
@@ -138,7 +141,6 @@ int do_start_scheduling(message *m_ptr)
 {
 	register struct schedproc *rmp;
 	int rv, proc_nr_n, parent_nr_n;
-	int cpu_chosen;
 	
 	/* we can handle two kinds of messages here */
 	assert(m_ptr->m_type == SCHEDULING_START || 
@@ -163,9 +165,6 @@ int do_start_scheduling(message *m_ptr)
 		return EINVAL;
 	}
 
-	allow_all_cpus(rmp);
-
-	cpu_chosen = 0;
 	/* Inherit current priority and time slice from parent. Since there
 	 * is currently only one scheduler scheduling the whole system, this
 	 * value is local and we assert that the parent endpoint is valid */
@@ -184,7 +183,6 @@ int do_start_scheduling(message *m_ptr)
 #ifdef CONFIG_SMP
 		rmp->cpu = machine.bsp_id;
 		/* FIXME set the cpu mask */
-		cpu_chosen = 1;
 #endif
 	}
 	
@@ -225,11 +223,12 @@ int do_start_scheduling(message *m_ptr)
 	rmp->flags = IN_USE;
 
 	/* Schedule the process, giving it some quantum */
-	if(!cpu_chosen)
-		rmp->cpu = pick_cpu(rmp);
-	cpu_proc[rmp->cpu]++;
-	if((rv = schedule_process(rmp, SCHEDULE_CHANGE_ALL)) == EBADCPU)
-		panic("EBADCPU\n");
+	pick_cpu(rmp);
+	while ((rv = schedule_process(rmp, SCHEDULE_CHANGE_ALL)) == EBADCPU) {
+		/* don't try this CPU ever again */
+		cpu_proc[rmp->cpu] = CPU_DEAD;
+		pick_cpu(rmp);
+	}
 
 	if (rv != OK) {
 		printf("Sched: Error while scheduling process, kernel replied %d\n",
@@ -282,8 +281,7 @@ int do_nice(message *m_ptr)
 	/* Update the proc entry and reschedule the process */
 	rmp->max_priority = rmp->priority = new_q;
 
-	rv = schedule_process(rmp,SCHEDULE_CHANGE_PRIO|SCHEDULE_CHANGE_QUANTUM);
-	if (rv != OK) {
+	if ((rv = schedule_process_local(rmp)) != OK) {
 		/* Something went wrong when rescheduling the process, roll
 		 * back the changes to proc struct */
 		rmp->priority     = old_q;
@@ -300,6 +298,8 @@ static int schedule_process(struct schedproc * rmp, unsigned flags)
 {
 	int err;
 	int new_prio, new_quantum, new_cpu, niced;
+
+	pick_cpu(rmp);
 
 	if (flags & SCHEDULE_CHANGE_PRIO)
 		new_prio = rmp->priority;
@@ -359,11 +359,7 @@ void balance_queues(void)
 		if (rmp->flags & IN_USE) {
 			if (rmp->priority > rmp->max_priority) {
 				rmp->priority -= 1; /* increase priority */
-				/* Balance the load, select new cpu. */
-				cpu_proc[rmp->cpu]--;
-				rmp->cpu = pick_cpu(rmp);
-				cpu_proc[rmp->cpu]++;
-				schedule_process(rmp,SCHEDULE_CHANGE_ALL);
+				schedule_process_local(rmp);
 			}
 		}
 	}
