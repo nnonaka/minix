@@ -1,4 +1,4 @@
-/*	$NetBSD: msdosfs_conv.c,v 1.17 2016/06/30 09:34:01 nonaka Exp $	*/
+/*	$NetBSD: msdosfs_conv.c,v 1.10 2014/09/01 09:09:47 martin Exp $	*/
 
 /*-
  * Copyright (C) 1995, 1997 Wolfgang Solfrank.
@@ -45,27 +45,20 @@
  * any damages caused by this software.
  *
  * October 1992
- *
  */
 
 #if HAVE_NBTOOL_CONFIG_H
 #include "nbtool_config.h"
 #endif
 
-#ifndef _KERNEL
-#include <assert.h>
-#define KASSERT(x)     assert(x)
-#endif
-
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: msdosfs_conv.c,v 1.17 2016/06/30 09:34:01 nonaka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: msdosfs_conv.c,v 1.10 2014/09/01 09:09:47 martin Exp $");
 
 /*
  * System include files.
  */
 #include <sys/param.h>
 #include <sys/time.h>
-#include <sys/endian.h>
 #ifdef _KERNEL
 #include <sys/dirent.h>
 #include <sys/systm.h>
@@ -84,22 +77,6 @@ __KERNEL_RCSID(0, "$NetBSD: msdosfs_conv.c,v 1.17 2016/06/30 09:34:01 nonaka Exp
  */
 #include <fs/msdosfs/direntry.h>
 #include <fs/msdosfs/denode.h>
-
-static int invalidname(const u_int16_t *, int);
-
-static int ucs2utf8(const u_int16_t *, u_int8_t *, int);
-static int utf8ucs2(const u_int8_t *, int, u_int16_t *);
-
-static int ucs2utf8str(const u_int16_t *, int, u_int8_t *, int);
-static int utf8ucs2str(const u_int8_t *, int, u_int16_t *, int);
-static int ucs2char8str(const u_int16_t *, int, u_int8_t *, int);
-static int char8ucs2str(const u_int8_t *, int, u_int16_t *, int);
-
-static void ucs2pad(u_int16_t *, int, int);
-
-static u_int16_t ucs2fold(u_int16_t);
-static int ucs2match(u_int16_t *, u_int16_t *, int n);
-static int char8match(u_int16_t *, u_int16_t *, int n);
 
 /*
  * The number of seconds between Jan 1, 1970 and Jan 1, 1980. In that
@@ -536,34 +513,24 @@ unix2dosfn(const u_char *un, u_char dn[12], int unlen, u_int gen)
  *	 i.e. doesn't consist solely of blanks and dots
  */
 int
-unix2winfn(const u_char *un, int unlen, struct winentry *wep, int cnt, int chksum, int utf8)
+unix2winfn(const u_char *un, int unlen, struct winentry *wep, int cnt, int chksum)
 {
-	u_int16_t wn[WIN_MAXLEN], *p;
-	int i, len;
-	const u_char *cp;
+	const u_int8_t *cp;
+	u_int8_t *wcp;
+	int i;
 
 	/*
 	 * Drop trailing blanks and dots
 	 */
-	for (cp = un + unlen; unlen > 0; unlen--)
-		if (*--cp != ' ' && *cp != '.')
-			break;
+	for (cp = un + unlen; *--cp == ' ' || *cp == '.'; unlen--);
 
-	/*
-	 * Offset of this entry
-	 */
-	i = (cnt - 1) * WIN_CHARS;
-
-	/*
-	 * Translate UNIX name to ucs-2
-	 */
-	len = utf8 ? utf8ucs2str(un, unlen, wn, WIN_MAXLEN) : char8ucs2str(un, unlen, wn, WIN_MAXLEN);
-	ucs2pad(wn, len, WIN_MAXLEN);
+	un += (cnt - 1) * WIN_CHARS;
+	unlen -= (cnt - 1) * WIN_CHARS;
 
 	/*
 	 * Initialize winentry to some useful default
 	 */
-	memset(wep, 0xff, sizeof(*wep));
+	for (wcp = (u_int8_t *)wep, i = sizeof(*wep); --i >= 0; *wcp++ = 0xff);
 	wep->weCnt = cnt;
 	wep->weAttributes = ATTR_WIN95;
 	wep->weReserved1 = 0;
@@ -571,18 +538,33 @@ unix2winfn(const u_char *un, int unlen, struct winentry *wep, int cnt, int chksu
 	wep->weReserved2 = 0;
 
 	/*
-	 * Store name segment into directory entry
+	 * Now convert the filename parts
 	 */
-	p = &wn[i];
-	memcpy(wep->wePart1, p, sizeof(wep->wePart1));
-	p += sizeof(wep->wePart1) / sizeof(*p);
-	memcpy(wep->wePart2, p, sizeof(wep->wePart2));
-	p += sizeof(wep->wePart2) / sizeof(*p);
-	memcpy(wep->wePart3, p, sizeof(wep->wePart3));
-	
-	if (len > i + WIN_CHARS)
-		return 1;
+	for (wcp = wep->wePart1, i = sizeof(wep->wePart1)/2; --i >= 0;) {
+		if (--unlen < 0)
+			goto done;
+		*wcp++ = *un++;
+		*wcp++ = 0;
+	}
+	for (wcp = wep->wePart2, i = sizeof(wep->wePart2)/2; --i >= 0;) {
+		if (--unlen < 0)
+			goto done;
+		*wcp++ = *un++;
+		*wcp++ = 0;
+	}
+	for (wcp = wep->wePart3, i = sizeof(wep->wePart3)/2; --i >= 0;) {
+		if (--unlen < 0)
+			goto done;
+		*wcp++ = *un++;
+		*wcp++ = 0;
+	}
+	if (!unlen)
+		wep->weCnt |= WIN_LAST;
+	return unlen;
 
+done:
+	*wcp++ = 0;
+	*wcp++ = 0;
 	wep->weCnt |= WIN_LAST;
 	return 0;
 }
@@ -592,16 +574,15 @@ unix2winfn(const u_char *un, int unlen, struct winentry *wep, int cnt, int chksu
  * Returns the checksum or -1 if no match
  */
 int
-winChkName(const u_char *un, int unlen, struct winentry *wep, int chksum, int utf8)
+winChkName(const u_char *un, int unlen, struct winentry *wep, int chksum)
 {
-	u_int16_t wn[WIN_MAXLEN], *p;
-	u_int16_t buf[WIN_CHARS];
-	int i, len;
+	u_int8_t *cp;
+	int i;
 
 	/*
 	 * First compare checksums
 	 */
-	if (wep->weCnt & WIN_LAST)
+	if (wep->weCnt&WIN_LAST)
 		chksum = wep->weChksum;
 	else if (chksum != wep->weChksum)
 		chksum = -1;
@@ -611,35 +592,56 @@ winChkName(const u_char *un, int unlen, struct winentry *wep, int chksum, int ut
 	/*
 	 * Offset of this entry
 	 */
-	i = ((wep->weCnt & WIN_CNT) - 1) * WIN_CHARS;
-
-	/*
-	 * Translate UNIX name to ucs-2
-	 */
-	len = utf8 ? utf8ucs2str(un, unlen, wn, WIN_MAXLEN) : char8ucs2str(un, unlen, wn, WIN_MAXLEN);
-	ucs2pad(wn, len, WIN_MAXLEN);
-
-	if (i >= len + 1)
-		return -1;
-	if ((wep->weCnt & WIN_LAST) && (len - i > WIN_CHARS))
+	i = ((wep->weCnt&WIN_CNT) - 1) * WIN_CHARS;
+	un += i;
+	if ((unlen -= i) < 0)
 		return -1;
 
 	/*
-	 * Fetch name segment from directory entry
+	 * Ignore redundant winentries (those with only \0\0 on start in them).
+	 * An appearance of such entry is a bug; unknown if in NetBSD msdosfs
+	 * or MS Windows.
 	 */
-	p = &buf[0];
-	memcpy(p, wep->wePart1, sizeof(wep->wePart1));
-	p += sizeof(wep->wePart1) / sizeof(*p);
-	memcpy(p, wep->wePart2, sizeof(wep->wePart2));
-	p += sizeof(wep->wePart2) / sizeof(*p);
-	memcpy(p, wep->wePart3, sizeof(wep->wePart3));
+	if (unlen == 0) {
+		if (wep->wePart1[0] == '\0' && wep->wePart1[1] == '\0')
+			return chksum;
+		else
+			return -1;
+	}
 
-	/*
-	 * And compare name segment
-	 */
-	if (! (utf8 ? ucs2match(&wn[i], buf, WIN_CHARS) : char8match(&wn[i], buf, WIN_CHARS)))
+	if ((wep->weCnt&WIN_LAST) && unlen > WIN_CHARS)
 		return -1;
 
+	/*
+	 * Compare the name parts
+	 */
+	for (cp = wep->wePart1, i = sizeof(wep->wePart1)/2; --i >= 0;) {
+		if (--unlen < 0) {
+			if (!*cp++ && !*cp)
+				return chksum;
+			return -1;
+		}
+		if (u2l[*cp++] != u2l[*un++] || *cp++)
+			return -1;
+	}
+	for (cp = wep->wePart2, i = sizeof(wep->wePart2)/2; --i >= 0;) {
+		if (--unlen < 0) {
+			if (!*cp++ && !*cp)
+				return chksum;
+			return -1;
+		}
+		if (u2l[*cp++] != u2l[*un++] || *cp++)
+			return -1;
+	}
+	for (cp = wep->wePart3, i = sizeof(wep->wePart3)/2; --i >= 0;) {
+		if (--unlen < 0) {
+			if (!*cp++ && !*cp)
+				return chksum;
+			return -1;
+		}
+		if (u2l[*cp++] != u2l[*un++] || *cp++)
+			return -1;
+	}
 	return chksum;
 }
 
@@ -648,73 +650,110 @@ winChkName(const u_char *un, int unlen, struct winentry *wep, int chksum, int ut
  * Returns the checksum or -1 if impossible
  */
 int
-win2unixfn(struct winentry *wep, struct dirent *dp, int chksum,
-    uint16_t *namlen, int utf8)
+win2unixfn(struct winentry *wep, struct dirent *dp, int chksum)
 {
-	u_int16_t wn[WIN_CHARS], *p;
-	u_int8_t buf[WIN_CHARS*3];
-	int len;
+	u_int8_t *cp;
+	u_int8_t *np, *ep = (u_int8_t *)dp->d_name + WIN_MAXLEN;
+	int i;
 
-	if ((wep->weCnt & WIN_CNT) > howmany(WIN_MAXLEN, WIN_CHARS)
-	    || !(wep->weCnt & WIN_CNT))
+	if ((wep->weCnt&WIN_CNT) > howmany(WIN_MAXLEN, WIN_CHARS)
+	    || !(wep->weCnt&WIN_CNT))
 		return -1;
 
 	/*
 	 * First compare checksums
 	 */
-	if (wep->weCnt & WIN_LAST) {
+	if (wep->weCnt&WIN_LAST) {
 		chksum = wep->weChksum;
-		*namlen = 0;
+		/*
+		 * This works even though d_namlen is one byte!
+		 */
+#ifdef __NetBSD__
+		dp->d_namlen = (wep->weCnt&WIN_CNT) * WIN_CHARS;
+#endif
 	} else if (chksum != wep->weChksum)
 		chksum = -1;
 	if (chksum == -1)
 		return -1;
 
 	/*
-	 * Fetch name segment from directory entry
+	 * Offset of this entry
 	 */
-	p = &wn[0];
-	memcpy(p, wep->wePart1, sizeof(wep->wePart1));
-	p += sizeof(wep->wePart1) / sizeof(*p);
-	memcpy(p, wep->wePart2, sizeof(wep->wePart2));
-	p += sizeof(wep->wePart2) / sizeof(*p);
-	memcpy(p, wep->wePart3, sizeof(wep->wePart3));
+	i = ((wep->weCnt&WIN_CNT) - 1) * WIN_CHARS;
+	np = (u_int8_t *)dp->d_name + i;
 
 	/*
-	 * Don't allow slashes in UNIX names. Discard that entry.
+	 * Convert the name parts
 	 */
-	if (invalidname(wn, WIN_CHARS))
-		return -1;
-
-	/*
-	 * Translate ucs-2 to UNIX name
-	 */
-	len = utf8 ? ucs2utf8str(wn, WIN_CHARS, buf, sizeof(buf))
-	    : ucs2char8str(wn, WIN_CHARS, buf, sizeof(buf));
-
-	KASSERT(len >= 0);
-	KASSERT((size_t)len <= MIN(sizeof(buf), sizeof(dp->d_name)-1));
-
-	/*
-	 * Prepend name segment to directory entry
-	 *
-	 * This ignores the slot number from the windows entry but
-	 * assumes that segments are read in reverse order.
-	 *
-	 * The UCS-2 name (up to 255 chars) can overflow the UNIX
-	 * directory entry (up to 511 bytes). Trailing characters
-	 * are silently discarded. This could also end in multiple
-	 * files using the same (truncated) name.
-	 */
-	*namlen += len;
-	if (*namlen > sizeof(dp->d_name) - 1)
-		*namlen = sizeof(dp->d_name) - 1;
-
-	KASSERT(*namlen >= len);
-
-	memmove(&dp->d_name[len], &dp->d_name[0], *namlen - len);
-	memcpy(dp->d_name, buf, len);
-
+	for (cp = wep->wePart1, i = sizeof(wep->wePart1)/2; --i >= 0;) {
+		switch (*np++ = *cp++) {
+		case 0:
+#ifdef __NetBSD__
+			dp->d_namlen -= sizeof(wep->wePart2)/2
+			    + sizeof(wep->wePart3)/2 + i + 1;
+#endif
+			return chksum;
+		case '/':
+			np[-1] = 0;
+			return -1;
+		}
+		/*
+		 * The size comparison should result in the compiler
+		 * optimizing the whole if away
+		 */
+		if (WIN_MAXLEN % WIN_CHARS < sizeof(wep->wePart1) / 2
+		    && np > ep) {
+			np[-1] = 0;
+			return -1;
+		}
+		if (*cp++)
+			return -1;
+	}
+	for (cp = wep->wePart2, i = sizeof(wep->wePart2)/2; --i >= 0;) {
+		switch (*np++ = *cp++) {
+		case 0:
+#ifdef __NetBSD__
+			dp->d_namlen -= sizeof(wep->wePart3)/2 + i + 1;
+#endif
+			return chksum;
+		case '/':
+			np[-1] = 0;
+			return -1;
+		}
+		/*
+		 * The size comparisons should be optimized away
+		 */
+		if (WIN_MAXLEN % WIN_CHARS >= sizeof(wep->wePart1) / 2
+		    && WIN_MAXLEN % WIN_CHARS < (sizeof(wep->wePart1) + sizeof(wep->wePart2)) / 2
+		    && np > ep) {
+			np[-1] = 0;
+			return -1;
+		}
+		if (*cp++)
+			return -1;
+	}
+	for (cp = wep->wePart3, i = sizeof(wep->wePart3)/2; --i >= 0;) {
+		switch (*np++ = *cp++) {
+		case 0:
+#ifdef __NetBSD__
+			dp->d_namlen -= i + 1;
+#endif
+			return chksum;
+		case '/':
+			np[-1] = 0;
+			return -1;
+		}
+		/*
+		 * See above
+		 */
+		if (WIN_MAXLEN % WIN_CHARS >= (sizeof(wep->wePart1) + sizeof(wep->wePart2)) / 2
+		    && np > ep) {
+			np[-1] = 0;
+			return -1;
+		}
+		if (*cp++)
+			return -1;
+	}
 	return chksum;
 }
 
@@ -728,7 +767,7 @@ winChksum(u_int8_t *name)
 	u_int8_t s;
 
 	for (s = 0, i = 11; --i >= 0; s += *name++)
-		s = (s << 7) | (s >> 1);
+		s = (s << 7)|(s >> 1);
 	return s;
 }
 
@@ -736,304 +775,12 @@ winChksum(u_int8_t *name)
  * Determine the number of slots necessary for Win95 names
  */
 int
-winSlotCnt(const u_char *un, int unlen, int utf8)
+winSlotCnt(const u_char *un, int unlen)
 {
-	const u_char *cp;
-	int len;
-
-	/*
-	 * Drop trailing blanks and dots
-	 */
-	for (cp = un + unlen; unlen > 0; unlen--)
-		if (*--cp != ' ' && *cp != '.')
+	for (un += unlen; unlen > 0; unlen--)
+		if (*--un != ' ' && *un != '.')
 			break;
-
-	len = utf8 ? utf8ucs2str(un, unlen, NULL, WIN_MAXLEN) : unlen;
-
-	return howmany(len, WIN_CHARS);
+	if (unlen > WIN_MAXLEN)
+		return 0;
+	return howmany(unlen, WIN_CHARS);
 }
-
-/*
- * Scan windows name for characters that must not
- * appear in a UNIX filename
- */
-static int
-invalidname(const u_int16_t *in, int n)
-{
-	while (n-- > 0) {
-		if (*in++ == '/')
-			return 1;
-	}
-
-	return 0;
-}
-
-/*
- * Convert UCS-2 character into UTF-8
- * return number of output bytes or 0 if output
- * buffer is too short
- */
-static int
-ucs2utf8(const u_int16_t *in, u_int8_t *out, int n)
-{
-	uint16_t inch = le16toh(in[0]);
-
-	if (inch <= 0x007f) {
-		if (n < 1) return 0;
-		if (out)
-			*out++ = inch;
-		return 1;
-	} else if (inch <= 0x07ff) {
-		if (n < 2) return 0;
-		if (out) {
-			*out++ = 0xc0 | (inch >> 6);
-			*out++ = 0x80 | (inch & 0x3f);
-		}
-		return 2;
-	} else {
-		if (n < 3) return 0;
-		if (out) {
-			*out++ = 0xe0 | (inch >> 12);
-			*out++ = 0x80 | ((inch >> 6) & 0x3f);
-			*out++ = 0x80 | (inch & 0x3f);
-		}
-		return 3;
-	}
-}
-
-
-/*
- * Convert UTF-8 bytes into UCS-2 character
- * return number of input bytes, 0 if input
- * is too short and -1 if input is invalid
- */
-static int
-utf8ucs2(const u_int8_t *in, int n, u_int16_t *out)
-{
-	uint16_t outch;
-
-	if (n < 1) return 0;
-
-	if (in[0] <= 0x7f) {
-		outch = in[0];
-		if (out)
-			*out = htole16(outch);
-		return 1;
-	} else if (in[0] <= 0xdf) {
-		if (n < 2) return 0;
-		outch = (in[0] & 0x1f) << 6 | (in[1] & 0x3f);
-		if (out)
-			*out = htole16(outch);
-		return 2;
-	} else if (in[0] <= 0xef) {
-		if (n < 3) return 0;
-		outch = (in[0] & 0x1f) << 12 | (in[1] & 0x3f) << 6 | (in[2] & 0x3f);
-		if (out)
-			*out = htole16(outch);
-		return 3;
-	}
-
-	return -1;
-}
-
-/*
- * Convert UCS-2 string into UTF-8 string
- * return total number of output bytes
- */
-static int
-ucs2utf8str(const u_int16_t *in, int n, u_int8_t *out, int m)
-{
-	u_int8_t *p;
-	int outlen;
-
-	p = out;
-	while (n > 0 && *in != 0) {
-		outlen = ucs2utf8(in, out ? p : out, m);
-		if (outlen == 0)
-			break;
-		p += outlen;
-		m -= outlen;
-		in += 1;
-		n -= 1;
-	}
-
-	return p - out;
-}
-
-/*
- * Convert UTF8 string into UCS-2 string
- * return total number of output chacters
- */
-static int
-utf8ucs2str(const u_int8_t *in, int n, u_int16_t *out, int m)
-{
-	u_int16_t *p;
-	int inlen;
-
-	p = out;
-	while (n > 0 && *in != 0) {
-		if (m < 1)
-			break;
-		inlen = utf8ucs2(in, n, out ? p : out);
-		if (inlen <= 0)
-			break;
-		in += inlen;
-		n -= inlen;
-		p += 1;
-		m -= 1;
-	}
-
-	return p - out;
-}
-
-/*
- * Convert UCS-2 string into 8bit character string
- * return total number of output bytes
- */
-static int
-ucs2char8str(const u_int16_t *in, int n, u_int8_t *out, int m)
-{
-	u_int8_t *p;
-	u_int16_t inch;
-
-	p = out;
-	while (n > 0 && in[0] != 0) {
-		if (m < 1)
-			break;
-		inch = le16toh(in[0]);
-		if (inch > 255)
-			break;
-		if (p)
-			p[0] = inch;
-		p += 1;
-		m -= 1;
-		in += 1;
-		n -= 1;
-	}
-
-	return p - out;
-}
-
-/*
- * Convert 8bit character string into UCS-2 string
- * return total number of output chacters
- */
-static int
-char8ucs2str(const u_int8_t *in, int n, u_int16_t *out, int m)
-{
-	u_int16_t *p;
-
-	p = out;
-	while (n > 0 && in[0] != 0) {
-		if (m < 1)
-			break;
-		if (p)
-			p[0] = htole16(in[0]);
-		p += 1;
-		m -= 1;
-		in += 1;
-		n -= 1;
-	}
-
-	return p - out;
-}
-
-static void
-ucs2pad(u_int16_t *buf, int len, int size)
-{
-
-	if (len < size-1)
-		buf[len++] = 0x0000;
-	while (len < size)
-		buf[len++] = 0xffff;
-}
-
-/*
- * Fold UCS-2 character to uppercase
- */
-static u_int16_t
-ucs2fold(u_int16_t w)
-{
-	int low,high,mid;
-	u_int16_t check;
-	extern const u_int16_t msdosfs_unicode_foldmap[];
-	extern size_t msdosfs_unicode_foldmap_entries;
-
-	w = le16toh(w);
-
-	low = 0;
-	high = msdosfs_unicode_foldmap_entries / 2;
-	while (low < high) {
-		mid = (low + high)/2;
-		check = msdosfs_unicode_foldmap[2*mid+0];
-
-		if (w == check) {
-			w = msdosfs_unicode_foldmap[2*mid+1];
-			break;
-		}
-
-		if (w < check)
-			high = mid;
-		else
-			low = mid+1;
-	}
-
-	w = le16toh(w);
-
-	return w;
-}
-
-/*
- * Compare two UCS-2 strings case-insensitive
- *
- * uses the Unicode case folding table
- */
-static int
-ucs2match(u_int16_t *w1, u_int16_t *w2, int n)
-{
-	u_int16_t u1, u2;
-
-	while (n > 0) {
-		if (*w1 == 0 || *w2 == 0)
-			return *w1 == *w2;
-		u1 = ucs2fold(*w1);
-		u2 = ucs2fold(*w2);
-		if (u1 != u2)
-			return 0;
-		++w1;
-		++w2;
-		--n;
-	}
-
-	return 1;
-}
-
-/*
- * Compare two 8bit char conversions case-insensitive
- *
- * uses the DOS case folding table
- */
-static int
-char8match(u_int16_t *w1, u_int16_t *w2, int n)
-{
-	u_int16_t u1, u2;
-
-	while (n > 0) {
-		u1 = le16toh(*w1);
-		u2 = le16toh(*w2);
-		if (u1 == 0 || u2 == 0)
-			return u1 == u2;
-		if (u1 > 255 || u2 > 255)
-			return 0;
-		u1 = u2l[u1 & 0xff];
-		u2 = u2l[u2 & 0xff];
-		if (u1 != u2)
-			return 0;
-		++w1;
-		++w2;
-		--n;
-	}
-
-	return 1;
-}
-

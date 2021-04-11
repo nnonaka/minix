@@ -50,7 +50,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: msdosfs_vfsops.c,v 1.11 2018/01/27 02:07:33 sevan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: msdosfs_vfsops.c,v 1.9 2015/03/29 05:52:59 agc Exp $");
 
 #include <sys/param.h>
 
@@ -68,7 +68,6 @@ __KERNEL_RCSID(0, "$NetBSD: msdosfs_vfsops.c,v 1.11 2018/01/27 02:07:33 sevan Ex
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
-#include <strings.h>
 
 #include "makefs.h"
 #include "msdos.h"
@@ -152,12 +151,6 @@ msdosfs_mount(struct vnode *devvp, int flags)
 			goto error_exit;
 		}
 	}
-
-	pmp->pm_flags = flags & MSDOSFSMNT_MNTOPT;
-	if (pmp->pm_flags & MSDOSFSMNT_GEMDOSFS)
-		pmp->pm_flags |= MSDOSFSMNT_NOWIN95;
-	if (pmp->pm_flags & MSDOSFSMNT_NOWIN95)
-		pmp->pm_flags |= MSDOSFSMNT_SHORTNAME;
 
 	if (pmp->pm_Sectors == 0) {
 		pmp->pm_HiddenSects = getulong(b50->bpbHiddenSecs);

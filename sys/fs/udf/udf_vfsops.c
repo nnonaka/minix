@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.80 2020/04/14 12:47:44 reinoud Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.71 2015/08/24 08:31:56 hannken Exp $ */
 
 /*
  * Copyright (c) 2006, 2008 Reinoud Zandijk
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__KERNEL_RCSID(0, "$NetBSD: udf_vfsops.c,v 1.80 2020/04/14 12:47:44 reinoud Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udf_vfsops.c,v 1.71 2015/08/24 08:31:56 hannken Exp $");
 #endif /* not lint */
 
 
@@ -79,6 +79,8 @@ MALLOC_JUSTDEFINE(M_UDFVOLD,  "UDF volspace",	"UDF volume space descriptors");
 MALLOC_JUSTDEFINE(M_UDFTEMP,  "UDF temp",	"UDF scrap space");
 struct pool udf_node_pool;
 
+static struct sysctllog *udf_sysctl_log;
+
 /* internal functions */
 static int udf_mountfs(struct vnode *, struct mount *, struct lwp *, struct udf_args *);
 
@@ -116,7 +118,7 @@ struct vfsops udf_vfsops = {
 	.vfs_mountroot = udf_mountroot,
 	.vfs_snapshot = udf_snapshot,
 	.vfs_extattrctl = vfs_stdextattrctl,
-	.vfs_suspendctl = genfs_suspendctl,
+	.vfs_suspendctl = (void *)eopnotsupp,
 	.vfs_renamelock_enter = genfs_renamelock_enter,
 	.vfs_renamelock_exit = genfs_renamelock_exit,
 	.vfs_fsync = (void *)eopnotsupp,
@@ -167,34 +169,10 @@ udf_done(void)
  */
 #define UDF_VERBOSE_SYSCTLOPT        1
 
-/*
- * XXX the "24" below could be dynamic, thereby eliminating one
- * more instance of the "number to vfs" mapping problem, but
- * "24" is the order as taken from sys/mount.h
- */
-SYSCTL_SETUP(udf_sysctl_setup, "udf sysctl")
-{
-	const struct sysctlnode *node;
-
-	sysctl_createv(clog, 0, NULL, &node,
-		       CTLFLAG_PERMANENT,
-		       CTLTYPE_NODE, "udf",
-		       SYSCTL_DESCR("OSTA Universal File System"),
-		       NULL, 0, NULL, 0,
-		       CTL_VFS, 24, CTL_EOL);
-#ifdef DEBUG
-	sysctl_createv(clog, 0, NULL, &node,
-		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
-		       CTLTYPE_INT, "verbose",
-		       SYSCTL_DESCR("Bitmask for filesystem debugging"),
-		       NULL, 0, &udf_verbose, 0,
-		       CTL_VFS, 24, UDF_VERBOSE_SYSCTLOPT, CTL_EOL);
-#endif
-}
-
 static int
 udf_modcmd(modcmd_t cmd, void *arg)
 {
+	const struct sysctlnode *node;
 	int error;
 
 	switch (cmd) {
@@ -202,11 +180,31 @@ udf_modcmd(modcmd_t cmd, void *arg)
 		error = vfs_attach(&udf_vfsops);
 		if (error != 0)
 			break;
+		/*
+		 * XXX the "24" below could be dynamic, thereby eliminating one
+		 * more instance of the "number to vfs" mapping problem, but
+		 * "24" is the order as taken from sys/mount.h
+		 */
+		sysctl_createv(&udf_sysctl_log, 0, NULL, &node,
+			       CTLFLAG_PERMANENT,
+			       CTLTYPE_NODE, "udf",
+			       SYSCTL_DESCR("OSTA Universal File System"),
+			       NULL, 0, NULL, 0,
+			       CTL_VFS, 24, CTL_EOL);
+#ifdef DEBUG
+		sysctl_createv(&udf_sysctl_log, 0, NULL, &node,
+			       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			       CTLTYPE_INT, "verbose",
+			       SYSCTL_DESCR("Bitmask for filesystem debugging"),
+			       NULL, 0, &udf_verbose, 0,
+			       CTL_VFS, 24, UDF_VERBOSE_SYSCTLOPT, CTL_EOL);
+#endif
 		break;
 	case MODULE_CMD_FINI:
 		error = vfs_detach(&udf_vfsops);
 		if (error != 0)
 			break;
+		sysctl_teardown(&udf_sysctl_log);
 		break;
 	default:
 		error = ENOTTY;
@@ -279,6 +277,7 @@ static void
 udf_release_system_nodes(struct mount *mp)
 {
 	struct udf_mount *ump = VFSTOUDF(mp);
+	int error;
 
 	/* if we haven't even got an ump, dont bother */
 	if (!ump)
@@ -295,6 +294,10 @@ udf_release_system_nodes(struct mount *mp)
 		vrele(ump->metadatamirror_node->vnode);
 	if (ump->metadatabitmap_node)
 		vrele(ump->metadatabitmap_node->vnode);
+
+	/* This flush should NOT write anything nor allow any node to remain */
+	if ((error = vflush(ump->vfs_mountp, NULLVP, 0)) != 0)
+		panic("Failure to flush UDF system vnodes\n");
 }
 
 
@@ -358,7 +361,7 @@ udf_mount(struct mount *mp, const char *path,
 	}
 	if (bdevsw_lookup(devvp->v_rdev) == NULL) {
 		vrele(devvp);
-		return ENXIO;
+		return ENXIO; 
 	}
 
 	/*
@@ -439,14 +442,12 @@ static bool
 udf_sanity_selector(void *cl, struct vnode *vp)
 {
 
-	KASSERT(mutex_owned(vp->v_interlock));
-
 	vprint("", vp);
 	if (VOP_ISLOCKED(vp) == LK_EXCLUSIVE) {
 		printf("  is locked\n");
 	}
-	if (vrefcnt(vp) > 1)
-		printf("  more than one usecount %d\n", vrefcnt(vp));
+	if (vp->v_usecount > 1)
+		printf("  more than one usecount %d\n", vp->v_usecount);
 	return false;
 }
 
@@ -516,10 +517,6 @@ udf_unmount(struct mount *mp, int mntflags)
 
 	/* NOTE release system nodes should NOT write anything */
 	udf_release_system_nodes(mp);
-
-	/* This flush should NOT write anything nor allow any node to remain */
-	if ((error = vflush(ump->vfs_mountp, NULLVP, 0)) != 0)
-		panic("Failure to flush UDF system vnodes\n");
 
 	/* finalise disc strategy */
 	udf_discstrat_finish(ump);
@@ -746,7 +743,7 @@ udf_start(struct mount *mp, int flags)
 /* --------------------------------------------------------------------- */
 
 int
-udf_root(struct mount *mp, int lktype, struct vnode **vpp)
+udf_root(struct mount *mp, struct vnode **vpp)
 {
 	struct vnode *vp;
 	struct long_ad *dir_loc;
@@ -757,13 +754,12 @@ udf_root(struct mount *mp, int lktype, struct vnode **vpp)
 	DPRINTF(CALL, ("udf_root called\n"));
 
 	dir_loc = &ump->fileset_desc->rootdir_icb;
-	error = udf_get_node(ump, dir_loc, &root_dir, lktype);
-
-	if (error)
-		return error;
+	error = udf_get_node(ump, dir_loc, &root_dir);
 
 	if (!root_dir)
 		error = ENOENT;
+	if (error)
+		return error;
 
 	vp = root_dir->vnode;
 	KASSERT(vp->v_vflag & VV_ROOT);
@@ -897,7 +893,7 @@ udf_sync(struct mount *mp, int waitfor, kauth_cred_t cred)
  * (optional) TODO lookup why some sources state NFSv3
  */
 int
-udf_vget(struct mount *mp, ino_t ino, int lktype,
+udf_vget(struct mount *mp, ino_t ino,
     struct vnode **vpp)
 {
 	DPRINTF(NOTIMPL, ("udf_vget called\n"));
@@ -910,7 +906,7 @@ udf_vget(struct mount *mp, ino_t ino, int lktype,
  * Lookup vnode for file handle specified
  */
 int
-udf_fhtovp(struct mount *mp, struct fid *fhp, int lktype,
+udf_fhtovp(struct mount *mp, struct fid *fhp,
     struct vnode **vpp)
 {
 	DPRINTF(NOTIMPL, ("udf_fhtovp called\n"));
