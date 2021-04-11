@@ -11,7 +11,6 @@
  */
 
 #include "kernel/system.h"
-#include "kernel/vm.h"
 
 #include <minix/endpoint.h>
 
@@ -64,10 +63,8 @@ int do_umap_remote(struct proc * caller, message * m_ptr)
 	int new_proc_nr;
 	cp_grant_id_t grant = (cp_grant_id_t) offset;
 
-	const int vres =verify_grant(caller,targetpr->p_endpoint, grantee, grant, count,
-		0, 0, &newoffset, &newep, NULL);
-	if(vres==VMSUSPEND) return vres;
-        if(vres!=OK) {
+        if(verify_grant(targetpr->p_endpoint, grantee, grant, count,
+                0, 0, &newoffset, &newep, NULL) != OK) {
                 printf("SYSTEM: do_umap: verify_grant in %s, grant %d, bytes 0x%lx, failed, caller %s\n", targetpr->p_name, offset, count, caller->p_name);
 		proc_stacktrace(caller);
                 return EFAULT;
