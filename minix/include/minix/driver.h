@@ -9,7 +9,6 @@
 
 /* The following are so basic, all the *.c files get them automatically. */
 #include <minix/config.h>	/* MUST be first */
-#include <limits.h>
 #include <minix/type.h>
 #include <minix/ipc.h>
 #include <minix/com.h>
@@ -20,6 +19,7 @@
 #include <minix/sysutil.h>
 #include <minix/endpoint.h>
 #include <string.h>
+#include <limits.h>
 #include <stddef.h>
 #include <errno.h>
 #include <sys/param.h>
