@@ -1,4 +1,4 @@
-/*	$NetBSD: pat_rep.c,v 1.31 2019/03/20 02:50:50 gutteridge Exp $	*/
+/*	$NetBSD: pat_rep.c,v 1.29 2009/04/07 19:52:35 perry Exp $	*/
 
 /*-
  * Copyright (c) 1992 Keith Muller.
@@ -42,7 +42,7 @@
 #if 0
 static char sccsid[] = "@(#)pat_rep.c	8.2 (Berkeley) 4/18/94";
 #else
-__RCSID("$NetBSD: pat_rep.c,v 1.31 2019/03/20 02:50:50 gutteridge Exp $");
+__RCSID("$NetBSD: pat_rep.c,v 1.29 2009/04/07 19:52:35 perry Exp $");
 #endif
 #endif /* not lint */
 
@@ -85,13 +85,12 @@ static int resub(regex_t *, regmatch_t *, char *, char *, char *, char *);
  *	parses the -s replacement string; compiles the regular expression
  *	and stores the compiled value and its replacement string together in
  *	replacement string list. Input to this function is of the form:
- *		/old/new/gps
+ *		/old/new/pg
  *	The first char in the string specifies the delimiter used by this
  *	replacement string. "Old" is a regular expression in "ed" format which
  *	is compiled by regcomp() and is applied to filenames. "new" is the
- *	substitution string; g, p, and s are options flags for global
- *	replacement (over the single filename), printing, and preventing
- *	substitutions on symbolic link destinations.
+ *	substitution string; p and g are options flags for printing and global
+ *	replacement (over the single filename)
  * Return:
  *	0 if a proper replacement string and regular expression was added to
  *	the list of replacement patterns; -1 otherwise.
@@ -896,7 +895,7 @@ fix_path( char *or_name, int *or_len, char *dir_name, int dir_len)
  *	namelen the size of the name buffer.
  *	nlen is the length of this name (and is modified to hold the length of
  *	the final string).
- *	flags contains various options to control behavior.
+ *	prnt is a flag that says whether to print the final result.
  * Return:
  *	0 if substitution was successful, 1 if we are to skip the file (the name
  *	ended up empty)
@@ -925,7 +924,7 @@ rep_name(char *name, size_t namelen, int *nlen, int flags)
 	 * (the user already saw that substitution go by)
 	 */
 	pt = rephead;
-	(void)strlcpy(buf1, name, sizeof(buf1));
+	(void)strcpy(buf1, name);
 	inpt = buf1;
 	outpt = nname;
 	endpt = outpt + PAXPATHLEN;
