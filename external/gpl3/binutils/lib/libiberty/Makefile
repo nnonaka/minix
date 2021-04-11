@@ -1,13 +1,12 @@
-#	$NetBSD: Makefile,v 1.10 2016/11/04 15:31:45 christos Exp $
+#	$NetBSD: Makefile,v 1.4 2013/08/06 05:35:57 matt Exp $
 
 NOLINT=		# defined
 NOPROFILE=	# defined
 NOPIC=		# defined
 NOLINKLIB=	# defined
 NOCLANGERROR=	# defined
-NODEBUGLIB=	# defined
 
-.include <bsd.init.mk>
+.include <bsd.own.mk>
 
 LIB=		iberty
 
@@ -19,6 +18,8 @@ COPTS.argv.c = -Wno-stack-protector
 COPTS.cp-demangle.c = -Wno-stack-protector
 COPTS.make-relative-prefix.c = -Wno-stack-protector
 COPTS.regex.c = -Wno-stack-protector
+
+DIST=		${NETBSDSRCDIR}/external/gpl3/binutils/dist
 
 .if defined(__MINIX)
 # MINIX: make sure sources are fetched, even when tools not built earlier
