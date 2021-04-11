@@ -5,7 +5,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(__lint)
-__RCSID("$NetBSD: ews4800mips.c,v 1.3 2019/05/07 04:35:31 thorpej Exp $");
+__RCSID("$NetBSD: ews4800mips.c,v 1.2 2006/02/18 10:08:07 dsl Exp $");
 #endif	/* !__lint */
 
 #include <sys/param.h>
@@ -16,12 +16,8 @@ __RCSID("$NetBSD: ews4800mips.c,v 1.3 2019/05/07 04:35:31 thorpej Exp $");
 
 static int ews4800mips_setboot(ib_params *);
 
-struct ib_mach ib_mach_ews4800mips = {
-	.name		=	"ews4800mips",
-	.setboot	=	ews4800mips_setboot,
-	.clearboot	=	no_clearboot,
-	.editboot	=	no_editboot,
-};
+struct ib_mach ib_mach_ews4800mips =
+	{ "ews4800mips", ews4800mips_setboot, no_clearboot, no_editboot, 0};
 
 struct bbinfo_params ews4800mips_bbparams = {
 	EWS4800MIPS_BBINFO_MAGIC,
