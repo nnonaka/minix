@@ -107,7 +107,7 @@ dependall-binstall: dependall-compat
 SUBDIR=	host-mkdep compat binstall \
 	.WAIT mktemp .WAIT sed .WAIT genassym
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+=  gencat \
+SUBDIR+= crunchgen gencat \
 		${LINT_BITS} \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif

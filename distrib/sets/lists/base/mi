@@ -74,7 +74,7 @@
 ./dev/i4btel1					base-obsolete		obsolete
 ./dev/i4btrc0					base-obsolete		obsolete
 ./dev/i4btrc1					base-obsolete		obsolete
-./dev/log					base-sys-root
+#./dev/log					base-sys-root
 ./etc						base-sys-root
 ./etc/X11					base-x11-root
 ./etc/X11/fs					base-x11-root
@@ -103,7 +103,8 @@
 ./etc/kyua					base-kyua-root
 ./etc/mail					base-postfix-bin
 ./etc/mtree					base-sys-root
-./etc/mtree/set.base				base-sys-root
+#./etc/mtree/set.base				base-sys-root
+./etc/mtree/set.minix-base				base-sys-root
 ./etc/namedb					base-bind-root
 ./etc/obsolete					base-obsolete		obsolete
 ./etc/openldap					base-ldap-root

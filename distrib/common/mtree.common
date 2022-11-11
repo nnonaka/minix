@@ -4,15 +4,17 @@
 
 .
 ./bin
+./boot
 ./dev
 ./etc
 ./libexec
 ./libexec/dhcpcd-hooks
 ./mnt
-./mnt2
-./kern
+#./mnt2
+#./kern
+./service
 ./sbin
-./targetroot
+#./targetroot
 ./tmp				mode=01777
 ./usr
 ./usr/bin
@@ -25,4 +27,4 @@
 ./var/run
 ./var/log
 ./var/spool
-./var/spool/lock
+#./var/spool/lock

@@ -20,8 +20,6 @@ then
 	exit 1
 fi
 
-echo "build.sh finished..." > log00
-
 # we create a disk image of about 2 gig's
 # for alignment reasons, prefer sizes which are multiples of 4096 bytes
 : ${BOOTXX_SECS=32}
@@ -37,19 +35,13 @@ echo "build.sh finished..." > log00
 echo "Building work directory..."
 build_workdir "$SETS"
 
-echo "build_workdir finished..." >> log00
-
 echo "Adding extra files..."
 workdir_add_hdd_files
-
-echo "workdir_add_hdd_files finished..." >> log00
 
 # add kernels
 add_link_spec "boot/minix_latest" "minix_default" extra.kernel
 workdir_add_kernel minix_default
 workdir_add_kernel minix/$RELEASE_VERSION
-
-echo "workdir_add_kernel finished..." >> log00
 
 # add boot.cfg
 cat >${ROOT_DIR}/boot.cfg <<END_BOOT_CFG

@@ -76,8 +76,10 @@ SETS_DIR?=	${RELEASEDIR}/${RELEASEMACHINEDIR}/binary/sets
 DISTRIBVER!=	${HOST_SH} ${KERNSRCDIR}/conf/osrelease.sh
 DISTRIBREV!=	${HOST_SH} ${KERNSRCDIR}/conf/osrelease.sh -s
 CUROBJDIR!=	cd ${.CURDIR} && ${PRINTOBJDIR}
-ISO_VOLID!=	echo NETBSD_${DISTRIBREV} | tr a-z A-Z
-PUBLISHER?= The_NetBSD_Project
+#ISO_VOLID!=	echo NETBSD_${DISTRIBREV} | tr a-z A-Z
+#PUBLISHER?= The_NetBSD_Project
+ISO_VOLID=	MINIX
+PUBLISHER?= Minix_Project
 .if defined(CDMAKEFSOPTIONS)
 _CDMAKEFSOPTIONS=	rockridge,label=${ISO_VOLID},publisher=${PUBLISHER},${CDMAKEFSOPTIONS}
 .else
@@ -154,21 +156,22 @@ BOOT2=boot
 
 prepare:
 	${MKDIR} ${MKDIRPERM} "${CUROBJDIR}/cdrom"
-.if defined(CDKERNELS)
-.for kernel target in ${CDKERNELS}
-	${INSTALL} ${COPY} -m 0644 ${_INSTKERNELNOBJDIR}/${kernel} cdrom/${target}
-.endfor
+#.if defined(CDKERNELS)
+#.for kernel target in ${CDKERNELS}
+#	${INSTALL} ${COPY} -m 0644 ${_INSTKERNELNOBJDIR}/${kernel} cdrom/${target}
+#.endfor
 .if exists(${DESTDIR}/usr/mdec/bootxx_cd9660)
-	${RM} -f cdrom/${BOOT2}
-	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/${BOOT2} cdrom/${BOOT2}
+#	${RM} -f cdrom/${BOOT2}
+#	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/${BOOT2} cdrom/${BOOT2}
 	${RM} -f bootxx.${MACHINE}
+	echo 'Oh! Im here\n'
 	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/bootxx_cd9660 bootxx.${MACHINE}
 	${CHMOD} +w bootxx.${MACHINE}
 .if defined(CDBOOTOPTIONS)
 	${TOOL_INSTALLBOOT} -m${MACHINE} -e ${CDBOOTOPTIONS} bootxx.${MACHINE}
 .endif
 .endif
-.endif
+#.endif
 
 .if ${MAKEVERBOSE} >= 2
 PAX_v?= -v
