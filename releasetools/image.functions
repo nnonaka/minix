@@ -267,13 +267,14 @@ fetch_and_build_grub()
          git clone git://git.savannah.gnu.org/grub.git ${RELEASETOOLSDIR}/grub
          pushd ${RELEASETOOLSDIR}/grub
          # most recent known working commit at the time of writing
-         git checkout a0bf403f66dbaca4edd8e667bfc397dd91c8d71c
-         ./autogen.sh
+         #git checkout a0bf403f66dbaca4edd8e667bfc397dd91c8d71c
+         git checkout grub-2.06
+         ./bootstrap
          ./configure --with-platform=efi --target=i386
          make clean
          make -j ${JOBS}
          cd grub-core
-         ../grub-mkimage -v -d . -o booti386.efi -O i386-efi -p /boot/efi normal part_msdos fat chain boot configfile multiboot minix3 gzio efi_uga
+         ../grub-mkimage -v -d . -o booti386.efi -O i386-efi -p /boot/efi normal part_msdos part_gpt fat chain boot configfile multiboot multiboot2 gfxmenu minix3 gzio efi_uga
          ls -l booti386.efi
          popd
        fi
@@ -284,7 +285,7 @@ fetch_and_build_grub()
 #
 create_grub_cfg()
 {
-	cat > ${EFI_DIR}/boot/efi/grub.cfg <<END_GRUBCFG
+	cat > ${EFI_DIR}/EFI/boot/grub.cfg <<END_GRUBCFG
 
 insmod serial
 insmod minix3
@@ -292,6 +293,9 @@ insmod gzio
 #insmod efi_uga
 #insmod video_fb
 insmod all_video
+insmod part_gpt
+insmod ext2
+insmod ufs2
 
 set timeout=30
 set default=0
@@ -299,24 +303,24 @@ set default=0
 set gfxmode=text
 
 menuentry "Minix Boot" {
-        set root=(hd0,1)
-        multiboot /boot/minix_default/kernel rootdevname=c0d0p0
-        module /boot/minix_default/mod01_ds
-        module /boot/minix_default/mod02_rs
-        module /boot/minix_default/mod03_pm
-        module /boot/minix_default/mod04_sched
-        module /boot/minix_default/mod05_vfs
-        module /boot/minix_default/mod06_memory
-        module /boot/minix_default/mod07_tty
-        module /boot/minix_default/mod08_mib
-        module /boot/minix_default/mod09_vm
-        module /boot/minix_default/mod10_pfs
-        module /boot/minix_default/mod11_mfs
-        module /boot/minix_default/mod12_init
+        set root='hd0,gpt2'
+        multiboot /EFI/boot/minix_default/kernel rootdevname=c0d0p0
+        module /EFI/boot/minix_default/mod01_ds
+        module /EFI/boot/minix_default/mod02_rs
+        module /EFI/boot/minix_default/mod03_pm
+        module /EFI/boot/minix_default/mod04_sched
+        module /EFI/boot/minix_default/mod05_vfs
+        module /EFI/boot/minix_default/mod06_memory
+        module /EFI/boot/minix_default/mod07_tty
+        module /EFI/boot/minix_default/mod08_mib
+        module /EFI/boot/minix_default/mod09_vm
+        module /EFI/boot/minix_default/mod10_pfs
+        module /EFI/boot/minix_default/mod11_mfs
+        module /EFI/boot/minix_default/mod12_init
 }
 
 menuentry "Minix Boot (serial)" {
-        set root=(hd0,1)
+        set root='hd0,gpt2'
         multiboot /boot/minix_default/kernel rootdevname=c0d0p0 cttyline=0 ttybaud=115200 console=tty00 consdev=com0
         module /boot/minix_default/mod01_ds
         module /boot/minix_default/mod02_rs
@@ -331,6 +335,11 @@ menuentry "Minix Boot (serial)" {
         module /boot/minix_default/mod11_mfs
         module /boot/minix_default/mod12_init
 }
+
+menuentry 'UEFI Firmware Settings' $menuentry_id_option 'uefi-firmware' {
+	fwsetup
+}
+
 END_GRUBCFG
 }
 
