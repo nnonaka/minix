@@ -52,3 +52,4 @@ lib/libc/compat__*
 minix_x86.img
 *.iso
 *.vmdk
+releasetools/grub/
