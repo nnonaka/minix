@@ -41,9 +41,9 @@ MAKEFS_FLAGS+=	-f 14
 .endif
 
 # Use stubs to eliminate some large stuff from libc
-HACKSRC=	${DISTRIBDIR}/utils/libhack
-.include	"${HACKSRC}/Makefile.inc"
-${CRUNCHBIN}:	libhack.o
+#HACKSRC=	${DISTRIBDIR}/utils/libhack
+#.include	"${HACKSRC}/Makefile.inc"
+#${CRUNCHBIN}:	libhack.o
 
 .include "${DISTRIBDIR}/common/Makefile.crunch"
 .include "${DISTRIBDIR}/common/Makefile.dhcpcd"

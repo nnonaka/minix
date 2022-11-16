@@ -1,0 +1,25 @@
+Cross-compiling memo
+
+  Cross-building for x86
+
+    $ bash ./releasetools/x86_hdimage.sh 
+
+  Using build.sh directly
+
+    $ sh build.sh -U -u -mi386 -O ../build tools
+    $ sh build.sh -U -u -mi386 -O ../build distribution
+    $ sh build.sh -U -u -mi386 -O ../build release
+    $ sh build.sh -U -u -mi386 -O ../build install-image (not working)
+    
+    
+    build.sh options
+    
+    -m mach        Set MACHINE to mach.  Some mach values are actually
+                   aliases that set MACHINE/MACHINE_ARCH pairs.
+                   (ex. i386 or amd64)
+
+    -U             Set MKUNPRIVED=yes; build without requiring root privileges,
+                   install from an UNPRIVED build with proper file permissions.
+    -u             Set MKUPDATE=yes; do not run "make cleandir" first.
+                   Without this, everything is rebuilt, including the tools.
+

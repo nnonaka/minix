@@ -379,13 +379,13 @@ struct	uio;
 #define	CLR(t, f)	((t) &= ~(f))
 #endif
 
-#if !defined(__minix)
+#if !defined(__MINIX)
 #if !defined(_KERNEL) && !defined(_STANDALONE)
 #if (_POSIX_C_SOURCE - 0L) >= 199506L || (_XOPEN_SOURCE - 0) >= 500 || \
     defined(_NETBSD_SOURCE)
-#include <pthread_types.h>
+//#include <pthread_types.h>
 #endif
 #endif
-#endif /* !defined(__minix) */
+#endif /* !defined(__MINIX) */
 
 #endif /* !_SYS_TYPES_H_ */

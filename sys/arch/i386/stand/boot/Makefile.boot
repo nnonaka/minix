@@ -1,25 +1,21 @@
-# $NetBSD: Makefile.boot,v 1.67 2015/08/20 11:39:28 uebayasi Exp $
+# $NetBSD: Makefile.boot,v 1.72.4.1 2019/09/17 19:32:00 martin Exp $
 
 S=	${.CURDIR}/../../../../..
 
 NOMAN=
+NOLIBCSANITIZER=
+NOSANITIZER=
+NOPIE=
 PROG?= boot
 NEWVERSWHAT?= "BIOS Boot"
-VERSIONFILE?= ${.CURDIR}/../version
 
 AFLAGS.biosboot.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 
-SOURCES?= biosboot.S boot2.c conf.c devopen.c exec.c
+SOURCES?= biosboot.S boot2.c conf.c devopen.c exec.c \
+	  exec_multiboot1.c exec_multiboot2.c
 SRCS= ${SOURCES}
-.if !make(depend)
-SRCS+= vers.c
-.endif
 
-PIE_CFLAGS=
-PIE_AFLAGS=
-PIE_LDFLAGS=
-
-.include <bsd.own.mk>
+.include <bsd.init.mk>
 
 STRIPFLAG=	# nothing
 
@@ -135,10 +131,10 @@ cleanlibdir:
 LIBLIST= ${LIBI386} ${LIBSA} ${LIBZ} ${LIBKERN} ${LIBI386} ${LIBSA}
 # LIBLIST= ${LIBSA} ${LIBKERN} ${LIBI386} ${LIBSA} ${LIBZ} ${LIBKERN}
 
-CLEANFILES+= ${PROG}.tmp ${PROG}.map ${PROG}.sym vers.c
+CLEANFILES+= ${PROG}.tmp ${PROG}.map ${PROG}.sym
 
-vers.c: ${VERSIONFILE} ${SOURCES} ${LIBLIST} ${.CURDIR}/../Makefile.boot
-	${HOST_SH} ${S}/conf/newvers_stand.sh ${VERSIONFILE} x86 ${NEWVERSWHAT}
+VERSIONMACHINE=x86
+.include "${S}/conf/newvers_stand.mk"
 
 .if defined(__MINIX)
 # BJG

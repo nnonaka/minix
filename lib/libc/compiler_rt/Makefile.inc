@@ -210,8 +210,11 @@ GENERIC_SRCS+= \
 	umoddi3.c
 .endif
 
+.if !defined(__MINIX)
 GENERIC_SRCS+= \
-	GCDAProfiling.c \
+	GCDAProfiling.c
+.endif # defined(__MINIX)
+GENERIC_SRCS+= \
 	InstrProfiling.c \
 	InstrProfilingBuffer.c \
 	InstrProfilingFile.c \

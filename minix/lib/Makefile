@@ -37,6 +37,14 @@ SUBDIR+=	libvboxfs
 SUBDIR+=	libvirtio
 .endif
 
+.if (${MACHINE_ARCH} == "x86_64")
+SUBDIR+=	libacpi
+SUBDIR+=	libhgfs
+SUBDIR+=	libvassert
+SUBDIR+=	libvboxfs
+SUBDIR+=	libvirtio
+.endif
+
 .if (${MACHINE_ARCH} == "earm")
 SUBDIR+=	libclkconf
 SUBDIR+=	libgpio

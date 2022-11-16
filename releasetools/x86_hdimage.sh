@@ -24,10 +24,10 @@ fi
 # for alignment reasons, prefer sizes which are multiples of 4096 bytes
 : ${BOOTXX_SECS=2048}
 : ${GPT_SECS=2048}
-: ${ROOT_SIZE=$((  128*(2**20) ))}
-: ${HOME_SIZE=$((  128*(2**20) ))}
-: ${USR_SIZE=$((  1500*(2**20) ))}
-: ${EFI_SIZE=$((  128*(2**20) ))}
+: ${ROOT_SIZE=$((  128*1024*1024 ))}
+: ${HOME_SIZE=$((  128*1024*1024 ))}
+: ${USR_SIZE=$((  1500*1024*1024 ))}
+: ${EFI_SIZE=$((  128*1024*1024 ))}
 
 # set up disk creation environment
 . releasetools/image.defaults
