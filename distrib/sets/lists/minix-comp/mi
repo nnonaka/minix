@@ -1812,6 +1812,7 @@
 ./usr/include/ufs/ext2fs/ext2fs.h                       minix-comp
 ./usr/include/ufs/ext2fs/ext2fs_dinode.h                minix-comp
 ./usr/include/ufs/ext2fs/ext2fs_dir.h                   minix-comp
+./usr/include/ufs/ext2fs/ext2fs_extents.h                minix-comp
 ./usr/include/ufs/ext2fs/ext2fs_extern.h                minix-comp
 ./usr/include/ufs/ffs                                   minix-comp
 ./usr/include/ufs/ffs/ffs_extern.h                      minix-comp

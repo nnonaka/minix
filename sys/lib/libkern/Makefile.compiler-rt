@@ -136,4 +136,4 @@ COPTS.udivmoddi4.c+=	-fnon-call-exceptions
 .endif
 
 # XXX This makes no binary changes at the moment.
-.include "${COMPILER_RT_DIR}/abi.mk"
+#.include "${COMPILER_RT_DIR}/abi.mk"

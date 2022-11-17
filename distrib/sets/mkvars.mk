@@ -1,4 +1,4 @@
-# $NetBSD: mkvars.mk,v 1.24 2015/07/23 08:03:25 mrg Exp $
+# $NetBSD: mkvars.mk,v 1.37 2019/04/16 21:20:51 mrg Exp $
 
 MKEXTRAVARS= \
 	MACHINE \
@@ -6,7 +6,12 @@ MKEXTRAVARS= \
 	MACHINE_CPU \
 	HAVE_GCC \
 	HAVE_GDB \
+	HAVE_XORG_SERVER_VER \
+	HAVE_XORG_GLAMOR \
+	HAVE_MESA_VER \
+	HAVE_BINUTILS \
 	HAVE_LIBGCC_EH \
+	HAVE_OPENSSL \
 	HAVE_SSP \
 	OBJECT_FMT \
 	TOOLCHAIN_MISSING \
@@ -16,13 +21,16 @@ MKEXTRAVARS= \
 	MKCOMPAT \
 	MKCOMPATTESTS \
 	MKCOMPATMODULES \
+	MKDTC \
 	MKDYNAMICROOT \
+	MKFIRMWARE \
 	MKMANPAGES \
 	MKSLJIT \
 	MKSOFTFLOAT \
 	MKXORG \
 	MKXORG_SERVER \
 	MKRADEONFIRMWARE \
+	MKSTATICPIE \
 	USE_INET6 \
 	USE_KERBEROS \
 	USE_LDAP \
@@ -92,18 +100,18 @@ mkextravars: .PHONY
 	@echo $i="${$i}"
 .endfor
 .if ${MKCOMPAT} != "no"
-	@echo COMPATARCHDIRS=${COMPATARCHDIRS} | ${TOOL_SED} -e's/ /,/g'
+	@echo COMPATARCHDIRS=${COMPATARCHDIRS:S/ /,/gW}
 .else
 	@echo COMPATARCHDIRS=
 .endif
 .if ${MKKMOD} != "no" && ${MKCOMPATMODULES} != "no"
-	@echo KMODARCHDIRS=${KMODARCHDIRS} | ${TOOL_SED} -e's/ /,/g'
+	@echo KMODARCHDIRS=${KMODARCHDIRS:S/ /,/gW}
 .else
 	@echo KMODARCHDIRS=
 .endif
 
 mksolaris: .PHONY
-.if (${MKDTRACE} != "no" || ${MKZFS} != "no")
+.if (${MKDTRACE} != "no" || ${MKZFS} != "no" || ${MKCTF} != "no")
 	@echo MKSOLARIS="yes"
 .else
 	@echo MKSOLARIS="no"

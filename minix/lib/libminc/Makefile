@@ -169,7 +169,7 @@ CPPFLAGS.strtoul.c+=	-D_STANDALONE
 CPPFLAGS.strtoul.c+=	-I${NETBSDSRCDIR}/sys
 
 .for f in \
-	strcasecmp.o strcspn.o strncasecmp.o strnlen.o strlcat.o
+	strcasecmp.o strcspn.o strncasecmp.o strnlen.o strlcat.o strstr.o
 ${f} ${f:C/\.o/.bc/}:	${LIBCOMMONCDIR}/string/${f:C/\.o/.c/}
 ${f} ${f:C/\.o/.go/}:	${LIBCOMMONCDIR}/string/${f:C/\.o/.c/}
 OBJS+=	${f}

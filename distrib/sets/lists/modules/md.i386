@@ -1,8 +1,8 @@
-# $NetBSD: md.i386,v 1.68 2015/06/23 14:38:49 matt Exp $
+# $NetBSD: md.i386,v 1.82.2.1 2019/12/09 15:19:30 martin Exp $
 #
-# NOTE that there are three sets of files here:
-# @MODULEDIR@, i386-xen, and i386pae-xen
+# NOTE that there are two sets of files here: @MODULEDIR@ and i386pae-xen
 #
+
 ./@MODULEDIR@/acpiacad				base-kernel-modules	kmod
 ./@MODULEDIR@/acpiacad/acpiacad.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/acpibat				base-kernel-modules	kmod
@@ -31,8 +31,12 @@
 ./@MODULEDIR@/acpiwmi/acpiwmi.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/aibs				base-kernel-modules	kmod
 ./@MODULEDIR@/aibs/aibs.kmod			base-kernel-modules	kmod
+./@MODULEDIR@/amdsmn				base-kernel-modules	kmod
+./@MODULEDIR@/amdsmn/amdsmn.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/amdtemp				base-kernel-modules	kmod
 ./@MODULEDIR@/amdtemp/amdtemp.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/amdzentemp			base-kernel-modules	kmod
+./@MODULEDIR@/amdzentemp/amdzentemp.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/aps				base-kernel-modules	kmod
 ./@MODULEDIR@/aps/aps.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/asus				base-kernel-modules	kmod
@@ -47,14 +51,16 @@
 ./@MODULEDIR@/azalia/azalia.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/bpfjit				base-kernel-modules	kmod,sljit
 ./@MODULEDIR@/bpfjit/bpfjit.kmod		base-kernel-modules	kmod,sljit
+./@MODULEDIR@/cac_eisa				base-obsolete		obsolete
+./@MODULEDIR@/cac_eisa/cac_eisa.kmod		base-obsolete		obsolete
 ./@MODULEDIR@/compat_freebsd			base-kernel-modules	kmod
 ./@MODULEDIR@/compat_freebsd/compat_freebsd.kmod	base-kernel-modules	kmod
-./@MODULEDIR@/compat_ibcs2			base-kernel-modules	kmod
-./@MODULEDIR@/compat_ibcs2/compat_ibcs2.kmod	base-kernel-modules	kmod
+./@MODULEDIR@/compat_ibcs2			base-obsolete		obsolete
+./@MODULEDIR@/compat_ibcs2/compat_ibcs2.kmod	base-obsolete		obsolete
 ./@MODULEDIR@/compat_linux			base-kernel-modules	kmod
 ./@MODULEDIR@/compat_linux/compat_linux.kmod	base-kernel-modules	kmod
-./@MODULEDIR@/compat_svr4			base-kernel-modules	kmod
-./@MODULEDIR@/compat_svr4/compat_svr4.kmod	base-kernel-modules	kmod
+./@MODULEDIR@/compat_svr4			base-obsolete		obsolete
+./@MODULEDIR@/compat_svr4/compat_svr4.kmod	base-obsolete		obsolete
 ./@MODULEDIR@/coram				base-kernel-modules	kmod
 ./@MODULEDIR@/coram/coram.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/coretemp				base-kernel-modules	kmod
@@ -69,8 +75,12 @@
 ./@MODULEDIR@/drmkms/drmkms.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/drmkms_linux			base-kernel-modules	kmod
 ./@MODULEDIR@/drmkms_linux/drmkms_linux.kmod	base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_agp			base-kernel-modules	kmod
+./@MODULEDIR@/drmkms_agp/drmkms_agp.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/drmkms_pci			base-kernel-modules	kmod
 ./@MODULEDIR@/drmkms_pci/drmkms_pci.kmod	base-kernel-modules	kmod
+./@MODULEDIR@/dtrace_syscall_linux		base-kernel-modules	kmod,dtrace
+./@MODULEDIR@/dtrace_syscall_linux/dtrace_syscall_linux.kmod	base-kernel-modules	kmod,dtrace
 ./@MODULEDIR@/emdtv				base-kernel-modules	kmod
 ./@MODULEDIR@/emdtv/emdtv.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/est				base-kernel-modules	kmod
@@ -99,12 +109,20 @@
 ./@MODULEDIR@/hpet/hpet.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/hpqlb				base-kernel-modules	kmod
 ./@MODULEDIR@/hpqlb/hpqlb.kmod			base-kernel-modules	kmod
+./@MODULEDIR@/ichsmb				base-kernel-modules     kmod
+./@MODULEDIR@/ichsmb/ichsmb.kmod		base-kernel-modules     kmod
+./@MODULEDIR@/imc				base-kernel-modules     kmod
+./@MODULEDIR@/imc/imc.kmod			base-kernel-modules     kmod
+./@MODULEDIR@/imcsmb				base-kernel-modules     kmod
+./@MODULEDIR@/imcsmb/imcsmb.kmod		base-kernel-modules     kmod
 ./@MODULEDIR@/i915drm				base-kernel-modules	kmod
 ./@MODULEDIR@/i915drm/i915drm.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/i915drmkms			base-kernel-modules	kmod
 ./@MODULEDIR@/i915drmkms/i915drmkms.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/itesio				base-kernel-modules	kmod
 ./@MODULEDIR@/itesio/itesio.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/ld_nvme				base-obsolete		obsolete
+./@MODULEDIR@/ld_nvme/ld_nvme.kmod		base-obsolete		obsolete
 ./@MODULEDIR@/lg3303				base-kernel-modules	kmod
 ./@MODULEDIR@/lg3303/lg3303.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/lm				base-kernel-modules	kmod
@@ -119,10 +137,14 @@
 ./@MODULEDIR@/mach64drm/mach64drm.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/mgadrm				base-kernel-modules	kmod
 ./@MODULEDIR@/mgadrm/mgadrm.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/mlx_eisa				base-obsolete		obsolete
+./@MODULEDIR@/mlx_eisa/mlx_eisa.kmod		base-obsolete		obsolete
 ./@MODULEDIR@/mt2131				base-kernel-modules	kmod
 ./@MODULEDIR@/mt2131/mt2131.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/nsclpcsio				base-kernel-modules	kmod
 ./@MODULEDIR@/nsclpcsio/nsclpcsio.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/nvme				base-obsolete		obsolete
+./@MODULEDIR@/nvme/nvme.kmod			base-obsolete		obsolete
 ./@MODULEDIR@/nxt2k				base-kernel-modules	kmod
 ./@MODULEDIR@/nxt2k/nxt2k.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/odcm				base-kernel-modules	kmod
@@ -145,8 +167,6 @@
 ./@MODULEDIR@/sisdrm/sisdrm.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/sljit				base-kernel-modules	kmod,sljit
 ./@MODULEDIR@/sljit/sljit.kmod			base-kernel-modules	kmod,sljit
-./@MODULEDIR@/spkr				base-kernel-modules	kmod
-./@MODULEDIR@/spkr/spkr.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/syscallemu			base-kernel-modules	kmod
 ./@MODULEDIR@/syscallemu/syscallemu.kmod	base-kernel-modules	kmod
 ./@MODULEDIR@/tco				base-kernel-modules	kmod
@@ -155,18 +175,20 @@
 ./@MODULEDIR@/tdfxdrm/tdfxdrm.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/thinkpad				base-kernel-modules	kmod
 ./@MODULEDIR@/thinkpad/thinkpad.kmod		base-kernel-modules	kmod
-./@MODULEDIR@/tprof_amdpmi			base-kernel-modules	kmod
-./@MODULEDIR@/tprof_amdpmi/tprof_amdpmi.kmod	base-kernel-modules	kmod
-./@MODULEDIR@/tprof_pmi				base-kernel-modules	kmod
-./@MODULEDIR@/tprof_pmi/tprof_pmi.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/tprof_amdpmi			base-obsolete		obsolete
+./@MODULEDIR@/tprof_amdpmi/tprof_amdpmi.kmod	base-obsolete		obsolete
+./@MODULEDIR@/tprof_pmi				base-obsolete		obsolete
+./@MODULEDIR@/tprof_pmi/tprof_pmi.kmod		base-obsolete		obsolete
+./@MODULEDIR@/tprof_x86				base-kernel-modules	kmod
+./@MODULEDIR@/tprof_x86/tprof_x86.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/tvpll				base-kernel-modules	kmod
 ./@MODULEDIR@/tvpll/tvpll.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/ubsec				base-kernel-modules	kmod
 ./@MODULEDIR@/ubsec/ubsec.kmod			base-kernel-modules	kmod
 ./@MODULEDIR@/viac7temp				base-kernel-modules	kmod
 ./@MODULEDIR@/viac7temp/viac7temp.kmod		base-kernel-modules	kmod
-./@MODULEDIR@/viadrm				base-kernel-modules	kmod
-./@MODULEDIR@/viadrm/viadrm.kmod		base-kernel-modules	kmod
+./@MODULEDIR@/viadrm				base-obsolete		obsolete
+./@MODULEDIR@/viadrm/viadrm.kmod		base-obsolete		obsolete
 ./@MODULEDIR@/viadrmums				base-kernel-modules	kmod
 ./@MODULEDIR@/viadrmums/viadrmums.kmod		base-kernel-modules	kmod
 ./@MODULEDIR@/vmt				base-kernel-modules	kmod
