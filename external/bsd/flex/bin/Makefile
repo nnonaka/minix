@@ -1,5 +1,5 @@
 #	from: @(#)Makefile	5.4 (Berkeley) 6/24/90
-#	$NetBSD: Makefile,v 1.9 2011/03/08 19:25:32 plunky Exp $
+#	$NetBSD: Makefile,v 1.13 2019/02/05 07:47:15 mrg Exp $
 #
 # By default, flex will be configured to generate 8-bit scanners only if the
 # -8 flag is given.  If you want it to always generate 8-bit scanners, add
@@ -12,8 +12,10 @@
 #
 # To bootstrap lex, cp initscan.c to scan.c and run make.
 
+.include <bsd.init.mk>
+
 PROG=	lex
-CPPFLAGS+=-I. -I${.CURDIR}
+CPPFLAGS+=-I. -I${.CURDIR} -DVERSION=\"${VERSION}\"
 SRCS=	 \
 buf.c \
 ccl.c \
@@ -53,13 +55,13 @@ LINKS=	${BINDIR}/lex ${BINDIR}/flex \
 MLINKS=	flex.1 lex.1 
 
 skel.c: flex.skl mkskel.sh flexint.h tables_shared.h
-	${TOOL_SED} -e 's/m4_/m4postproc_/g' -e 's/m4preproc_/m4_/g' \
+	${TOOL_SED} -e 's/4_/a4_/g; s/m4preproc_/m4_/g' \
 	    ${IDIST}/flex.skl | ${TOOL_M4} -I${IDIST} -P \
 	    -DFLEX_MAJOR_VERSION=`echo ${VERSION} | cut -f 1 -d .` \
 	    -DFLEX_MINOR_VERSION=`echo ${VERSION} | cut -f 2 -d .` \
 	    -DFLEX_SUBMINOR_VERSION=`echo ${VERSION} | cut -f 3 -d .` | \
 	    ${TOOL_SED} -e 's/m4postproc_/m4_/g' | \
-	    ${HOST_SH} ${IDIST}/mkskel.sh  > ${.TARGET}
+	    ${HOST_SH} ${IDIST}/mkskel.sh ${IDIST} ${TOOL_M4} ${VERSION} > ${.TARGET}
 
 .ifndef HOSTPROG
 scan.c: scan.l
@@ -68,5 +70,12 @@ scan.c: scan.l
 .endif
 
 scan.o yylex.o: parse.h
+
+# Ugh. Generates too large offsets with -O2.
+.if defined(HAVE_GCC) && ${HAVE_GCC} == 7 && ${ACTIVE_CC} == "gcc"
+. if ${MACHINE_CPU} == "m68k" && empty(CFLAGS:M-O0)
+COPTS.scan.c+=        -O1
+. endif
+.endif
 
 .include <bsd.prog.mk>

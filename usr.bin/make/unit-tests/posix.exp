@@ -20,7 +20,4 @@ a command prefixed by '+' executes even with -n
 Now we expect an error...
 *** Error code 1 (continuing)
 `all' not remade because of errors.
-
-Stop.
-make: stopped in unit-tests
-exit status 1
+exit status 0

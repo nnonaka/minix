@@ -8,7 +8,7 @@ set -e
 
 : ${ARCH=amd64}
 : ${OBJ=../obj.${ARCH}}
-: ${TOOLCHAIN_TRIPLET=i686-elf64-minix-}
+: ${TOOLCHAIN_TRIPLET=x86-64-elf64-minix-}
 : ${BUILDSH=build.sh}
 
 : ${SETS="minix-base minix-comp minix-games minix-man minix-tests tests"}
@@ -22,11 +22,12 @@ fi
 
 # we create a disk image of about 2 gig's
 # for alignment reasons, prefer sizes which are multiples of 4096 bytes
-: ${BOOTXX_SECS=32}
-: ${ROOT_SIZE=$((  128*(2**20) - ${BOOTXX_SECS} * 512 ))}
-: ${HOME_SIZE=$((  128*(2**20) ))}
-: ${USR_SIZE=$((  1792*(2**20) ))}
-: ${EFI_SIZE=$((  128*(2**20) ))}
+: ${BOOTXX_SECS=2048}
+: ${GPT_SECS=2048}
+: ${ROOT_SIZE=$((  128*1024*1024 ))}
+: ${HOME_SIZE=$((  128*1024*1024 ))}
+: ${USR_SIZE=$((  1500*1024*1024 ))}
+: ${EFI_SIZE=$((  128*1024*1024 ))}
 
 # set up disk creation environment
 . releasetools/image.defaults
@@ -81,16 +82,33 @@ ROOTSIZEARG="-b $((${ROOT_SIZE} / 512 / 8))"
 USRSIZEARG="-b $((${USR_SIZE} / 512 / 8))"
 HOMESIZEARG="-b $((${HOME_SIZE} / 512 / 8))"
 
+_BOOT_SIZE=$((${BOOTXX_SECS} + ${GPT_SECS}))
+BOOT_SIZE=$((${_BOOT_SIZE} * 512))
+dd if=/dev/zero bs=${BOOT_SIZE} count=1 > ${OBJ}/boot.img
+
 if [ ${EFI_SIZE} -ge 512 ]
 then
-       fetch_and_build_grub
+    fetch_and_build_grub
 
-       : ${EFI_DIR=$OBJ/efi}
-       rm -rf ${EFI_DIR} && mkdir -p ${EFI_DIR}/boot/minix_default ${EFI_DIR}/boot/efi
-       create_grub_cfg
-       cp ${MODDIR}/* ${EFI_DIR}/boot/minix_default/
-       cp ${RELEASETOOLSDIR}/grub/grub-core/booti386.efi ${EFI_DIR}/boot/efi
-       cp ${RELEASETOOLSDIR}/grub/grub-core/*.mod ${EFI_DIR}/boot/efi
+    : ${EFI_DIR=$OBJ/efi}
+    rm -rf ${EFI_DIR} && mkdir -p ${EFI_DIR}/EFI/boot ${EFI_DIR}/EFI/boot/minix_default 
+    create_grub_cfg
+    cp ${MODDIR}/* ${EFI_DIR}/EFI/boot/minix_default/
+    cp ${RELEASETOOLSDIR}/grub/grub-core/booti386.efi ${EFI_DIR}/EFI/boot/bootia32.efi
+    cp ${RELEASETOOLSDIR}/grub/grub-core/*.mod ${EFI_DIR}/EFI/boot
+    
+    dd if=/dev/zero bs=${EFI_SIZE} count=1 > ${OBJ}/efi.img
+    
+    echo " * EFI"
+    ${CROSS_TOOLS}/nbmakefs -t msdos -s ${EFI_SIZE} -o "F=32,c=1" ${OBJ}/efi.img ${EFI_DIR}
+    #dd if=${OBJ}/efi.img >> ${IMG}
+    cat ${OBJ}/boot.img ${OBJ}/efi.img > ${IMG}
+
+    EFI_START=${_BOOT_SIZE}
+    _EFI_SIZE=$(($EFI_SIZE / 512))
+    ROOT_START=$((${EFI_START} + ${_EFI_SIZE}))
+else
+    ROOT_START=${_BOOT_SIZE}
 fi
 
 ROOT_START=${BOOTXX_SECS}
@@ -112,17 +130,21 @@ _HOME_SIZE=$(($_HOME_SIZE / 512))
 #
 if [ ${EFI_SIZE} -ge 512 ]
 then
-       dd if=/dev/zero bs=${EFI_SIZE} count=1 > ${OBJ}/efi.img
-       EFI_START=$((${HOME_START} + ${_HOME_SIZE}))
-       echo " * EFI"
-       ${CROSS_TOOLS}/nbmakefs -t msdos -s ${EFI_SIZE} -o "F=32,c=1" ${OBJ}/efi.img ${EFI_DIR}
-       dd if=${OBJ}/efi.img >> ${IMG}
-       ${CROSS_TOOLS}/nbpartition -m ${IMG} ${BOOTXX_SECS} 81:${_ROOT_SIZE}* 81:${_USR_SIZE} 81:${_HOME_SIZE} EF:1+
+    mv ${IMG} ${IMG}.work
+    cat ${IMG}.work ${OBJ}/boot.img > ${IMG}
+    rm ${IMG}.work
+	${CROSS_TOOLS}/nbgpt ${IMG} create -f
+	${CROSS_TOOLS}/nbgpt ${IMG} add -b ${EFI_START} -s ${_EFI_SIZE} -t efi -l "EFI system"
+	${CROSS_TOOLS}/nbgpt ${IMG} add -s ${_ROOT_SIZE} -t ffs
+	${CROSS_TOOLS}/nbgpt ${IMG} add -s ${_USR_SIZE} -t ffs
+	${CROSS_TOOLS}/nbgpt ${IMG} add -s ${_HOME_SIZE} -t ffs
 else
-       ${CROSS_TOOLS}/nbpartition -m ${IMG} ${BOOTXX_SECS} 81:${_ROOT_SIZE}* 81:${_USR_SIZE} 81:${_HOME_SIZE}
+    ${CROSS_TOOLS}/nbpartition -m ${IMG} ${BOOTXX_SECS} 81:${_ROOT_SIZE}* 81:${_USR_SIZE} 81:${_HOME_SIZE}
+    ${CROSS_TOOLS}/nbinstallboot -f -m ${ARCH} ${IMG} ${DESTDIR}/usr/mdec/bootxx_minixfs3
 fi
 
-${CROSS_TOOLS}/nbinstallboot -f -m ${ARCH} ${IMG} ${DESTDIR}/usr/mdec/bootxx_minixfs3
+echo "Convert to vmdk"
+qemu-img convert -f raw -O vmdk ${IMG} minix_x86.vmdk
 
 echo ""
 echo "Disk image at `pwd`/${IMG}"

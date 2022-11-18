@@ -1,10 +1,11 @@
-#	$NetBSD: Makefile,v 1.157 2015/08/17 06:16:03 knakahara Exp $
+#	$NetBSD: Makefile,v 1.170 2019/05/18 08:38:00 mlelstv Exp $
 
 .include <bsd.own.mk>
 
 INCSDIR= /usr/include/sys
 
-INCS=	acct.h agpio.h aio.h ansi.h aout_mids.h ataio.h atomic.h audioio.h \
+INCS=	acct.h agpio.h aio.h ansi.h aout_mids.h ataio.h atomic.h \
+	audioio.h \
 	bitops.h bootblock.h bswap.h buf.h \
 	callback.h callout.h cdbr.h cdefs.h cdefs_aout.h \
 	cdefs_elf.h cdio.h chio.h clock.h clockctl.h \
@@ -21,20 +22,21 @@ INCS=	acct.h agpio.h aio.h ansi.h aout_mids.h ataio.h atomic.h audioio.h \
 	exec_coff.h exec_ecoff.h exec_elf.h exec_script.h extattr.h extent.h \
 	fcntl.h fd_set.h fdio.h featuretest.h file.h filedesc.h filio.h \
 	flashio.h float_ieee754.h fstypes.h gcq.h gmon.h gpio.h hash.h \
-	ieee754.h intr.h intrio.h inttypes.h ioccom.h ioctl.h ioctl_compat.h iostat.h ipc.h \
+	idtype.h ieee754.h intr.h intrio.h inttypes.h ioccom.h ioctl.h \
+	ioctl_compat.h iostat.h ipc.h ipmi.h \
 	joystick.h \
-	kcore.h kcpuset.h kgdb.h kmem.h ksem.h ksyms.h ktrace.h \
-	localedef.h lock.h lockf.h lua.h lwp.h lwpctl.h \
+	kcore.h kcov.h kcpuset.h kgdb.h kmem.h ksem.h ksyms.h ktrace.h \
+	localcount.h localedef.h lock.h lockf.h lua.h lwp.h lwpctl.h \
 	malloc.h mallocvar.h mbuf.h md4.h md5.h midiio.h \
 	mman.h module.h mount.h mqueue.h msg.h msgbuf.h mtio.h mutex.h \
 	namei.h null.h \
-	param.h pcu.h pipe.h pmc.h poll.h pool.h power.h proc.h \
-	protosw.h pset.h ptrace.h ptree.h \
+	param.h pcu.h pipe.h pmf.h poll.h pool.h power.h proc.h \
+	protosw.h pset.h psref.h ptrace.h ptree.h \
 	queue.h quota.h quotactl.h \
 	ras.h rbtree.h reboot.h radioio.h resource.h resourcevar.h rmd160.h \
 	rnd.h rndio.h rwlock.h \
-	scanio.h sched.h scsiio.h sdt.h select.h selinfo.h sem.h sha1.h \
-	sha2.h shm.h siginfo.h signal.h signalvar.h sigtypes.h \
+	scanio.h sched.h scsiio.h sdt.h select.h selinfo.h sem.h semaphore.h \
+	sha1.h sha2.h sha3.h shm.h siginfo.h signal.h signalvar.h sigtypes.h \
 	sleepq.h socket.h \
 	socketvar.h sockio.h spawn.h specificdata.h stat.h \
 	statvfs.h syscall.h syscallargs.h sysctl.h stdarg.h stdbool.h \
@@ -42,8 +44,8 @@ INCS=	acct.h agpio.h aio.h ansi.h aout_mids.h ataio.h atomic.h audioio.h \
 	tape.h termios.h time.h timeb.h timepps.h times.h timespec.h \
 	timex.h tls.h trace.h tree.h tty.h ttychars.h ttycom.h \
 	ttydefaults.h ttydev.h types.h \
-	ucontext.h ucred.h uio.h un.h unistd.h unpcb.h user.h utsname.h uuid.h \
-	vadvise.h verified_exec.h videoio.h vmmeter.h vnode.h vnode_if.h \
+	ucontext.h ucred.h uio.h un.h unistd.h unpcb.h utsname.h uuid.h \
+	verified_exec.h videoio.h vmmeter.h vnode.h vnode_if.h \
 	wait.h wapbl.h wapbl_replay.h wdog.h xattr.h
 
 INCSYMLINKS=\

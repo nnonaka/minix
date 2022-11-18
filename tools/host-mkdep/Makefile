@@ -1,4 +1,6 @@
-#	$NetBSD: Makefile,v 1.12 2012/12/02 12:44:06 apb Exp $
+#	$NetBSD: Makefile,v 1.15 2019/01/27 05:16:10 dholland Exp $
+
+.include <bsd.hostinit.mk>
 
 HOSTPROG= 	host-mkdep
 HOSTPROGNAME=	${_TOOL_PREFIX}host-mkdep

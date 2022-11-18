@@ -1,10 +1,10 @@
-#	$NetBSD: Makefile,v 1.31 2020/04/04 00:47:30 christos Exp $
+#	$NetBSD: Makefile,v 1.30 2018/12/27 16:26:52 christos Exp $
 
 .include <bsd.hostinit.mk>
 
 MODULE=		binutils
 
-GNUHOSTDIST=	${.CURDIR}/../../external/gpl3/binutils/dist
+GNUHOSTDIST=	${.CURDIR}/../../external/gpl3/${EXTERNAL_BINUTILS_SUBDIR}/dist
 
 BRANDING?=	\
 	--with-pkgversion="NetBSD Binutils nb1" \
@@ -42,8 +42,7 @@ INSTALL_TARGET+=install-gprof
 
 .include "${.CURDIR}/../Makefile.gnuhost"
 
-CCADDFLAGS=	-I${GNUHOSTDIST}/include  -I${DESTDIR}/usr/include
-CCADDFLAGS+=	-B${DESTDIR}/usr/lib/
+CCADDFLAGS=	-I${DESTDIR}/usr/include -B${DESTDIR}/usr/lib/
 LDADDFLAGS=	-L${DESTDIR}/lib -L${DESTDIR}/usr/lib
 
 # Force avoiding possibly non-executable install-sh.
