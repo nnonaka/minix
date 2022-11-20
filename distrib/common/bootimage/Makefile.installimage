@@ -31,8 +31,8 @@ IMAGEMB=	${INSTIMAGEMB}
 .endif
 SWAPMB=		0			# no swap
 
-KERN_SET?=	kern-GENERIC
-SETS?=		modules base etc
+KERN_SET?=	minix-kernel
+SETS?=		minix-base minix-comp minix-games minix-man minix-tests tests
 
 FSTAB_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/fstab.install.in
 

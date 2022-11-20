@@ -37,11 +37,15 @@ AFLAGS.putstr32.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 .endif # defined(__MINIX)
 AFLAGS.realprot.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 
+.if defined(__MINIX)
+CPPFLAGS+= -DNO_RAIDFRAME
+.endif
+
 CPPFLAGS= -I$S/lib/libsa ${I386CPPFLAGS} ${I386MISCCPPFLAGS}
 #CPPFLAGS+= -DDISK_DEBUG
 #CPPFLAGS+= -DNO_DISKLABEL
 #CPPFLAGS+= -DNO_GPT
-CPPFLAGS+= -DNO_RAIDFRAME
+#CPPFLAGS+= -DNO_RAIDFRAME
 #CPPFLAGS+= -DNO_MULTIBOOT2
 #CPPFLAGS+= -DSAVE_MEMORY
 

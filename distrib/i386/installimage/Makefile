@@ -12,7 +12,7 @@ PRIMARY_BOOT=		bootxx_ffsv1
 EFIBOOT=		${WORKDIR}/usr/mdec/bootia32.efi
 
 USE_MBR=		yes
-USE_GPT=        yes
+USE_GPT=        no
 USE_GPTMBR=		yes
 
 CLEANFILES+=	boot.cfg

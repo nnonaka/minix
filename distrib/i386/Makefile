@@ -5,14 +5,14 @@
 SUBDIR=
 #SUBDIR+=	ramdisks
 SUBDIR+=	.WAIT
-#SUBDIR+=	instkernel
-SUBDIR+=	instminixkernel
+SUBDIR+=	instkernel
+#SUBDIR+=	instminixkernel
 .if ${MKKMOD} != "no"
 SUBDIR+=	kmod
 SUBDIR+=	kmod-cgdroot
 .endif
 SUBDIR+=	.WAIT
-#SUBDIR+=	cdroms
+SUBDIR+=	cdroms
 #SUBDIR+=	floppies
 SUBDIR+=	liveimage
 SUBDIR+=	installimage

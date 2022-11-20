@@ -27,8 +27,7 @@ ${V}=		${${V}DIR}/${F}.fs
 # MDSETTARGETS+=	INSTALL_TINY		${RAMDISK_T}	-
 # MDSETTARGETS+=	INSTALL_PS2		${RAMDISK_S}	-
 # MDSETTARGETS+=	INSTALL_TINY		${RESCUE_T}	netbsd-RESCUE_TINY
-# MDSETTARGETS+=	GENERIC			${RAMDISK_M}	-
-MDSETTARGETS+=	${DESTDIR}/boot/minix/.temp/kernel			Dummy	-
+MDSETTARGETS+=	${DESTDIR}/boot/minix/kernel			Dummy	-
 
 #MDSET_RELEASEDIR=	binary/kernel
 MDSET_RELEASEDIR=	binary/boot/minix_default

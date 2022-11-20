@@ -2,7 +2,7 @@
 
 .include <bsd.own.mk>
 
-KERN_SET=		minix-base
+KERN_SET=		minix-kernel
 PRIMARY_BOOT=		bootxx_ffsv1
 #SECONDARY_BOOT=		boot
 #SECONDARY_BOOT_ARG=	# unnecessary
