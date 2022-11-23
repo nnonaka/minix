@@ -123,9 +123,9 @@ SUBDIR += .WAIT texinfo \
 		 cksum \
 		file \
 		makefs .WAIT mkcsmapper mkesdb mklocale \
-		.WAIT gpt\
+		.WAIT disklabel gpt \
 		.WAIT \
-		.WAIT \
+		.WAIT fdisk \
 		.WAIT installboot \
 		pwd_mkdb strfile zic
 .endif
