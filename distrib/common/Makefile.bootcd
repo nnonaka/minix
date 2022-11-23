@@ -108,7 +108,8 @@ ECHO?=		echo
 .if ${CDRELEASE} == false
 CDIMAGE=	${CDBASE}.iso
 .else
-CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/cd$//}.iso
+#CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/cd$//}.iso
+CDIMAGE=	Minix-${DISTRIBVER}-${CDBASE:S/cd$//}.iso
 .endif
 WORKSPEC=	fs.spec
 

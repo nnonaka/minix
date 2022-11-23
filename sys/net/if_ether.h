@@ -81,6 +81,11 @@ struct ether_addr {
 	uint8_t ether_addr_octet[ETHER_ADDR_LEN];
 } __packed;
 
+#if defined(__minix)
+#define ea_addr ether_addr_octet
+typedef struct ether_addr ether_addr_t;
+#endif /* defined(__minix) */
+
 /*
  * Structure of a 10Mb/s Ethernet header.
  */
