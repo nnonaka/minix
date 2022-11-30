@@ -59,10 +59,10 @@ MKISOFS!=       (which mkisofs || echo true) 2>/dev/null
 .endif
 DISTRIBREV!=	${HOST_SH} ${KERNSRCDIR}/conf/osrelease.sh -s
 # ISO 9660 volume ID.  Note that this can only contain [A-Z0-9_].
-ISO_VOLID!=	echo NETBSD_${DISTRIBREV} | tr a-z A-Z
+ISO_VOLID!=	echo MINIX_${DISTRIBREV} | tr a-z A-Z
 MKISOFS_FLAGS+= -J -l -hide-joliet-trans-tbl -r -T \
 		-V ${ISO_VOLID} \
-		-publisher "The NetBSD Project" \
+		-publisher "Minix" \
 		-m "${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom"
 .if ${MKISOFS_FLAGS:N-v}
 MKISOFS_FLAGS+=	-quiet
@@ -728,6 +728,7 @@ build_kernels: .PHONY
 #
 .if !defined(KERNELS_DONE)						# {
 .for configfile in ${ALL_KERNELS:O:u}					# {
+.if !defined(__MINIX)
 build_kernels: kern-${configfile}
 kern-${configfile}: .PHONY .MAKE
 	cd ${KERNCONFDIR} && ${TOOL_CONFIG} ${CONFIGOPTS} -s ${KERNSRCDIR} \
@@ -738,6 +739,7 @@ kern-${configfile}: .PHONY .MAKE
 	${MAKE} -C ${KERNOBJDIR}/${configfile:C/.*\///} depend && \
 	${MAKE} -C ${KERNOBJDIR}/${configfile:C/.*\///} 
 	sync
+.endif  # !defined(__MINIX)
 .endfor	# ALL_KERNELS							# }
 .endif	# KERNELS_DONE							# }
 
@@ -747,6 +749,7 @@ build_kernelsets: .PHONY
 #
 .for configfile in ${KERNEL_SETS:O:u}					# {
 .for configsel in ${ALL_KERNELS:O:u}
+.if !defined(__MINIX)
 .if ${configfile} == ${configsel}
 build_kernelsets: kernset-${configfile}
 kernset-${configfile}: .PHONY build_kernels snap_pre
@@ -780,6 +783,7 @@ kernset-${configfile}: .PHONY build_kernels snap_pre
 		} \
 	}
 .endif
+.endif # !defined(__MINIX)
 .endfor
 .endfor	# KERNEL_SETS							# }
 
@@ -789,6 +793,7 @@ build_releasekernels: .PHONY
 #
 .for configfile in ${KERNEL_SETS:O:u} ${EXTRA_KERNELS:O:u}		# {
 .for configsel in ${ALL_KERNELS:O:u}
+.if !defined(__MINIX)
 .if ${configfile} == ${configsel}
 build_releasekernels: releasekern-${configfile}
 releasekern-${configfile}: .PHONY build_kernels snap_pre
@@ -819,6 +824,7 @@ releasekern-${configfile}: .PHONY build_kernels snap_pre
 		done; \
 	}
 .endif
+.endif # !defined(__MINIX)
 .endfor
 .endfor	# KERNEL_SETS EXTRA_KERNELS					# }
 

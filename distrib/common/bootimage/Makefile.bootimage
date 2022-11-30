@@ -213,6 +213,7 @@ MBRHEADS=	255
 MBRSECTORS=	63
 MBRCYLINDERS!=	expr ${IMAGESECTORS} / \( ${MBRHEADS} \* ${MBRSECTORS} \)
 MBRNETBSD=	169
+MBRMINIX=	129
 MBRFAT?=	6	# 16-bit FAT, more than 32M
 
 BSDPARTSECTORS!= expr ${IMAGESECTORS} - ${LABELSECTORS} \
@@ -519,7 +520,7 @@ ${WORKMBR}:
 	# create BSD partition
 	${TOOL_FDISK} -f -i -u \
 	    -b ${MBRCYLINDERS}/${MBRHEADS}/${MBRSECTORS}		\
-	    -1 -a -s ${MBRNETBSD}/${FSOFFSET}/${BSDPARTSECTORS}		\
+	    -1 -a -s ${MBRMINIX}/${FSOFFSET}/${BSDPARTSECTORS}		\
 	    -F ${WORKMBR}
 	# create FAT partition
 	${TOOL_FDISK} -f -u \
@@ -530,7 +531,7 @@ ${WORKMBR}:
 	# create BSD partition
 	${TOOL_FDISK} -f -i -u \
 	    -b ${MBRCYLINDERS}/${MBRHEADS}/${MBRSECTORS}		\
-	    -0 -a -s ${MBRNETBSD}/${FSOFFSET}/${BSDPARTSECTORS}		\
+	    -0 -a -s ${MBRMINIX}/${FSOFFSET}/${BSDPARTSECTORS}		\
 	    -F ${WORKMBR}
 .  endif
 .  if empty(MBR_BOOTCODE)
