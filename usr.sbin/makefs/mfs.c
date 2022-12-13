@@ -182,8 +182,9 @@ mfs_makefs(const char *image, const char *dir, fsnode *root, fsinfo_t *fsopts)
 	if (debug & DEBUG_FS_MAKEFS)
 		printf("mfs_makefs: image %s directory %s root %p\n",
 		    image, dir, root);
-
-    mfs_opts->verbose = 2;
+		    
+    if (debug)
+        mfs_opts->verbose = 2;
 
 		/* validate tree and options */
 	TIMER_START(start);

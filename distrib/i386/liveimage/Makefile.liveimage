@@ -4,7 +4,7 @@
 
 KERN_SET=		minix-kernel
 PRIMARY_BOOT=		bootxx_minixfs3
-#SECONDARY_BOOT=		boot
+SECONDARY_BOOT=		boot_monitor
 #SECONDARY_BOOT_ARG=	# unnecessary
 EFIBOOT+=		${WORKDIR}/usr/mdec/bootia32.efi
 
