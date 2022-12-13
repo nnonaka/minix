@@ -53,3 +53,4 @@ minix_x86.img
 *.iso
 *.vmdk
 releasetools/grub/
+*.img

@@ -6,14 +6,15 @@ INSTIMGBASE=	Minix-${DISTRIBVER}-i386-install	# gives ${IMGBASE}.img
 
 INSTIMAGEMB?=	1900			# for all installation binaries
 
-PRIMARY_BOOT=		bootxx_ffsv1
-#SECONDARY_BOOT=		boot
+#PRIMARY_BOOT=		bootxx_ffsv1
+PRIMARY_BOOT=		bootxx_minixfs3
+SECONDARY_BOOT=		boot_monitor
 #SECONDARY_BOOT_ARG=	# unnecessary
 EFIBOOT=		${WORKDIR}/usr/mdec/bootia32.efi
 
 USE_MBR=		yes
 USE_GPT=        no
-USE_GPTMBR=		yes
+USE_GPTMBR=		no
 
 CLEANFILES+=	boot.cfg
 
