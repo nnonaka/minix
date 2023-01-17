@@ -207,7 +207,6 @@ motd: ${.CURDIR}/${MOTD_SOURCE} ${_NETBSD_VERSION_DEPENDS}
 .endif # !defined(__MINIX)
 
 CLEANFILES+=	MAKEDEV
-.if !defined(__MINIX)
 MAKEDEV_MACHINE=${"${MACHINE_CPU}" == "aarch64":?${MACHINE_CPU}:${MACHINE}}
 MAKEDEV: ${.CURDIR}/MAKEDEV.awk ${.CURDIR}/MAKEDEV.tmpl \
     ${.CURDIR}/etc.${MAKEDEV_MACHINE}/MAKEDEV.conf
@@ -216,14 +215,6 @@ MAKEDEV: ${.CURDIR}/MAKEDEV.awk ${.CURDIR}/MAKEDEV.tmpl \
 	    NETBSDSRCDIR=${NETBSDSRCDIR:Q} \
 	    ${TOOL_AWK} -f ${.CURDIR}/MAKEDEV.awk ${.CURDIR}/MAKEDEV.tmpl \
 	    > ${.TARGET}
-.else
-MAKEDEV: .PHONY
-	if [ ${MKUNPRIVED} != "yes" ]; then \
-		cd ${DESTDIR}/dev && sh ${NETBSDSRCDIR}/minix/commands/MAKEDEV/MAKEDEV.sh -s; \
-	else \
-		sh ${NETBSDSRCDIR}/minix/commands/MAKEDEV/MAKEDEV.sh -m -s >> ${DESTDIR}/METALOG; \
-	fi
-.endif # !defined(__MINIX)
 
 .include "${NETBSDSRCDIR}/etc/Makefile.params"
 
@@ -283,11 +274,11 @@ FILESDIR_aliases=	/etc/mail
 FILESMODE_aliases=	644
 .endif
 
-.if !defined(__MINIX)
 CONFIGFILES+=		MAKEDEV.local
 FILESDIR_MAKEDEV.local=	/dev
 FILESMODE_MAKEDEV.local=${BINMODE}
 
+.if !defined(__MINIX)
 CONFIGFILES+=		crontab
 FILESDIR_crontab=	/var/cron/tabs
 FILESNAME_crontab=	root
@@ -390,11 +381,10 @@ install-etc-files-safe: .PHONY .MAKE check_DESTDIR MAKEDEV
 	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 644 \
 	    ${.CURDIR}/etc.${MACHINE}/boot.cfg ${DESTDIR}/
 .endif
-.if !defined(__MINIX)
 	${_MKMSG_INSTALL} ${DESTDIR}/dev/MAKEDEV
 	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 555 \
 	    MAKEDEV ${DESTDIR}/dev
-.else
+.if defined(__MINIX)
 # As /var/log is a symlink to /usr/log, we need to use /usr/log for files
 # in /var/log here.  The same applies to the distrib list entries.
 .for owner group mode file in \
@@ -407,7 +397,7 @@ install-etc-files-safe: .PHONY .MAKE check_DESTDIR MAKEDEV
     			/dev/null ${DESTDIR}${file}; \
 	else true; fi
 .endfor
-.endif # !defined(__MINIX)
+.endif # defined(__MINIX)
 # TAC as software is imported, copy the files from the .for block below
 # TAC to the .for block above.
 .if !defined(__MINIX)
