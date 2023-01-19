@@ -21,20 +21,22 @@ MTREECONF=	${DISTRIBDIR}/common/mtree.common
 IMAGEENDIAN=	le
 IMAGEDEPENDS+= 	${CRUNCHBIN} \
 		dot.profile \
-		${DESTDIR}/usr/mdec/bootxx_ffsv1 \
+		${DESTDIR}/usr/mdec/boot_monitor \
+		${DESTDIR}/usr/mdec/bootxx_minixfs3 \
 		${DESTDIR}/usr/mdec/mbr \
 		${DESTDIR}/usr/mdec/mbr_ext \
 		${DESTDIR}/usr/mdec/mbr_bootsel \
 		${DESTDIR}/usr/mdec/gptmbr.bin \
 		${NETBSDSRCDIR}/etc/group ${NETBSDSRCDIR}/etc/master.passwd \
+		#${NETBSDSRCDIR}/etc/netconfig ${DISTRIBDIR}/common/protocols \
 		${DISTRIBDIR}/common/services
 PARSELISTENV+=	BOOTMODEL=${BOOTMODEL:Q}
 
 # This propogates through to the link of ramdiskbin
 # The map file is useful when trying to prune the image
-LDFLAGS+=	-Wl,-Map,${CRUNCHBIN}.map,--cref
-CRUNCHENV+=	LDFLAGS=${LDFLAGS:Q}
-CLEANFILES+=	${CRUNCHBIN}.map
+#LDFLAGS+=	-Wl,-Map,${CRUNCHBIN}.map,--cref
+#CRUNCHENV+=	LDFLAGS=${LDFLAGS:Q}
+#CLEANFILES+=	${CRUNCHBIN}.map
 
 .if defined(USE_SYSINST)
 .if ${USE_SYSINST} != yes
@@ -50,8 +52,8 @@ MAKEFS_FLAGS+=	-f 14
 #.include	"${HACKSRC}/Makefile.inc"
 #${CRUNCHBIN}:	libhack.o
 
-.include "${DISTRIBDIR}/common/Makefile.crunch"
-#.include "${DISTRIBDIR}/common/Makefile.makedev"
+#.include "${DISTRIBDIR}/common/Makefile.crunch"
+.include "${DISTRIBDIR}/common/Makefile.makedev"
 .include "${DISTRIBDIR}/common/Makefile.image"
 
 release:

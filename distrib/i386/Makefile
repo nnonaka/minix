@@ -3,7 +3,7 @@
 .include <bsd.own.mk>
 
 SUBDIR=
-#SUBDIR+=	ramdisks
+SUBDIR+=	ramdisks
 SUBDIR+=	.WAIT
 SUBDIR+=	instkernel
 #SUBDIR+=	instminixkernel
