@@ -3,10 +3,10 @@
 .include <bsd.own.mk>
 
 SUBDIR=
-SUBDIR+=	ramdisks
+#SUBDIR+=	ramdisks
 SUBDIR+=	.WAIT
 SUBDIR+=	instkernel
-#SUBDIR+=	instminixkernel
+SUBDIR+=	instminixkernel
 .if ${MKKMOD} != "no"
 SUBDIR+=	kmod
 SUBDIR+=	kmod-cgdroot

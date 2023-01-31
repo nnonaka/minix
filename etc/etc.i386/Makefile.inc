@@ -22,7 +22,7 @@ BUILD_KERNELS+=	INSTALL
 # BUILD_KERNELS+=	INSTALL_TINY
 # BUILD_KERNELS+=	INSTALL_PS2
 
-INSTALLATION_DIRS+=	installation/misc
+#INSTALLATION_DIRS+=	installation/misc
 INSTALLATION_DIRS+=	installation/cdrom
 # INSTALLATION_DIRS+=	installation/floppy
 # INSTALLATION_DIRS+=	installation/miniroot

@@ -22,4 +22,5 @@ Cross-compiling memo
                    install from an UNPRIVED build with proper file permissions.
     -u             Set MKUPDATE=yes; do not run "make cleandir" first.
                    Without this, everything is rebuilt, including the tools.
-
+  *texinfo
+    put texinfo-4.8.tar.bz2 to gnu/dist

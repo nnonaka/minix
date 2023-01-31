@@ -12,7 +12,7 @@ I386COMMON=	${.CURDIR}/../common
 WARNS=		1
 DBG=		-Os
 
-#CRUNCHBIN=	ramdiskbin
+CRUNCHBIN=	ramdiskbin
 
 # Use ${.CURDIR}/list only if LISTS was not already defined by the caller.
 LISTS?=		${.CURDIR}/list
@@ -52,7 +52,7 @@ MAKEFS_FLAGS+=	-f 14
 #.include	"${HACKSRC}/Makefile.inc"
 #${CRUNCHBIN}:	libhack.o
 
-#.include "${DISTRIBDIR}/common/Makefile.crunch"
+.include "${DISTRIBDIR}/common/Makefile.crunch"
 .include "${DISTRIBDIR}/common/Makefile.makedev"
 .include "${DISTRIBDIR}/common/Makefile.image"
 

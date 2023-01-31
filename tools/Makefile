@@ -61,13 +61,13 @@ TOOLCHAIN_BITS+= pcc
 . endif
 .endif
 
-.if !defined(__MINIX)
-.if ${TOOLCHAIN_MISSING} == "no"
+#.if !defined(__MINIX)
+.if ${TOOLCHAIN_MISSING} == "no" || defined(EXTERNAL_TOOLCHAIN)
 # XXX Eventually, we want to be able to build dbsym and mdsetimage
 # XXX if EXTERNAL_TOOLCHAIN is set.
 TOOLCHAIN_BITS+= dbsym mdsetimage
 .endif
-.endif # !defined(__MINIX)
+#.endif # !defined(__MINIX)
 
 DTRACE_BITS=
 .if ${MKDTRACE} != "no" || ${MKCTF} != "no"
@@ -107,24 +107,25 @@ dependall-binstall: dependall-compat
 SUBDIR=	host-mkdep compat binstall \
 	.WAIT mktemp .WAIT sed .WAIT genassym
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+= crunchgen gencat \
+SUBDIR+= crunchgen gencat hexdump \
 		${LINT_BITS} \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
 SUBDIR+= cat join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= grep pax
 
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR += .WAIT texinfo \
 	.WAIT tic \
-	.WAIT pax \
 	.WAIT ${TOOLCHAIN_BITS} \
 	${DTRACE_BITS} \
-		 cksum \
+		 cksum db \
 		file \
-		makefs .WAIT mkcsmapper mkesdb mklocale \
+		makefs sortinfo \
+		.WAIT mkcsmapper mkesdb mklocale mknod \
 		.WAIT disklabel gpt \
-		.WAIT \
+		.WAIT paxctl \
 		.WAIT fdisk \
 		.WAIT installboot \
 		pwd_mkdb strfile zic
@@ -144,8 +145,8 @@ SUBDIR+= .WAIT config
 SUBDIR+= \
 	llvm .WAIT \
 	llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
-	llvm-tblgen llvm-clang-tblgen .WAIT \
-	llvm-include .WAIT \
+	llvm-tblgen llvm-clang-tblgen \
+	.WAIT llvm-include .WAIT \
 	llvm-lib .WAIT \
 	llvm-clang
 . if ${MKLLD} != "no"
@@ -233,6 +234,8 @@ SUBDIR+=	elftosb
 .if ${MACHINE} == "evbarm" || ${MACHINE} == "evbmips" || \
     ${MACHINE} == "evbppc" || ${MACHINE} == "sandpoint"
 SUBDIR+=	mkubootimage
+SUBDIR+=	libfdt .WAIT
+SUBDIR+=	dtc
 .endif
 .endif # !defined(__MINIX)
 
