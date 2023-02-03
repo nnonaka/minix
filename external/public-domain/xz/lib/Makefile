@@ -1,10 +1,11 @@
-# $NetBSD: Makefile,v 1.5 2015/04/17 20:12:45 christos Exp $
+# $NetBSD: Makefile,v 1.10 2018/09/25 05:42:08 joerg Exp $
+
+.include <bsd.init.mk>
 
 LIB=		lzma
 USE_SHLIBDIR=	yes
 NOLINT=		yes
 
-.include <bsd.init.mk>
 
 .PATH:	${XZSRCDIR}/src/liblzma/api ${XZSRCDIR}/src/liblzma/api/lzma
 INCS+=	base.h bcj.h block.h check.h container.h delta.h \
@@ -14,8 +15,11 @@ INCS+=	base.h bcj.h block.h check.h container.h delta.h \
 INCSDIR_lzma.h=	/usr/include
 INCSDIR=	/usr/include/lzma
 
+.if ${MKSANITIZER} != "yes"
 LDFLAGS+=	-Wl,-z,defs
+.endif
 
+CPPFLAGS+=	-I${XZSRCDIR}/src/common
 CPPFLAGS+=	-I${XZSRCDIR}/src/liblzma/check
 CPPFLAGS+=	-I${XZSRCDIR}/src/liblzma/common
 CPPFLAGS+=	-I${XZSRCDIR}/src/liblzma/delta
@@ -32,6 +36,10 @@ SRCS+=	tuklib_physmem.c tuklib_cpucores.c
 .PATH:	${XZSRCDIR}/src/liblzma/check
 SRCS+=	check.c crc32_table.c crc64_table.c
 SRCS+=	crc32_fast.c crc64_fast.c
+
+.if defined(HOSTLIB)
+SRCS+=	sha256.c
+.endif
 
 #__MINIX: No pthreads:
 #         hardware_cputhreads.c outqueue.c stream_encoder_mt.c
@@ -50,6 +58,10 @@ SRCS+=	common.c block_util.c easy_preset.c filter_common.c \
 	filter_buffer_decoder.c filter_decoder.c filter_flags_decoder.c \
 	index_decoder.c index_hash.c stream_buffer_decoder.c \
 	stream_decoder.c stream_flags_decoder.c vli_decoder.c
+
+.if !defined(HOSTLIB)
+#SRCS+=	 stream_encoder_mt.c
+.endif
 
 .PATH:	${XZSRCDIR}/src/liblzma/delta
 SRCS+=	delta_common.c delta_encoder.c delta_decoder.c
@@ -85,11 +97,19 @@ liblzma.pc:	${XZSRCDIR}/src/liblzma/liblzma.pc.in
 	    > ${.TARGET}.tmp && \
 	mv -f ${.TARGET}.tmp ${.TARGET}
 
+.if ${MACHINE_ARCH} == "i386"
+COPTS += ${${ACTIVE_CC} == "gcc":? -Wno-error=psabi :}
+.endif
+
 CLEANFILES+=	liblzma.pc
 
+.if defined(HOSTLIB)
+HOST_CPPFLAGS+=	${CPPFLAGS:N-Wp,-iremap,*}
+.include <bsd.hostlib.mk>
+.else
 .if !defined(__MINIX)
-LDADD+=	-lpthread
-DPADD+=	${LIBPTHREAD}
+LIBDPLIBS+=	pthread ${NETBSDSRCDIR}/lib/libpthread
 .endif # defined(__MINIX)
-
 .include <bsd.lib.mk>
+.endif
+

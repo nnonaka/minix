@@ -3058,7 +3058,7 @@
 ./usr/include/sys/param.h			comp-c-include
 ./usr/include/sys/pcu.h				comp-c-include
 ./usr/include/sys/pipe.h			comp-c-include
-./usr/include/sys/pmc.h				comp-obsolete		obsolete
+./usr/include/sys/pmc.h				comp-c-include
 ./usr/include/sys/pmf.h				comp-c-include
 ./usr/include/sys/poll.h			comp-c-include
 ./usr/include/sys/pool.h			comp-c-include
@@ -3149,10 +3149,10 @@
 ./usr/include/sys/un.h				comp-c-include
 ./usr/include/sys/unistd.h			comp-c-include
 ./usr/include/sys/unpcb.h			comp-c-include
-./usr/include/sys/user.h			comp-obsolete		obsolete
+./usr/include/sys/user.h			comp-c-include
 ./usr/include/sys/utsname.h			comp-c-include
 ./usr/include/sys/uuid.h			comp-c-include
-./usr/include/sys/vadvise.h			comp-obsolete		obsolete
+./usr/include/sys/vadvise.h			comp-c-include
 ./usr/include/sys/vcmd.h			comp-obsolete		obsolete
 ./usr/include/sys/verified_exec.h		comp-c-include
 ./usr/include/sys/videoio.h			comp-c-include

@@ -61,13 +61,9 @@ TOOLCHAIN_BITS+= pcc
 . endif
 .endif
 
-#.if !defined(__MINIX)
 .if ${TOOLCHAIN_MISSING} == "no" || defined(EXTERNAL_TOOLCHAIN)
-# XXX Eventually, we want to be able to build dbsym and mdsetimage
-# XXX if EXTERNAL_TOOLCHAIN is set.
 TOOLCHAIN_BITS+= dbsym mdsetimage
 .endif
-#.endif # !defined(__MINIX)
 
 DTRACE_BITS=
 .if ${MKDTRACE} != "no" || ${MKCTF} != "no"
@@ -107,13 +103,13 @@ dependall-binstall: dependall-compat
 SUBDIR=	host-mkdep compat binstall \
 	.WAIT mktemp .WAIT sed .WAIT genassym
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+= crunchgen gencat hexdump \
+SUBDIR+= crunchgen ctags gencat hexdump \
 		${LINT_BITS} \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
-SUBDIR+= cat join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
-SUBDIR+= grep pax
+SUBDIR+= cat join lorder m4 mkdep tsort xz-include .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= grep xz-lib pax .WAIT libprop
 
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR += .WAIT texinfo \
@@ -130,7 +126,7 @@ SUBDIR += .WAIT texinfo \
 		.WAIT installboot \
 		pwd_mkdb strfile zic
 .endif
-SUBDIR+= stat .WAIT
+SUBDIR+= stat .WAIT xz-bin
 
 .if defined(__MINIX)
 SUBDIR += \
