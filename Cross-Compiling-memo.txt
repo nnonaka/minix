@@ -23,4 +23,5 @@ Cross-compiling memo
     -u             Set MKUPDATE=yes; do not run "make cleandir" first.
                    Without this, everything is rebuilt, including the tools.
   *texinfo
-    put texinfo-4.8.tar.bz2 to gnu/dist
+  
+    You might run gnu/dist/fetch.sh manually.
