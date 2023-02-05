@@ -1002,7 +1002,8 @@ void
 prop_object_retain(prop_object_t obj)
 {
 	struct _prop_object *po = obj;
-	uint32_t ncnt __unused;
+//	uint32_t ncnt __unused;
+	uint32_t ncnt;
 
 	_PROP_ATOMIC_INC32_NV(&po->po_refcnt, ncnt);
 	_PROP_ASSERT(ncnt != 0);

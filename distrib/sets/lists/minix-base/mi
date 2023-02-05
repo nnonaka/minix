@@ -64,6 +64,8 @@
 ./boot/minix                                            minix-base
 ./boot/minix_default                                    minix-base
 ./dev                                                   minix-base
+./dev/MAKEDEV                                           minix-base
+./dev/MAKEDEV.local                                     minix-base
 ./dev/pts                                               minix-base
 ./etc                                                   minix-base
 ./etc/X11                                               minix-base      xorg
