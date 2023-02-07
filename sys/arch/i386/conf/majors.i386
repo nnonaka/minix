@@ -23,7 +23,7 @@ device-major	klog	char 15     	klog
 device-major	random	char 16			random
 device-major	hello	char 17			hello
 #device-major	ccd		char 18  block 16	ccd
-device-major	fb0		char 19			fb0
+device-major	fb		char 19			fb
 device-major	i2c-1	char 20			i2c-1
 device-major	i2c-2	char 21			i2c-2
 device-major	i2c-3	char 22			i2c-3

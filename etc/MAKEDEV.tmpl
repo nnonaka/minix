@@ -887,9 +887,11 @@ audio|mixer)
 
 bmp085b[1-3]s77)
 	# Weather Cape: temperature & pressure sensor
-	bus=`expr $i : 'bmp085b\\(.*\\)s77'` #bus number
+	#bus=`expr $i : 'bmp085b\\(.*\\)s77'` #bus number
+	bus=${i#bmp085b}
+	bus=${bus%s77}
 	major=$(($bus + 52))
-	mkdev bmp085b${bus}s77 c ${major} 0 444
+	mkdev $i c ${major} 0 444
 	;;
 
 c[0-3]d[0-7])
@@ -929,15 +931,28 @@ c[0-3]d[0-7]p[0-3]s[0-3])
 		done
 	done
 	;;
-	
+
+eepromb[1-3]s5[0-7])
+	# cat24c256 driver
+	#bus=`expr ${dev} : 'eepromb\\(.*\\)s'`
+	dev=${i#eepromb}
+	bus=${dev%s*}
+	# configurable part of slave addr
+	slave_low=${dev#*s}
+	major=$(($bus * 8 + $slave_low + 17))
+
+	mkdev $i b ${major} 0
+	;;
+
+
 fb0)
 	# Framebuffer driver
-	mkdev $name     c %fb0_chr%     0   644
+	mkdev $i     c %fb_chr%     0   644
 	;;
 	
 fbd)
 	# Faulty block device driver
-	mkdev $name     b %fbd_chr%     0
+	mkdev $i     b %fbd_chr%     0
 	;;
 	
 fd[0-3])
@@ -961,20 +976,20 @@ fd[0-3]p[0-3])
 
 filter)
 	# Filter driver
-	mkdev $name     b %filter_chr%  0
+	mkdev $i     b %filter_chr%  0
 	;;
 
 hello)
 	# Hello driver
-	mkdev $name     c %hello_chr%   0   644
+	mkdev $i     c %hello_chr%   0   644
 	;;
 
 i2c-[1-3])
 	# i2c driver
-	bus=`expr ${dev} : '....\\(.*\\)'` # bus number
+	bus=${i#i2c-} # bus number
 	# least significant digit of major
-	major_low=`expr ${dev} : '....\\(.*\\)'`
-	major_low=$(($major_low + 19))
+	#major_low=`expr ${dev} : '....\\(.*\\)'`
+	major_low=$(($bus + 19))
 	mkdev "i2c-${bus}" c ${major_low} 0
 	;;
 	
@@ -1005,16 +1020,16 @@ flash[0-9]*)
 
 sht21b[1-3]s40)
 	# Weather Cape: relative humidity & temperature sensor
-	bus=`expr ${dev} : 'sht21b\\(.*\\)s40'`
+	bus=`expr ${i} : 'sht21b\\(.*\\)s40'`
 	major=$(($bus + 49))
 	mkdev sht21b${bus}s40 c ${major} 0 444
 	;;
 	
 tsl2550b[1-3]s39)
 	# Weather Cape: ambient light sensor
-	bus=`expr ${dev} : 'tsl2550b\\(.*\\)s39'`
+	bus=`expr ${i} : 'tsl2550b\\(.*\\)s39'`
 	major=$(($bus + 46))
-	mkdev tsl2550b${bus}s39 c ${major} 0 444
+	mkdev $i c ${major} 0 444
 	;;
 
 tty0[0-3])
@@ -1023,6 +1038,22 @@ tty0[0-3])
 	minor=$(($line + 16))
 
 	mkdev $i c %cons_chr% ${minor} 666 $g_tty
+	;;
+	
+tty[p-s][0-9a-f]|pty[p-s][0-9a-f])
+	# Pseudo ttys.
+	dev=`expr ${i} : '...\\(..\\)'`
+	group=`expr ${dev} : '\\(.\\)'`
+	group=`echo ${group} | tr 'pqrs' '0123'`
+	pty=`expr ${dev} : '.\\(.\\)'`
+	case ${pty} in
+		[a-f])	pty=1`/bin/echo ${pty} | tr 'abcdef' '012345'`
+	esac
+	minor_tty=$(($group * 16 + $pty + 128))
+	minor_pty=$(($group * 16 + $pty + 192))
+
+	mkdev tty${dev} c 9 ${minor_tty}  $g_tty 666
+	mkdev pty${dev} c 9 ${minor_pty}  $g_tty 666
 	;;
 
 ttyc[1-7])
@@ -1121,6 +1152,44 @@ video|video[0-9]*)
 	: ${unit:-0}
 	mkdev video$unit c %video_chr% $unit 666
 	;;
+	
+vnd[0-7])
+	# Whole disk devices.
+	disk=`expr $i : '...\\(.\\)'`
+	major=$(($disk + 56))
+
+	mkdev $i b ${major} 0
+	;;
+	
+vnd[0-7]p[0-3])
+	# Disk primary partitions.
+	prefix=`expr $i : '\\(.*\\).'`
+	disk=`expr $i : '...\\(.\\)'`
+	major=$(($disk + 56))
+
+	for p in 0 1 2 3
+	do
+		minor=$((1 + $p))
+		mkdev ${prefix}${p} b ${major} ${minor} 
+	done
+	;;
+	
+vnd[0-7]p[0-3]s[0-3])
+	# Disk subpartition.
+	prefix=`expr $i : '\\(.*\\)...'`
+	disk=`expr $i : '...\\(.\\)'`
+	major=$(($disk + 56))
+	
+	for p in 0 1 2 3
+	do
+		for s in 0 1 2 3
+		do
+			minor=$((128 + $p * 4 + $s))
+			mkdev ${prefix}${p}s${s} b ${major} ${minor} 
+		done
+	done
+	;;
+
 
 iic[0-9]*)
 	unit=${i#iic}
@@ -1164,7 +1233,7 @@ ipty)
 	mkdev ptyp1 c %ptc_chr% 1 666
 	;;
 
-ptm)
+ptmx)
 	makedir pts 755
 	mkdev ptmx c %ptm_chr% 0 666
 	#mkdev ptm c %ptm_chr% 1 666
