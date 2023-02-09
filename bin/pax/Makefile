@@ -54,7 +54,7 @@ DPADD+=	${LIBRMT}
 .endif
 
 .if defined(__MINIX)
-CPPFLAGS+= -DHOSTPROG
+#CPPFLAGS+= -DHOSTPROG
 
 MLINKS+= pax.1 bsdtar.1
 .endif # defined(__MINIX)

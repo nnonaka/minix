@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.182 2015/07/23 08:03:26 mrg Exp $
+#	$NetBSD: Makefile,v 1.203 2019/05/07 10:22:54 hannken Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
@@ -103,12 +103,12 @@ dependall-binstall: dependall-compat
 SUBDIR=	host-mkdep compat binstall \
 	.WAIT mktemp .WAIT sed .WAIT genassym
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+= crunchgen ctags gencat hexdump \
+SUBDIR+= cap_mkdb crunchgen ctags gencat hexdump \
 		${LINT_BITS} \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
-SUBDIR+= cat join lorder m4 mkdep tsort xz-include .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= cat rpcgen join lorder m4 mkdep tsort xz-include .WAIT yacc .WAIT awk .WAIT lex
 SUBDIR+= grep xz-lib pax .WAIT libprop
 
 .if ${TOOLS_BUILDRUMP} == "no"
@@ -116,15 +116,15 @@ SUBDIR += .WAIT texinfo \
 	.WAIT tic \
 	.WAIT ${TOOLCHAIN_BITS} \
 	${DTRACE_BITS} \
-		 cksum db \
-		file \
+		asn1_compile cksum compile_et db \
+		file lint1 slc \
 		makefs sortinfo \
-		.WAIT mkcsmapper mkesdb mklocale mknod \
+		.WAIT menuc mkcsmapper mkesdb mklocale mknod msgc \
 		.WAIT disklabel gpt \
 		.WAIT paxctl \
 		.WAIT fdisk \
 		.WAIT installboot \
-		pwd_mkdb strfile zic
+		pwd_mkdb strfile vgrind zic
 .endif
 SUBDIR+= stat .WAIT xz-bin
 
@@ -137,11 +137,18 @@ SUBDIR += \
 SUBDIR+= .WAIT config
 .endif # defined(__MINIX)
 
-.if ${MKLLVM} != "no"
+.if ${MKLLVM} != "no" || ${MKLLVMRT} != "no"
 SUBDIR+= \
 	llvm .WAIT \
 	llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
-	llvm-tblgen llvm-clang-tblgen \
+	llvm-tblgen
+.endif
+.if ${MKLLVM} != "no"
+SUBDIR+= \
+	llvm-clang-tblgen
+.endif
+.if ${MKLLVM} != "no" && !defined(EXTERNAL_TOOLCHAIN)
+SUBDIR+= \
 	.WAIT llvm-include .WAIT \
 	llvm-lib .WAIT \
 	llvm-clang

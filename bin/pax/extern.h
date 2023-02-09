@@ -1,4 +1,4 @@
-/*	$NetBSD: extern.h,v 1.60 2020/04/03 16:13:32 joerg Exp $	*/
+/*	$NetBSD: extern.h,v 1.59.36.1 2021/04/30 14:07:02 martin Exp $	*/
 
 /*-
  * Copyright (c) 1992 Keith Muller.
