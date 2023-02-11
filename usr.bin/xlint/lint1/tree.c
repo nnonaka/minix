@@ -2989,7 +2989,7 @@ foldflt(tnode_t *tn)
 
 	if (!fpe && isnan((double)v->v_ldbl))
 		LERROR("foldflt()");
-	if (fpe || !finite((double)v->v_ldbl) ||
+	if (fpe || !isfinite((double)v->v_ldbl) ||
 	    (t == FLOAT &&
 	     (v->v_ldbl > FLT_MAX || v->v_ldbl < -FLT_MAX)) ||
 	    (t == DOUBLE &&

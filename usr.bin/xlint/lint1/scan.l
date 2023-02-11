@@ -863,7 +863,7 @@ fcon(void)
 
 	if (typ == FLOAT) {
 		f = (float)d;
-		if (!finite(f)) {
+		if (!isfinite(f)) {
 			/* floating-point constant out of range */
 			warning(248);
 			f = f > 0 ? FLT_MAX : -FLT_MAX;
