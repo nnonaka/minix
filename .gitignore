@@ -54,3 +54,4 @@ minix_x86.img
 *.vmdk
 releasetools/grub/
 *.img
+.DS_Store
