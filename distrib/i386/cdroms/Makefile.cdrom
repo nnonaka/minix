@@ -11,7 +11,7 @@ CDMAKEFSOPTIONS= bootimage=i386;bootxx.${MACHINE},no-emul-boot,allow-multidot
 #CDKERNELS=	netbsd-GENERIC.gz       netbsd
 CDRELEASE_NOISOS=	true
 #CD_SETS=	base etc
-CD_SETS=	minix-base
+CD_SETS=	minix-kernel minix-base
 .if ${MKKMOD} != "no"
 CD_SETS+=	modules
 .endif

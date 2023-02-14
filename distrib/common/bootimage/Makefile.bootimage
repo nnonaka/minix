@@ -243,6 +243,7 @@ SETS_DEFAULT+=	xbase xcomp xetc xfont xserver
 
 #KERN_SET?=	kern-GENERIC
 KERN_SET?=	minix-kernel
+KERN_DIR?=	minix_default
 SETS?=		${SETS_DEFAULT}
 IMG_SETS=	${KERN_SET} ${SETS}
 SETS_DIR?=	${RELEASEDIR}/${RELEASEMACHINEDIR}/binary/sets
@@ -347,6 +348,12 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 		--use-compress-program=${COMPRESS_PROGRAM:Q} \
 		-f ${SETS_DIR}/${set}.${TAR_SUFF} .)
 .endfor
+.if defined(__MINIX)
+	@echo Moving boot...
+	@${MKDIR} ${WORKDIR}/boot/${KERN_DIR}
+	@mv ${WORKDIR}/boot/minix/.temp/* ${WORKDIR}/boot/${KERN_DIR}
+	@rm -rf ${WORKDIR}/boot/minix/.temp
+.endif
 .if defined(SECONDARY_BOOT)
 	@echo Copying secondary boot...
 	${INSTALL} ${COPY} -m 0444 ${WORKDIR}/usr/mdec/${SECONDARY_BOOT} ${WORKDIR}

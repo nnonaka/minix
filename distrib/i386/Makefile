@@ -5,8 +5,7 @@
 SUBDIR=
 #SUBDIR+=	ramdisks
 SUBDIR+=	.WAIT
-SUBDIR+=	instkernel
-SUBDIR+=	instminixkernel
+#SUBDIR+=	instkernel
 .if ${MKKMOD} != "no"
 SUBDIR+=	kmod
 SUBDIR+=	kmod-cgdroot

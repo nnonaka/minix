@@ -68,6 +68,7 @@ CDRELEASE_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
 CDRELEASE_EXCLUDE+=	-s ',./installation/installimage.*,,gp'
 .endif
 
+KERN_DIR?=	minix_default
 SETS_DIR?=	${RELEASEDIR}/${RELEASEMACHINEDIR}/binary/sets
 
 .include <bsd.own.mk> 		# For PRINTOBJDIR
@@ -151,7 +152,8 @@ _INSTKERNELNOBJDIR!=	cd ${.CURDIR}/${CDINSTKERNEL} && ${PRINTOBJDIR}
 .if exists(${DESTDIR}/usr/mdec/boot.${MACHINE})
 BOOT2=boot.${MACHINE}
 .else
-BOOT2=boot
+#BOOT2=boot
+BOOT2=boot_monitor
 .endif
 .endif
 
@@ -162,17 +164,17 @@ prepare:
 #	${INSTALL} ${COPY} -m 0644 ${_INSTKERNELNOBJDIR}/${kernel} cdrom/${target}
 #.endfor
 .if exists(${DESTDIR}/usr/mdec/bootxx_cd9660)
-#	${RM} -f cdrom/${BOOT2}
-#	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/${BOOT2} cdrom/${BOOT2}
+	${RM} -f cdrom/${BOOT2}
+	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/${BOOT2} cdrom/${BOOT2}
 	${RM} -f bootxx.${MACHINE}
-	echo 'Oh! Im here\n'
+
 	${INSTALL} ${COPY} -m 0644 ${DESTDIR}/usr/mdec/bootxx_cd9660 bootxx.${MACHINE}
 	${CHMOD} +w bootxx.${MACHINE}
 .if defined(CDBOOTOPTIONS)
 	${TOOL_INSTALLBOOT} -m${MACHINE} -e ${CDBOOTOPTIONS} bootxx.${MACHINE}
 .endif
 .endif
-#.endif
+#.endif #defined(CDKERNELS)
 
 .if ${MAKEVERBOSE} >= 2
 PAX_v?= -v
@@ -271,6 +273,12 @@ copy-releasedir:
 	    -F "${CUROBJDIR}/cdrom/etc/mtree"				\
 	    -d "${DESTDIR:S,^$,/,}" ${set}
 .endfor
+.if defined(__MINIX)
+	@echo Moving boot...
+	@${MKDIR} ${CUROBJDIR}/cdrom/boot/${KERN_DIR}
+	@mv ${CUROBJDIR}/cdrom/boot/minix/.temp/* ${CUROBJDIR}/cdrom/boot/${KERN_DIR}
+	@rm -rf ${CUROBJDIR}/cdrom/boot/minix/.temp
+.endif
 	if [ -d "${CUROBJDIR}/cdrom/var/spool/ftp/hidden" ]; then	\
 		${CHMOD} +r "${CUROBJDIR}/cdrom/var/spool/ftp/hidden";	\
 	fi
