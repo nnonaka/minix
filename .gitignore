@@ -55,3 +55,5 @@ minix_x86.img
 releasetools/grub/
 *.img
 .DS_Store
+*.bz2
+gnu/dist/texinfo/
