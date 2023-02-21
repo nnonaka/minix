@@ -82,6 +82,11 @@ CONFIGURE_ARGS+=--prefix=${TOOLDIR}
 CONFIGURE_ARGS+=--disable-shared
 .endif
 
+.if ${MAKEVERBOSE} == 0
+CONFIGURE_ARGS+=--silent
+.endif
+
+
 .if ${MAKE_PROGRAM} == ${MAKE}
 .ifndef _NOWRAPPER
 # Some systems have a small ARG_MAX.  On such systems, prevent Make
@@ -101,11 +106,15 @@ BUILD_COMMAND=	${BUILD_ENV} ${MAKE} ${MAKE_ARGS}
 # sub-gmake's get them, otherwise tools/gcc tries to build libgcc and
 # fails.  it also uses "env -i" to entirely clear out MAKEFLAGS.
 GMAKE_J_ARGS?=	${MAKEFLAGS:[*]:M*-j*:C/.*(-j ?[0-9]*).*/\1/W}
-BUILD_COMMAND=	/usr/bin/env -i ${BUILD_ENV} ${MAKE_ARGS} ${TOOL_GMAKE} ${GMAKE_J_ARGS} -e ${MAKE_ARGS}
+BUILD_COMMAND=	/usr/bin/env -i ${BUILD_ENV} ${MAKE_ARGS:N-*} ${TOOL_GMAKE} ${GMAKE_J_ARGS} -e ${MAKE_ARGS}
 
 .endif
 
 MAKE_ARGS+=	BISON=true DESTDIR= INSTALL=${HOST_INSTALL_FILE:Q}
+
+.if ${MAKEVERBOSE} < 2
+MAKE_ARGS+=	-s V=0
+.endif
 
 ALL_TARGET?=	all
 INSTALL_TARGET?=install

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.22 2020/04/04 00:46:53 christos Exp $
+#	$NetBSD: Makefile,v 1.26 2023/01/13 15:56:28 christos Exp $
 
 NOLINKLIB=	# defined
 NOLINT=		# defined
@@ -34,7 +34,7 @@ GNUHOSTDIST=	${DIST}
 .include "${.CURDIR}/../../../../../minix/Makefile.fetchgnu"
 .endif # defined(__MINIX)
 
-SHLIB_MAJOR=	17
+SHLIB_MAJOR=	18
 SHLIB_MINOR=	0
 
 LIBDPLIBS+=	z	${.CURDIR}/../../../../../lib/libz
@@ -59,12 +59,16 @@ GSRCS=		${G_libbfd_la_OBJECTS:libbfd.lo=lib_bfd.lo} \
 SRCS=		${GSRCS:.lo=.c}
 
 DPSRCS+=	elf32-target.h elf64-target.h targmatch.h \
-		elf32-ia64.c elf64-ia64.c peigen.c pepigen.c \
-		elf32-riscv.c elf64-riscv.c elf32-aarch64.c elf64-aarch64.c \
+		elf32-aarch64.c elf64-aarch64.c \
+		elf32-ia64.c elf64-ia64.c \
+		elf32-riscv.c elf64-riscv.c \
+		peigen.c pepigen.c \
 		pex64igen.c
 CLEANFILES+=	elf32-target.h elf64-target.h targmatch.h \
-		elf32-ia64.c elf64-ia64.c peigen.c pepigen.c \
-		elf32-riscv.c elf64-riscv.c elf32-aarch64.c elf64-aarch64.c \
+		elf32-aarch64.c elf64-aarch64.c \
+		elf32-ia64.c elf64-ia64.c \
+		elf32-riscv.c elf64-riscv.c \
+		peigen.c pepigen.c \
 		pex64igen.c
 
 TEXINFO=	bfd.texinfo
@@ -93,6 +97,14 @@ elf64-target.h: elfxx-target.h
 	${_MKTARGET_CREATE}
 	${TOOL_SED} -e s/NN/64/g < $> > $@
 
+elf32-aarch64.c: elfnn-aarch64.c
+	${_MKTARGET_CREATE}
+	${TOOL_SED} -e s/NN/32/g < $> > $@
+
+elf64-aarch64.c: elfnn-aarch64.c
+	${_MKTARGET_CREATE}
+	${TOOL_SED} -e s/NN/64/g < $> > $@
+
 elf32-ia64.c: elfnn-ia64.c
 	${_MKTARGET_CREATE}
 	${TOOL_SED} -e s/NN/32/g < $> > $@
@@ -109,14 +121,6 @@ elf64-riscv.c: elfnn-riscv.c
 	${_MKTARGET_CREATE}
 	${TOOL_SED} -e s/NN/64/g < $> > $@
 
-elf32-aarch64.c: elfnn-aarch64.c
-	${_MKTARGET_CREATE}
-	${TOOL_SED} -e s/NN/32/g < $> > $@
-
-elf64-aarch64.c: elfnn-aarch64.c
-	${_MKTARGET_CREATE}
-	${TOOL_SED} -e s/NN/64/g < $> > $@
-
 peigen.c: peXXigen.c
 	${_MKTARGET_CREATE}
 	${TOOL_SED} -e s/XX/pe/g < $> > $@
@@ -128,6 +132,10 @@ pepigen.c: peXXigen.c
 pex64igen.c: peXXigen.c
 	${_MKTARGET_CREATE}
 	${TOOL_SED} -e s/XX/pex64/g < $> > $@
+
+pe-aarch64igen.c: peXXigen.c
+	${_MKTARGET_CREATE}
+	${TOOL_SED} -e s/XX/peAArch64/g < $> > $@
 
 .if defined(__MINIX) && ${USETOOLS} != "yes"
 # Trigger the fetch phase, even when not building tools

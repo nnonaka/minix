@@ -104,7 +104,7 @@
 
 
 /* Version number of package */
-#define VERSION "2.34"
+#define VERSION "2.39"
 
 /* Enable large inode numbers on Mac OS X 10.5.  */
 #ifndef _DARWIN_USE_64_BIT_INODE

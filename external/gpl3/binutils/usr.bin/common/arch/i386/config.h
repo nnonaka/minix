@@ -12,19 +12,23 @@
 #endif
 #define __CONFIG_H__ 1
 
-/* Define to one of `_getb67', `GETB67', `getb67' for Cray-2 and Cray-YMP
-   systems. This function is required for `alloca.c' support on those systems.
-   */
-/* #undef CRAY_STACKSEG_END */
-
-/* Define to 1 if using `alloca.c'. */
-/* #undef C_ALLOCA */
-
 /* Should ar and ranlib use -D behavior by default? */
 #define DEFAULT_AR_DETERMINISTIC 0
 
+/* Have readelf and objdump follow debug links by default */
+#define DEFAULT_FOR_FOLLOW_LINKS 1
+
+/* Have nm use F and f for global and local ifunc symbols */
+#define DEFAULT_F_FOR_IFUNC_SYMBOLS 0
+
 /* Should strings use -a behavior by default? */
 #define DEFAULT_STRINGS_ALL 1
+
+/* Define if you want run-time sanity checks. */
+/* #undef ENABLE_CHECKING */
+
+/* Handle .ctf type-info sections */
+#define ENABLE_LIBCTF 1
 
 #if !defined(__minix)
 /* Define to 1 if translation of program messages to the user's native
@@ -35,13 +39,6 @@
 /* Suffix used for executables, if any. */
 #define EXECUTABLE_SUFFIX ""
 
-/* Define to 1 if you have `alloca', as a function or macro. */
-#define HAVE_ALLOCA 1
-
-/* Define to 1 if you have <alloca.h> and it should be used (not on Ultrix).
-   */
-/* #undef HAVE_ALLOCA_H */
-
 /* Define to 1 if you have the declaration of `asprintf', and to 0 if you
    don't. */
 #define HAVE_DECL_ASPRINTF 1
@@ -49,10 +46,6 @@
 /* Define to 1 if you have the declaration of `environ', and to 0 if you
    don't. */
 #define HAVE_DECL_ENVIRON 0
-
-/* Define to 1 if you have the declaration of `fprintf', and to 0 if you
-   don't. */
-#define HAVE_DECL_FPRINTF 1
 
 /* Define to 1 if you have the declaration of `getc_unlocked', and to 0 if you
    don't. */
@@ -147,6 +140,9 @@
 /* Define to 1 if you have a working `mmap' system call. */
 #define HAVE_MMAP 1
 
+/* Define to 1 if msgpack is available. */
+/* #undef HAVE_MSGPACK */
+
 /* Define to 1 if you have the `sbrk' function. */
 #define HAVE_SBRK 1
 
@@ -173,6 +169,18 @@
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
 
+/* Define to 1 if `st_atimensec' is a member of `struct stat'. */
+/* #undef HAVE_STRUCT_STAT_ST_ATIMENSEC */
+
+/* Define to 1 if `st_atimespec.tv_nsec' is a member of `struct stat'. */
+/* #undef HAVE_STRUCT_STAT_ST_ATIMESPEC_TV_NSEC */
+
+/* Define to 1 if `st_atim.st__tim.tv_nsec' is a member of `struct stat'. */
+/* #undef HAVE_STRUCT_STAT_ST_ATIM_ST__TIM_TV_NSEC */
+
+/* Define to 1 if `st_atim.tv_nsec' is a member of `struct stat'. */
+/* #define HAVE_STRUCT_STAT_ST_ATIM_TV_NSEC 1 */
+
 /* Define to 1 if you have the <sys/file.h> header file. */
 #define HAVE_SYS_FILE_H 1
 
@@ -198,12 +206,12 @@
 #define HAVE_UNISTD_H 1
 
 #if !defined(__minix)
+/* Define to 1 if you have the `utimensat' function. */
+#define HAVE_UTIMENSAT 1
+
 /* Define to 1 if you have the `utimes' function. */
 #define HAVE_UTIMES 1
 #endif /* !defined(__minix) */
-
-/* Define to 1 if you have the <wchar.h> header file. */
-#define HAVE_WCHAR_H 1
 
 /* Define to 1 if you have the <windows.h> header file. */
 /* #undef HAVE_WINDOWS_H */
@@ -225,7 +233,7 @@
 #define PACKAGE_NAME "binutils"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "binutils 2.34"
+#define PACKAGE_STRING "binutils 2.39"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "binutils"
@@ -234,21 +242,13 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.34"
+#define PACKAGE_VERSION "2.39"
 
 /* The size of `long', as computed by sizeof. */
 #define SIZEOF_LONG 4
 
 /* The size of `long long', as computed by sizeof. */
 #define SIZEOF_LONG_LONG 8
-
-/* If using the C implementation of alloca, define if you know the
-   direction of stack growth for your system; otherwise it will be
-   automatically deduced at runtime.
-	STACK_DIRECTION > 0 => grows toward higher addresses
-	STACK_DIRECTION < 0 => grows toward lower addresses
-	STACK_DIRECTION = 0 => direction of growth unknown */
-/* #undef STACK_DIRECTION */
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -288,7 +288,7 @@
 
 
 /* Version number of package */
-#define VERSION "2.34"
+#define VERSION "2.39"
 
 /* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
    `char[]'. */
@@ -314,6 +314,3 @@
 
 /* Define to 1 if you need to in order for `stat' and other things to work. */
 /* #undef _POSIX_SOURCE */
-
-/* Define to `unsigned int' if <sys/types.h> does not define. */
-/* #undef size_t */

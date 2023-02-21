@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.12 2020/04/04 00:46:54 christos Exp $
+#	$NetBSD: Makefile,v 1.13 2022/12/24 20:17:09 christos Exp $
 
 NOLINKLIB=	# defined
 NOLINT=		# defined
@@ -15,13 +15,7 @@ BFD_MACHINE_ARCH?=	${MACHINE_ARCH:C/armv[4-7]/arm/}
 .if exists(${.CURDIR}/arch/${BFD_MACHINE_ARCH}/defs.mk)
 .include "${.CURDIR}/arch/${BFD_MACHINE_ARCH}/defs.mk"
 
-.if defined(__MINIX)
-# MINIX: make sure sources are fetched, even when tools not built earlier
-GNUHOSTDIST=	${DIST}
-.include "${.CURDIR}/../../../../../minix/Makefile.fetchgnu"
-.endif # defined(__MINIX)
-
-SHLIB_MAJOR=	10
+SHLIB_MAJOR=	11
 SHLIB_MINOR=	0
 
 GCPPFLAGS=	${G_archdefs} ${G_DEFS} ${G_INCLUDES} ${G_TDEFAULTS}
@@ -37,11 +31,6 @@ SRCS=		${GSRCS:.lo=.c} ${G_libopcodes_la_SOURCES}
 .PATH: ${DIST}/opcodes
 
 .include <bsd.lib.mk>
-
-.if defined(__MINIX) #&& ${USETOOLS} != "yes"
-# Trigger the fetch phase, even when not building tools
-${SRCS} realdepend realall realinstall: ${fetch_done}
-.endif # defined(__MINIX)
 
 .else
 .include <bsd.prog.mk> # do nothing

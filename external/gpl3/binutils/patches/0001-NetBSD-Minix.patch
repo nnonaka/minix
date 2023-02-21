@@ -1,7 +1,7 @@
 diff -rNU3 a/bfd/config.bfd b/bfd/config.bfd
---- a/bfd/config.bfd	2021-04-01 23:41:19.699481000 -0300
-+++ b/bfd/config.bfd	2021-04-01 23:44:05.966151225 -0300
-@@ -386,6 +386,7 @@
+--- a/bfd/config.bfd	2023-02-08 10:53:12.000000000 +0900
++++ b/bfd/config.bfd	2023-02-16 21:20:56.463115042 +0900
+@@ -411,6 +411,7 @@
      targ_selvecs=arm_elf32_be_vec
      ;;
    arm-*-elf | arm*-*-freebsd* | arm*-*-linux-* | arm*-*-conix* | \
@@ -9,31 +9,31 @@ diff -rNU3 a/bfd/config.bfd b/bfd/config.bfd
    arm*-*-uclinux* | arm-*-kfreebsd*-gnu | \
    arm*-*-eabi* | arm-*-rtems* | arm*-*-uclinuxfdpiceabi)
      targ_defvec=arm_elf32_le_vec
-@@ -620,6 +621,9 @@
+@@ -636,6 +637,9 @@
  	targ_cflags=-DOLD_FREEBSD_ABI_LABEL ;;
      esac
      ;;
 +  i[3-7]86-*-minix)
 +    targ_defvec=i386_elf32_minix_vec
 +    ;;
-   i[3-7]86-*-netbsdelf* | i[3-7]86-*-netbsd*-gnu* | i[3-7]86-*-knetbsd*-gnu)
+   i[3-7]86-*-netbsd* | i[3-7]86-*-knetbsd*-gnu)
      targ_defvec=i386_elf32_vec
-     targ_selvecs="iamcu_elf32_vec i386_coff_vec i386_pei_vec i386_aout_bsd_vec i386_aout_nbsd_vec"
+     targ_selvecs="iamcu_elf32_vec i386_coff_vec i386_pei_vec"
 diff -rNU3 a/bfd/configure b/bfd/configure
---- a/bfd/configure	2021-04-01 23:41:19.706148000 -0300
-+++ b/bfd/configure	2021-04-01 23:44:05.972817891 -0300
-@@ -14759,6 +14759,7 @@
+--- a/bfd/configure	2023-01-16 08:10:52.000000000 +0900
++++ b/bfd/configure	2023-02-16 21:24:04.849293910 +0900
+@@ -13429,6 +13429,7 @@
      i386_coff_lynx_vec)		 tb="$tb cf-i386lynx.lo lynx-core.lo $coff" ;;
      i386_elf32_vec)		 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
      i386_elf32_fbsd_vec)	 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
 +    i386_elf32_minix_vec)	 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
-     i386_elf32_nacl_vec)	 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
      i386_elf32_sol2_vec)	 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
      i386_elf32_vxworks_vec)	 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
+     i386_mach_o_vec)		 tb="$tb mach-o-i386.lo" ;;
 diff -rNU3 a/bfd/elf32-i386.c b/bfd/elf32-i386.c
---- a/bfd/elf32-i386.c	2021-04-01 23:41:19.722814000 -0300
-+++ b/bfd/elf32-i386.c	2021-04-01 23:44:05.976151225 -0300
-@@ -4392,6 +4392,18 @@
+--- a/bfd/elf32-i386.c	2022-12-25 05:17:04.000000000 +0900
++++ b/bfd/elf32-i386.c	2023-02-16 21:13:22.178052203 +0900
+@@ -4467,6 +4467,18 @@
  
  #include "elf32-target.h"
  
@@ -53,55 +53,55 @@ diff -rNU3 a/bfd/elf32-i386.c b/bfd/elf32-i386.c
  
  #undef	TARGET_LITTLE_SYM
 diff -rNU3 a/bfd/targets.c b/bfd/targets.c
---- a/bfd/targets.c	2021-04-01 23:41:19.776148000 -0300
-+++ b/bfd/targets.c	2021-04-01 23:44:05.979484558 -0300
-@@ -734,6 +734,7 @@
+--- a/bfd/targets.c	2022-12-25 05:17:04.000000000 +0900
++++ b/bfd/targets.c	2023-02-16 21:25:49.689590308 +0900
+@@ -748,6 +748,7 @@
  extern const bfd_target i386_coff_lynx_vec;
  extern const bfd_target i386_elf32_vec;
  extern const bfd_target i386_elf32_fbsd_vec;
 +extern const bfd_target i386_elf32_minix_vec;
- extern const bfd_target i386_elf32_nacl_vec;
  extern const bfd_target i386_elf32_sol2_vec;
  extern const bfd_target i386_elf32_vxworks_vec;
+ extern const bfd_target i386_mach_o_vec;
 diff -rNU3 a/config.guess b/config.guess
---- a/config.guess	2021-04-01 23:41:19.802814000 -0300
-+++ b/config.guess	2021-04-01 23:44:05.979484558 -0300
-@@ -917,7 +917,7 @@
- 	echo "$UNAME_MACHINE-unknown-`echo "$UNAME_SYSTEM" | sed 's,^[^/]*/,,' | tr "[:upper:]" "[:lower:]"``echo "$UNAME_RELEASE"|sed -e 's/[-(].*//'`-$LIBC"
- 	exit ;;
+--- a/config.guess	2022-12-25 05:17:03.000000000 +0900
++++ b/config.guess	2023-02-16 21:28:25.342540431 +0900
+@@ -967,7 +967,7 @@
+ 	GUESS=$UNAME_MACHINE-unknown-$GNU_SYS$GNU_REL-$LIBC
+ 	;;
      *:Minix:*:*)
--	echo "$UNAME_MACHINE"-unknown-minix
-+	echo "$UNAME_MACHINE"-elf32-minix
- 	exit ;;
+-	GUESS=$UNAME_MACHINE-unknown-minix
++	GUESS=$UNAME_MACHINE-elf32-minix
+ 	;;
      aarch64:Linux:*:*)
- 	echo "$UNAME_MACHINE"-unknown-linux-"$LIBC"
+ 	GUESS=$UNAME_MACHINE-unknown-linux-$LIBC
 diff -rNU3 a/configure b/configure
---- a/configure	2020-01-18 11:01:13.000000000 -0300
-+++ b/configure	2021-04-01 23:44:05.982817892 -0300
-@@ -3055,7 +3055,7 @@
+--- a/configure	2022-12-25 05:17:03.000000000 +0900
++++ b/configure	2023-02-16 21:41:58.596110662 +0900
+@@ -3016,7 +3016,7 @@
        *-*-elf* | *-*-sysv4* | *-*-unixware* | *-*-eabi* | hppa*64*-*-hpux* \
        | *-*-linux* | *-*-gnu* | frv-*-uclinux* | *-*-irix5* | *-*-irix6* \
        | *-*-netbsd* | *-*-openbsd* | *-*-freebsd* | *-*-dragonfly* \
--      | *-*-solaris2* | *-*-nto* | *-*-nacl*)
-+      | *-*-solaris2* | *-*-nto* | *-*-nacl* | *-*-minix*)
+-      | *-*-solaris2* | *-*-nto* | *-*-nacl* | *-*-haiku*)
++      | *-*-solaris2* | *-*-nto* | *-*-nacl* | *-*-haiku* | *-*-minix*)
          case "${target}" in
            *-*-linux*aout* | *-*-linux*oldld*)
              ;;
 diff -rNU3 a/gas/config/tc-i386.c b/gas/config/tc-i386.c
---- a/gas/config/tc-i386.c	2020-01-18 10:55:47.000000000 -0300
-+++ b/gas/config/tc-i386.c	2021-04-02 00:10:25.766178832 -0300
-@@ -478,6 +478,7 @@
- 	 && !defined (TE_NACL)				\
- 	 && !defined (TE_FreeBSD)			\
- 	 && !defined (TE_DragonFly)			\
+--- a/gas/config/tc-i386.c	2022-12-24 04:01:18.000000000 +0900
++++ b/gas/config/tc-i386.c	2023-02-16 21:30:47.404579965 +0900
+@@ -474,6 +474,7 @@
+      && !defined (TE_Haiku)				\
+      && !defined (TE_FreeBSD)				\
+      && !defined (TE_DragonFly)				\
 +	 && !defined (TE_MINIX)				\
- 	 && !defined (TE_NetBSD)))
+      && !defined (TE_NetBSD))
  /* This array holds the chars that always start a comment.  If the
     pre-processor is disabled, these aren't very useful.  The option
 diff -rNU3 a/gas/config/tc-i386.h b/gas/config/tc-i386.h
---- a/gas/config/tc-i386.h	2020-01-18 10:55:47.000000000 -0300
-+++ b/gas/config/tc-i386.h	2021-04-01 23:44:05.986151225 -0300
-@@ -72,6 +72,10 @@
+--- a/gas/config/tc-i386.h	2022-12-24 04:01:21.000000000 +0900
++++ b/gas/config/tc-i386.h	2023-02-16 21:13:22.194102805 +0900
+@@ -68,6 +68,10 @@
  #define ELF_TARGET_FORMAT64	"elf64-x86-64-sol2"
  #endif
  
@@ -113,8 +113,8 @@ diff -rNU3 a/gas/config/tc-i386.h b/gas/config/tc-i386.h
  #define ELF_TARGET_FORMAT	"elf32-i386"
  #endif
 diff -rNU3 a/gas/config/te-minix.h b/gas/config/te-minix.h
---- a/gas/config/te-minix.h	1969-12-31 21:00:00.000000000 -0300
-+++ b/gas/config/te-minix.h	2021-04-01 23:44:05.986151225 -0300
+--- a/gas/config/te-minix.h	1970-01-01 09:00:00.000000000 +0900
++++ b/gas/config/te-minix.h	2023-02-16 21:13:22.194102805 +0900
 @@ -0,0 +1,9 @@
 +#define TE_MINIX	1
 +
@@ -126,9 +126,9 @@ diff -rNU3 a/gas/config/te-minix.h b/gas/config/te-minix.h
 +
 +#include "obj-format.h"
 diff -rNU3 a/gas/configure b/gas/configure
---- a/gas/configure	2020-02-01 08:49:51.000000000 -0300
-+++ b/gas/configure	2021-04-01 23:44:05.992817892 -0300
-@@ -6269,6 +6269,10 @@
+--- a/gas/configure	2023-01-16 08:10:53.000000000 +0900
++++ b/gas/configure	2023-02-16 21:13:22.206140755 +0900
+@@ -5607,6 +5607,10 @@
    fi
    ;;
  
@@ -140,9 +140,9 @@ diff -rNU3 a/gas/configure b/gas/configure
    lt_cv_deplibs_check_method=pass_all
    ;;
 diff -rNU3 a/gas/configure.tgt b/gas/configure.tgt
---- a/gas/configure.tgt	2021-04-01 23:41:19.829481000 -0300
-+++ b/gas/configure.tgt	2021-04-01 23:44:05.992817892 -0300
-@@ -438,6 +438,8 @@
+--- a/gas/configure.tgt	2022-12-25 05:17:05.000000000 +0900
++++ b/gas/configure.tgt	2023-02-16 21:13:22.206140755 +0900
+@@ -443,6 +443,8 @@
    *-*-elf | *-*-rtems* | *-*-sysv4*)	fmt=elf ;;
    *-*-solaris*)				fmt=elf em=solaris ;;
    *-*-aros*)				fmt=elf em=linux ;;
@@ -152,20 +152,20 @@ diff -rNU3 a/gas/configure.tgt b/gas/configure.tgt
  esac
  
 diff -rNU3 a/ld/configure.tgt b/ld/configure.tgt
---- a/ld/configure.tgt	2021-04-01 23:41:19.839481000 -0300
-+++ b/ld/configure.tgt	2021-04-01 23:44:05.992817892 -0300
-@@ -167,6 +167,9 @@
- arm-*-elf | arm*-*-eabi* | arm-*-rtems*)
+--- a/ld/configure.tgt	2023-02-08 05:39:01.000000000 +0900
++++ b/ld/configure.tgt	2023-02-16 21:35:17.238145831 +0900
+@@ -209,6 +209,9 @@
+ arm-*-elf | arm*-*-eabi* | arm-*-rtems* | arm-*-genode*)
  			targ_emul=armelf
  			;;
 +arm*-*-minix*)		targ_emul=armelf_minix
 +			targ_extra_emuls="armelf"
 +			;;
- arm*-*-symbianelf*)	targ_emul=armsymbian;;
  arm-*-kaos*)		targ_emul=armelf
  			;;
-@@ -344,6 +347,9 @@
- 			targ64_extra_emuls="elf_x86_64 elf32_x86_64 elf_l1om elf_k1om"
+ arm9e-*-elf)		targ_emul=armelf
+@@ -384,6 +387,9 @@
+ 			targ64_extra_emuls="elf_x86_64 elf32_x86_64"
  			targ64_extra_libpath="elf_x86_64 elf32_x86_64"
  			;;
 +i[3-7]86-*-minix)	targ_emul=elf_i386_minix
@@ -175,8 +175,8 @@ diff -rNU3 a/ld/configure.tgt b/ld/configure.tgt
  			targ_extra_emuls=elf_x86_64
  			;;
 diff -rNU3 a/ld/emulparams/armelf_minix.sh b/ld/emulparams/armelf_minix.sh
---- a/ld/emulparams/armelf_minix.sh	1969-12-31 21:00:00.000000000 -0300
-+++ b/ld/emulparams/armelf_minix.sh	2021-04-01 23:44:05.992817892 -0300
+--- a/ld/emulparams/armelf_minix.sh	1970-01-01 09:00:00.000000000 +0900
++++ b/ld/emulparams/armelf_minix.sh	2023-02-16 21:13:22.206140755 +0900
 @@ -0,0 +1,15 @@
 +. ${srcdir}/emulparams/armelf.sh
 +. ${srcdir}/emulparams/elf_minix.sh
@@ -194,21 +194,21 @@ diff -rNU3 a/ld/emulparams/armelf_minix.sh b/ld/emulparams/armelf_minix.sh
 +
 +unset EMBEDDED
 diff -rNU3 a/ld/emulparams/elf_i386_minix.sh b/ld/emulparams/elf_i386_minix.sh
---- a/ld/emulparams/elf_i386_minix.sh	1969-12-31 21:00:00.000000000 -0300
-+++ b/ld/emulparams/elf_i386_minix.sh	2021-04-01 23:44:05.992817892 -0300
+--- a/ld/emulparams/elf_i386_minix.sh	1970-01-01 09:00:00.000000000 +0900
++++ b/ld/emulparams/elf_i386_minix.sh	2023-02-16 21:13:22.210153406 +0900
 @@ -0,0 +1,3 @@
 +. ${srcdir}/emulparams/elf_i386.sh
 +. ${srcdir}/emulparams/elf_minix.sh
 +OUTPUT_FORMAT="elf32-i386-minix"
 diff -rNU3 a/ld/emulparams/elf_minix.sh b/ld/emulparams/elf_minix.sh
---- a/ld/emulparams/elf_minix.sh	1969-12-31 21:00:00.000000000 -0300
-+++ b/ld/emulparams/elf_minix.sh	2021-04-01 23:44:05.992817892 -0300
+--- a/ld/emulparams/elf_minix.sh	1970-01-01 09:00:00.000000000 +0900
++++ b/ld/emulparams/elf_minix.sh	2023-02-16 21:13:22.210153406 +0900
 @@ -0,0 +1 @@
 +ELF_INTERPRETER_NAME=\"/libexec/ld-elf.so.1\"
 diff -rNU3 a/ld/Makefile.in b/ld/Makefile.in
---- a/ld/Makefile.in	2021-04-01 23:41:19.856148000 -0300
-+++ b/ld/Makefile.in	2021-04-01 23:44:05.996151225 -0300
-@@ -669,6 +669,7 @@
+--- a/ld/Makefile.in	2023-01-02 09:55:46.000000000 +0900
++++ b/ld/Makefile.in	2023-02-16 21:39:25.515644572 +0900
+@@ -668,6 +668,7 @@
  	earmelf_linux.c \
  	earmelf_linux_eabi.c \
  	earmelf_linux_fdpiceabi.c \
@@ -216,15 +216,23 @@ diff -rNU3 a/ld/Makefile.in b/ld/Makefile.in
  	earmelf_nacl.c \
  	earmelf_nbsd.c \
  	earmelf_nbsd_eabi.c \
-@@ -795,6 +796,7 @@
- 	eelf_i386_be.c \
+@@ -789,6 +790,7 @@
  	eelf_i386_fbsd.c \
+ 	eelf_i386_haiku.c \
  	eelf_i386_ldso.c \
 +	eelf_i386_minix.c \
- 	eelf_i386_nacl.c \
  	eelf_i386_sol2.c \
  	eelf_i386_vxworks.c \
-@@ -2298,6 +2300,7 @@
+ 	eelf_iamcu.c \
+@@ -1470,6 +1472,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_fbsd.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_haiku.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_ldso.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_minix.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_sol2.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_vxworks.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_iamcu.Po@am__quote@
+@@ -2355,6 +2358,7 @@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_eabi.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Pc@am__quote@
@@ -232,11 +240,3 @@ diff -rNU3 a/ld/Makefile.in b/ld/Makefile.in
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Pc@am__quote@
-@@ -2411,6 +2414,7 @@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_be.Pc@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_fbsd.Pc@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_ldso.Pc@am__quote@
-+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_minix.Pc@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_nacl.Pc@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_sol2.Pc@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_vxworks.Pc@am__quote@

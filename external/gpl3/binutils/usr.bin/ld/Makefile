@@ -6,11 +6,16 @@ CPPFLAGS+=	-I${.CURDIR}/arch/${BINUTILS_MACHINE_ARCH} \
 		-DSCRIPTDIR=\"${SCRIPTSDIR}\" \
 		-DTARGET=\"${G_target_alias}\" \
 		-DBINDIR=\"/usr/bin\" \
-		-DTOOLBINDIR=\"/usr/bin\" \
-		-DENABLE_PLUGINS \
-		-DELF_LIST_OPTIONS=TRUE \
+		-DTOOLBINDIR=\"/usr/bin\"
+.if !defined(__MINIX)
+CPPFLAGS+=	-DELF_LIST_OPTIONS=TRUE \
 		-DELF_SHLIB_LIST_OPTIONS=TRUE \
 		-DELF_PLT_UNWIND_LIST_OPTIONS=TRUE
+.else
+CPPFLAGS+=	-DELF_LIST_OPTIONS=false \
+		-DELF_SHLIB_LIST_OPTIONS=false \
+		-DELF_PLT_UNWIND_LIST_OPTIONS=false
+.endif # !defined(__MINIX)
 
 .if defined(__MINIX)
 CPPFLAGS+=	\

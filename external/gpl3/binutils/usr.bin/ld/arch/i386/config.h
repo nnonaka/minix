@@ -21,6 +21,24 @@
 /* Define if you want compressed debug sections by default. */
 /* #undef DEFAULT_FLAG_COMPRESS_DEBUG */
 
+/* Define to 0 if you want to disable the generation of an executable stack
+   when a .note-GNU-stack section is missing. */
+#define DEFAULT_LD_EXECSTACK 0
+
+/* The default method for DT_TEXTREL check in ELF linker. */
+#define DEFAULT_LD_TEXTREL_CHECK textrel_check_warning
+
+/* Define to 1 if DT_TEXTREL check is warning in ELF linker by default. */
+#define DEFAULT_LD_TEXTREL_CHECK_WARNING 1
+
+/* Define to 1 if you want to enable --warn-execstack in ELF linker by
+   default. */
+#define DEFAULT_LD_WARN_EXECSTACK 2
+
+/* Define to 0 if you want to disable --warn-rwx-segments in ELF linker by
+   default. */
+#define DEFAULT_LD_WARN_RWX_SEGMENTS 1
+
 /* Define to 1 if you want to enable -z relro in ELF linker by default. */
 #define DEFAULT_LD_Z_RELRO 0
 
@@ -195,7 +213,7 @@
 #define PACKAGE_NAME "ld"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "ld 2.34"
+#define PACKAGE_STRING "ld 2.39"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "ld"
@@ -204,7 +222,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.34"
+#define PACKAGE_VERSION "2.39"
 
 /* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P 4
@@ -241,7 +259,7 @@
 
 
 /* Version number of package */
-#define VERSION "2.34"
+#define VERSION "2.39"
 
 /* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
    `char[]'. */
