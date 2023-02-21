@@ -22,7 +22,7 @@ then
 		fi
 	fi
 
-	tar -oxjf grub-2.06.tar.gz && \
+	tar -oxzf grub-2.06.tar.gz && \
 	mv grub-2.06 dist
 fi
 
