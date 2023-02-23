@@ -306,6 +306,24 @@ efi_cons_waitforinputevent(uint64_t timeout)
 	return EINVAL;
 }
 
+#if defined(__minix)
+int
+getchar_ex(void)
+{
+	int c;
+
+	c = internal_getchar();
+#ifdef CONSOLE_KEYMAP
+	{
+		char *cp = strchr(CONSOLE_KEYMAP, c & 0xff);
+		if (cp != 0 && cp[1] != 0)
+			c = cp[1] | (c & 0xff00);
+	}
+#endif
+	return c;
+}
+#endif /* !defined(__minix) */
+
 int
 getchar(void)
 {

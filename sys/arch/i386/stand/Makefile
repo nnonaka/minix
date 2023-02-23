@@ -5,6 +5,6 @@ SUBDIR=		mbr boot
 SUBDIR+=	bootxx cdboot # fatboot
 #SUBDIR+=	dosboot misc
 #SUBDIR+=	pxeboot
-#SUBDIR+=	efiboot
+SUBDIR+=	efiboot
 
 .include <bsd.subdir.mk>

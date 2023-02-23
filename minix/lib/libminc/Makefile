@@ -38,7 +38,7 @@ CFLAGS+=	-fno-builtin
 #
 # Customized versions of libc functions.
 #
-SRCS+= atoi.c fputs.c _snprintf.c strtol.c
+SRCS+= atoi.c fputs.c _snprintf.c strtol.c intoa.c popcount32.c inet_addr.c
 CPPFLAGS._snprintf.c+=	-I${LIBSADIR}
 
 CPPFLAGS.strtol.c+=	-D_STANDALONE

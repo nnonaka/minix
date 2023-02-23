@@ -41,7 +41,7 @@ BINMODE=444
 .PATH:	${.CURDIR}/../../libsa
 
 LDSCRIPT?= ${.CURDIR}/ldscript
-LDFLAGS+= --no-dynamic-linker -z nocombreloc
+LDFLAGS+= --no-dynamic-linker --noinhibit-exec -z nocombreloc
 LDFLAGS+= -nostdlib -T${LDSCRIPT} -Bsymbolic -shared
 CPPFLAGS+= -I$S -I${.CURDIR} -I${.CURDIR}/.. -I$S/lib/libsa
 CPPFLAGS+= -I${.OBJDIR}
@@ -103,20 +103,20 @@ SAMISCMAKEFLAGS+="SA_ENABLE_LS_OP=yes"
 .include "${S}/lib/libsa/Makefile.inc"
 LIBSA= ${SALIB}
 
-#.if !defined(__MINIX)
+.if !defined(__MINIX)
 ### find out what to use for libkern
 KERN_AS= library
 LIBKERN_ARCH?= ${MACHINE_ARCH}
 KERNMISCMAKEFLAGS+="LIBKERN_ARCH=${LIBKERN_ARCH}"
 .include "${S}/lib/libkern/Makefile.inc"
 LIBKERN= ${KERNLIB}
-#.else
+.else
 #
-#USE_BITCODE=no
+USE_BITCODE=no
 #
 # use MINIX minc
-#LIBKERN= ${DESTDIR}/usr/lib/libminc.a
-#.endif # !defined(__MINIX)
+LIBKERN= ${DESTDIR}/usr/lib/libminc.a
+.endif # !defined(__MINIX)
 
 ### find out what to use for libz
 Z_AS= library

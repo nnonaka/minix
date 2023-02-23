@@ -63,7 +63,8 @@ GENERIC_SRCS+= \
 	ctzsi2.c
 .endif
 
-.if ${MACHINE_CPU} != "aarch64" && ${MACHINE} != "alpha"
+.if ${MACHINE_CPU} != "aarch64" && ${MACHINE} != "alpha" && \
+    ${MACHINE_ARCH} != "m68k"
 GENERIC_SRCS+= \
 	divmodsi4.c \
 	divsi3.c \
@@ -129,7 +130,7 @@ COPTS.${src}+=	-Wno-missing-prototypes \
 CPPFLAGS.int_util.c+=	-DKERNEL_USE
 
 # XXX Explicit divide by zero in udivmoddi4.c -> abort().
-.if defined(HAVE_GCC) && ${HAVE_GCC} == 7 && ${ACTIVE_CC} == "gcc"
+.if defined(HAVE_GCC) && ${HAVE_GCC} >= 7 && ${ACTIVE_CC} == "gcc"
 . if ${MACHINE_CPU} != "arm"
 COPTS.udivmoddi4.c+=	-fnon-call-exceptions
 . endif
