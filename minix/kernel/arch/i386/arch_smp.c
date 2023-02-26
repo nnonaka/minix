@@ -13,6 +13,7 @@
 #include <machine/cmos.h>
 #include <machine/bios.h>
 
+#include "kernel/kernel.h"
 #include "kernel/spinlock.h"
 #include "kernel/smp.h"
 #include "apic.h"
@@ -217,6 +218,9 @@ static void ap_finish_booting(void)
 
 	/* inform the world of our presence. */
 	ap_cpu_ready = cpu;
+
+	/* Set up sysenter/syscall. */
+	setup_sysenter_syscall();
 
 	/* Set up sysenter/syscall. */
 	setup_sysenter_syscall();

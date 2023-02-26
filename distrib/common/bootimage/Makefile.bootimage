@@ -195,9 +195,9 @@ FATSECTORS!=	expr ${FATMB} \* 1024 \* 1024 / 512 || true
 .if ${USE_MBR} == "no" && ${USE_GPT} == "no"
 LABELSECTORS?=	0
 .else
-#LABELSECTORS?=	63	# historical
+LABELSECTORS?=	63	# historical
 #LABELSECTORS?=	32	# 16KB aligned
-LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
+#LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
 .endif
 
 FSSECTORS!=	expr ${IMAGESECTORS} - ${SWAPSECTORS} - ${LABELSECTORS} \
@@ -417,7 +417,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	@echo Creating rootfs...
 	# XXX /var/spool/ftp/hidden is unreadable
 	${CHMOD} +r ${WORKDIR}/var/spool/ftp/hidden
-	${TOOL_MAKEFS} -M ${FSSIZE} -m ${FSSIZE}			\
+	${TOOL_MAKEFS}  -m ${FSSIZE}			\
 	    -B ${TARGET_ENDIANNESS}					\
 	    -F ${WORKSPEC} -N ${WORKDIR}/etc				\
 	    ${MAKEFS_TIMESTAMP}						\

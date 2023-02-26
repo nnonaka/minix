@@ -2,7 +2,7 @@ banner=Welcome to the MINIX @@VERSION@@ installation CD
 banner================================================================================
 banner=
 menu=Regular MINIX 3:multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1
-menu=Regular MINIX 3 (with AHCI):multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1 ahci=yes
+menu=Regular MINIX 3 (with AHCI):multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1 ahci=yes acpi=yes cttyline=0 no_smp=0 no_apic=0
 menu=Edit menu option:edit
 menu=Drop to boot prompt:prompt
 clear=1

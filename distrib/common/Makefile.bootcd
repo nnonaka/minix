@@ -156,6 +156,9 @@ BOOT2=boot.${MACHINE}
 BOOT2=boot_monitor
 .endif
 .endif
+.if defined(__MINIX)
+SECONDARY_BOOT=minixboot
+.endif
 
 prepare:
 	${MKDIR} ${MKDIRPERM} "${CUROBJDIR}/cdrom"
@@ -278,6 +281,8 @@ copy-releasedir:
 	@${MKDIR} ${CUROBJDIR}/cdrom/boot/${KERN_DIR}
 	@mv ${CUROBJDIR}/cdrom/boot/minix/.temp/* ${CUROBJDIR}/cdrom/boot/${KERN_DIR}
 	@rm -rf ${CUROBJDIR}/cdrom/boot/minix/.temp
+	@rm -f ${CUROBJDIR}/cdrom/minixboot
+	@cp ${CUROBJDIR}/cdrom/boot_monitor ${CUROBJDIR}/cdrom/minixboot
 .endif
 	if [ -d "${CUROBJDIR}/cdrom/var/spool/ftp/hidden" ]; then	\
 		${CHMOD} +r "${CUROBJDIR}/cdrom/var/spool/ftp/hidden";	\

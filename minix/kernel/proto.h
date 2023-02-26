@@ -67,6 +67,7 @@ void vm_suspend(struct proc *caller, const struct proc *target,
         const vir_bytes linaddr, const vir_bytes len, const int type,
         const int writeflag);
 void enqueue(struct proc *rp);
+void enqueue_head(struct proc *rp);
 void dequeue(struct proc *rp);
 void switch_to_user(void);
 void arch_proc_reset(struct proc *rp);

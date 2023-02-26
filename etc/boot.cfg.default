@@ -1,8 +1,8 @@
-clear=1
-timeout=5
-default=2
-menu=Start MINIX 3:load_mods /boot/minix_default/mod*;multiboot /boot/minix_default/kernel rootdevname=$rootdevname $args
-menu=Start latest MINIX 3:load_mods /boot/minix_latest/mod*;multiboot /boot/minix_latest/kernel rootdevname=$rootdevname $args
-menu=Start latest MINIX 3 in single user mode:load_mods /boot/minix_latest/mod*;multiboot /boot/minix_latest/kernel rootdevname=$rootdevname bootopts=-s $args
+menu=Start MINIX 3:load_mods /boot/minix_default/mod*;multiboot /boot/minix_default/kernel rootdevname=$rootdevname $args acpi=yes cttyline=0 no_smp=0 no_apic=0
+menu=Start MINIX 3 in single user mode:load_mods /boot/minix_default/mod*;multiboot /boot/minix_default/kernel rootdevname=$rootdevname bootopts=-s $args acpi=yes cttyline=0 no_smp=0 no_apic=0
 menu=Edit menu option:edit
 menu=Drop to boot prompt:prompt
+clear=1
+timeout=10
+default=1
+

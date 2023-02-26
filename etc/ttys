@@ -7,8 +7,10 @@ console		"/usr/libexec/getty default"	minix	on secure
 ttyc1		"/usr/libexec/getty default"	minix	on secure
 ttyc2		"/usr/libexec/getty default"	minix	on secure
 ttyc3		"/usr/libexec/getty default"	minix	on secure
-tty00		""		unknown	off secure
-tty01		""		unknown off secure
+tty00		"/usr/libexec/getty default"	ansi	on secure
+tty01		"/usr/libexec/getty default"	ansi	on secure
+tty02		"/usr/libexec/getty default"	ansi	on secure
+tty03		"/usr/libexec/getty default"	ansi	on secure
 
 ttyp0		""		network	off 
 ttyp1		""		network	off
