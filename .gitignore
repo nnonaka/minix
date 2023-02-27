@@ -57,3 +57,4 @@ releasetools/grub/
 *.bz2
 gnu/dist/texinfo/
 external/gpl3/binutils-2.39/
+.vscode
