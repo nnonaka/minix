@@ -34,7 +34,7 @@ loop:
   %rand2 = icmp ugt i32 %A, %Z1
   %Z2 = select i1 %rand2, i32 %A, i32 %Z1
 ; CHECK: %Z2 =
-; CHECK-NEXT: -->  ([[EXPR:.*]]){{ +}}Exits: 20
+; CHECK-NEXT: -->  ([[EXPR:.*]]){{ U: [^ ]+ S: [^ ]+}}{{ +}}Exits: 20
   %B = trunc i32 %Z2 to i16
   %C = sext i16 %B to i30
 ; CHECK: %C =
@@ -85,4 +85,44 @@ define void @test6(i8 %x) {
   %C = and i16 %B, -2048
 ; CHECK: -->  (2048 * ((zext i8 %x to i16) /u 8))
   ret void
+}
+
+; PR22960
+define void @test7(i32 %A) {
+; CHECK-LABEL: @test7
+  %B = sext i32 %A to i64
+  %C = zext i32 %A to i64
+  %D = sub i64 %B, %C
+  %E = trunc i64 %D to i16
+; CHECK: %E
+; CHECK-NEXT: -->  0
+  ret void
+}
+
+define i64 @test8(i64 %a) {
+; CHECK-LABEL: @test8
+  %t0 = udiv i64 %a, 56
+  %t1 = udiv i64 %t0, 56
+; CHECK: %t1
+; CHECK-NEXT: -->  (%a /u 3136)
+  ret i64 %t1
+}
+
+define i64 @test9(i64 %a) {
+; CHECK-LABEL: @test9
+  %t0 = udiv i64 %a, 100000000000000
+  %t1 = udiv i64 %t0, 100000000000000
+; CHECK: %t1
+; CHECK-NEXT: -->  0
+  ret i64 %t1
+}
+
+define i64 @test10(i64 %a, i64 %b) {
+; CHECK-LABEL: @test10
+  %t0 = udiv i64 %a, 100000000000000
+  %t1 = udiv i64 %t0, 100000000000000
+  %t2 = mul i64 %b, %t1
+; CHECK: %t2
+; CHECK-NEXT: -->  0
+  ret i64 %t2
 }

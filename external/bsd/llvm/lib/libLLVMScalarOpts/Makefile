@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.19 2015/01/29 20:41:36 joerg Exp $
+#	$NetBSD: Makefile,v 1.24 2018/07/17 18:55:29 joerg Exp $
 
 LIB=	LLVMScalarOpts
 
@@ -8,41 +8,71 @@ LIB=	LLVMScalarOpts
 
 SRCS+=	ADCE.cpp \
 	AlignmentFromAssumptions.cpp \
+	BDCE.cpp \
+	CallSiteSplitting.cpp \
 	ConstantHoisting.cpp \
 	ConstantProp.cpp \
 	CorrelatedValuePropagation.cpp \
 	DCE.cpp \
 	DeadStoreElimination.cpp \
+	DivRemPairs.cpp \
 	EarlyCSE.cpp \
 	FlattenCFGPass.cpp \
+	Float2Int.cpp \
+	GuardWidening.cpp \
 	GVN.cpp \
+	GVNHoist.cpp \
+	GVNSink.cpp \
+	InductiveRangeCheckElimination.cpp \
 	IndVarSimplify.cpp \
+	InferAddressSpaces.cpp \
+	InstSimplifyPass.cpp \
+	IVUsersPrinter.cpp \
 	JumpThreading.cpp \
 	LICM.cpp \
-	LoadCombine.cpp \
+	LoopAccessAnalysisPrinter.cpp \
+	LoopDataPrefetch.cpp \
 	LoopDeletion.cpp \
+	LoopDistribute.cpp \
 	LoopIdiomRecognize.cpp \
 	LoopInstSimplify.cpp \
+	LoopInterchange.cpp \
+	LoopLoadElimination.cpp \
+	LoopPassManager.cpp \
+	LoopPredication.cpp \
 	LoopRerollPass.cpp \
 	LoopRotation.cpp \
+	LoopSimplifyCFG.cpp \
+	LoopSink.cpp \
 	LoopStrengthReduce.cpp \
+	LoopUnrollAndJamPass.cpp \
 	LoopUnrollPass.cpp \
 	LoopUnswitch.cpp \
+	LoopVersioningLICM.cpp \
 	LowerAtomic.cpp \
+	LowerExpectIntrinsic.cpp \
+	LowerGuardIntrinsic.cpp \
 	MemCpyOptimizer.cpp \
 	MergedLoadStoreMotion.cpp \
+	MergeICmps.cpp \
+	NaryReassociate.cpp \
+	NewGVN.cpp \
 	PartiallyInlineLibCalls.cpp \
+	PlaceSafepoints.cpp \
 	Reassociate.cpp \
 	Reg2Mem.cpp \
-	SCCP.cpp \
-	SROA.cpp \
-	SampleProfile.cpp \
+	RewriteStatepointsForGC.cpp \
 	Scalar.cpp \
-	ScalarReplAggregates.cpp \
 	Scalarizer.cpp \
+	SCCP.cpp \
 	SeparateConstOffsetFromGEP.cpp \
+	SimpleLoopUnswitch.cpp \
 	SimplifyCFGPass.cpp \
 	Sink.cpp \
+	SpeculateAroundPHIs.cpp \
+	SpeculativeExecution.cpp \
+	SROA.cpp \
+	StraightLineStrengthReduce.cpp \
 	StructurizeCFG.cpp \
 	TailRecursionElimination.cpp
 

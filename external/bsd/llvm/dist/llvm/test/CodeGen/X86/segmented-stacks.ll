@@ -11,16 +11,16 @@
 ; RUN: llc < %s -mcpu=generic -mtriple=x86_64-mingw32 -verify-machineinstrs | FileCheck %s -check-prefix=X64-MinGW
 
 ; We used to crash with filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=i686-linux -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-linux -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-linux-gnux32 -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=i686-darwin -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-darwin -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=i686-mingw32 -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-freebsd -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=i686-dragonfly -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-dragonfly -filetype=obj
-; RUN: llc < %s -mcpu=generic -mtriple=x86_64-mingw32 -filetype=obj
+; RUN: llc < %s -mcpu=generic -mtriple=i686-linux -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-linux -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-linux-gnux32 -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=i686-darwin -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-darwin -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=i686-mingw32 -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-freebsd -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=i686-dragonfly -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-dragonfly -filetype=obj -o /dev/null
+; RUN: llc < %s -mcpu=generic -mtriple=x86_64-mingw32 -filetype=obj -o /dev/null
 
 ; RUN: not llc < %s -mcpu=generic -mtriple=x86_64-solaris 2> %t.log
 ; RUN: FileCheck %s -input-file=%t.log -check-prefix=X64-Solaris
@@ -44,7 +44,7 @@ define void @test_basic() #0 {
 ; X32-Linux-NEXT:  ja      .LBB0_2
 
 ; X32-Linux:       pushl $0
-; X32-Linux-NEXT:  pushl $60
+; X32-Linux-NEXT:  pushl $44
 ; X32-Linux-NEXT:  calll __morestack
 ; X32-Linux-NEXT:  ret
 
@@ -105,7 +105,7 @@ define void @test_basic() #0 {
 ; X32-MinGW-NEXT:  ja      LBB0_2
 
 ; X32-MinGW:       pushl $0
-; X32-MinGW-NEXT:  pushl $48
+; X32-MinGW-NEXT:  pushl $40
 ; X32-MinGW-NEXT:  calll ___morestack
 ; X32-MinGW-NEXT:  ret
 
@@ -135,7 +135,7 @@ define void @test_basic() #0 {
 ; X32-DFlyBSD-NEXT:  ja      .LBB0_2
 
 ; X32-DFlyBSD:       pushl $0
-; X32-DFlyBSD-NEXT:  pushl $48
+; X32-DFlyBSD-NEXT:  pushl $40
 ; X32-DFlyBSD-NEXT:  calll __morestack
 ; X32-DFlyBSD-NEXT:  ret
 
@@ -152,7 +152,7 @@ define void @test_basic() #0 {
 }
 
 define i32 @test_nested(i32 * nest %closure, i32 %other) #0 {
-       %addend = load i32 * %closure
+       %addend = load i32 , i32 * %closure
        %result = add i32 %other, %addend
        %mem = alloca i32, i32 10
        call void @dummy_use (i32* %mem, i32 10)
@@ -162,7 +162,7 @@ define i32 @test_nested(i32 * nest %closure, i32 %other) #0 {
 ; X32-Linux-NEXT:  ja      .LBB1_2
 
 ; X32-Linux:       pushl $4
-; X32-Linux-NEXT:  pushl $60
+; X32-Linux-NEXT:  pushl $44
 ; X32-Linux-NEXT:  calll __morestack
 ; X32-Linux-NEXT:  ret
 
@@ -209,7 +209,7 @@ define i32 @test_nested(i32 * nest %closure, i32 %other) #0 {
 ; X32-MinGW-NEXT:  ja      LBB1_2
 
 ; X32-MinGW:       pushl $4
-; X32-MinGW-NEXT:  pushl $52
+; X32-MinGW-NEXT:  pushl $44
 ; X32-MinGW-NEXT:  calll ___morestack
 ; X32-MinGW-NEXT:  ret
 
@@ -238,7 +238,7 @@ define i32 @test_nested(i32 * nest %closure, i32 %other) #0 {
 ; X32-DFlyBSD-NEXT:  ja      .LBB1_2
 
 ; X32-DFlyBSD:       pushl $4
-; X32-DFlyBSD-NEXT:  pushl $52
+; X32-DFlyBSD-NEXT:  pushl $44
 ; X32-DFlyBSD-NEXT:  calll __morestack
 ; X32-DFlyBSD-NEXT:  ret
 
@@ -305,12 +305,12 @@ define void @test_large() #0 {
 ; X64-Darwin-NEXT: callq ___morestack
 ; X64-Darwin-NEXT: ret
 
-; X32-MinGW:       leal -40008(%esp), %ecx
+; X32-MinGW:       leal -40000(%esp), %ecx
 ; X32-MinGW-NEXT:  cmpl %fs:20, %ecx
 ; X32-MinGW-NEXT:  ja      LBB2_2
 
 ; X32-MinGW:       pushl $0
-; X32-MinGW-NEXT:  pushl $40008
+; X32-MinGW-NEXT:  pushl $40000
 ; X32-MinGW-NEXT:  calll ___morestack
 ; X32-MinGW-NEXT:  ret
 
@@ -333,12 +333,12 @@ define void @test_large() #0 {
 ; X64-FreeBSD-NEXT:  callq __morestack
 ; X64-FreeBSD-NEXT:  ret
 
-; X32-DFlyBSD:       leal -40008(%esp), %ecx
+; X32-DFlyBSD:       leal -40000(%esp), %ecx
 ; X32-DFlyBSD-NEXT:  cmpl %fs:16, %ecx
 ; X32-DFlyBSD-NEXT:  ja      .LBB2_2
 
 ; X32-DFlyBSD:       pushl $0
-; X32-DFlyBSD-NEXT:  pushl $40008
+; X32-DFlyBSD-NEXT:  pushl $40000
 ; X32-DFlyBSD-NEXT:  calll __morestack
 ; X32-DFlyBSD-NEXT:  ret
 
@@ -364,7 +364,7 @@ define fastcc void @test_fastcc() #0 {
 ; X32-Linux-NEXT:  ja      .LBB3_2
 
 ; X32-Linux:       pushl $0
-; X32-Linux-NEXT:  pushl $60
+; X32-Linux-NEXT:  pushl $44
 ; X32-Linux-NEXT:  calll __morestack
 ; X32-Linux-NEXT:  ret
 
@@ -415,7 +415,7 @@ define fastcc void @test_fastcc() #0 {
 ; X32-MinGW-NEXT:  ja      LBB3_2
 
 ; X32-MinGW:       pushl $0
-; X32-MinGW-NEXT:  pushl $48
+; X32-MinGW-NEXT:  pushl $40
 ; X32-MinGW-NEXT:  calll ___morestack
 ; X32-MinGW-NEXT:  ret
 
@@ -445,7 +445,7 @@ define fastcc void @test_fastcc() #0 {
 ; X32-DFlyBSD-NEXT:  ja      .LBB3_2
 
 ; X32-DFlyBSD:       pushl $0
-; X32-DFlyBSD-NEXT:  pushl $48
+; X32-DFlyBSD-NEXT:  pushl $40
 ; X32-DFlyBSD-NEXT:  calll __morestack
 ; X32-DFlyBSD-NEXT:  ret
 
@@ -524,12 +524,12 @@ define fastcc void @test_fastcc_large() #0 {
 
 ; X32-MinGW-LABEL:       test_fastcc_large:
 
-; X32-MinGW:       leal -40008(%esp), %eax
+; X32-MinGW:       leal -40000(%esp), %eax
 ; X32-MinGW-NEXT:  cmpl %fs:20, %eax
 ; X32-MinGW-NEXT:  ja      LBB4_2
 
 ; X32-MinGW:       pushl $0
-; X32-MinGW-NEXT:  pushl $40008
+; X32-MinGW-NEXT:  pushl $40000
 ; X32-MinGW-NEXT:  calll ___morestack
 ; X32-MinGW-NEXT:  ret
 
@@ -557,12 +557,12 @@ define fastcc void @test_fastcc_large() #0 {
 
 ; X32-DFlyBSD-LABEL:       test_fastcc_large:
 
-; X32-DFlyBSD:       leal -40008(%esp), %eax
+; X32-DFlyBSD:       leal -40000(%esp), %eax
 ; X32-DFlyBSD-NEXT:  cmpl %fs:16, %eax
 ; X32-DFlyBSD-NEXT:  ja      .LBB4_2
 
 ; X32-DFlyBSD:       pushl $0
-; X32-DFlyBSD-NEXT:  pushl $40008
+; X32-DFlyBSD-NEXT:  pushl $40000
 ; X32-DFlyBSD-NEXT:  calll __morestack
 ; X32-DFlyBSD-NEXT:  ret
 
@@ -636,8 +636,73 @@ define void @test_nostack() #0 {
 ; X64-DFlyBSD-NOT:   callq __morestack
 }
 
+define void @test_nosplitstck() {
+	ret void
+}
+
+; Test to make sure that a morestack call is generated if there is a
+; sibling call, even if the function in question has no stack frame
+; (PR37807).
+
+declare i32 @callee(i32)
+
+define i32 @test_sibling_call_empty_frame(i32 %x) #0 {
+  %call = tail call i32 @callee(i32 %x) #0
+  ret i32 %call
+
+; X32-Linux-LABEL:       test_sibling_call_empty_frame:
+; X32-Linux:  calll __morestack
+
+; X64-Linux-LABEL:       test_sibling_call_empty_frame:
+; X64-Linux:  callq __morestack
+
+; X64-Linux-Large-LABEL:       test_sibling_call_empty_frame:
+; X64-Linux-Large:  callq *__morestack_addr(%rip)
+
+; X32ABI-LABEL:       test_sibling_call_empty_frame:
+; X32ABI:  callq __morestack
+
+; X32-Darwin-LABEL:      test_sibling_call_empty_frame:
+; X32-Darwin: calll ___morestack
+
+; X64-Darwin-LABEL:      test_sibling_call_empty_frame:
+; X64-Darwin: callq ___morestack
+
+; X32-MinGW-LABEL:       test_sibling_call_empty_frame:
+; X32-MinGW:  calll ___morestack
+
+; X64-MinGW-LABEL:       test_sibling_call_empty_frame:
+; X64-MinGW:  callq __morestack
+
+; X64-FreeBSD-LABEL:       test_sibling_call_empty_frame:
+; X64-FreeBSD:  callq __morestack
+
+; X32-DFlyBSD-LABEL:       test_sibling_call_empty_frame:
+; X32-DFlyBSD:  calll __morestack
+; X32-DFlyBSD-NEXT:  ret
+
+; X64-DFlyBSD-LABEL:       test_sibling_call_empty_frame:
+; X64-DFlyBSD:  callq __morestack
+
+}
+
 attributes #0 = { "split-stack" }
 
 ; X64-Linux-Large: .rodata
 ; X64-Linux-Large-NEXT: __morestack_addr:
 ; X64-Linux-Large-NEXT: .quad	__morestack
+
+; X32-Linux: .section ".note.GNU-split-stack","",@progbits
+; X32-Linux: .section ".note.GNU-no-split-stack","",@progbits
+
+; X64-Linux: .section ".note.GNU-split-stack","",@progbits
+; X64-Linux: .section ".note.GNU-no-split-stack","",@progbits
+
+; X64-FreeBSD: .section ".note.GNU-split-stack","",@progbits
+; X64-FreeBSD: .section ".note.GNU-no-split-stack","",@progbits
+
+; X32-DFlyBSD: .section ".note.GNU-split-stack","",@progbits
+; X32-DFlyBSD: .section ".note.GNU-no-split-stack","",@progbits
+
+; X64-DFlyBSD: .section ".note.GNU-split-stack","",@progbits
+; X64-DFlyBSD: .section ".note.GNU-no-split-stack","",@progbits

@@ -48,6 +48,18 @@ inline bool IsVariableAConstantExpression(VarDecl *Var, ASTContext &Context) {
     Var->getAnyInitializer(DefVD) && DefVD->checkInitIsICE(); 
 }
 
+// Helper function to check whether D's attributes match current CUDA mode.
+// Decls with mismatched attributes and related diagnostics may have to be
+// ignored during this CUDA compilation pass.
+inline bool DeclAttrsMatchCUDAMode(const LangOptions &LangOpts, Decl *D) {
+  if (!LangOpts.CUDA || !D)
+    return true;
+  bool isDeviceSideDecl = D->hasAttr<CUDADeviceAttr>() ||
+                          D->hasAttr<CUDASharedAttr>() ||
+                          D->hasAttr<CUDAGlobalAttr>();
+  return isDeviceSideDecl == LangOpts.CUDAIsDevice;
+}
+
 // Directly mark a variable odr-used. Given a choice, prefer to use 
 // MarkVariableReferenced since it does additional checks and then 
 // calls MarkVarDeclODRUsed.
@@ -61,10 +73,12 @@ inline void MarkVarDeclODRUsed(VarDecl *Var,
   // Keep track of used but undefined variables.
   // FIXME: We shouldn't suppress this warning for static data members.
   if (Var->hasDefinition(SemaRef.Context) == VarDecl::DeclarationOnly &&
-    !Var->isExternallyVisible() &&
-    !(Var->isStaticDataMember() && Var->hasInit())) {
-      SourceLocation &old = SemaRef.UndefinedButUsed[Var->getCanonicalDecl()];
-      if (old.isInvalid()) old = Loc;
+      (!Var->isExternallyVisible() || Var->isInline() ||
+       SemaRef.isExternalWithNoLinkageType(Var)) &&
+      !(Var->isStaticDataMember() && Var->hasInit())) {
+    SourceLocation &old = SemaRef.UndefinedButUsed[Var->getCanonicalDecl()];
+    if (old.isInvalid())
+      old = Loc;
   }
   QualType CaptureType, DeclRefType;
   SemaRef.tryCaptureVariable(Var, Loc, Sema::TryCapture_Implicit, 
@@ -125,13 +139,13 @@ public:
     return CorrectionResults.empty() && ValidatedCorrections.size() == 1;
   }
 
-  /// \brief Return the list of TypoCorrections for the given identifier from
+  /// Return the list of TypoCorrections for the given identifier from
   /// the set of corrections that have the closest edit distance, if any.
   TypoResultList &operator[](StringRef Name) {
     return CorrectionResults.begin()->second[Name];
   }
 
-  /// \brief Return the edit distance of the corrections that have the
+  /// Return the edit distance of the corrections that have the
   /// closest/best edit distance from the original typop.
   unsigned getBestEditDistance(bool Normalized) {
     if (CorrectionResults.empty())
@@ -141,28 +155,28 @@ public:
     return Normalized ? TypoCorrection::NormalizeEditDistance(BestED) : BestED;
   }
 
-  /// \brief Set-up method to add to the consumer the set of namespaces to use
+  /// Set-up method to add to the consumer the set of namespaces to use
   /// in performing corrections to nested name specifiers. This method also
   /// implicitly adds all of the known classes in the current AST context to the
   /// to the consumer for correcting nested name specifiers.
   void
   addNamespaces(const llvm::MapVector<NamespaceDecl *, bool> &KnownNamespaces);
 
-  /// \brief Return the next typo correction that passes all internal filters
+  /// Return the next typo correction that passes all internal filters
   /// and is deemed valid by the consumer's CorrectionCandidateCallback,
   /// starting with the corrections that have the closest edit distance. An
   /// empty TypoCorrection is returned once no more viable corrections remain
   /// in the consumer.
   const TypoCorrection &getNextCorrection();
 
-  /// \brief Get the last correction returned by getNextCorrection().
+  /// Get the last correction returned by getNextCorrection().
   const TypoCorrection &getCurrentCorrection() {
     return CurrentTCIndex < ValidatedCorrections.size()
                ? ValidatedCorrections[CurrentTCIndex]
                : ValidatedCorrections[0];  // The empty correction.
   }
 
-  /// \brief Return the next typo correction like getNextCorrection, but keep
+  /// Return the next typo correction like getNextCorrection, but keep
   /// the internal state pointed to the current correction (i.e. the next time
   /// getNextCorrection is called, it will return the same correction returned
   /// by peekNextcorrection).
@@ -173,27 +187,27 @@ public:
     return TC;
   }
 
-  /// \brief Reset the consumer's position in the stream of viable corrections
+  /// Reset the consumer's position in the stream of viable corrections
   /// (i.e. getNextCorrection() will return each of the previously returned
   /// corrections in order before returning any new corrections).
   void resetCorrectionStream() {
     CurrentTCIndex = 0;
   }
 
-  /// \brief Return whether the end of the stream of corrections has been
+  /// Return whether the end of the stream of corrections has been
   /// reached.
   bool finished() {
     return CorrectionResults.empty() &&
            CurrentTCIndex >= ValidatedCorrections.size();
   }
 
-  /// \brief Save the current position in the correction stream (overwriting any
+  /// Save the current position in the correction stream (overwriting any
   /// previously saved position).
   void saveCurrentPosition() {
     SavedTCIndex = CurrentTCIndex;
   }
 
-  /// \brief Restore the saved position in the correction stream.
+  /// Restore the saved position in the correction stream.
   void restoreSavedPosition() {
     CurrentTCIndex = SavedTCIndex;
   }
@@ -204,6 +218,9 @@ public:
   bool isAddressOfOperand() const { return CorrectionValidator->IsAddressOfOperand; }
   const CXXScopeSpec *getSS() const { return SS.get(); }
   Scope *getScope() const { return S; }
+  CorrectionCandidateCallback *getCorrectionValidator() const {
+    return CorrectionValidator.get();
+  }
 
 private:
   class NamespaceSpecifierSet {
@@ -221,17 +238,12 @@ private:
     std::string CurNameSpecifier;
     SmallVector<const IdentifierInfo*, 4> CurContextIdentifiers;
     SmallVector<const IdentifierInfo*, 4> CurNameSpecifierIdentifiers;
-    bool isSorted;
 
-    SpecifierInfoList Specifiers;
-    llvm::SmallSetVector<unsigned, 4> Distances;
-    llvm::DenseMap<unsigned, SpecifierInfoList> DistanceMap;
+    std::map<unsigned, SpecifierInfoList> DistanceMap;
 
-    /// \brief Helper for building the list of DeclContexts between the current
+    /// Helper for building the list of DeclContexts between the current
     /// context and the top of the translation unit
     static DeclContextList buildContextChain(DeclContext *Start);
-
-    void sortNamespaces();
 
     unsigned buildNestedNameSpecifier(DeclContextList &DeclChain,
                                       NestedNameSpecifier *&NNS);
@@ -240,36 +252,64 @@ private:
     NamespaceSpecifierSet(ASTContext &Context, DeclContext *CurContext,
                           CXXScopeSpec *CurScopeSpec);
 
-    /// \brief Add the DeclContext (a namespace or record) to the set, computing
+    /// Add the DeclContext (a namespace or record) to the set, computing
     /// the corresponding NestedNameSpecifier and its distance in the process.
     void addNameSpecifier(DeclContext *Ctx);
 
-    typedef SpecifierInfoList::iterator iterator;
-    iterator begin() {
-      if (!isSorted) sortNamespaces();
-      return Specifiers.begin();
-    }
-    iterator end() { return Specifiers.end(); }
+    /// Provides flat iteration over specifiers, sorted by distance.
+    class iterator
+        : public llvm::iterator_facade_base<iterator, std::forward_iterator_tag,
+                                            SpecifierInfo> {
+      /// Always points to the last element in the distance map.
+      const std::map<unsigned, SpecifierInfoList>::iterator OuterBack;
+      /// Iterator on the distance map.
+      std::map<unsigned, SpecifierInfoList>::iterator Outer;
+      /// Iterator on an element in the distance map.
+      SpecifierInfoList::iterator Inner;
+
+    public:
+      iterator(NamespaceSpecifierSet &Set, bool IsAtEnd)
+          : OuterBack(std::prev(Set.DistanceMap.end())),
+            Outer(Set.DistanceMap.begin()),
+            Inner(!IsAtEnd ? Outer->second.begin() : OuterBack->second.end()) {
+        assert(!Set.DistanceMap.empty());
+      }
+
+      iterator &operator++() {
+        ++Inner;
+        if (Inner == Outer->second.end() && Outer != OuterBack) {
+          ++Outer;
+          Inner = Outer->second.begin();
+        }
+        return *this;
+      }
+
+      SpecifierInfo &operator*() { return *Inner; }
+      bool operator==(const iterator &RHS) const { return Inner == RHS.Inner; }
+    };
+
+    iterator begin() { return iterator(*this, /*IsAtEnd=*/false); }
+    iterator end() { return iterator(*this, /*IsAtEnd=*/true); }
   };
 
   void addName(StringRef Name, NamedDecl *ND,
                NestedNameSpecifier *NNS = nullptr, bool isKeyword = false);
 
-  /// \brief Find any visible decls for the given typo correction candidate.
+  /// Find any visible decls for the given typo correction candidate.
   /// If none are found, it to the set of candidates for which qualified lookups
   /// will be performed to find possible nested name specifier changes.
   bool resolveCorrection(TypoCorrection &Candidate);
 
-  /// \brief Perform qualified lookups on the queued set of typo correction
+  /// Perform qualified lookups on the queued set of typo correction
   /// candidates and add the nested name specifier changes to each candidate if
   /// a lookup succeeds (at which point the candidate will be returned to the
   /// main pool of potential corrections).
   void performQualifiedLookups();
 
-  /// \brief The name written that is a typo in the source.
+  /// The name written that is a typo in the source.
   IdentifierInfo *Typo;
 
-  /// \brief The results found that have the smallest edit distance
+  /// The results found that have the smallest edit distance
   /// found (so far) with the typo name.
   ///
   /// The pointer value being set to the current DeclContext indicates
@@ -294,12 +334,12 @@ private:
 
 inline Sema::TypoExprState::TypoExprState() {}
 
-inline Sema::TypoExprState::TypoExprState(TypoExprState &&other) LLVM_NOEXCEPT {
+inline Sema::TypoExprState::TypoExprState(TypoExprState &&other) noexcept {
   *this = std::move(other);
 }
 
-inline Sema::TypoExprState &Sema::TypoExprState::operator=(
-    Sema::TypoExprState &&other) LLVM_NOEXCEPT {
+inline Sema::TypoExprState &Sema::TypoExprState::
+operator=(Sema::TypoExprState &&other) noexcept {
   Consumer = std::move(other.Consumer);
   DiagHandler = std::move(other.DiagHandler);
   RecoveryHandler = std::move(other.RecoveryHandler);

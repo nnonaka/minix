@@ -15,6 +15,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/StmtObjC.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace clang;
@@ -28,6 +29,8 @@ enum OpaqueValueMode {
 
 static void BuildParentMap(MapTy& M, Stmt* S,
                            OpaqueValueMode OVMode = OV_Transparent) {
+  if (!S)
+    return;
 
   switch (S->getStmtClass()) {
   case Stmt::PseudoObjectExprClass: {
@@ -36,8 +39,8 @@ static void BuildParentMap(MapTy& M, Stmt* S,
 
     // If we are rebuilding the map, clear out any existing state.
     if (M[POE->getSyntacticForm()])
-      for (Stmt::child_range I = S->children(); I; ++I)
-        M[*I] = nullptr;
+      for (Stmt *SubStmt : S->children())
+        M[SubStmt] = nullptr;
 
     M[POE->getSyntacticForm()] = S;
     BuildParentMap(M, POE->getSyntacticForm(), OV_Transparent);
@@ -82,10 +85,10 @@ static void BuildParentMap(MapTy& M, Stmt* S,
     break;
   }
   default:
-    for (Stmt::child_range I = S->children(); I; ++I) {
-      if (*I) {
-        M[*I] = S;
-        BuildParentMap(M, *I, OVMode);
+    for (Stmt *SubStmt : S->children()) {
+      if (SubStmt) {
+        M[SubStmt] = S;
+        BuildParentMap(M, SubStmt, OVMode);
       }
     }
     break;
@@ -191,6 +194,8 @@ bool ParentMap::isConsumedExpr(Expr* E) const {
       return DirectChild == cast<IndirectGotoStmt>(P)->getTarget();
     case Stmt::SwitchStmtClass:
       return DirectChild == cast<SwitchStmt>(P)->getCond();
+    case Stmt::ObjCForCollectionStmtClass:
+      return DirectChild == cast<ObjCForCollectionStmt>(P)->getCollection();
     case Stmt::ReturnStmtClass:
       return true;
   }

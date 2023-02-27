@@ -14,91 +14,152 @@
 #ifndef LLVM_TOOLS_DSYMUTIL_BINARYHOLDER_H
 #define LLVM_TOOLS_DSYMUTIL_BINARYHOLDER_H
 
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/Error.h"
+#include "llvm/Object/MachOUniversal.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Support/Chrono.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorOr.h"
+
+#include <mutex>
 
 namespace llvm {
 namespace dsymutil {
 
-/// \brief The BinaryHolder class is responsible for creating and
-/// owning ObjectFile objects and their underlying MemoryBuffer. This
-/// is different from a simple OwningBinary in that it handles
-/// accessing to archive members.
-///
-/// As an optimization, this class will reuse an already mapped and
-/// parsed Archive object if 2 successive requests target the same
-/// archive file (Which is always the case in debug maps).
-/// Currently it only owns one memory buffer at any given time,
-/// meaning that a mapping request will invalidate the previous memory
-/// mapping.
+/// The BinaryHolder class is responsible for creating and owning
+/// ObjectFiles and their underlying MemoryBuffers. It differs from a simple
+/// OwningBinary in that it handles accessing and caching of archives and its
+/// members.
 class BinaryHolder {
-  std::unique_ptr<object::Archive> CurrentArchive;
-  std::unique_ptr<MemoryBuffer> CurrentMemoryBuffer;
-  std::unique_ptr<object::ObjectFile> CurrentObjectFile;
-  bool Verbose;
-
-  /// \brief Get the MemoryBufferRef for the file specification in \p
-  /// Filename from the current archive.
-  ///
-  /// This function performs no system calls, it just looks up a
-  /// potential match for the given \p Filename in the currently
-  /// mapped archive if there is one.
-  ErrorOr<MemoryBufferRef> GetArchiveMemberBuffer(StringRef Filename);
-
-  /// \brief Interpret Filename as an archive member specification,
-  /// map the corresponding archive to memory and return the
-  /// MemoryBufferRef corresponding to the described member.
-  ErrorOr<MemoryBufferRef> MapArchiveAndGetMemberBuffer(StringRef Filename);
-
-  /// \brief Return the MemoryBufferRef that holds the memory
-  /// mapping for the given \p Filename. This function will try to
-  /// parse archive member specifications of the form
-  /// /path/to/archive.a(member.o).
-  ///
-  /// The returned MemoryBufferRef points to a buffer owned by this
-  /// object. The buffer is valid until the next call to
-  /// GetMemoryBufferForFile() on this object.
-  ErrorOr<MemoryBufferRef> GetMemoryBufferForFile(StringRef Filename);
-
 public:
-  BinaryHolder(bool Verbose) : Verbose(Verbose) {}
+  using TimestampTy = sys::TimePoint<std::chrono::seconds>;
 
-  /// \brief Get the ObjectFile designated by the \p Filename. This
-  /// might be an archive member specification of the form
-  /// /path/to/archive.a(member.o).
-  ///
-  /// Calling this function invalidates the previous mapping owned by
-  /// the BinaryHolder.
-  ErrorOr<const object::ObjectFile &> GetObjectFile(StringRef Filename);
+  BinaryHolder(bool Verbose = false) : Verbose(Verbose) {}
 
-  /// \brief Wraps GetObjectFile() to return a derived ObjectFile type.
-  template <typename ObjectFileType>
-  ErrorOr<const ObjectFileType &> GetFileAs(StringRef Filename) {
-    auto ErrOrObjFile = GetObjectFile(Filename);
-    if (auto Err = ErrOrObjFile.getError())
-      return Err;
-    if (const auto *Derived = dyn_cast<ObjectFileType>(CurrentObjectFile.get()))
-      return *Derived;
-    return make_error_code(object::object_error::invalid_file_type);
+  // Forward declarations for friend declaration.
+  class ObjectEntry;
+  class ArchiveEntry;
+
+  /// Base class shared by cached entries, representing objects and archives.
+  class EntryBase {
+  protected:
+    std::unique_ptr<MemoryBuffer> MemBuffer;
+    std::unique_ptr<object::MachOUniversalBinary> FatBinary;
+    std::string FatBinaryName;
+  };
+
+  /// Cached entry holding one or more (in case of a fat binary) object files.
+  class ObjectEntry : public EntryBase {
+  public:
+    /// Load the given object binary in memory.
+    Error load(StringRef Filename, bool Verbose = false);
+
+    /// Access all owned ObjectFiles.
+    std::vector<const object::ObjectFile *> getObjects() const;
+
+    /// Access to a derived version of all the currently owned ObjectFiles. The
+    /// conversion might be invalid, in which case an Error is returned.
+    template <typename ObjectFileType>
+    Expected<std::vector<const ObjectFileType *>> getObjectsAs() const {
+      std::vector<const ObjectFileType *> Result;
+      Result.reserve(Objects.size());
+      for (auto &Object : Objects) {
+        const auto *Derived = dyn_cast<ObjectFileType>(Object.get());
+        if (!Derived)
+          return errorCodeToError(object::object_error::invalid_file_type);
+        Result.push_back(Derived);
+      }
+      return Result;
+    }
+
+    /// Access the owned ObjectFile with architecture \p T.
+    Expected<const object::ObjectFile &> getObject(const Triple &T) const;
+
+    /// Access to a derived version of the currently owned ObjectFile with
+    /// architecture \p T. The conversion must be known to be valid.
+    template <typename ObjectFileType>
+    Expected<const ObjectFileType &> getObjectAs(const Triple &T) const {
+      auto Object = getObject(T);
+      if (!Object)
+        return Object.takeError();
+      return cast<ObjectFileType>(*Object);
+    }
+
+  private:
+    std::vector<std::unique_ptr<object::ObjectFile>> Objects;
+    friend ArchiveEntry;
+  };
+
+  /// Cached entry holding one or more (in the of a fat binary) archive files.
+  class ArchiveEntry : public EntryBase {
+  public:
+    struct KeyTy {
+      std::string Filename;
+      TimestampTy Timestamp;
+
+      KeyTy() : Filename(), Timestamp() {}
+      KeyTy(StringRef Filename, TimestampTy Timestamp)
+          : Filename(Filename.str()), Timestamp(Timestamp) {}
+    };
+
+    /// Load the given object binary in memory.
+    Error load(StringRef Filename, TimestampTy Timestamp, bool Verbose = false);
+
+    Expected<const ObjectEntry &> getObjectEntry(StringRef Filename,
+                                                 TimestampTy Timestamp,
+                                                 bool Verbose = false);
+
+  private:
+    std::vector<std::unique_ptr<object::Archive>> Archives;
+    DenseMap<KeyTy, ObjectEntry> MemberCache;
+    std::mutex MemberCacheMutex;
+  };
+
+  Expected<const ObjectEntry &>
+  getObjectEntry(StringRef Filename, TimestampTy Timestamp = TimestampTy());
+
+  void clear();
+
+private:
+  /// Cache of static archives. Objects that are part of a static archive are
+  /// stored under this object, rather than in the map below.
+  StringMap<ArchiveEntry> ArchiveCache;
+  std::mutex ArchiveCacheMutex;
+
+  /// Object entries for objects that are not in a static archive.
+  StringMap<ObjectEntry> ObjectCache;
+  std::mutex ObjectCacheMutex;
+
+  bool Verbose;
+};
+
+} // namespace dsymutil
+
+template <> struct DenseMapInfo<dsymutil::BinaryHolder::ArchiveEntry::KeyTy> {
+
+  static inline dsymutil::BinaryHolder::ArchiveEntry::KeyTy getEmptyKey() {
+    return dsymutil::BinaryHolder::ArchiveEntry::KeyTy();
   }
 
-  /// \brief Access the currently owned ObjectFile. As successfull
-  /// call to GetObjectFile() or GetFileAs() must have been performed
-  /// before calling this.
-  const object::ObjectFile &Get() {
-    assert(CurrentObjectFile);
-    return *CurrentObjectFile;
+  static inline dsymutil::BinaryHolder::ArchiveEntry::KeyTy getTombstoneKey() {
+    return dsymutil::BinaryHolder::ArchiveEntry::KeyTy("/", {});
   }
 
-  /// \brief Access to a derived version of the currently owned
-  /// ObjectFile. The conversion must be known to be valid.
-  template <typename ObjectFileType> const ObjectFileType &GetAs() {
-    return cast<ObjectFileType>(*CurrentObjectFile);
+  static unsigned
+  getHashValue(const dsymutil::BinaryHolder::ArchiveEntry::KeyTy &K) {
+    return hash_combine(DenseMapInfo<StringRef>::getHashValue(K.Filename),
+                        DenseMapInfo<unsigned>::getHashValue(
+                            K.Timestamp.time_since_epoch().count()));
+  }
+
+  static bool isEqual(const dsymutil::BinaryHolder::ArchiveEntry::KeyTy &LHS,
+                      const dsymutil::BinaryHolder::ArchiveEntry::KeyTy &RHS) {
+    return LHS.Filename == RHS.Filename && LHS.Timestamp == RHS.Timestamp;
   }
 };
-}
-}
+
+} // namespace llvm
 #endif

@@ -26,7 +26,6 @@
 namespace llvm {
 
 class IntrinsicLowering;
-struct FunctionInfo;
 template<typename T> class generic_gep_type_iterator;
 class ConstantExpr;
 typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
@@ -42,12 +41,9 @@ class AllocaHolder {
 public:
   AllocaHolder() {}
 
-  // Make this type move-only. Define explicit move special members for MSVC.
-  AllocaHolder(AllocaHolder &&RHS) : Allocations(std::move(RHS.Allocations)) {}
-  AllocaHolder &operator=(AllocaHolder &&RHS) {
-    Allocations = std::move(RHS.Allocations);
-    return *this;
-  }
+  // Make this type move-only.
+  AllocaHolder(AllocaHolder &&) = default;
+  AllocaHolder &operator=(AllocaHolder &&RHS) = default;
 
   ~AllocaHolder() {
     for (void *Allocation : Allocations)
@@ -73,29 +69,12 @@ struct ExecutionContext {
   AllocaHolder Allocas;            // Track memory allocated by alloca
 
   ExecutionContext() : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr) {}
-
-  ExecutionContext(ExecutionContext &&O)
-      : CurFunction(O.CurFunction), CurBB(O.CurBB), CurInst(O.CurInst),
-        Caller(O.Caller), Values(std::move(O.Values)),
-        VarArgs(std::move(O.VarArgs)), Allocas(std::move(O.Allocas)) {}
-
-  ExecutionContext &operator=(ExecutionContext &&O) {
-    CurFunction = O.CurFunction;
-    CurBB = O.CurBB;
-    CurInst = O.CurInst;
-    Caller = O.Caller;
-    Values = std::move(O.Values);
-    VarArgs = std::move(O.VarArgs);
-    Allocas = std::move(O.Allocas);
-    return *this;
-  }
 };
 
 // Interpreter - This class represents the entirety of the interpreter.
 //
 class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   GenericValue ExitValue;          // The return value of the called function
-  DataLayout TD;
   IntrinsicLowering *IL;
 
   // The runtime stack of executing code.  The top of the stack is the current
@@ -108,7 +87,7 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M);
-  ~Interpreter();
+  ~Interpreter() override;
 
   /// runAtExitHandlers - Run any functions registered by the program's calls to
   /// atexit(3), which we intercept and store in AtExitHandlers.
@@ -127,7 +106,7 @@ public:
   /// run - Start execution with the specified function and arguments.
   ///
   GenericValue runFunction(Function *F,
-                           const std::vector<GenericValue> &ArgValues) override;
+                           ArrayRef<GenericValue> ArgValues) override;
 
   void *getPointerToNamedFunction(StringRef Name,
                                   bool AbortOnFailure = true) override {
@@ -137,7 +116,7 @@ public:
 
   // Methods used to execute code:
   // Place a call on the stack
-  void callFunction(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
   void run();                // Execute instructions until nothing left to do
 
   // Opcode Implementations
@@ -194,7 +173,7 @@ public:
   }
 
   GenericValue callExternalFunction(Function *F,
-                                    const std::vector<GenericValue> &ArgVals);
+                                    ArrayRef<GenericValue> ArgVals);
   void exitCalled(GenericValue GV);
 
   void addAtExitHandler(Function *F) {

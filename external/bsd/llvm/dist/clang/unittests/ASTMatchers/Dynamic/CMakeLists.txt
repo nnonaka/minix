@@ -5,11 +5,14 @@ set(LLVM_LINK_COMPONENTS
 add_clang_unittest(DynamicASTMatchersTests
   VariantValueTest.cpp
   ParserTest.cpp
-  RegistryTest.cpp)
+  RegistryTest.cpp
+  )
 
 target_link_libraries(DynamicASTMatchersTests
+  PRIVATE
   clangAST
   clangASTMatchers
+  clangBasic
   clangDynamicASTMatchers
   clangFrontend
   clangTooling

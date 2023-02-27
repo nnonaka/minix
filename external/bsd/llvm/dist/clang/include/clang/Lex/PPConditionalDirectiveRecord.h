@@ -21,7 +21,7 @@
 
 namespace clang {
   
-/// \brief Records preprocessor conditional directive regions and allows
+/// Records preprocessor conditional directive regions and allows
 /// querying in which region source locations belong to.
 class PPConditionalDirectiveRecord : public PPCallbacks {
   SourceManager &SourceMgr;
@@ -57,25 +57,25 @@ class PPConditionalDirectiveRecord : public PPCallbacks {
   };
 
   typedef std::vector<CondDirectiveLoc> CondDirectiveLocsTy;
-  /// \brief The locations of conditional directives in source order.
+  /// The locations of conditional directives in source order.
   CondDirectiveLocsTy CondDirectiveLocs;
 
   void addCondDirectiveLoc(CondDirectiveLoc DirLoc);
 
 public:
-  /// \brief Construct a new preprocessing record.
+  /// Construct a new preprocessing record.
   explicit PPConditionalDirectiveRecord(SourceManager &SM);
 
   size_t getTotalMemory() const;
 
   SourceManager &getSourceManager() const { return SourceMgr; }
 
-  /// \brief Returns true if the given range intersects with a conditional
+  /// Returns true if the given range intersects with a conditional
   /// directive. if a \#if/\#endif block is fully contained within the range,
   /// this function will return false.
   bool rangeIntersectsConditionalDirective(SourceRange Range) const;
 
-  /// \brief Returns true if the given locations are in different regions,
+  /// Returns true if the given locations are in different regions,
   /// separated by conditional directive blocks.
   bool areInDifferentConditionalDirectiveRegion(SourceLocation LHS,
                                                 SourceLocation RHS) const {
@@ -91,9 +91,9 @@ private:
   void Elif(SourceLocation Loc, SourceRange ConditionRange,
             ConditionValueKind ConditionValue, SourceLocation IfLoc) override;
   void Ifdef(SourceLocation Loc, const Token &MacroNameTok,
-             const MacroDirective *MD) override;
+             const MacroDefinition &MD) override;
   void Ifndef(SourceLocation Loc, const Token &MacroNameTok,
-              const MacroDirective *MD) override;
+              const MacroDefinition &MD) override;
   void Else(SourceLocation Loc, SourceLocation IfLoc) override;
   void Endif(SourceLocation Loc, SourceLocation IfLoc) override;
 };

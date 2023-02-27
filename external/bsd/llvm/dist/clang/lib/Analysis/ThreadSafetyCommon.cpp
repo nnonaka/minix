@@ -1,4 +1,4 @@
-//===- ThreadSafetyCommon.cpp ----------------------------------*- C++ --*-===//
+//===- ThreadSafetyCommon.cpp ---------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,31 +13,32 @@
 
 #include "clang/Analysis/Analyses/ThreadSafetyCommon.h"
 #include "clang/AST/Attr.h"
+#include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/DeclGroup.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
-#include "clang/AST/StmtCXX.h"
-#include "clang/Analysis/Analyses/PostOrderCFGView.h"
+#include "clang/AST/OperationKinds.h"
+#include "clang/AST/Stmt.h"
+#include "clang/AST/Type.h"
 #include "clang/Analysis/Analyses/ThreadSafetyTIL.h"
-#include "clang/Analysis/Analyses/ThreadSafetyTraverse.h"
-#include "clang/Analysis/AnalysisContext.h"
 #include "clang/Analysis/CFG.h"
+#include "clang/Basic/LLVM.h"
 #include "clang/Basic/OperatorKinds.h"
-#include "clang/Basic/SourceLocation.h"
-#include "clang/Basic/SourceManager.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
+#include "clang/Basic/Specifiers.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 #include <algorithm>
-#include <climits>
-#include <vector>
+#include <cassert>
+#include <string>
+#include <utility>
 
-
-namespace clang {
-namespace threadSafety {
+using namespace clang;
+using namespace threadSafety;
 
 // From ThreadSafetyUtil.h
-std::string getSourceLiteralString(const clang::Expr *CE) {
+std::string threadSafety::getSourceLiteralString(const Expr *CE) {
   switch (CE->getStmtClass()) {
     case Stmt::IntegerLiteralClass:
       return cast<IntegerLiteral>(CE)->getValue().toString(10, true);
@@ -59,20 +60,14 @@ std::string getSourceLiteralString(const clang::Expr *CE) {
   }
 }
 
-namespace til {
-
 // Return true if E is a variable that points to an incomplete Phi node.
-static bool isIncompletePhi(const SExpr *E) {
-  if (const auto *Ph = dyn_cast<Phi>(E))
-    return Ph->status() == Phi::PH_Incomplete;
+static bool isIncompletePhi(const til::SExpr *E) {
+  if (const auto *Ph = dyn_cast<til::Phi>(E))
+    return Ph->status() == til::Phi::PH_Incomplete;
   return false;
 }
 
-}  // end namespace til
-
-
-typedef SExprBuilder::CallingContext CallingContext;
-
+using CallingContext = SExprBuilder::CallingContext;
 
 til::SExpr *SExprBuilder::lookupStmt(const Stmt *S) {
   auto It = SMap.find(S);
@@ -81,21 +76,17 @@ til::SExpr *SExprBuilder::lookupStmt(const Stmt *S) {
   return nullptr;
 }
 
-
 til::SCFG *SExprBuilder::buildCFG(CFGWalker &Walker) {
   Walker.walk(*this);
   return Scfg;
 }
 
-
-
-inline bool isCalleeArrow(const Expr *E) {
-  const MemberExpr *ME = dyn_cast<MemberExpr>(E->IgnoreParenCasts());
+static bool isCalleeArrow(const Expr *E) {
+  const auto *ME = dyn_cast<MemberExpr>(E->IgnoreParenCasts());
   return ME ? ME->isArrow() : false;
 }
 
-
-/// \brief Translate a clang expression in an attribute to a til::SExpr.
+/// Translate a clang expression in an attribute to a til::SExpr.
 /// Constructs the context from D, DeclExp, and SelfDecl.
 ///
 /// \param AttrExp The expression to translate.
@@ -114,20 +105,18 @@ CapabilityExpr SExprBuilder::translateAttrExpr(const Expr *AttrExp,
 
   // Examine DeclExp to find SelfArg and FunArgs, which are used to substitute
   // for formal parameters when we call buildMutexID later.
-  if (const MemberExpr *ME = dyn_cast<MemberExpr>(DeclExp)) {
+  if (const auto *ME = dyn_cast<MemberExpr>(DeclExp)) {
     Ctx.SelfArg   = ME->getBase();
     Ctx.SelfArrow = ME->isArrow();
-  } else if (const CXXMemberCallExpr *CE =
-             dyn_cast<CXXMemberCallExpr>(DeclExp)) {
+  } else if (const auto *CE = dyn_cast<CXXMemberCallExpr>(DeclExp)) {
     Ctx.SelfArg   = CE->getImplicitObjectArgument();
     Ctx.SelfArrow = isCalleeArrow(CE->getCallee());
     Ctx.NumArgs   = CE->getNumArgs();
     Ctx.FunArgs   = CE->getArgs();
-  } else if (const CallExpr *CE = dyn_cast<CallExpr>(DeclExp)) {
+  } else if (const auto *CE = dyn_cast<CallExpr>(DeclExp)) {
     Ctx.NumArgs = CE->getNumArgs();
     Ctx.FunArgs = CE->getArgs();
-  } else if (const CXXConstructExpr *CE =
-             dyn_cast<CXXConstructExpr>(DeclExp)) {
+  } else if (const auto *CE = dyn_cast<CXXConstructExpr>(DeclExp)) {
     Ctx.SelfArg = nullptr;  // Will be set below
     Ctx.NumArgs = CE->getNumArgs();
     Ctx.FunArgs = CE->getArgs();
@@ -157,15 +146,14 @@ CapabilityExpr SExprBuilder::translateAttrExpr(const Expr *AttrExp,
     return translateAttrExpr(AttrExp, &Ctx);
 }
 
-
-/// \brief Translate a clang expression in an attribute to a til::SExpr.
+/// Translate a clang expression in an attribute to a til::SExpr.
 // This assumes a CallingContext has already been created.
 CapabilityExpr SExprBuilder::translateAttrExpr(const Expr *AttrExp,
                                                CallingContext *Ctx) {
   if (!AttrExp)
     return CapabilityExpr(nullptr, false);
 
-  if (auto* SLit = dyn_cast<StringLiteral>(AttrExp)) {
+  if (const auto* SLit = dyn_cast<StringLiteral>(AttrExp)) {
     if (SLit->getString() == StringRef("*"))
       // The "*" expr is a universal lock, which essentially turns off
       // checks until it is removed from the lockset.
@@ -176,13 +164,13 @@ CapabilityExpr SExprBuilder::translateAttrExpr(const Expr *AttrExp,
   }
 
   bool Neg = false;
-  if (auto *OE = dyn_cast<CXXOperatorCallExpr>(AttrExp)) {
+  if (const auto *OE = dyn_cast<CXXOperatorCallExpr>(AttrExp)) {
     if (OE->getOperator() == OO_Exclaim) {
       Neg = true;
       AttrExp = OE->getArg(0);
     }
   }
-  else if (auto *UO = dyn_cast<UnaryOperator>(AttrExp)) {
+  else if (const auto *UO = dyn_cast<UnaryOperator>(AttrExp)) {
     if (UO->getOpcode() == UO_LNot) {
       Neg = true;
       AttrExp = UO->getSubExpr();
@@ -197,14 +185,12 @@ CapabilityExpr SExprBuilder::translateAttrExpr(const Expr *AttrExp,
     return CapabilityExpr(nullptr, false);
 
   // Hack to deal with smart pointers -- strip off top-level pointer casts.
-  if (auto *CE = dyn_cast_or_null<til::Cast>(E)) {
+  if (const auto *CE = dyn_cast_or_null<til::Cast>(E)) {
     if (CE->castOpcode() == til::CAST_objToPtr)
       return CapabilityExpr(CE->expr(), Neg);
   }
   return CapabilityExpr(E, Neg);
 }
-
-
 
 // Translate a clang statement or expression to a TIL expression.
 // Also performs substitution of variables; Ctx provides the context.
@@ -253,6 +239,9 @@ til::SExpr *SExprBuilder::translate(const Stmt *S, CallingContext *Ctx) {
     return translate(cast<ExprWithCleanups>(S)->getSubExpr(), Ctx);
   case Stmt::CXXBindTemporaryExprClass:
     return translate(cast<CXXBindTemporaryExpr>(S)->getSubExpr(), Ctx);
+  case Stmt::MaterializeTemporaryExprClass:
+    return translate(cast<MaterializeTemporaryExpr>(S)->GetTemporaryExpr(),
+                     Ctx);
 
   // Collect all literals
   case Stmt::CharacterLiteralClass:
@@ -271,21 +260,19 @@ til::SExpr *SExprBuilder::translate(const Stmt *S, CallingContext *Ctx) {
   default:
     break;
   }
-  if (const CastExpr *CE = dyn_cast<CastExpr>(S))
+  if (const auto *CE = dyn_cast<CastExpr>(S))
     return translateCastExpr(CE, Ctx);
 
   return new (Arena) til::Undefined(S);
 }
 
-
-
 til::SExpr *SExprBuilder::translateDeclRefExpr(const DeclRefExpr *DRE,
                                                CallingContext *Ctx) {
-  const ValueDecl *VD = cast<ValueDecl>(DRE->getDecl()->getCanonicalDecl());
+  const auto *VD = cast<ValueDecl>(DRE->getDecl()->getCanonicalDecl());
 
   // Function parameters require substitution and/or renaming.
-  if (const ParmVarDecl *PV = dyn_cast_or_null<ParmVarDecl>(VD)) {
-    const FunctionDecl *FD =
+  if (const auto *PV = dyn_cast_or_null<ParmVarDecl>(VD)) {
+    const auto *FD =
         cast<FunctionDecl>(PV->getDeclContext())->getCanonicalDecl();
     unsigned I = PV->getFunctionScopeIndex();
 
@@ -299,10 +286,9 @@ til::SExpr *SExprBuilder::translateDeclRefExpr(const DeclRefExpr *DRE,
     VD = FD->getParamDecl(I);
   }
 
-  // For non-local variables, treat it as a referenced to a named object.
+  // For non-local variables, treat it as a reference to a named object.
   return new (Arena) til::LiteralPtr(VD);
 }
-
 
 til::SExpr *SExprBuilder::translateCXXThisExpr(const CXXThisExpr *TE,
                                                CallingContext *Ctx) {
@@ -313,39 +299,37 @@ til::SExpr *SExprBuilder::translateCXXThisExpr(const CXXThisExpr *TE,
   return SelfVar;
 }
 
-
-const ValueDecl *getValueDeclFromSExpr(const til::SExpr *E) {
-  if (auto *V = dyn_cast<til::Variable>(E))
+static const ValueDecl *getValueDeclFromSExpr(const til::SExpr *E) {
+  if (const auto *V = dyn_cast<til::Variable>(E))
     return V->clangDecl();
-  if (auto *Ph = dyn_cast<til::Phi>(E))
+  if (const auto *Ph = dyn_cast<til::Phi>(E))
     return Ph->clangDecl();
-  if (auto *P = dyn_cast<til::Project>(E))
+  if (const auto *P = dyn_cast<til::Project>(E))
     return P->clangDecl();
-  if (auto *L = dyn_cast<til::LiteralPtr>(E))
+  if (const auto *L = dyn_cast<til::LiteralPtr>(E))
     return L->clangDecl();
-  return 0;
+  return nullptr;
 }
 
-bool hasCppPointerType(const til::SExpr *E) {
+static bool hasCppPointerType(const til::SExpr *E) {
   auto *VD = getValueDeclFromSExpr(E);
   if (VD && VD->getType()->isPointerType())
     return true;
-  if (auto *C = dyn_cast<til::Cast>(E))
+  if (const auto *C = dyn_cast<til::Cast>(E))
     return C->castOpcode() == til::CAST_objToPtr;
 
   return false;
 }
 
-
 // Grab the very first declaration of virtual method D
-const CXXMethodDecl* getFirstVirtualDecl(const CXXMethodDecl *D) {
+static const CXXMethodDecl *getFirstVirtualDecl(const CXXMethodDecl *D) {
   while (true) {
     D = D->getCanonicalDecl();
-    CXXMethodDecl::method_iterator I = D->begin_overridden_methods(),
-                                   E = D->end_overridden_methods();
-    if (I == E)
+    auto OverriddenMethods = D->overridden_methods();
+    if (OverriddenMethods.begin() == OverriddenMethods.end())
       return D;  // Method does not override anything
-    D = *I;      // FIXME: this does not work with multiple inheritance.
+    // FIXME: this does not work with multiple inheritance.
+    D = *OverriddenMethods.begin();
   }
   return nullptr;
 }
@@ -355,8 +339,8 @@ til::SExpr *SExprBuilder::translateMemberExpr(const MemberExpr *ME,
   til::SExpr *BE = translate(ME->getBase(), Ctx);
   til::SExpr *E  = new (Arena) til::SApply(BE);
 
-  const ValueDecl *D = ME->getMemberDecl();
-  if (auto *VD = dyn_cast<CXXMethodDecl>(D))
+  const auto *D = cast<ValueDecl>(ME->getMemberDecl()->getCanonicalDecl());
+  if (const auto *VD = dyn_cast<CXXMethodDecl>(D))
     D = getFirstVirtualDecl(VD);
 
   til::Project *P = new (Arena) til::Project(E, D);
@@ -364,7 +348,6 @@ til::SExpr *SExprBuilder::translateMemberExpr(const MemberExpr *ME,
     P->setArrow(true);
   return P;
 }
-
 
 til::SExpr *SExprBuilder::translateCallExpr(const CallExpr *CE,
                                             CallingContext *Ctx,
@@ -378,7 +361,7 @@ til::SExpr *SExprBuilder::translateCallExpr(const CallExpr *CE,
       LRCallCtx.SelfArg  = SelfE;
       LRCallCtx.NumArgs  = CE->getNumArgs();
       LRCallCtx.FunArgs  = CE->getArgs();
-      return const_cast<til::SExpr*>(
+      return const_cast<til::SExpr *>(
           translateAttrExpr(At->getArg(), &LRCallCtx).sexpr());
     }
   }
@@ -390,7 +373,6 @@ til::SExpr *SExprBuilder::translateCallExpr(const CallExpr *CE,
   }
   return new (Arena) til::Call(E, CE);
 }
-
 
 til::SExpr *SExprBuilder::translateCXXMemberCallExpr(
     const CXXMemberCallExpr *ME, CallingContext *Ctx) {
@@ -407,7 +389,6 @@ til::SExpr *SExprBuilder::translateCXXMemberCallExpr(
                            ME->getImplicitObjectArgument());
 }
 
-
 til::SExpr *SExprBuilder::translateCXXOperatorCallExpr(
     const CXXOperatorCallExpr *OCE, CallingContext *Ctx) {
   if (CapabilityExprMode) {
@@ -422,7 +403,6 @@ til::SExpr *SExprBuilder::translateCXXOperatorCallExpr(
   return translateCallExpr(cast<CallExpr>(OCE), Ctx);
 }
 
-
 til::SExpr *SExprBuilder::translateUnaryOperator(const UnaryOperator *UO,
                                                  CallingContext *Ctx) {
   switch (UO->getOpcode()) {
@@ -432,10 +412,10 @@ til::SExpr *SExprBuilder::translateUnaryOperator(const UnaryOperator *UO,
   case UO_PreDec:
     return new (Arena) til::Undefined(UO);
 
-  case UO_AddrOf: {
+  case UO_AddrOf:
     if (CapabilityExprMode) {
       // interpret &Graph::mu_ as an existential.
-      if (DeclRefExpr* DRE = dyn_cast<DeclRefExpr>(UO->getSubExpr())) {
+      if (const auto *DRE = dyn_cast<DeclRefExpr>(UO->getSubExpr())) {
         if (DRE->getDecl()->isCXXInstanceMember()) {
           // This is a pointer-to-member expression, e.g. &MyClass::mu_.
           // We interpret this syntax specially, as a wildcard.
@@ -446,7 +426,6 @@ til::SExpr *SExprBuilder::translateUnaryOperator(const UnaryOperator *UO,
     }
     // otherwise, & is a no-op
     return translate(UO->getSubExpr(), Ctx);
-  }
 
   // We treat these as no-ops
   case UO_Deref:
@@ -467,11 +446,11 @@ til::SExpr *SExprBuilder::translateUnaryOperator(const UnaryOperator *UO,
   case UO_Real:
   case UO_Imag:
   case UO_Extension:
+  case UO_Coawait:
     return new (Arena) til::Undefined(UO);
   }
   return new (Arena) til::Undefined(UO);
 }
-
 
 til::SExpr *SExprBuilder::translateBinOp(til::TIL_BinaryOpcode Op,
                                          const BinaryOperator *BO,
@@ -484,7 +463,6 @@ til::SExpr *SExprBuilder::translateBinOp(til::TIL_BinaryOpcode Op,
      return new (Arena) til::BinaryOp(Op, E0, E1);
 }
 
-
 til::SExpr *SExprBuilder::translateBinAssign(til::TIL_BinaryOpcode Op,
                                              const BinaryOperator *BO,
                                              CallingContext *Ctx,
@@ -496,7 +474,7 @@ til::SExpr *SExprBuilder::translateBinAssign(til::TIL_BinaryOpcode Op,
 
   const ValueDecl *VD = nullptr;
   til::SExpr *CV = nullptr;
-  if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(LHS)) {
+  if (const auto *DRE = dyn_cast<DeclRefExpr>(LHS)) {
     VD = DRE->getDecl();
     CV = lookupVarDecl(VD);
   }
@@ -510,7 +488,6 @@ til::SExpr *SExprBuilder::translateBinAssign(til::TIL_BinaryOpcode Op,
     return updateVarDecl(VD, E1);
   return new (Arena) til::Store(E0, E1);
 }
-
 
 til::SExpr *SExprBuilder::translateBinaryOperator(const BinaryOperator *BO,
                                                   CallingContext *Ctx) {
@@ -532,6 +509,7 @@ til::SExpr *SExprBuilder::translateBinaryOperator(const BinaryOperator *BO,
   case BO_GE:   return translateBinOp(til::BOP_Leq, BO, Ctx, true);
   case BO_EQ:   return translateBinOp(til::BOP_Eq,  BO, Ctx);
   case BO_NE:   return translateBinOp(til::BOP_Neq, BO, Ctx);
+  case BO_Cmp:  return translateBinOp(til::BOP_Cmp, BO, Ctx);
   case BO_And:  return translateBinOp(til::BOP_BitAnd,   BO, Ctx);
   case BO_Xor:  return translateBinOp(til::BOP_BitXor,   BO, Ctx);
   case BO_Or:   return translateBinOp(til::BOP_BitOr,    BO, Ctx);
@@ -557,13 +535,12 @@ til::SExpr *SExprBuilder::translateBinaryOperator(const BinaryOperator *BO,
   return new (Arena) til::Undefined(BO);
 }
 
-
 til::SExpr *SExprBuilder::translateCastExpr(const CastExpr *CE,
                                             CallingContext *Ctx) {
-  clang::CastKind K = CE->getCastKind();
+  CastKind K = CE->getCastKind();
   switch (K) {
   case CK_LValueToRValue: {
-    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(CE->getSubExpr())) {
+    if (const auto *DRE = dyn_cast<DeclRefExpr>(CE->getSubExpr())) {
       til::SExpr *E0 = lookupVarDecl(DRE->getDecl());
       if (E0)
         return E0;
@@ -591,7 +568,6 @@ til::SExpr *SExprBuilder::translateCastExpr(const CastExpr *CE,
   }
 }
 
-
 til::SExpr *
 SExprBuilder::translateArraySubscriptExpr(const ArraySubscriptExpr *E,
                                           CallingContext *Ctx) {
@@ -599,7 +575,6 @@ SExprBuilder::translateArraySubscriptExpr(const ArraySubscriptExpr *E,
   til::SExpr *E1 = translate(E->getIdx(), Ctx);
   return new (Arena) til::ArrayIndex(E0, E1);
 }
-
 
 til::SExpr *
 SExprBuilder::translateAbstractConditionalOperator(
@@ -610,20 +585,18 @@ SExprBuilder::translateAbstractConditionalOperator(
   return new (Arena) til::IfThenElse(C, T, E);
 }
 
-
 til::SExpr *
 SExprBuilder::translateDeclStmt(const DeclStmt *S, CallingContext *Ctx) {
   DeclGroupRef DGrp = S->getDeclGroup();
-  for (DeclGroupRef::iterator I = DGrp.begin(), E = DGrp.end(); I != E; ++I) {
-    if (VarDecl *VD = dyn_cast_or_null<VarDecl>(*I)) {
+  for (auto I : DGrp) {
+    if (auto *VD = dyn_cast_or_null<VarDecl>(I)) {
       Expr *E = VD->getInit();
       til::SExpr* SE = translate(E, Ctx);
 
       // Add local variables with trivial type to the variable map
       QualType T = VD->getType();
-      if (T.isTrivialType(VD->getASTContext())) {
+      if (T.isTrivialType(VD->getASTContext()))
         return addVarDecl(VD, SE);
-      }
       else {
         // TODO: add alloca
       }
@@ -631,8 +604,6 @@ SExprBuilder::translateDeclStmt(const DeclStmt *S, CallingContext *Ctx) {
   }
   return nullptr;
 }
-
-
 
 // If (E) is non-trivial, then add it to the current basic block, and
 // update the statement map so that S refers to E.  Returns a new variable
@@ -650,7 +621,6 @@ til::SExpr *SExprBuilder::addStatement(til::SExpr* E, const Stmt *S,
   return E;
 }
 
-
 // Returns the current value of VD, if known, and nullptr otherwise.
 til::SExpr *SExprBuilder::lookupVarDecl(const ValueDecl *VD) {
   auto It = LVarIdxMap.find(VD);
@@ -661,12 +631,11 @@ til::SExpr *SExprBuilder::lookupVarDecl(const ValueDecl *VD) {
   return nullptr;
 }
 
-
 // if E is a til::Variable, update its clangDecl.
-inline void maybeUpdateVD(til::SExpr *E, const ValueDecl *VD) {
+static void maybeUpdateVD(til::SExpr *E, const ValueDecl *VD) {
   if (!E)
     return;
-  if (til::Variable *V = dyn_cast<til::Variable>(E)) {
+  if (auto *V = dyn_cast<til::Variable>(E)) {
     if (!V->clangDecl())
       V->setClangDecl(VD);
   }
@@ -680,7 +649,6 @@ til::SExpr *SExprBuilder::addVarDecl(const ValueDecl *VD, til::SExpr *E) {
   CurrentLVarMap.push_back(std::make_pair(VD, E));
   return E;
 }
-
 
 // Updates a current variable declaration.  (E.g. by assignment)
 til::SExpr *SExprBuilder::updateVarDecl(const ValueDecl *VD, til::SExpr *E) {
@@ -696,7 +664,6 @@ til::SExpr *SExprBuilder::updateVarDecl(const ValueDecl *VD, til::SExpr *E) {
   return E;
 }
 
-
 // Make a Phi node in the current block for the i^th variable in CurrentVarMap.
 // If E != null, sets Phi[CurrentBlockInfo->ArgIndex] = E.
 // If E == null, this is a backedge and will be set later.
@@ -708,7 +675,7 @@ void SExprBuilder::makePhiNodeVar(unsigned i, unsigned NPreds, til::SExpr *E) {
   if (CurrE->block() == CurrentBB) {
     // We already have a Phi node in the current block,
     // so just add the new variable to the Phi node.
-    til::Phi *Ph = dyn_cast<til::Phi>(CurrE);
+    auto *Ph = dyn_cast<til::Phi>(CurrE);
     assert(Ph && "Expecting Phi node.");
     if (E)
       Ph->values()[ArgIndex] = E;
@@ -726,9 +693,8 @@ void SExprBuilder::makePhiNodeVar(unsigned i, unsigned NPreds, til::SExpr *E) {
   Ph->setClangDecl(CurrentLVarMap[i].first);
   // If E is from a back-edge, or either E or CurrE are incomplete, then
   // mark this node as incomplete; we may need to remove it later.
-  if (!E || isIncompletePhi(E) || isIncompletePhi(CurrE)) {
+  if (!E || isIncompletePhi(E) || isIncompletePhi(CurrE))
     Ph->setStatus(til::Phi::PH_Incomplete);
-  }
 
   // Add Phi node to current block, and update CurrentLVarMap[i]
   CurrentArguments.push_back(Ph);
@@ -738,7 +704,6 @@ void SExprBuilder::makePhiNodeVar(unsigned i, unsigned NPreds, til::SExpr *E) {
   CurrentLVarMap.makeWritable();
   CurrentLVarMap.elem(i).second = Ph;
 }
-
 
 // Merge values from Map into the current variable map.
 // This will construct Phi nodes in the current basic block as necessary.
@@ -758,7 +723,7 @@ void SExprBuilder::mergeEntryMap(LVarDefinitionMap Map) {
   unsigned MSz = Map.size();
   unsigned Sz  = std::min(ESz, MSz);
 
-  for (unsigned i=0; i<Sz; ++i) {
+  for (unsigned i = 0; i < Sz; ++i) {
     if (CurrentLVarMap[i].first != Map[i].first) {
       // We've reached the end of variables in common.
       CurrentLVarMap.makeWritable();
@@ -773,7 +738,6 @@ void SExprBuilder::mergeEntryMap(LVarDefinitionMap Map) {
     CurrentLVarMap.downsize(Map.size());
   }
 }
-
 
 // Merge a back edge into the current variable map.
 // This will create phi nodes for all variables in the variable map.
@@ -796,11 +760,9 @@ void SExprBuilder::mergeEntryMapBackEdge() {
   unsigned Sz = CurrentLVarMap.size();
   unsigned NPreds = CurrentBB->numPredecessors();
 
-  for (unsigned i=0; i < Sz; ++i) {
+  for (unsigned i = 0; i < Sz; ++i)
     makePhiNodeVar(i, NPreds, nullptr);
-  }
 }
-
 
 // Update the phi nodes that were initially created for a back edge
 // once the variable definitions have been computed.
@@ -811,7 +773,7 @@ void SExprBuilder::mergePhiNodesBackEdge(const CFGBlock *Blk) {
   assert(ArgIndex > 0 && ArgIndex < BB->numPredecessors());
 
   for (til::SExpr *PE : BB->arguments()) {
-    til::Phi *Ph = dyn_cast_or_null<til::Phi>(PE);
+    auto *Ph = dyn_cast_or_null<til::Phi>(PE);
     assert(Ph && "Expecting Phi Node.");
     assert(Ph->values()[ArgIndex] == nullptr && "Wrong index for back edge.");
 
@@ -854,9 +816,8 @@ void SExprBuilder::enterCFG(CFG *Cfg, const NamedDecl *D,
   }
 }
 
-
 void SExprBuilder::enterCFGBlock(const CFGBlock *B) {
-  // Intialize TIL basic block and add it to the CFG.
+  // Initialize TIL basic block and add it to the CFG.
   CurrentBB = lookupBlock(B);
   CurrentBB->reservePredecessors(B->pred_size());
   Scfg->add(CurrentBB);
@@ -867,7 +828,6 @@ void SExprBuilder::enterCFGBlock(const CFGBlock *B) {
   // FIXME: the entry block will hold function parameters.
   // assert(!CurrentLVarMap.valid() && "CurrentLVarMap already initialized.");
 }
-
 
 void SExprBuilder::handlePredecessor(const CFGBlock *Pred) {
   // Compute CurrentLVarMap on entry from ExitMaps of predecessors
@@ -884,11 +844,9 @@ void SExprBuilder::handlePredecessor(const CFGBlock *Pred) {
   ++CurrentBlockInfo->ProcessedPredecessors;
 }
 
-
 void SExprBuilder::handlePredecessorBackEdge(const CFGBlock *Pred) {
   mergeEntryMapBackEdge();
 }
-
 
 void SExprBuilder::enterCFGBlockBody(const CFGBlock *B) {
   // The merge*() methods have created arguments.
@@ -899,12 +857,10 @@ void SExprBuilder::enterCFGBlockBody(const CFGBlock *B) {
     CurrentBB->addArgument(A);
 }
 
-
 void SExprBuilder::handleStatement(const Stmt *S) {
   til::SExpr *E = translate(S, nullptr);
   addStatement(E, S);
 }
-
 
 void SExprBuilder::handleDestructorCall(const VarDecl *VD,
                                         const CXXDestructorDecl *DD) {
@@ -914,8 +870,6 @@ void SExprBuilder::handleDestructorCall(const VarDecl *VD,
   til::SExpr *E = new (Arena) til::Call(Ap);
   addStatement(E, nullptr);
 }
-
-
 
 void SExprBuilder::exitCFGBlockBody(const CFGBlock *B) {
   CurrentBB->instructions().reserve(
@@ -938,23 +892,20 @@ void SExprBuilder::exitCFGBlockBody(const CFGBlock *B) {
     til::BasicBlock *BB1 = *It ? lookupBlock(*It) : nullptr;
     ++It;
     til::BasicBlock *BB2 = *It ? lookupBlock(*It) : nullptr;
-    // FIXME: make sure these arent' critical edges.
+    // FIXME: make sure these aren't critical edges.
     auto *Tm = new (Arena) til::Branch(C, BB1, BB2);
     CurrentBB->setTerminator(Tm);
   }
 }
 
-
 void SExprBuilder::handleSuccessor(const CFGBlock *Succ) {
   ++CurrentBlockInfo->UnprocessedSuccessors;
 }
-
 
 void SExprBuilder::handleSuccessorBackEdge(const CFGBlock *Succ) {
   mergePhiNodesBackEdge(Succ);
   ++BBInfo[Succ->getBlockID()].ProcessedPredecessors;
 }
-
 
 void SExprBuilder::exitCFGBlock(const CFGBlock *B) {
   CurrentArguments.clear();
@@ -963,7 +914,6 @@ void SExprBuilder::exitCFGBlock(const CFGBlock *B) {
   CurrentBB = nullptr;
   CurrentBlockInfo = nullptr;
 }
-
 
 void SExprBuilder::exitCFG(const CFGBlock *Last) {
   for (auto *Ph : IncompleteArgs) {
@@ -976,7 +926,6 @@ void SExprBuilder::exitCFG(const CFGBlock *Last) {
   IncompleteArgs.clear();
 }
 
-
 /*
 void printSCFG(CFGWalker &Walker) {
   llvm::BumpPtrAllocator Bpa;
@@ -986,8 +935,3 @@ void printSCFG(CFGWalker &Walker) {
   TILPrinter::print(Scfg, llvm::errs());
 }
 */
-
-
-} // end namespace threadSafety
-
-} // end namespace clang

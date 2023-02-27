@@ -246,6 +246,67 @@ ldr    q1, [x3, w3, sxtw #1]
 ; CHECK-ERRORS:   str w2, [x2, #8]!
 ; CHECK-ERRORS:       ^
 
+; Store exclusive instructions are unpredictable if the status register clashes
+; with anything.
+  stlxrb w1, w1, [x5]
+  stxrb w3, w5, [x3]
+  stxrh w7, w9, [x7]
+  stlxrh wzr, wzr, [x13]
+  stxr w9, w9, [x12]
+  stlxr w22, x1, [x22]
+  stxr w4, x4, [x9]
+  stlxr w5, x0, [x5]
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stlxrb w1, w1, [x5]
+; CHECK-ERRORS:          ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stxrb w3, w5, [x3]
+; CHECK-ERRORS:         ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stxrh w7, w9, [x7]
+; CHECK-ERRORS:         ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stlxrh wzr, wzr, [x13]
+; CHECK-ERRORS:          ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stxr w9, w9, [x12]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stlxr w22, x1, [x22]
+; CHECK-ERRORS:         ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stxr w4, x4, [x9]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXR instruction, status is also a source
+; CHECK-ERRORS:   stlxr w5, x0, [x5]
+; CHECK-ERRORS:         ^
+
+  stxp w0, w0, w1, [x3]
+  stxp w0, w1, w0, [x5]
+  stxp w10, w4, w5, [x10]
+  stxp wzr, xzr, x4, [x5]
+  stxp w3, x5, x3, [sp]
+  stxp w25, x4, x2, [x25]
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp w0, w0, w1, [x3]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp w0, w1, w0, [x5]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp w10, w4, w5, [x10]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp wzr, xzr, x4, [x5]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp w3, x5, x3, [sp]
+; CHECK-ERRORS:        ^
+; CHECK-ERRORS: error: unpredictable STXP instruction, status is also a source
+; CHECK-ERRORS:   stxp w25, x4, x2, [x25]
+; CHECK-ERRORS:        ^
+
+
 ; The validity checking for shifted-immediate operands.  rdar://13174476
 ; Where the immediate is out of range.
   add w1, w2, w3, lsr #75
@@ -426,3 +487,66 @@ tlbi vale2
 ; CHECK-ERRORS: error: specified tlbi op requires a register
 tlbi vale3
 ; CHECK-ERRORS: error: specified tlbi op requires a register
+
+
+; Check that we give the proper "too few operands" diagnostic even when
+; using short-form NEON.
+
+  add.16b v0, v1, v2, v3
+  add.8b v0, v1
+  sub.8h v0, v1
+  fadd.4s v0
+  fmul.2s
+
+; CHECK-ERRORS: error: invalid operand for instruction
+; CHECK-ERRORS:   add.16b v0, v1, v2, v3
+; CHECK-ERRORS:                       ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   add.8b v0, v1
+; CHECK-ERRORS:   ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   sub.8h v0, v1
+; CHECK-ERRORS:   ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   fadd.4s v0
+; CHECK-ERRORS:   ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   fmul.2s
+; CHECK-ERRORS:   ^
+
+; Also for 2-operand instructions.
+
+  frsqrte.4s v0, v1, v2
+  frsqrte.2s v0
+  frecpe.2d
+
+; CHECK-ERRORS: error: invalid operand for instruction
+; CHECK-ERRORS:   frsqrte.4s v0, v1, v2
+; CHECK-ERRORS:                      ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   frsqrte.2s v0
+; CHECK-ERRORS:   ^
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   frecpe.2d
+; CHECK-ERRORS:   ^
+
+; And check that we do the same for non-NEON instructions.
+
+  b.ne
+  b.eq 0, 0
+
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   b.ne
+; CHECK-ERRORS:   ^
+; CHECK-ERRORS: error: invalid operand for instruction
+; CHECK-ERRORS:   b.eq 0, 0
+; CHECK-ERRORS:           ^
+
+; Check that we give the proper "too few operands" diagnostic instead of
+; asserting.
+
+  ldr
+
+; CHECK-ERRORS: error: too few operands for instruction
+; CHECK-ERRORS:   ldr
+; CHECK-ERRORS:   ^

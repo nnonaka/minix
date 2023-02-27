@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.2 2013/07/07 21:36:43 joerg Exp $
+#	$NetBSD: Makefile,v 1.6 2018/07/17 18:55:25 joerg Exp $
 
 PROG_CXX=	llvm-dwarfdump
 NOMAN=		yes
@@ -7,12 +7,41 @@ NOMAN=		yes
 
 .PATH: ${LLVM_SRCDIR}/tools/llvm-dwarfdump
 
-SRCS=	llvm-dwarfdump.cpp
+SRCS=	Statistics.cpp \
+	llvm-dwarfdump.cpp
 
 LLVM_LIBS+= \
-	DebugInfo \
+	AArch64TargetInfo \
+	AArch64MCTargetDesc \
+	AArch64AsmPrinter \
+	AArch64Utils \
+	ARMTargetInfo \
+	ARMMCTargetDesc \
+	ARMAsmPrinter \
+	ARMUtils \
+	MipsTargetInfo \
+	MipsMCTargetDesc \
+	MipsAsmPrinter \
+	PowerPCTargetInfo \
+	PowerPCMCTargetDesc \
+	PowerPCAsmPrinter \
+	SparcTargetInfo \
+	SparcMCTargetDesc \
+	SparcAsmPrinter \
+	X86TargetInfo \
+	X86MCTargetDesc \
+	X86AsmPrinter \
+	X86Utils \
+	DebugInfoDWARF \
 	Object \
-	Support
+	BitReader \
+	IR \
+	BinaryFormat \
+	MCDisassembler \
+	MCParser \
+	MC \
+	Support \
+	Demangle
 
 LDADD+=	-lz
 DPADD+=	${LIBZ}

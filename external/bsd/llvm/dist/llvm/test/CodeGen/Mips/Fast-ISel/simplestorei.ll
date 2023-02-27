@@ -1,6 +1,6 @@
-; RUN: llc -march=mipsel -relocation-model=pic -O0 -mips-fast-isel -fast-isel-abort -mcpu=mips32r2 \
+; RUN: llc -fast-isel-sink-local-values -march=mipsel -relocation-model=pic -O0 -fast-isel-abort=3 -mcpu=mips32r2 \
 ; RUN:     < %s | FileCheck %s
-; RUN: llc -march=mipsel -relocation-model=pic -O0 -mips-fast-isel -fast-isel-abort -mcpu=mips32 \
+; RUN: llc -fast-isel-sink-local-values -march=mipsel -relocation-model=pic -O0 -fast-isel-abort=3 -mcpu=mips32 \
 ; RUN:     < %s | FileCheck %s
 
 @ijk = external global i32
@@ -10,8 +10,8 @@ define void @si2_1() #0 {
 entry:
   store i32 32767, i32* @ijk, align 4
 ; CHECK:        .ent    si2_1
-; CHECK:        addiu   $[[REG1:[0-9]+]], $zero, 32767
 ; CHECK:        lw      $[[REG2:[0-9]+]], %got(ijk)(${{[0-9]+}})
+; CHECK:        addiu   $[[REG1:[0-9]+]], $zero, 32767
 ; CHECK:        sw      $[[REG1]], 0($[[REG2]])
 
   ret void
@@ -22,9 +22,10 @@ define void @si2_2() #0 {
 entry:
   store i32 -32768, i32* @ijk, align 4
 ; CHECK:        .ent    si2_2
-; CHECK:        addiu   $[[REG1:[0-9]+]], $zero, -32768
-; CHECK:        lw      $[[REG2:[0-9]+]], %got(ijk)(${{[0-9]+}})
-; CHECK:        sw      $[[REG1]], 0($[[REG2]])
+; CHECK:        lui     $[[REG1:[0-9]+]], 65535
+; CHECK:        ori     $[[REG2:[0-9]+]], $[[REG1]], 32768
+; CHECK:        lw      $[[REG3:[0-9]+]], %got(ijk)(${{[0-9]+}})
+; CHECK:        sw      $[[REG2]], 0($[[REG3]])
   ret void
 }
 
@@ -33,8 +34,8 @@ define void @ui2_1() #0 {
 entry:
   store i32 65535, i32* @ijk, align 4
 ; CHECK:        .ent    ui2_1
-; CHECK:        ori     $[[REG1:[0-9]+]], $zero, 65535
 ; CHECK:        lw      $[[REG2:[0-9]+]], %got(ijk)(${{[0-9]+}})
+; CHECK:        ori     $[[REG1:[0-9]+]], $zero, 65535
 ; CHECK:        sw      $[[REG1]], 0($[[REG2]])
   ret void
 }
@@ -44,8 +45,8 @@ define void @ui4_1() #0 {
 entry:
   store i32 983040, i32* @ijk, align 4
 ; CHECK:        .ent    ui4_1
-; CHECK:        lui     $[[REG1:[0-9]+]], 15
 ; CHECK:        lw      $[[REG2:[0-9]+]], %got(ijk)(${{[0-9]+}})
+; CHECK:        lui     $[[REG1:[0-9]+]], 15
 ; CHECK:        sw      $[[REG1]], 0($[[REG2]])
   ret void
 }

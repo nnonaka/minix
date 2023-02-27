@@ -1,4 +1,4 @@
-; RUN: llc -mcpu=pwr7 -mattr=+altivec -mattr=-vsx < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -mcpu=pwr7 -mattr=+altivec -mattr=-vsx < %s | FileCheck %s
 
 target datalayout = "e-m:e-i64:64-n32:64"
 target triple = "powerpc64le-unknown-linux-gnu"
@@ -9,7 +9,7 @@ define void @callee(ppc_fp128 %x) {
 entry:
   %x.addr = alloca ppc_fp128, align 16
   store ppc_fp128 %x, ppc_fp128* %x.addr, align 16
-  %0 = load ppc_fp128* %x.addr, align 16
+  %0 = load ppc_fp128, ppc_fp128* %x.addr, align 16
   store ppc_fp128 %0, ppc_fp128* @g, align 16
   ret void
 }
@@ -21,7 +21,7 @@ entry:
 
 define void @caller() {
 entry:
-  %0 = load ppc_fp128* @g, align 16
+  %0 = load ppc_fp128, ppc_fp128* @g, align 16
   call void @test(ppc_fp128 %0)
   ret void
 }
@@ -43,15 +43,15 @@ entry:
 ; CHECK: .LCPI[[LC]]_1:
 ; CHECK: .long   0
 ; CHECK: @caller_const
-; CHECK: addi [[REG0:[0-9]+]], {{[0-9]+}}, .LCPI[[LC]]_0
-; CHECK: addi [[REG1:[0-9]+]], {{[0-9]+}}, .LCPI[[LC]]_1
-; CHECK: lfs 1, 0([[REG0]])
-; CHECK: lfs 2, 0([[REG1]])
+; CHECK: addis [[REG0:[0-9]+]], 2, .LCPI[[LC]]_0@toc@ha
+; CHECK: addis [[REG1:[0-9]+]], 2, .LCPI[[LC]]_1@toc@ha
+; CHECK: lfs 1, .LCPI[[LC]]_0@toc@l([[REG0]])
+; CHECK: lfs 2, .LCPI[[LC]]_1@toc@l([[REG1]])
 ; CHECK: bl test
 
 define ppc_fp128 @result() {
 entry:
-  %0 = load ppc_fp128* @g, align 16
+  %0 = load ppc_fp128, ppc_fp128* @g, align 16
   ret ppc_fp128 %0
 }
 ; CHECK: @result
@@ -104,9 +104,9 @@ entry:
   %0 = bitcast i128 %x to ppc_fp128
   ret ppc_fp128 %0
 }
-; CHECK: @convert_to
-; CHECK: std 3, [[OFF1:.*]](1)
-; CHECK: std 4, [[OFF2:.*]](1)
+; CHECK: convert_to:
+; CHECK-DAG: std 3, [[OFF1:.*]](1)
+; CHECK-DAG: std 4, [[OFF2:.*]](1)
 ; CHECK: lfd 1, [[OFF1]](1)
 ; CHECK: lfd 2, [[OFF2]](1)
 ; CHECK: blr
@@ -118,9 +118,9 @@ entry:
   ret ppc_fp128 %0
 }
 
-; CHECK: @convert_to
+; CHECK: convert_to2:
 ; CHECK: std 3, [[OFF1:.*]](1)
-; CHECK: std 4, [[OFF2:.*]](1)
+; CHECK: std 5, [[OFF2:.*]](1)
 ; CHECK: lfd 1, [[OFF1]](1)
 ; CHECK: lfd 2, [[OFF2]](1)
 ; CHECK: blr

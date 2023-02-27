@@ -1,4 +1,6 @@
-// RUN: %clang_cc1 -verify -fopenmp=libiomp5 -o - %s
+// RUN: %clang_cc1 -verify -fopenmp -o - %s
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -o - %s
 
 void foo();
 

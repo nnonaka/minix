@@ -7,10 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Support/Program.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/Program.h"
 #include "gtest/gtest.h"
 #include <stdlib.h>
 #if defined(__APPLE__)
@@ -25,7 +27,7 @@ extern char **environ;
 void sleep_for(unsigned int seconds) {
   sleep(seconds);
 }
-#elif defined(LLVM_ON_WIN32)
+#elif defined(_WIN32)
 #include <windows.h>
 void sleep_for(unsigned int seconds) {
   Sleep(seconds * 1000);
@@ -57,21 +59,58 @@ ProgramTestStringArg1("program-test-string-arg1");
 static cl::opt<std::string>
 ProgramTestStringArg2("program-test-string-arg2");
 
-static void CopyEnvironment(std::vector<const char *> &out) {
-#ifdef __APPLE__
-  char **envp = *_NSGetEnviron();
-#else
-  // environ seems to work for Windows and most other Unices.
-  char **envp = environ;
-#endif
-  while (*envp != nullptr) {
-    out.push_back(*envp);
-    ++envp;
-  }
-}
+class ProgramEnvTest : public testing::Test {
+  std::vector<StringRef> EnvTable;
+  std::vector<std::string> EnvStorage;
 
-#ifdef LLVM_ON_WIN32
-TEST(ProgramTest, CreateProcessLongPath) {
+protected:
+  void SetUp() override {
+    auto EnvP = [] {
+#if defined(_WIN32)
+      _wgetenv(L"TMP"); // Populate _wenviron, initially is null
+      return _wenviron;
+#elif defined(__APPLE__)
+      return *_NSGetEnviron();
+#else
+      return environ;
+#endif
+    }();
+    ASSERT_TRUE(EnvP);
+
+    auto prepareEnvVar = [this](decltype(*EnvP) Var) -> StringRef {
+#if defined(_WIN32)
+      // On Windows convert UTF16 encoded variable to UTF8
+      auto Len = wcslen(Var);
+      ArrayRef<char> Ref{reinterpret_cast<char const *>(Var),
+                         Len * sizeof(*Var)};
+      EnvStorage.emplace_back();
+      auto convStatus = convertUTF16ToUTF8String(Ref, EnvStorage.back());
+      EXPECT_TRUE(convStatus);
+      return EnvStorage.back();
+#else
+      (void)this;
+      return StringRef(Var);
+#endif
+    };
+
+    while (*EnvP != nullptr) {
+      EnvTable.emplace_back(prepareEnvVar(*EnvP));
+      ++EnvP;
+    }
+  }
+
+  void TearDown() override {
+    EnvTable.clear();
+    EnvStorage.clear();
+  }
+
+  void addEnvVar(StringRef Var) { EnvTable.emplace_back(Var); }
+
+  ArrayRef<StringRef> getEnviron() const { return EnvTable; }
+};
+
+#ifdef _WIN32
+TEST_F(ProgramEnvTest, CreateProcessLongPath) {
   if (getenv("LLVM_PROGRAM_TEST_LONG_PATH"))
     exit(0);
 
@@ -83,17 +122,11 @@ TEST(ProgramTest, CreateProcessLongPath) {
     MyExe.append("\\\\?\\");
   MyExe.append(MyAbsExe);
 
-  const char *ArgV[] = {
-    MyExe.c_str(),
-    "--gtest_filter=ProgramTest.CreateProcessLongPath",
-    nullptr
-  };
+  StringRef ArgV[] = {MyExe,
+                      "--gtest_filter=ProgramEnvTest.CreateProcessLongPath"};
 
   // Add LLVM_PROGRAM_TEST_LONG_PATH to the environment of the child.
-  std::vector<const char *> EnvP;
-  CopyEnvironment(EnvP);
-  EnvP.push_back("LLVM_PROGRAM_TEST_LONG_PATH=1");
-  EnvP.push_back(nullptr);
+  addEnvVar("LLVM_PROGRAM_TEST_LONG_PATH=1");
 
   // Redirect stdout to a long path.
   SmallString<128> TestDirectory;
@@ -103,12 +136,11 @@ TEST(ProgramTest, CreateProcessLongPath) {
   LongPath.push_back('\\');
   // MAX_PATH = 260
   LongPath.append(260 - TestDirectory.size(), 'a');
-  StringRef LongPathRef(LongPath);
 
   std::string Error;
   bool ExecutionFailed;
-  const StringRef *Redirects[] = { nullptr, &LongPathRef, nullptr };
-  int RC = ExecuteAndWait(MyExe, ArgV, &EnvP[0], Redirects,
+  Optional<StringRef> Redirects[] = {None, LongPath.str(), None};
+  int RC = ExecuteAndWait(MyExe, ArgV, getEnviron(), Redirects,
     /*secondsToWait=*/ 10, /*memoryLimit=*/ 0, &Error,
     &ExecutionFailed);
   EXPECT_FALSE(ExecutionFailed) << Error;
@@ -120,7 +152,7 @@ TEST(ProgramTest, CreateProcessLongPath) {
 }
 #endif
 
-TEST(ProgramTest, CreateProcessTrailingSlash) {
+TEST_F(ProgramEnvTest, CreateProcessTrailingSlash) {
   if (getenv("LLVM_PROGRAM_TEST_CHILD")) {
     if (ProgramTestStringArg1 == "has\\\\ trailing\\" &&
         ProgramTestStringArg2 == "has\\\\ trailing\\") {
@@ -131,37 +163,34 @@ TEST(ProgramTest, CreateProcessTrailingSlash) {
 
   std::string my_exe =
       sys::fs::getMainExecutable(TestMainArgv0, &ProgramTestStringArg1);
-  const char *argv[] = {
-    my_exe.c_str(),
-    "--gtest_filter=ProgramTest.CreateProcessTrailingSlash",
-    "-program-test-string-arg1", "has\\\\ trailing\\",
-    "-program-test-string-arg2", "has\\\\ trailing\\",
-    nullptr
-  };
+  StringRef argv[] = {
+      my_exe,
+      "--gtest_filter=ProgramEnvTest.CreateProcessTrailingSlash",
+      "-program-test-string-arg1",
+      "has\\\\ trailing\\",
+      "-program-test-string-arg2",
+      "has\\\\ trailing\\"};
 
   // Add LLVM_PROGRAM_TEST_CHILD to the environment of the child.
-  std::vector<const char *> envp;
-  CopyEnvironment(envp);
-  envp.push_back("LLVM_PROGRAM_TEST_CHILD=1");
-  envp.push_back(nullptr);
+  addEnvVar("LLVM_PROGRAM_TEST_CHILD=1");
 
   std::string error;
   bool ExecutionFailed;
   // Redirect stdout and stdin to NUL, but let stderr through.
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
   StringRef nul("NUL");
 #else
   StringRef nul("/dev/null");
 #endif
-  const StringRef *redirects[] = { &nul, &nul, nullptr };
-  int rc = ExecuteAndWait(my_exe, argv, &envp[0], redirects,
+  Optional<StringRef> redirects[] = { nul, nul, None };
+  int rc = ExecuteAndWait(my_exe, argv, getEnviron(), redirects,
                           /*secondsToWait=*/ 10, /*memoryLimit=*/ 0, &error,
                           &ExecutionFailed);
   EXPECT_FALSE(ExecutionFailed) << error;
   EXPECT_EQ(0, rc);
 }
 
-TEST(ProgramTest, TestExecuteNoWait) {
+TEST_F(ProgramEnvTest, TestExecuteNoWait) {
   using namespace llvm::sys;
 
   if (getenv("LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT")) {
@@ -171,24 +200,18 @@ TEST(ProgramTest, TestExecuteNoWait) {
 
   std::string Executable =
       sys::fs::getMainExecutable(TestMainArgv0, &ProgramTestStringArg1);
-  const char *argv[] = {
-    Executable.c_str(),
-    "--gtest_filter=ProgramTest.TestExecuteNoWait",
-    nullptr
-  };
+  StringRef argv[] = {Executable,
+                      "--gtest_filter=ProgramEnvTest.TestExecuteNoWait"};
 
   // Add LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT to the environment of the child.
-  std::vector<const char *> envp;
-  CopyEnvironment(envp);
-  envp.push_back("LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT=1");
-  envp.push_back(nullptr);
+  addEnvVar("LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT=1");
 
   std::string Error;
   bool ExecutionFailed;
-  ProcessInfo PI1 = ExecuteNoWait(Executable, argv, &envp[0], nullptr, 0,
-                                  &Error, &ExecutionFailed);
+  ProcessInfo PI1 = ExecuteNoWait(Executable, argv, getEnviron(), {}, 0, &Error,
+                                  &ExecutionFailed);
   ASSERT_FALSE(ExecutionFailed) << Error;
-  ASSERT_NE(PI1.Pid, 0) << "Invalid process id";
+  ASSERT_NE(PI1.Pid, ProcessInfo::InvalidPid) << "Invalid process id";
 
   unsigned LoopCount = 0;
 
@@ -196,7 +219,7 @@ TEST(ProgramTest, TestExecuteNoWait) {
   // LoopCount should only be incremented once.
   while (true) {
     ++LoopCount;
-    ProcessInfo WaitResult = Wait(PI1, 0, true, &Error);
+    ProcessInfo WaitResult = llvm::sys::Wait(PI1, 0, true, &Error);
     ASSERT_TRUE(Error.empty());
     if (WaitResult.Pid == PI1.Pid)
       break;
@@ -204,16 +227,16 @@ TEST(ProgramTest, TestExecuteNoWait) {
 
   EXPECT_EQ(LoopCount, 1u) << "LoopCount should be 1";
 
-  ProcessInfo PI2 = ExecuteNoWait(Executable, argv, &envp[0], nullptr, 0,
-                                  &Error, &ExecutionFailed);
+  ProcessInfo PI2 = ExecuteNoWait(Executable, argv, getEnviron(), {}, 0, &Error,
+                                  &ExecutionFailed);
   ASSERT_FALSE(ExecutionFailed) << Error;
-  ASSERT_NE(PI2.Pid, 0) << "Invalid process id";
+  ASSERT_NE(PI2.Pid, ProcessInfo::InvalidPid) << "Invalid process id";
 
   // Test that Wait() with SecondsToWait=0 performs a non-blocking wait. In this
   // cse, LoopCount should be greater than 1 (more than one increment occurs).
   while (true) {
     ++LoopCount;
-    ProcessInfo WaitResult = Wait(PI2, 0, false, &Error);
+    ProcessInfo WaitResult = llvm::sys::Wait(PI2, 0, false, &Error);
     ASSERT_TRUE(Error.empty());
     if (WaitResult.Pid == PI2.Pid)
       break;
@@ -222,7 +245,7 @@ TEST(ProgramTest, TestExecuteNoWait) {
   ASSERT_GT(LoopCount, 1u) << "LoopCount should be >1";
 }
 
-TEST(ProgramTest, TestExecuteAndWaitTimeout) {
+TEST_F(ProgramEnvTest, TestExecuteAndWaitTimeout) {
   using namespace llvm::sys;
 
   if (getenv("LLVM_PROGRAM_TEST_TIMEOUT")) {
@@ -232,35 +255,29 @@ TEST(ProgramTest, TestExecuteAndWaitTimeout) {
 
   std::string Executable =
       sys::fs::getMainExecutable(TestMainArgv0, &ProgramTestStringArg1);
-  const char *argv[] = {
-    Executable.c_str(),
-    "--gtest_filter=ProgramTest.TestExecuteAndWaitTimeout",
-    nullptr
-  };
+  StringRef argv[] = {
+      Executable, "--gtest_filter=ProgramEnvTest.TestExecuteAndWaitTimeout"};
 
   // Add LLVM_PROGRAM_TEST_TIMEOUT to the environment of the child.
-  std::vector<const char *> envp;
-  CopyEnvironment(envp);
-  envp.push_back("LLVM_PROGRAM_TEST_TIMEOUT=1");
-  envp.push_back(nullptr);
+ addEnvVar("LLVM_PROGRAM_TEST_TIMEOUT=1");
 
   std::string Error;
   bool ExecutionFailed;
   int RetCode =
-      ExecuteAndWait(Executable, argv, &envp[0], nullptr, /*secondsToWait=*/1, 0,
+      ExecuteAndWait(Executable, argv, getEnviron(), {}, /*secondsToWait=*/1, 0,
                      &Error, &ExecutionFailed);
   ASSERT_EQ(-2, RetCode);
 }
 
 TEST(ProgramTest, TestExecuteNegative) {
   std::string Executable = "i_dont_exist";
-  const char *argv[] = { Executable.c_str(), nullptr };
+  StringRef argv[] = {Executable};
 
   {
     std::string Error;
     bool ExecutionFailed;
-    int RetCode = ExecuteAndWait(Executable, argv, nullptr, nullptr, 0, 0,
-                                 &Error, &ExecutionFailed);
+    int RetCode = ExecuteAndWait(Executable, argv, llvm::None, {}, 0, 0, &Error,
+                                 &ExecutionFailed);
     ASSERT_TRUE(RetCode < 0) << "On error ExecuteAndWait should return 0 or "
                                 "positive value indicating the result code";
     ASSERT_TRUE(ExecutionFailed);
@@ -270,9 +287,9 @@ TEST(ProgramTest, TestExecuteNegative) {
   {
     std::string Error;
     bool ExecutionFailed;
-    ProcessInfo PI = ExecuteNoWait(Executable, argv, nullptr, nullptr, 0,
-                                   &Error, &ExecutionFailed);
-    ASSERT_EQ(PI.Pid, 0)
+    ProcessInfo PI = ExecuteNoWait(Executable, argv, llvm::None, {}, 0, &Error,
+                                   &ExecutionFailed);
+    ASSERT_EQ(PI.Pid, ProcessInfo::InvalidPid)
         << "On error ExecuteNoWait should return an invalid ProcessInfo";
     ASSERT_TRUE(ExecutionFailed);
     ASSERT_FALSE(Error.empty());
@@ -280,7 +297,7 @@ TEST(ProgramTest, TestExecuteNegative) {
 
 }
 
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 const char utf16le_text[] =
     "\x6c\x00\x69\x00\x6e\x00\x67\x00\xfc\x00\x69\x00\xe7\x00\x61\x00";
 const char utf16be_text[] =
@@ -300,7 +317,7 @@ TEST(ProgramTest, TestWriteWithSystemEncoding) {
                                              sys::WEM_UTF16));
   int fd = 0;
   ASSERT_NO_ERROR(fs::openFileForRead(file_pathname.c_str(), fd));
-#if defined(LLVM_ON_WIN32)
+#if defined(_WIN32)
   char buf[18];
   ASSERT_EQ(::read(fd, buf, 18), 18);
   if (strncmp(buf, "\xfe\xff", 2) == 0) { // UTF16-BE

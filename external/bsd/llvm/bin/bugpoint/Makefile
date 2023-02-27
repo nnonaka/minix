@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.8 2015/01/29 20:41:33 joerg Exp $
+#	$NetBSD: Makefile,v 1.12 2018/07/17 18:55:25 joerg Exp $
 
 PROG_CXX=	bugpoint
 NOMAN=		yes
@@ -18,27 +18,77 @@ SRCS=	BugDriver.cpp \
 	bugpoint.cpp
 
 LLVM_LIBS+= \
-	CodeGen \
+	TransformsAggressiveInstCombine \
 	ObjCARC \
+	ipo \
 	IRReader \
 	AsmParser \
 	BitReader \
 	BitWriter \
+	AArch64CodeGen \
+	AArch64TargetInfo \
+	AArch64AsmParser \
+	AArch64MCTargetDesc \
+	AArch64AsmPrinter \
+	AArch64Utils \
+	ARMCodeGen \
+	ARMTargetInfo \
+	ARMMCTargetDesc \
+	ARMAsmParser \
+	ARMAsmPrinter \
+	ARMUtils \
+	MipsCodeGen \
+	MipsTargetInfo \
+	MipsAsmPrinter \
+	MipsAsmParser \
+	MipsMCTargetDesc \
+	PowerPCCodeGen \
+	PowerPCTargetInfo \
+	PowerPCMCTargetDesc \
+	PowerPCAsmParser \
+	PowerPCAsmPrinter \
+	SparcCodeGen \
+	SparcTargetInfo \
+	SparcMCTargetDesc \
+	SparcAsmParser \
+	SparcAsmPrinter \
+	X86CodeGen \
+	X86MCTargetDesc \
+	X86TargetInfo \
+	X86Utils \
+	X86AsmParser \
+	X86AsmPrinter \
+	GlobalISel \
+	SelectionDAG \
+	AsmPrinter \
+	DebugInfoCodeView \
+	DebugInfoMSF \
+	Passes \
+	CodeGen \
+	Vectorize \
+	Target \
 	InstCombine \
 	Instrumentation \
-	MC \
-	Linker \
 	ScalarOpts \
 	ProfileData \
-	Target \
-	ipo \
-	Vectorize \
-	TransformsUtils \
+	MCDisassembler \
+	MCParser \
+	MC \
 	Analysis \
-	ipa \
+	Object \
+	Linker \
+	TransformsUtils \
 	IR \
-	Support
+	Option \
+	BinaryFormat \
+	Support \
+	Demangle
 
 .include "${.PARSEDIR}/../../link.mk"
+
+LDADD+=	-lz
+.if !defined(HOSTPROG)
+DPADD+=	${LIBZ}
+.endif
 
 .include <bsd.prog.mk>

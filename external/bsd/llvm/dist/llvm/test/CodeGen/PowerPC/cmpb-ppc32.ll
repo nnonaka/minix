@@ -1,4 +1,4 @@
-; RUN: llc -mcpu=pwr7 < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -mcpu=pwr7 < %s | FileCheck %s
 target datalayout = "E-m:e-p:32:32-i64:64-n32"
 target triple = "powerpc-unknown-linux-gnu"
 
@@ -17,7 +17,7 @@ entry:
 
 ; CHECK-LABEL: @test16
 ; CHECK: cmpb [[REG1:[0-9]+]], 4, 3
-; CHECK: rlwinm 3, [[REG1]], 0, 16, 31
+; CHECK: clrlwi 3, [[REG1]], 16
 ; CHECK: blr
 }
 

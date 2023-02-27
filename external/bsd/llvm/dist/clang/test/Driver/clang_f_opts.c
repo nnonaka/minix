@@ -1,7 +1,7 @@
 // REQUIRES: clang-driver
 
 // RUN: %clang -### -S -fasm -fblocks -fbuiltin -fno-math-errno -fcommon -fpascal-strings -fno-blocks -fno-builtin -fmath-errno -fno-common -fno-pascal-strings -fblocks -fbuiltin -fmath-errno -fcommon -fpascal-strings -fsplit-stack %s 2>&1 | FileCheck -check-prefix=CHECK-OPTIONS1 %s
-// RUN: %clang -### -S -fasm -fblocks -fbuiltin -fno-math-errno -fcommon -fpascal-strings -fno-asm -fno-blocks -fno-builtin -fmath-errno -fno-common -fno-pascal-strings -fno-show-source-location -fshort-enums -fshort-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-OPTIONS2 %s
+// RUN: %clang -### -S -fasm -fblocks -fbuiltin -fno-math-errno -fcommon -fpascal-strings -fno-asm -fno-blocks -fno-builtin -fmath-errno -fno-common -fno-pascal-strings -fno-show-source-location -fshort-enums %s 2>&1 | FileCheck -check-prefix=CHECK-OPTIONS2 %s
 
 // CHECK-OPTIONS1: -split-stacks
 // CHECK-OPTIONS1: -fgnu-keywords
@@ -12,7 +12,6 @@
 // CHECK-OPTIONS2: -fno-gnu-keywords
 // CHECK-OPTIONS2: -fno-builtin
 // CHECK-OPTIONS2: -fshort-enums
-// CHECK-OPTIONS2: -fshort-wchar
 // CHECK-OPTIONS2: -fno-common
 // CHECK-OPTIONS2: -fno-show-source-location
 
@@ -53,11 +52,21 @@
 // CHECK-REROLL-LOOPS: "-freroll-loops"
 // CHECK-NO-REROLL-LOOPS-NOT: "-freroll-loops"
 
+// RUN: %clang -### -S -fprofile-sample-accurate %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-SAMPLE-ACCURATE %s
+// CHECK-PROFILE-SAMPLE-ACCURATE: "-fprofile-sample-accurate"
+
 // RUN: %clang -### -S -fprofile-sample-use=%S/Inputs/file.prof %s 2>&1 | FileCheck -check-prefix=CHECK-SAMPLE-PROFILE %s
 // CHECK-SAMPLE-PROFILE: "-fprofile-sample-use={{.*}}/file.prof"
 
 // RUN: %clang -### -S -fauto-profile=%S/Inputs/file.prof %s 2>&1 | FileCheck -check-prefix=CHECK-AUTO-PROFILE %s
 // CHECK-AUTO-PROFILE: "-fprofile-sample-use={{.*}}/file.prof"
+
+// RUN: %clang -### -S -fauto-profile=%S/Inputs/file.prof -fno-profile-sample-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-AUTO-PROFILE %s
+// RUN: %clang -### -S -fauto-profile=%S/Inputs/file.prof -fno-auto-profile %s 2>&1 | FileCheck -check-prefix=CHECK-NO-AUTO-PROFILE %s
+// CHECK-NO-AUTO-PROFILE-NOT: "-fprofile-sample-use={{.*}}/file.prof"
+
+// RUN: %clang -### -S -fauto-profile=%S/Inputs/file.prof -fno-profile-sample-use -fauto-profile %s 2>&1 | FileCheck -check-prefix=CHECK-AUTO-PROFILE %s
+// RUN: %clang -### -S -fauto-profile=%S/Inputs/file.prof -fno-auto-profile -fprofile-sample-use %s 2>&1 | FileCheck -check-prefix=CHECK-AUTO-PROFILE %s
 
 // RUN: %clang -### -S -fprofile-arcs %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-ARCS %s
 // RUN: %clang -### -S -fno-profile-arcs -fprofile-arcs %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-ARCS %s
@@ -65,6 +74,67 @@
 // RUN: %clang -### -S -fprofile-arcs -fno-profile-arcs %s 2>&1 | FileCheck -check-prefix=CHECK-NO-PROFILE-ARCS %s
 // CHECK-PROFILE-ARCS: "-femit-coverage-data"
 // CHECK-NO-PROFILE-ARCS-NOT: "-femit-coverage-data"
+
+// RUN: %clang -### -S -fprofile-dir=abc %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DIR-UNUSED %s
+// RUN: %clang -### -S -ftest-coverage -fprofile-dir=abc %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DIR-UNUSED %s
+// RUN: %clang -### -S -fprofile-arcs -fprofile-dir=abc %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DIR %s
+// RUN: %clang -### -S --coverage -fprofile-dir=abc %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DIR %s
+// RUN: %clang -### -S -fprofile-arcs -fno-profile-arcs -fprofile-dir=abc %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DIR-NEITHER %s
+// CHECK-PROFILE-DIR: "-coverage-data-file" "abc
+// CHECK-PROFILE-DIR-UNUSED: argument unused
+// CHECK-PROFILE-DIR-UNUSED-NOT: "-coverage-data-file" "abc
+// CHECK-PROFILE-DIR-NEITHER-NOT: argument unused
+
+// RUN: %clang -### -S -fprofile-generate %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE-LLVM %s
+// RUN: %clang -### -S -fprofile-instr-generate %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE %s
+// RUN: %clang -### -S -fprofile-generate=/some/dir %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE-DIR %s
+// RUN: %clang -### -S -fprofile-instr-generate=/tmp/somefile.profraw %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE-FILE %s
+// RUN: %clang -### -S -fprofile-generate -fprofile-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate -fprofile-use=dir %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate -fprofile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate -fprofile-instr-use=file %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-use=dir %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-instr-use=file %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate=file -fprofile-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate=file -fprofile-use=dir %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate=file -fprofile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate=file -fprofile-instr-use=file %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate=dir -fprofile-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate=dir -fprofile-use=dir %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate=dir -fprofile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-generate=dir -fprofile-instr-use=file %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
+// RUN: %clang -### -S -fprofile-instr-generate=file -fno-profile-instr-generate %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-GEN %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-generate %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GENERATE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fprofile-generate=file %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GENERATE %s
+// RUN: %clang -### -S -fprofile-generate=dir -fno-profile-generate %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-GEN %s
+// RUN: %clang -### -S -fprofile-instr-use=file -fno-profile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-USE %s
+// RUN: %clang -### -S -fprofile-instr-use=file -fno-profile-use %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-USE %s
+// RUN: %clang -### -S -fprofile-use=file -fno-profile-use %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-USE %s
+// RUN: %clang -### -S -fprofile-use=file -fno-profile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-USE %s
+// RUN: %clang -### -S -fcoverage-mapping %s 2>&1 | FileCheck -check-prefix=CHECK-COVERAGE-AND-GEN %s
+// RUN: %clang -### -S -fcoverage-mapping -fno-coverage-mapping %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-COVERAGE %s
+// RUN: %clang -### -S -fprofile-instr-generate -fcoverage-mapping -fno-coverage-mapping %s 2>&1 | FileCheck -check-prefix=CHECK-DISABLE-COVERAGE %s
+// CHECK-PROFILE-GENERATE: "-fprofile-instrument=clang"
+// CHECK-PROFILE-GENERATE-LLVM: "-fprofile-instrument=llvm"
+// CHECK-PROFILE-GENERATE-DIR: "-fprofile-instrument-path=/some/dir{{/|\\\\}}{{.*}}"
+// CHECK-PROFILE-GENERATE-FILE: "-fprofile-instrument-path=/tmp/somefile.profraw"
+// CHECK-NO-MIX-GEN-USE: '{{[a-z=-]*}}' not allowed with '{{[a-z=-]*}}'
+// CHECK-NO-MIX-GENERATE: '{{[a-z=-]*}}' not allowed with '{{[a-z=-]*}}'
+// CHECK-DISABLE-GEN-NOT: "-fprofile-instrument=clang"
+// CHECK-DISABLE-USE-NOT: "-fprofile-instr-use"
+// CHECK-COVERAGE-AND-GEN: '-fcoverage-mapping' only allowed with '-fprofile-instr-generate'
+// CHECK-DISABLE-COVERAGE-NOT: "-fcoverage-mapping"
+
+// RUN: %clang -### -S -fprofile-use %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-USE %s
+// RUN: %clang -### -S -fprofile-instr-use %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-USE %s
+// RUN: mkdir -p %t.d/some/dir
+// RUN: %clang -### -S -fprofile-use=%t.d/some/dir %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-USE-DIR %s
+// RUN: %clang -### -S -fprofile-instr-use=/tmp/somefile.prof %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-USE-FILE %s
+// CHECK-PROFILE-USE: "-fprofile-instrument-use-path=default.profdata"
+// CHECK-PROFILE-USE-DIR: "-fprofile-instrument-use-path={{.*}}.d/some/dir{{/|\\\\}}default.profdata"
+// CHECK-PROFILE-USE-FILE: "-fprofile-instrument-use-path=/tmp/somefile.prof"
 
 // RUN: %clang -### -S -fvectorize %s 2>&1 | FileCheck -check-prefix=CHECK-VECTORIZE %s
 // RUN: %clang -### -S -fno-vectorize -fvectorize %s 2>&1 | FileCheck -check-prefix=CHECK-VECTORIZE %s
@@ -110,15 +180,8 @@
 // CHECK-SLP-VECTORIZE: "-vectorize-slp"
 // CHECK-NO-SLP-VECTORIZE-NOT: "-vectorize-slp"
 
-// RUN: %clang -### -S -fslp-vectorize-aggressive %s 2>&1 | FileCheck -check-prefix=CHECK-SLP-VECTORIZE-AGG %s
-// RUN: %clang -### -S -fno-slp-vectorize-aggressive -fslp-vectorize-aggressive %s 2>&1 | FileCheck -check-prefix=CHECK-SLP-VECTORIZE-AGG %s
-// RUN: %clang -### -S -fno-slp-vectorize-aggressive %s 2>&1 | FileCheck -check-prefix=CHECK-NO-SLP-VECTORIZE-AGG %s
-// RUN: %clang -### -S -fslp-vectorize-aggressive -fno-slp-vectorize-aggressive %s 2>&1 | FileCheck -check-prefix=CHECK-NO-SLP-VECTORIZE-AGG %s
-// CHECK-SLP-VECTORIZE-AGG: "-vectorize-slp-aggressive"
-// CHECK-NO-SLP-VECTORIZE-AGG-NOT: "-vectorize-slp-aggressive"
-
 // RUN: %clang -### -S -fextended-identifiers %s 2>&1 | FileCheck -check-prefix=CHECK-EXTENDED-IDENTIFIERS %s
-// RUN: %clang -### -S -fno-extended-identifiers %s 2>&1 | FileCheck -check-prefix=CHECK-NO-EXTENDED-IDENTIFIERS %s
+// RUN: not %clang -### -S -fno-extended-identifiers %s 2>&1 | FileCheck -check-prefix=CHECK-NO-EXTENDED-IDENTIFIERS %s
 // CHECK-EXTENDED-IDENTIFIERS: "-cc1"
 // CHECK-EXTENDED-IDENTIFIERS-NOT: "-fextended-identifiers"
 // CHECK-NO-EXTENDED-IDENTIFIERS: error: unsupported option '-fno-extended-identifiers'
@@ -161,8 +224,6 @@
 // RUN:     -fdefer-pop -fno-defer-pop                                        \
 // RUN:     -fprefetch-loop-arrays -fno-prefetch-loop-arrays                  \
 // RUN:     -fprofile-correction -fno-profile-correction                      \
-// RUN:     -fprofile-dir=bar                                                 \
-// RUN:     -fprofile-use -fprofile-use=zed -fno-profile-use                  \
 // RUN:     -fprofile-values -fno-profile-values                              \
 // RUN:     -frounding-math -fno-rounding-math                                \
 // RUN:     -fsee -fno-see                                                    \
@@ -215,6 +276,7 @@
 // RUN:     -fno-inline-small-functions -finline-small-functions              \
 // RUN:     -fno-fat-lto-objects -ffat-lto-objects                            \
 // RUN:     -fno-merge-constants -fmerge-constants                            \
+// RUN:     -fno-merge-all-constants -fmerge-all-constants                    \
 // RUN:     -fno-caller-saves -fcaller-saves                                  \
 // RUN:     -fno-reorder-blocks -freorder-blocks                              \
 // RUN:     -fno-schedule-insns2 -fschedule-insns2                            \
@@ -237,15 +299,9 @@
 // RUN: -fexpensive-optimizations                                             \
 // RUN: -fno-expensive-optimizations                                          \
 // RUN: -fno-defer-pop                                                        \
-// RUN: -finline-functions                                                    \
 // RUN: -fkeep-inline-functions                                               \
 // RUN: -fno-keep-inline-functions                                            \
 // RUN: -freorder-blocks                                                      \
-// RUN: -fprofile-dir=/rand/dir                                               \
-// RUN: -fprofile-use                                                         \
-// RUN: -fprofile-use=/rand/dir                                               \
-// RUN: -falign-functions                                                     \
-// RUN: -falign-functions=1                                                   \
 // RUN: -ffloat-store                                                         \
 // RUN: -fgcse                                                                \
 // RUN: -fivopts                                                              \
@@ -301,21 +357,17 @@
 // RUN: -ftree-vrp                                                            \
 // RUN: -fno-devirtualize                                                     \
 // RUN: -fno-devirtualize-speculatively                                       \
+// RUN: -fslp-vectorize-aggressive                                            \
+// RUN: -fno-slp-vectorize-aggressive                                         \
 // RUN: %s 2>&1 | FileCheck --check-prefix=CHECK-WARNING %s
 // CHECK-WARNING-DAG: optimization flag '-finline-limit=1000' is not supported
 // CHECK-WARNING-DAG: optimization flag '-finline-limit' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fexpensive-optimizations' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-expensive-optimizations' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-defer-pop' is not supported
-// CHECK-WARNING-DAG: optimization flag '-finline-functions' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fkeep-inline-functions' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-keep-inline-functions' is not supported
 // CHECK-WARNING-DAG: optimization flag '-freorder-blocks' is not supported
-// CHECK-WARNING-DAG: optimization flag '-fprofile-dir=/rand/dir' is not supported
-// CHECK-WARNING-DAG: optimization flag '-fprofile-use' is not supported
-// CHECK-WARNING-DAG: optimization flag '-fprofile-use=/rand/dir' is not supported
-// CHECK-WARNING-DAG: optimization flag '-falign-functions' is not supported
-// CHECK-WARNING-DAG: optimization flag '-falign-functions=1' is not supported
 // CHECK-WARNING-DAG: optimization flag '-ffloat-store' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fgcse' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fivopts' is not supported
@@ -329,7 +381,7 @@
 // CHECK-WARNING-DAG: optimization flag '-ftracer' is not supported
 // CHECK-WARNING-DAG: optimization flag '-funroll-all-loops' is not supported
 // CHECK-WARNING-DAG: optimization flag '-funswitch-loops' is not supported
-// CHECK-WARNING-DAG: optimization flag '-flto=1' is not supported
+// CHECK-WARNING-DAG: unsupported argument '1' to option 'flto='
 // CHECK-WARNING-DAG: optimization flag '-falign-labels' is not supported
 // CHECK-WARNING-DAG: optimization flag '-falign-labels=100' is not supported
 // CHECK-WARNING-DAG: optimization flag '-falign-loops' is not supported
@@ -371,6 +423,8 @@
 // CHECK-WARNING-DAG: optimization flag '-ftree-vrp' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-devirtualize' is not supported
 // CHECK-WARNING-DAG: optimization flag '-fno-devirtualize-speculatively' is not supported
+// CHECK-WARNING-DAG: the flag '-fslp-vectorize-aggressive' has been deprecated and will be ignored
+// CHECK-WARNING-DAG: the flag '-fno-slp-vectorize-aggressive' has been deprecated and will be ignored
 
 // Test that we mute the warning on these
 // RUN: %clang -### -finline-limit=1000 -Wno-invalid-command-line-argument              \
@@ -383,10 +437,92 @@
 // CHECK-NO-WARNING1-NOT: optimization flag '-finline-limit=1000' is not supported
 // CHECK-NO-WARNING2-NOT: optimization flag '-finline-limit' is not supported
 
+// Test that an ignored optimization argument only prints 1 warning,
+// not both a warning about not claiming the arg, *and* about not supporting
+// the arg; and that adding -Wno-ignored-optimization silences the warning.
+//
+// RUN: %clang -### -fprofile-correction %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-NO-WARNING3 %s
+// CHECK-NO-WARNING3: optimization flag '-fprofile-correction' is not supported
+// CHECK-NO-WARNING3-NOT: argument unused
+// RUN: %clang -### -fprofile-correction -Wno-ignored-optimization-argument %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-NO-WARNING4 %s
+// CHECK-NO-WARNING4-NOT: not supported
+// CHECK-NO-WARNING4-NOT: argument unused
 
-// RUN: %clang -### -fshort-wchar -fno-short-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR1 %s
-// RUN: %clang -### -fno-short-wchar -fshort-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR2 %s
-// CHECK-WCHAR1: -fno-short-wchar
-// CHECK-WCHAR1-NOT: -fshort-wchar
-// CHECK-WCHAR2: -fshort-wchar
-// CHECK-WCHAR2-NOT: -fno-short-wchar
+// RUN: %clang -### -S -fsigned-char %s 2>&1 | FileCheck -check-prefix=CHAR-SIGN1 %s
+// CHAR-SIGN1-NOT: -fno-signed-char
+
+// RUN: %clang -### -S -funsigned-char %s 2>&1 | FileCheck -check-prefix=CHAR-SIGN2 %s
+// CHAR-SIGN2: -fno-signed-char
+
+// RUN: %clang -### -S -fno-signed-char %s 2>&1 | FileCheck -check-prefix=CHAR-SIGN3 %s
+// CHAR-SIGN3: -fno-signed-char
+
+// RUN: %clang -### -S -fno-unsigned-char %s 2>&1 | FileCheck -check-prefix=CHAR-SIGN4 %s
+// CHAR-SIGN4-NOT: -fno-signed-char
+
+// RUN: %clang -target x86_64-unknown-none-none -### -fshort-wchar -fno-short-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR1 -check-prefix=DELIMITERS %s
+// RUN: %clang -target x86_64-unknown-none-none -### -fno-short-wchar -fshort-wchar %s 2>&1 | FileCheck -check-prefix=CHECK-WCHAR2 -check-prefix=DELIMITERS %s
+// Make sure we don't match the -NOT lines with the linker invocation.
+// Delimiters match the start of the cc1 and the start of the linker lines
+// DELIMITERS: {{^ *"}}
+// CHECK-WCHAR1: -fwchar-type=int
+// CHECK-WCHAR1-NOT: -fwchar-type=short
+// CHECK-WCHAR2: -fwchar-type=short
+// CHECK-WCHAR2-NOT: -fwchar-type=int
+// DELIMITERS: {{^ *"}}
+
+// RUN: %clang -### -fno-experimental-new-pass-manager -fexperimental-new-pass-manager %s 2>&1 | FileCheck --check-prefix=CHECK-PM --check-prefix=CHECK-NEW-PM %s
+// RUN: %clang -### -fexperimental-new-pass-manager -fno-experimental-new-pass-manager %s 2>&1 | FileCheck --check-prefix=CHECK-PM --check-prefix=CHECK-NO-NEW-PM %s
+// CHECK-PM-NOT: argument unused
+// CHECK-NEW-PM: -fexperimental-new-pass-manager
+// CHECK-NEW-PM-NOT: -fno-experimental-new-pass-manager
+// CHECK-NO-NEW-PM: -fno-experimental-new-pass-manager
+// CHECK-NO-NEW-PM-NOT: -fexperimental-new-pass-manager
+
+// RUN: %clang -### -S -fstrict-return %s 2>&1 | FileCheck -check-prefix=CHECK-STRICT-RETURN %s
+// RUN: %clang -### -S -fno-strict-return %s 2>&1 | FileCheck -check-prefix=CHECK-NO-STRICT-RETURN %s
+// CHECK-STRICT-RETURN-NOT: "-fno-strict-return"
+// CHECK-NO-STRICT-RETURN: "-fno-strict-return"
+
+// RUN: %clang -### -S -fno-debug-info-for-profiling -fdebug-info-for-profiling %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-DEBUG %s
+// RUN: %clang -### -S -fdebug-info-for-profiling -fno-debug-info-for-profiling %s 2>&1 | FileCheck -check-prefix=CHECK-NO-PROFILE-DEBUG %s
+// CHECK-PROFILE-DEBUG: -fdebug-info-for-profiling
+// CHECK-NO-PROFILE-DEBUG-NOT: -fdebug-info-for-profiling
+
+// RUN: %clang -### -S -fallow-editor-placeholders %s 2>&1 | FileCheck -check-prefix=CHECK-ALLOW-PLACEHOLDERS %s
+// RUN: %clang -### -S -fno-allow-editor-placeholders %s 2>&1 | FileCheck -check-prefix=CHECK-NO-ALLOW-PLACEHOLDERS %s
+// CHECK-ALLOW-PLACEHOLDERS: -fallow-editor-placeholders
+// CHECK-NO-ALLOW-PLACEHOLDERS-NOT: -fallow-editor-placeholders
+
+// RUN: %clang -### -target x86_64-unknown-windows-msvc -fno-short-wchar %s 2>&1 | FileCheck -check-prefix CHECK-WINDOWS-ISO10646 %s
+// CHECK-WINDOWS-ISO10646: "-fwchar-type=int"
+// CHECK-WINDOWS-ISO10646: "-fsigned-wchar"
+
+// RUN: %clang -### -S -fcf-protection %s 2>&1 | FileCheck -check-prefix=CHECK-CF-PROTECTION-FULL %s
+// RUN: %clang -### -S %s 2>&1 | FileCheck -check-prefix=CHECK-NO-CF-PROTECTION-FULL %s
+// RUN: %clang -### -S -fcf-protection=full %s 2>&1 | FileCheck -check-prefix=CHECK-CF-PROTECTION-FULL %s
+// RUN: %clang -### -S %s 2>&1 | FileCheck -check-prefix=CHECK-NO-CF-PROTECTION-FULL %s
+// CHECK-CF-PROTECTION-FULL: -fcf-protection=full
+// CHECK-NO-CF-PROTECTION-FULL-NOT: -fcf-protection=full
+// RUN: %clang -### -S -fcf-protection=return %s 2>&1 | FileCheck -check-prefix=CHECK-CF-PROTECTION-RETURN %s
+// RUN: %clang -### -S %s 2>&1 | FileCheck -check-prefix=CHECK-NO-CF-PROTECTION-RETURN %s
+// CHECK-CF-PROTECTION-RETURN: -fcf-protection=return
+// CHECK-NO-CF-PROTECTION-RETURN-NOT: -fcf-protection=return
+// RUN: %clang -### -S -fcf-protection=branch %s 2>&1 | FileCheck -check-prefix=CHECK-CF-PROTECTION-BRANCH %s
+// RUN: %clang -### -S %s 2>&1 | FileCheck -check-prefix=CHECK-NO-CF-PROTECTION-BRANCH %s
+// CHECK-CF-PROTECTION-BRANCH: -fcf-protection=branch
+// CHECK-NO-CF-PROTECTION-BRANCH-NOT: -fcf-protection=branch
+
+// RUN: %clang -### -S -fdiscard-value-names %s 2>&1 | FileCheck -check-prefix=CHECK-DISCARD-NAMES %s
+// RUN: %clang -### -S -fno-discard-value-names %s 2>&1 | FileCheck -check-prefix=CHECK-NO-DISCARD-NAMES %s
+// CHECK-DISCARD-NAMES: "-discard-value-names"
+// CHECK-NO-DISCARD-NAMES-NOT: "-discard-value-names"
+//
+// RUN: %clang -### -S -fmerge-all-constants %s 2>&1 | FileCheck -check-prefix=CHECK-MERGE-ALL-CONSTANTS %s
+// RUN: %clang -### -S -fno-merge-all-constants %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MERGE-ALL-CONSTANTS %s
+// RUN: %clang -### -S -fmerge-all-constants -fno-merge-all-constants %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MERGE-ALL-CONSTANTS %s
+// RUN: %clang -### -S -fno-merge-all-constants -fmerge-all-constants %s 2>&1 | FileCheck -check-prefix=CHECK-MERGE-ALL-CONSTANTS %s
+// CHECK-NO-MERGE-ALL-CONSTANTS-NOT: "-fmerge-all-constants"
+// CHECK-MERGE-ALL-CONSTANTS: "-fmerge-all-constants"

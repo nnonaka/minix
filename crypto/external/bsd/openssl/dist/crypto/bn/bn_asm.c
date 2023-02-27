@@ -1,70 +1,16 @@
-/* crypto/bn/bn_asm.c */
-/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
- * All rights reserved.
+/*
+ * Copyright 1995-2016 The OpenSSL Project Authors. All Rights Reserved.
  *
- * This package is an SSL implementation written
- * by Eric Young (eay@cryptsoft.com).
- * The implementation was written so as to conform with Netscapes SSL.
- *
- * This library is free for commercial and non-commercial use as long as
- * the following conditions are aheared to.  The following conditions
- * apply to all code found in this distribution, be it the RC4, RSA,
- * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
- * included with this distribution is covered by the same copyright terms
- * except that the holder is Tim Hudson (tjh@cryptsoft.com).
- *
- * Copyright remains Eric Young's, and as such any Copyright notices in
- * the code are not to be removed.
- * If this package is used in a product, Eric Young should be given attribution
- * as the author of the parts of the library used.
- * This can be in the form of a textual message at program startup or
- * in documentation (online or textual) provided with the package.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *    "This product includes cryptographic software written by
- *     Eric Young (eay@cryptsoft.com)"
- *    The word 'cryptographic' can be left out if the rouines from the library
- *    being used are not cryptographic related :-).
- * 4. If you include any Windows specific code (or a derivative thereof) from
- *    the apps directory (application code) you must include an acknowledgement:
- *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
- *
- * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- *
- * The licence and distribution terms for any publically available version or
- * derivative of this code cannot be changed.  i.e. this code cannot simply be
- * copied and put under another distribution licence
- * [including the GNU Public Licence.]
+ * Licensed under the OpenSSL license (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://www.openssl.org/source/license.html
  */
 
-#ifndef BN_DEBUG
-# undef NDEBUG                  /* avoid conflicting definitions */
-# define NDEBUG
-#endif
-
-#include <stdio.h>
 #include <assert.h>
-#include "cryptlib.h"
-#include "bn_lcl.h"
+#include <openssl/crypto.h>
+#include "internal/cryptlib.h"
+#include "bn_local.h"
 
 #if defined(BN_LLONG) || defined(BN_UMULT_HIGH)
 
@@ -75,7 +21,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
 
     assert(num >= 0);
     if (num <= 0)
-        return (c1);
+        return c1;
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
     while (num & ~3) {
@@ -95,7 +41,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
         num--;
     }
 
-    return (c1);
+    return c1;
 }
 
 BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
@@ -104,7 +50,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
 
     assert(num >= 0);
     if (num <= 0)
-        return (c1);
+        return c1;
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
     while (num & ~3) {
@@ -123,7 +69,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
         rp++;
         num--;
     }
-    return (c1);
+    return c1;
 }
 
 void bn_sqr_words(BN_ULONG *r, const BN_ULONG *a, int n)
@@ -162,7 +108,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
 
     assert(num >= 0);
     if (num <= 0)
-        return ((BN_ULONG)0);
+        return (BN_ULONG)0;
 
     bl = LBITS(w);
     bh = HBITS(w);
@@ -184,7 +130,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
         rp++;
         num--;
     }
-    return (c);
+    return c;
 }
 
 BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
@@ -194,7 +140,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
 
     assert(num >= 0);
     if (num <= 0)
-        return ((BN_ULONG)0);
+        return (BN_ULONG)0;
 
     bl = LBITS(w);
     bh = HBITS(w);
@@ -216,7 +162,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
         rp++;
         num--;
     }
-    return (carry);
+    return carry;
 }
 
 void bn_sqr_words(BN_ULONG *r, const BN_ULONG *a, int n)
@@ -264,7 +210,7 @@ BN_ULONG bn_div_words(BN_ULONG h, BN_ULONG l, BN_ULONG d)
     int i, count = 2;
 
     if (d == 0)
-        return (BN_MASK2);
+        return BN_MASK2;
 
     i = BN_num_bits_word(d);
     assert((i == BN_BITS2) || (h <= (BN_ULONG)1 << i));
@@ -318,7 +264,7 @@ BN_ULONG bn_div_words(BN_ULONG h, BN_ULONG l, BN_ULONG d)
         l = (l & BN_MASK2l) << BN_BITS4;
     }
     ret |= q;
-    return (ret);
+    return ret;
 }
 #endif                          /* !defined(BN_LLONG) && defined(BN_DIV2W) */
 
@@ -330,7 +276,7 @@ BN_ULONG bn_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 
     assert(n >= 0);
     if (n <= 0)
-        return ((BN_ULONG)0);
+        return (BN_ULONG)0;
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
     while (n & ~3) {
@@ -361,7 +307,7 @@ BN_ULONG bn_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
         r++;
         n--;
     }
-    return ((BN_ULONG)ll);
+    return (BN_ULONG)ll;
 }
 #else                           /* !BN_LLONG */
 BN_ULONG bn_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
@@ -371,7 +317,7 @@ BN_ULONG bn_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 
     assert(n >= 0);
     if (n <= 0)
-        return ((BN_ULONG)0);
+        return (BN_ULONG)0;
 
     c = 0;
 # ifndef OPENSSL_SMALL_FOOTPRINT
@@ -418,7 +364,7 @@ BN_ULONG bn_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
         r++;
         n--;
     }
-    return ((BN_ULONG)c);
+    return (BN_ULONG)c;
 }
 #endif                          /* !BN_LLONG */
 
@@ -430,7 +376,7 @@ BN_ULONG bn_sub_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 
     assert(n >= 0);
     if (n <= 0)
-        return ((BN_ULONG)0);
+        return (BN_ULONG)0;
 
 #ifndef OPENSSL_SMALL_FOOTPRINT
     while (n & ~3) {
@@ -471,7 +417,7 @@ BN_ULONG bn_sub_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
         r++;
         n--;
     }
-    return (c);
+    return c;
 }
 
 #if defined(BN_MUL_COMBA) && !defined(OPENSSL_SMALL_FOOTPRINT)
@@ -489,121 +435,144 @@ BN_ULONG bn_sub_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
  * c=(c2,c1,c0)
  */
 
-/*
- * Keep in mind that carrying into high part of multiplication result
- * can not overflow, because it cannot be all-ones.
- */
 # ifdef BN_LLONG
-#  define mul_add_c(a,b,c0,c1,c2) \
-        t=(BN_ULLONG)a*b; \
-        t1=(BN_ULONG)Lw(t); \
-        t2=(BN_ULONG)Hw(t); \
-        c0=(c0+t1)&BN_MASK2; if ((c0) < t1) t2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+/*
+ * Keep in mind that additions to multiplication result can not
+ * overflow, because its high half cannot be all-ones.
+ */
+#  define mul_add_c(a,b,c0,c1,c2)       do {    \
+        BN_ULONG hi;                            \
+        BN_ULLONG t = (BN_ULLONG)(a)*(b);       \
+        t += c0;                /* no carry */  \
+        c0 = (BN_ULONG)Lw(t);                   \
+        hi = (BN_ULONG)Hw(t);                   \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
-#  define mul_add_c2(a,b,c0,c1,c2) \
-        t=(BN_ULLONG)a*b; \
-        tt=(t+t)&BN_MASK; \
-        if (tt < t) c2++; \
-        t1=(BN_ULONG)Lw(tt); \
-        t2=(BN_ULONG)Hw(tt); \
-        c0=(c0+t1)&BN_MASK2;  \
-        if ((c0 < t1) && (((++t2)&BN_MASK2) == 0)) c2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+#  define mul_add_c2(a,b,c0,c1,c2)      do {    \
+        BN_ULONG hi;                            \
+        BN_ULLONG t = (BN_ULLONG)(a)*(b);       \
+        BN_ULLONG tt = t+c0;    /* no carry */  \
+        c0 = (BN_ULONG)Lw(tt);                  \
+        hi = (BN_ULONG)Hw(tt);                  \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        t += c0;                /* no carry */  \
+        c0 = (BN_ULONG)Lw(t);                   \
+        hi = (BN_ULONG)Hw(t);                   \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
-#  define sqr_add_c(a,i,c0,c1,c2) \
-        t=(BN_ULLONG)a[i]*a[i]; \
-        t1=(BN_ULONG)Lw(t); \
-        t2=(BN_ULONG)Hw(t); \
-        c0=(c0+t1)&BN_MASK2; if ((c0) < t1) t2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+#  define sqr_add_c(a,i,c0,c1,c2)       do {    \
+        BN_ULONG hi;                            \
+        BN_ULLONG t = (BN_ULLONG)a[i]*a[i];     \
+        t += c0;                /* no carry */  \
+        c0 = (BN_ULONG)Lw(t);                   \
+        hi = (BN_ULONG)Hw(t);                   \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
 #  define sqr_add_c2(a,i,j,c0,c1,c2) \
         mul_add_c2((a)[i],(a)[j],c0,c1,c2)
 
 # elif defined(BN_UMULT_LOHI)
+/*
+ * Keep in mind that additions to hi can not overflow, because
+ * the high word of a multiplication result cannot be all-ones.
+ */
+#  define mul_add_c(a,b,c0,c1,c2)       do {    \
+        BN_ULONG ta = (a), tb = (b);            \
+        BN_ULONG lo, hi;                        \
+        BN_UMULT_LOHI(lo,hi,ta,tb);             \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
-#  define mul_add_c(a,b,c0,c1,c2) {       \
-        BN_ULONG ta=(a),tb=(b);         \
-        BN_UMULT_LOHI(t1,t2,ta,tb);     \
-        c0 += t1; t2 += (c0<t1)?1:0;    \
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        }
+#  define mul_add_c2(a,b,c0,c1,c2)      do {    \
+        BN_ULONG ta = (a), tb = (b);            \
+        BN_ULONG lo, hi, tt;                    \
+        BN_UMULT_LOHI(lo,hi,ta,tb);             \
+        c0 += lo; tt = hi+((c0<lo)?1:0);        \
+        c1 += tt; c2 += (c1<tt)?1:0;            \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
-#  define mul_add_c2(a,b,c0,c1,c2) {      \
-        BN_ULONG ta=(a),tb=(b),t0;      \
-        BN_UMULT_LOHI(t0,t1,ta,tb);     \
-        c0 += t0; t2 = t1+((c0<t0)?1:0);\
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        c0 += t0; t1 += (c0<t0)?1:0;    \
-        c1 += t1; c2 += (c1<t1)?1:0;    \
-        }
-
-#  define sqr_add_c(a,i,c0,c1,c2) {       \
-        BN_ULONG ta=(a)[i];             \
-        BN_UMULT_LOHI(t1,t2,ta,ta);     \
-        c0 += t1; t2 += (c0<t1)?1:0;    \
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        }
+#  define sqr_add_c(a,i,c0,c1,c2)       do {    \
+        BN_ULONG ta = (a)[i];                   \
+        BN_ULONG lo, hi;                        \
+        BN_UMULT_LOHI(lo,hi,ta,ta);             \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
 #  define sqr_add_c2(a,i,j,c0,c1,c2)    \
         mul_add_c2((a)[i],(a)[j],c0,c1,c2)
 
 # elif defined(BN_UMULT_HIGH)
+/*
+ * Keep in mind that additions to hi can not overflow, because
+ * the high word of a multiplication result cannot be all-ones.
+ */
+#  define mul_add_c(a,b,c0,c1,c2)       do {    \
+        BN_ULONG ta = (a), tb = (b);            \
+        BN_ULONG lo = ta * tb;                  \
+        BN_ULONG hi = BN_UMULT_HIGH(ta,tb);     \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
-#  define mul_add_c(a,b,c0,c1,c2) {       \
-        BN_ULONG ta=(a),tb=(b);         \
-        t1 = ta * tb;                   \
-        t2 = BN_UMULT_HIGH(ta,tb);      \
-        c0 += t1; t2 += (c0<t1)?1:0;    \
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        }
+#  define mul_add_c2(a,b,c0,c1,c2)      do {    \
+        BN_ULONG ta = (a), tb = (b), tt;        \
+        BN_ULONG lo = ta * tb;                  \
+        BN_ULONG hi = BN_UMULT_HIGH(ta,tb);     \
+        c0 += lo; tt = hi + ((c0<lo)?1:0);      \
+        c1 += tt; c2 += (c1<tt)?1:0;            \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
-#  define mul_add_c2(a,b,c0,c1,c2) {      \
-        BN_ULONG ta=(a),tb=(b),t0;      \
-        t1 = BN_UMULT_HIGH(ta,tb);      \
-        t0 = ta * tb;                   \
-        c0 += t0; t2 = t1+((c0<t0)?1:0);\
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        c0 += t0; t1 += (c0<t0)?1:0;    \
-        c1 += t1; c2 += (c1<t1)?1:0;    \
-        }
-
-#  define sqr_add_c(a,i,c0,c1,c2) {       \
-        BN_ULONG ta=(a)[i];             \
-        t1 = ta * ta;                   \
-        t2 = BN_UMULT_HIGH(ta,ta);      \
-        c0 += t1; t2 += (c0<t1)?1:0;    \
-        c1 += t2; c2 += (c1<t2)?1:0;    \
-        }
+#  define sqr_add_c(a,i,c0,c1,c2)       do {    \
+        BN_ULONG ta = (a)[i];                   \
+        BN_ULONG lo = ta * ta;                  \
+        BN_ULONG hi = BN_UMULT_HIGH(ta,ta);     \
+        c0 += lo; hi += (c0<lo)?1:0;            \
+        c1 += hi; c2 += (c1<hi)?1:0;            \
+        } while(0)
 
 #  define sqr_add_c2(a,i,j,c0,c1,c2)      \
         mul_add_c2((a)[i],(a)[j],c0,c1,c2)
 
 # else                          /* !BN_LLONG */
-#  define mul_add_c(a,b,c0,c1,c2) \
-        t1=LBITS(a); t2=HBITS(a); \
-        bl=LBITS(b); bh=HBITS(b); \
-        mul64(t1,t2,bl,bh); \
-        c0=(c0+t1)&BN_MASK2; if ((c0) < t1) t2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+/*
+ * Keep in mind that additions to hi can not overflow, because
+ * the high word of a multiplication result cannot be all-ones.
+ */
+#  define mul_add_c(a,b,c0,c1,c2)       do {    \
+        BN_ULONG lo = LBITS(a), hi = HBITS(a);  \
+        BN_ULONG bl = LBITS(b), bh = HBITS(b);  \
+        mul64(lo,hi,bl,bh);                     \
+        c0 = (c0+lo)&BN_MASK2; if (c0<lo) hi++; \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
-#  define mul_add_c2(a,b,c0,c1,c2) \
-        t1=LBITS(a); t2=HBITS(a); \
-        bl=LBITS(b); bh=HBITS(b); \
-        mul64(t1,t2,bl,bh); \
-        if (t2 & BN_TBIT) c2++; \
-        t2=(t2+t2)&BN_MASK2; \
-        if (t1 & BN_TBIT) t2++; \
-        t1=(t1+t1)&BN_MASK2; \
-        c0=(c0+t1)&BN_MASK2;  \
-        if ((c0 < t1) && (((++t2)&BN_MASK2) == 0)) c2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+#  define mul_add_c2(a,b,c0,c1,c2)      do {    \
+        BN_ULONG tt;                            \
+        BN_ULONG lo = LBITS(a), hi = HBITS(a);  \
+        BN_ULONG bl = LBITS(b), bh = HBITS(b);  \
+        mul64(lo,hi,bl,bh);                     \
+        tt = hi;                                \
+        c0 = (c0+lo)&BN_MASK2; if (c0<lo) tt++; \
+        c1 = (c1+tt)&BN_MASK2; if (c1<tt) c2++; \
+        c0 = (c0+lo)&BN_MASK2; if (c0<lo) hi++; \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
-#  define sqr_add_c(a,i,c0,c1,c2) \
-        sqr64(t1,t2,(a)[i]); \
-        c0=(c0+t1)&BN_MASK2; if ((c0) < t1) t2++; \
-        c1=(c1+t2)&BN_MASK2; if ((c1) < t2) c2++;
+#  define sqr_add_c(a,i,c0,c1,c2)       do {    \
+        BN_ULONG lo, hi;                        \
+        sqr64(lo,hi,(a)[i]);                    \
+        c0 = (c0+lo)&BN_MASK2; if (c0<lo) hi++; \
+        c1 = (c1+hi)&BN_MASK2; if (c1<hi) c2++; \
+        } while(0)
 
 #  define sqr_add_c2(a,i,j,c0,c1,c2) \
         mul_add_c2((a)[i],(a)[j],c0,c1,c2)
@@ -611,12 +580,6 @@ BN_ULONG bn_sub_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 
 void bn_mul_comba8(BN_ULONG *r, BN_ULONG *a, BN_ULONG *b)
 {
-# ifdef BN_LLONG
-    BN_ULLONG t;
-# else
-    BN_ULONG bl, bh;
-# endif
-    BN_ULONG t1, t2;
     BN_ULONG c1, c2, c3;
 
     c1 = 0;
@@ -720,12 +683,6 @@ void bn_mul_comba8(BN_ULONG *r, BN_ULONG *a, BN_ULONG *b)
 
 void bn_mul_comba4(BN_ULONG *r, BN_ULONG *a, BN_ULONG *b)
 {
-# ifdef BN_LLONG
-    BN_ULLONG t;
-# else
-    BN_ULONG bl, bh;
-# endif
-    BN_ULONG t1, t2;
     BN_ULONG c1, c2, c3;
 
     c1 = 0;
@@ -765,12 +722,6 @@ void bn_mul_comba4(BN_ULONG *r, BN_ULONG *a, BN_ULONG *b)
 
 void bn_sqr_comba8(BN_ULONG *r, const BN_ULONG *a)
 {
-# ifdef BN_LLONG
-    BN_ULLONG t, tt;
-# else
-    BN_ULONG bl, bh;
-# endif
-    BN_ULONG t1, t2;
     BN_ULONG c1, c2, c3;
 
     c1 = 0;
@@ -846,12 +797,6 @@ void bn_sqr_comba8(BN_ULONG *r, const BN_ULONG *a)
 
 void bn_sqr_comba4(BN_ULONG *r, const BN_ULONG *a)
 {
-# ifdef BN_LLONG
-    BN_ULLONG t, tt;
-# else
-    BN_ULONG bl, bh;
-# endif
-    BN_ULONG t1, t2;
     BN_ULONG c1, c2, c3;
 
     c1 = 0;
@@ -1006,13 +951,13 @@ int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
 
 /* hmm... is it faster just to do a multiply? */
 # undef bn_sqr_comba4
+# undef bn_sqr_comba8
 void bn_sqr_comba4(BN_ULONG *r, const BN_ULONG *a)
 {
     BN_ULONG t[8];
     bn_sqr_normal(r, a, 4, t);
 }
 
-# undef bn_sqr_comba8
 void bn_sqr_comba8(BN_ULONG *r, const BN_ULONG *a)
 {
     BN_ULONG t[16];

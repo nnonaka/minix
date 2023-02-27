@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Defines the TargetCXXABI class, which abstracts details of the
+/// Defines the TargetCXXABI class, which abstracts details of the
 /// C++ ABI that we're targeting.
 ///
 //===----------------------------------------------------------------------===//
@@ -16,15 +16,14 @@
 #ifndef LLVM_CLANG_BASIC_TARGETCXXABI_H
 #define LLVM_CLANG_BASIC_TARGETCXXABI_H
 
-#include "llvm/ADT/Triple.h"
 #include "llvm/Support/ErrorHandling.h"
 
 namespace clang {
 
-/// \brief The basic abstraction for the target C++ ABI.
+/// The basic abstraction for the target C++ ABI.
 class TargetCXXABI {
 public:
-  /// \brief The basic C++ ABI kind.
+  /// The basic C++ ABI kind.
   enum Kind {
     /// The generic Itanium ABI is the standard ABI of most open-source
     /// and Unix-like platforms.  It is the primary ABI targeted by
@@ -71,6 +70,11 @@ public:
     ///                  /help/topic/com.arm.doc.ihi0059a/IHI0059A_cppabi64.pdf
     iOS64,
 
+    /// WatchOS is a modernisation of the iOS ABI, which roughly means it's
+    /// the iOS64 ABI ported to 32-bits. The primary difference from iOS64 is
+    /// that RTTI objects must still be unique at the moment.
+    WatchOS,
+
     /// The generic AArch64 ABI is also a modified version of the Itanium ABI,
     /// but it has fewer divergences than the 32-bit ARM ABI.
     ///
@@ -84,6 +88,21 @@ public:
     /// At the moment, only change from the generic ABI in this case is:
     ///   - representation of member function pointers adjusted as in ARM.
     GenericMIPS,
+
+    /// The WebAssembly ABI is a modified version of the Itanium ABI.
+    ///
+    /// The changes from the Itanium ABI are:
+    ///   - representation of member function pointers is adjusted, as in ARM;
+    ///   - member functions are not specially aligned;
+    ///   - constructors and destructors return 'this', as in ARM;
+    ///   - guard variables are 32-bit on wasm32, as in ARM;
+    ///   - unused bits of guard variables are reserved, as in ARM;
+    ///   - inline functions are never key functions, as in ARM;
+    ///   - C++11 POD rules are used for tail padding, as in iOS64.
+    ///
+    /// TODO: At present the WebAssembly ABI is not considered stable, so none
+    /// of these details is necessarily final yet.
+    WebAssembly,
 
     /// The Microsoft ABI is the ABI used by Microsoft Visual Studio (and
     /// compatible compilers).
@@ -112,7 +131,7 @@ public:
 
   Kind getKind() const { return TheKind; }
 
-  /// \brief Does this ABI generally fall into the Itanium family of ABIs?
+  /// Does this ABI generally fall into the Itanium family of ABIs?
   bool isItaniumFamily() const {
     switch (getKind()) {
     case GenericAArch64:
@@ -120,7 +139,9 @@ public:
     case GenericARM:
     case iOS:
     case iOS64:
+    case WatchOS:
     case GenericMIPS:
+    case WebAssembly:
       return true;
 
     case Microsoft:
@@ -129,7 +150,7 @@ public:
     llvm_unreachable("bad ABI kind");
   }
 
-  /// \brief Is this ABI an MSVC-compatible ABI?
+  /// Is this ABI an MSVC-compatible ABI?
   bool isMicrosoft() const {
     switch (getKind()) {
     case GenericAArch64:
@@ -137,7 +158,9 @@ public:
     case GenericARM:
     case iOS:
     case iOS64:
+    case WatchOS:
     case GenericMIPS:
+    case WebAssembly:
       return false;
 
     case Microsoft:
@@ -146,11 +169,34 @@ public:
     llvm_unreachable("bad ABI kind");
   }
 
-  /// \brief Is the default C++ member function calling convention
-  /// the same as the default calling convention?
-  bool isMemberFunctionCCDefault() const {
-    // Right now, this is always false for Microsoft.
-    return !isMicrosoft();
+  /// Are member functions differently aligned?
+  ///
+  /// Many Itanium-style C++ ABIs require member functions to be aligned, so
+  /// that a pointer to such a function is guaranteed to have a zero in the
+  /// least significant bit, so that pointers to member functions can use that
+  /// bit to distinguish between virtual and non-virtual functions. However,
+  /// some Itanium-style C++ ABIs differentiate between virtual and non-virtual
+  /// functions via other means, and consequently don't require that member
+  /// functions be aligned.
+  bool areMemberFunctionsAligned() const {
+    switch (getKind()) {
+    case WebAssembly:
+      // WebAssembly doesn't require any special alignment for member functions.
+      return false;
+    case GenericARM:
+    case GenericAArch64:
+    case GenericMIPS:
+      // TODO: ARM-style pointers to member functions put the discriminator in
+      //       the this adjustment, so they don't require functions to have any
+      //       special alignment and could therefore also return false.
+    case GenericItanium:
+    case iOS:
+    case iOS64:
+    case WatchOS:
+    case Microsoft:
+      return true;
+    }
+    llvm_unreachable("bad ABI kind");
   }
 
   /// Are arguments to a call destroyed left to right in the callee?
@@ -164,28 +210,28 @@ public:
     return isMicrosoft();
   }
 
-  /// \brief Does this ABI have different entrypoints for complete-object
+  /// Does this ABI have different entrypoints for complete-object
   /// and base-subobject constructors?
   bool hasConstructorVariants() const {
     return isItaniumFamily();
   }
 
-  /// \brief Does this ABI allow virtual bases to be primary base classes?
+  /// Does this ABI allow virtual bases to be primary base classes?
   bool hasPrimaryVBases() const {
     return isItaniumFamily();
   }
 
-  /// \brief Does this ABI use key functions?  If so, class data such as the
+  /// Does this ABI use key functions?  If so, class data such as the
   /// vtable is emitted with strong linkage by the TU containing the key
   /// function.
   bool hasKeyFunctions() const {
     return isItaniumFamily();
   }
 
-  /// \brief Can an out-of-line inline function serve as a key function?
+  /// Can an out-of-line inline function serve as a key function?
   ///
   /// This flag is only useful in ABIs where type data (for example,
-  /// v-tables and type_info objects) are emitted only after processing
+  /// vtables and type_info objects) are emitted only after processing
   /// the definition of a special "key" virtual function.  (This is safe
   /// because the ODR requires that every virtual function be defined
   /// somewhere in a program.)  This usually permits such data to be
@@ -214,6 +260,8 @@ public:
     switch (getKind()) {
     case GenericARM:
     case iOS64:
+    case WebAssembly:
+    case WatchOS:
       return false;
 
     case GenericAArch64:
@@ -261,7 +309,7 @@ public:
     switch (getKind()) {
     // To preserve binary compatibility, the generic Itanium ABI has
     // permanently locked the definition of POD to the rules of C++ TR1,
-    // and that trickles down to all the derived ABIs.
+    // and that trickles down to derived ABIs.
     case GenericItanium:
     case GenericAArch64:
     case GenericARM:
@@ -269,9 +317,11 @@ public:
     case GenericMIPS:
       return UseTailPaddingUnlessPOD03;
 
-    // iOS on ARM64 uses the C++11 POD rules.  It does not honor the
-    // Itanium exception about classes with over-large bitfields.
+    // iOS on ARM64 and WebAssembly use the C++11 POD rules.  They do not honor
+    // the Itanium exception about classes with over-large bitfields.
     case iOS64:
+    case WebAssembly:
+    case WatchOS:
       return UseTailPaddingUnlessPOD11;
 
     // MSVC always allocates fields in the tail-padding of a base class
@@ -281,9 +331,6 @@ public:
     }
     llvm_unreachable("bad ABI kind");
   }
-
-  /// Try to parse an ABI name, returning false on error.
-  bool tryParse(llvm::StringRef name);
 
   friend bool operator==(const TargetCXXABI &left, const TargetCXXABI &right) {
     return left.getKind() == right.getKind();

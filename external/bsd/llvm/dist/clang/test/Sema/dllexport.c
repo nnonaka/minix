@@ -1,15 +1,21 @@
-// RUN: %clang_cc1 -triple i686-win32     -fsyntax-only -verify -std=c99 %s
-// RUN: %clang_cc1 -triple x86_64-win32   -fsyntax-only -verify -std=c11 %s
-// RUN: %clang_cc1 -triple i686-mingw32   -fsyntax-only -verify -std=c11 %s
-// RUN: %clang_cc1 -triple x86_64-mingw32 -fsyntax-only -verify -std=c99 %s
+// RUN: %clang_cc1 -triple i686-win32     -fsyntax-only -fms-extensions -verify -std=c99 %s
+// RUN: %clang_cc1 -triple x86_64-win32   -fsyntax-only -fms-extensions -verify -std=c11 %s
+// RUN: %clang_cc1 -triple i686-mingw32   -fsyntax-only -fms-extensions -verify -std=c11 %s
+// RUN: %clang_cc1 -triple x86_64-mingw32 -fsyntax-only -fms-extensions -verify -std=c99 %s
 
 // Invalid usage.
-__declspec(dllexport) typedef int typedef1; // expected-warning{{'dllexport' attribute only applies to variables and functions}}
-typedef __declspec(dllexport) int typedef2; // expected-warning{{'dllexport' attribute only applies to variables and functions}}
-typedef int __declspec(dllexport) typedef3; // expected-warning{{'dllexport' attribute only applies to variables and functions}}
-typedef __declspec(dllexport) void (*FunTy)(); // expected-warning{{'dllexport' attribute only applies to variables and functions}}
-enum __declspec(dllexport) Enum { EnumVal }; // expected-warning{{'dllexport' attribute only applies to variables and functions}}
-struct __declspec(dllexport) Record {}; // expected-warning{{'dllexport' attribute only applies to variables and functions}}
+__declspec(dllexport) typedef int typedef1;
+// expected-warning@-1{{'dllexport' attribute only applies to functions, variables, classes, and Objective-C interfaces}}
+typedef __declspec(dllexport) int typedef2;
+// expected-warning@-1{{'dllexport' attribute only applies to}}
+typedef int __declspec(dllexport) typedef3;
+// expected-warning@-1{{'dllexport' attribute only applies to}}
+typedef __declspec(dllexport) void (*FunTy)();
+// expected-warning@-1{{'dllexport' attribute only applies to}}
+enum __declspec(dllexport) Enum { EnumVal };
+// expected-warning@-1{{'dllexport' attribute only applies to}}
+struct __declspec(dllexport) Record {};
+// expected-warning@-1{{'dllexport' attribute only applies to}}
 
 
 
@@ -108,6 +114,11 @@ __declspec(dllexport) void redecl6(); // expected-warning{{redeclaration of 'red
 
 // External linkage is required.
 __declspec(dllexport) static int staticFunc(); // expected-error{{'staticFunc' must have external linkage when declared 'dllexport'}}
+
+// Static locals don't count as having external linkage.
+void staticLocalFunc() {
+  __declspec(dllexport) static int staticLocal; // expected-error{{'staticLocal' must have external linkage when declared 'dllexport'}}
+}
 
 
 

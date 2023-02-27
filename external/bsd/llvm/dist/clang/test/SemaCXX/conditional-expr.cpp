@@ -149,7 +149,7 @@ void test()
   i1 = i1 ? i1 : I();
   I i2(i1 ? I() : J());
   I i3(i1 ? J() : I());
-  // "the type [it] woud have if E2 were converted to an rvalue"
+  // "the type [it] would have if E2 were converted to an rvalue"
   vfn pfn = i1 ? F() : test;
   pfn = i1 ? test : F();
   (void)(i1 ? A() : B()); // expected-error {{conversion from 'B' to 'A' is ambiguous}}
@@ -262,7 +262,7 @@ namespace PR6757 {
   struct Foo2 { };
 
   struct Foo3 {
-    Foo3();
+    Foo3(); // expected-note{{requires 0 arguments}}
     Foo3(Foo3&); // expected-note{{would lose const qualifier}}
   };
 
@@ -383,4 +383,13 @@ namespace PR17052 {
 
     int &test() { return b_ ? i_ : throw 1; }
   };
+}
+
+namespace PR26448 {
+struct Base {};
+struct Derived : Base {};
+Base b;
+Derived d;
+typedef decltype(true ? static_cast<Base&&>(b) : static_cast<Derived&&>(d)) x;
+typedef Base &&x;
 }

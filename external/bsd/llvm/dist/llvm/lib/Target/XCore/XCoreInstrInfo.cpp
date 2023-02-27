@@ -60,17 +60,16 @@ static bool isZeroImm(const MachineOperand &op) {
 /// the destination along with the FrameIndex of the loaded stack slot.  If
 /// not, return 0.  This predicate must return 0 if the instruction has
 /// any side effects other than loading from the stack slot.
-unsigned
-XCoreInstrInfo::isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) const{
-  int Opcode = MI->getOpcode();
+unsigned XCoreInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+                                             int &FrameIndex) const {
+  int Opcode = MI.getOpcode();
   if (Opcode == XCore::LDWFI) 
   {
-    if ((MI->getOperand(1).isFI()) && // is a stack slot
-        (MI->getOperand(2).isImm()) &&  // the imm is zero
-        (isZeroImm(MI->getOperand(2)))) 
-    {
-      FrameIndex = MI->getOperand(1).getIndex();
-      return MI->getOperand(0).getReg();
+    if ((MI.getOperand(1).isFI()) &&  // is a stack slot
+        (MI.getOperand(2).isImm()) && // the imm is zero
+        (isZeroImm(MI.getOperand(2)))) {
+      FrameIndex = MI.getOperand(1).getIndex();
+      return MI.getOperand(0).getReg();
     }
   }
   return 0;
@@ -81,18 +80,16 @@ XCoreInstrInfo::isLoadFromStackSlot(const MachineInstr *MI, int &FrameIndex) con
   /// the source reg along with the FrameIndex of the loaded stack slot.  If
   /// not, return 0.  This predicate must return 0 if the instruction has
   /// any side effects other than storing to the stack slot.
-unsigned
-XCoreInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
-                                   int &FrameIndex) const {
-  int Opcode = MI->getOpcode();
+unsigned XCoreInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex) const {
+  int Opcode = MI.getOpcode();
   if (Opcode == XCore::STWFI)
   {
-    if ((MI->getOperand(1).isFI()) && // is a stack slot
-        (MI->getOperand(2).isImm()) &&  // the imm is zero
-        (isZeroImm(MI->getOperand(2))))
-    {
-      FrameIndex = MI->getOperand(1).getIndex();
-      return MI->getOperand(0).getReg();
+    if ((MI.getOperand(1).isFI()) &&  // is a stack slot
+        (MI.getOperand(2).isImm()) && // the imm is zero
+        (isZeroImm(MI.getOperand(2)))) {
+      FrameIndex = MI.getOperand(1).getIndex();
+      return MI.getOperand(0).getReg();
     }
   }
   return 0;
@@ -187,32 +184,27 @@ static inline XCore::CondCode GetOppositeBranchCondition(XCore::CondCode CC)
 ///    operands can be passed to other TargetInstrInfo methods to create new
 ///    branches.
 ///
-/// Note that RemoveBranch and InsertBranch must be implemented to support
+/// Note that removeBranch and insertBranch must be implemented to support
 /// cases where this method returns success.
 ///
-bool
-XCoreInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
-                              MachineBasicBlock *&FBB,
-                              SmallVectorImpl<MachineOperand> &Cond,
-                              bool AllowModify) const {
+bool XCoreInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
+                                   MachineBasicBlock *&TBB,
+                                   MachineBasicBlock *&FBB,
+                                   SmallVectorImpl<MachineOperand> &Cond,
+                                   bool AllowModify) const {
   // If the block has no terminators, it just falls into the block after it.
-  MachineBasicBlock::iterator I = MBB.end();
-  if (I == MBB.begin())
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end())
     return false;
-  --I;
-  while (I->isDebugValue()) {
-    if (I == MBB.begin())
-      return false;
-    --I;
-  }
-  if (!isUnpredicatedTerminator(I))
+
+  if (!isUnpredicatedTerminator(*I))
     return false;
 
   // Get the last instruction in the block.
-  MachineInstr *LastInst = I;
-  
+  MachineInstr *LastInst = &*I;
+
   // If there is only one terminator instruction, process it.
-  if (I == MBB.begin() || !isUnpredicatedTerminator(--I)) {
+  if (I == MBB.begin() || !isUnpredicatedTerminator(*--I)) {
     if (IsBRU(LastInst->getOpcode())) {
       TBB = LastInst->getOperand(0).getMBB();
       return false;
@@ -232,11 +224,10 @@ XCoreInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
   }
   
   // Get the instruction before it if it's a terminator.
-  MachineInstr *SecondLastInst = I;
+  MachineInstr *SecondLastInst = &*I;
 
   // If there are three terminators, we don't know what sort of block this is.
-  if (SecondLastInst && I != MBB.begin() &&
-      isUnpredicatedTerminator(--I))
+  if (SecondLastInst && I != MBB.begin() && isUnpredicatedTerminator(*--I))
     return true;
   
   unsigned SecondLastOpc    = SecondLastInst->getOpcode();
@@ -278,16 +269,18 @@ XCoreInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
   return true;
 }
 
-unsigned
-XCoreInstrInfo::InsertBranch(MachineBasicBlock &MBB,MachineBasicBlock *TBB,
-                             MachineBasicBlock *FBB,
-                             const SmallVectorImpl<MachineOperand> &Cond,
-                             DebugLoc DL)const{
+unsigned XCoreInstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                      MachineBasicBlock *TBB,
+                                      MachineBasicBlock *FBB,
+                                      ArrayRef<MachineOperand> Cond,
+                                      const DebugLoc &DL,
+                                      int *BytesAdded) const {
   // Shouldn't be a fall through.
-  assert(TBB && "InsertBranch must not be told to insert a fallthrough");
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
   assert((Cond.size() == 2 || Cond.size() == 0) &&
          "Unexpected number of components!");
-  
+  assert(!BytesAdded && "code size not handled");
+
   if (!FBB) { // One way branch.
     if (Cond.empty()) {
       // Unconditional branch
@@ -311,15 +304,13 @@ XCoreInstrInfo::InsertBranch(MachineBasicBlock &MBB,MachineBasicBlock *TBB,
 }
 
 unsigned
-XCoreInstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
-  MachineBasicBlock::iterator I = MBB.end();
-  if (I == MBB.begin()) return 0;
-  --I;
-  while (I->isDebugValue()) {
-    if (I == MBB.begin())
-      return 0;
-    --I;
-  }
+XCoreInstrInfo::removeBranch(MachineBasicBlock &MBB, int *BytesRemoved) const {
+  assert(!BytesRemoved && "code size not handled");
+
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end())
+    return 0;
+
   if (!IsBRU(I->getOpcode()) && !IsCondBranch(I->getOpcode()))
     return 0;
   
@@ -339,9 +330,9 @@ XCoreInstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
 }
 
 void XCoreInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator I, DebugLoc DL,
-                                 unsigned DestReg, unsigned SrcReg,
-                                 bool KillSrc) const {
+                                 MachineBasicBlock::iterator I,
+                                 const DebugLoc &DL, unsigned DestReg,
+                                 unsigned SrcReg, bool KillSrc) const {
   bool GRDest = XCore::GRRegsRegClass.contains(DestReg);
   bool GRSrc  = XCore::GRRegsRegClass.contains(SrcReg);
 
@@ -373,15 +364,14 @@ void XCoreInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          const TargetRegisterInfo *TRI) const
 {
   DebugLoc DL;
-  if (I != MBB.end() && !I->isDebugValue())
+  if (I != MBB.end() && !I->isDebugInstr())
     DL = I->getDebugLoc();
   MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = *MF->getFrameInfo();
-  MachineMemOperand *MMO =
-    MF->getMachineMemOperand(MachinePointerInfo::getFixedStack(FrameIndex),
-                             MachineMemOperand::MOStore,
-                             MFI.getObjectSize(FrameIndex),
-                             MFI.getObjectAlignment(FrameIndex));
+  const MachineFrameInfo &MFI = MF->getFrameInfo();
+  MachineMemOperand *MMO = MF->getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(*MF, FrameIndex),
+      MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex),
+      MFI.getObjectAlignment(FrameIndex));
   BuildMI(MBB, I, DL, get(XCore::STWFI))
     .addReg(SrcReg, getKillRegState(isKill))
     .addFrameIndex(FrameIndex)
@@ -396,26 +386,23 @@ void XCoreInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                           const TargetRegisterInfo *TRI) const
 {
   DebugLoc DL;
-  if (I != MBB.end() && !I->isDebugValue())
+  if (I != MBB.end() && !I->isDebugInstr())
     DL = I->getDebugLoc();
   MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = *MF->getFrameInfo();
-  MachineMemOperand *MMO =
-    MF->getMachineMemOperand(MachinePointerInfo::getFixedStack(FrameIndex),
-                             MachineMemOperand::MOLoad,
-                             MFI.getObjectSize(FrameIndex),
-                             MFI.getObjectAlignment(FrameIndex));
+  const MachineFrameInfo &MFI = MF->getFrameInfo();
+  MachineMemOperand *MMO = MF->getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(*MF, FrameIndex),
+      MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIndex),
+      MFI.getObjectAlignment(FrameIndex));
   BuildMI(MBB, I, DL, get(XCore::LDWFI), DestReg)
     .addFrameIndex(FrameIndex)
     .addImm(0)
     .addMemOperand(MMO);
 }
 
-/// ReverseBranchCondition - Return the inverse opcode of the 
-/// specified Branch instruction.
 bool XCoreInstrInfo::
-ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
-  assert((Cond.size() == 2) && 
+reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
+  assert((Cond.size() == 2) &&
           "Invalid XCore branch condition!");
   Cond[0].setImm(GetOppositeBranchCondition((XCore::CondCode)Cond[0].getImm()));
   return false;
@@ -442,7 +429,7 @@ MachineBasicBlock::iterator XCoreInstrInfo::loadImmediate(
                                               MachineBasicBlock::iterator MI,
                                               unsigned Reg, uint64_t Value) const {
   DebugLoc dl;
-  if (MI != MBB.end() && !MI->isDebugValue())
+  if (MI != MBB.end() && !MI->isDebugInstr())
     dl = MI->getDebugLoc();
   if (isImmMskBitp(Value)) {
     int N = Log2_32(Value) + 1;
@@ -456,7 +443,7 @@ MachineBasicBlock::iterator XCoreInstrInfo::loadImmediate(
   }
   MachineConstantPool *ConstantPool = MBB.getParent()->getConstantPool();
   const Constant *C = ConstantInt::get(
-        Type::getInt32Ty(MBB.getParent()->getFunction()->getContext()), Value);
+        Type::getInt32Ty(MBB.getParent()->getFunction().getContext()), Value);
   unsigned Idx = ConstantPool->getConstantPoolIndex(C, 4);
   return BuildMI(MBB, MI, dl, get(XCore::LDWCP_lru6), Reg)
       .addConstantPoolIndex(Idx)

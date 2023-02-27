@@ -13,23 +13,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/IR/LLVMContext.h"
 #include "../../lib/ExecutionEngine/IntelJITEvents/IntelJITEventsWrapper.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 #include <string>
 
 using namespace llvm;
@@ -104,8 +103,6 @@ unsigned int GetNewMethodID(void) {
 class JitEventListenerTest {
 protected:
   void InitEE(const std::string &IRFile) {
-    LLVMContext &Context = getGlobalContext();
-
     // If we have a native target, initialize it to ensure it is linked in and
     // usable by the JIT.
     InitializeNativeTarget();
@@ -179,16 +176,10 @@ InputFilename(cl::Positional, cl::desc("<input IR file>"),
                cl::Required);
 
 int main(int argc, char **argv) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal();
-  PrettyStackTraceProgram X(argc, argv);
-  llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
-
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv, "llvm jit event listener test utility\n");
 
   JitEventListenerTest Test;
-
   Test.ProcessInput(InputFilename);
-
   return 0;
 }

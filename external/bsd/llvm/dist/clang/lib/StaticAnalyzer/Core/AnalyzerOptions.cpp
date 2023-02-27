@@ -1,4 +1,4 @@
-//===-- AnalyzerOptions.cpp - Analysis Engine Options -----------*- C++ -*-===//
+//===- AnalyzerOptions.cpp - Analysis Engine Options ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,13 +13,41 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Core/AnalyzerOptions.h"
+#include "clang/StaticAnalyzer/Core/Checker.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstddef>
+#include <utility>
+#include <vector>
 
 using namespace clang;
+using namespace ento;
 using namespace llvm;
+
+std::vector<StringRef>
+AnalyzerOptions::getRegisteredCheckers(bool IncludeExperimental /* = false */) {
+  static const StringRef StaticAnalyzerChecks[] = {
+#define GET_CHECKERS
+#define CHECKER(FULLNAME, CLASS, DESCFILE, HELPTEXT, GROUPINDEX, HIDDEN)       \
+  FULLNAME,
+#include "clang/StaticAnalyzer/Checkers/Checkers.inc"
+#undef CHECKER
+#undef GET_CHECKERS
+  };
+  std::vector<StringRef> Result;
+  for (StringRef CheckName : StaticAnalyzerChecks) {
+    if (!CheckName.startswith("debug.") &&
+        (IncludeExperimental || !CheckName.startswith("alpha.")))
+      Result.push_back(CheckName);
+  }
+  return Result;
+}
 
 AnalyzerOptions::UserModeKind AnalyzerOptions::getUserMode() {
   if (UserMode == UMK_NotSet) {
@@ -34,9 +62,32 @@ AnalyzerOptions::UserModeKind AnalyzerOptions::getUserMode() {
   return UserMode;
 }
 
+AnalyzerOptions::ExplorationStrategyKind
+AnalyzerOptions::getExplorationStrategy() {
+  if (ExplorationStrategy == ExplorationStrategyKind::NotSet) {
+    StringRef StratStr =
+        Config
+            .insert(std::make_pair("exploration_strategy", "unexplored_first_queue"))
+            .first->second;
+    ExplorationStrategy =
+        llvm::StringSwitch<ExplorationStrategyKind>(StratStr)
+            .Case("dfs", ExplorationStrategyKind::DFS)
+            .Case("bfs", ExplorationStrategyKind::BFS)
+            .Case("unexplored_first",
+                  ExplorationStrategyKind::UnexploredFirst)
+            .Case("unexplored_first_queue",
+                  ExplorationStrategyKind::UnexploredFirstQueue)
+            .Case("bfs_block_dfs_contents",
+                  ExplorationStrategyKind::BFSBlockDFSContents)
+            .Default(ExplorationStrategyKind::NotSet);
+    assert(ExplorationStrategy != ExplorationStrategyKind::NotSet &&
+           "User mode is invalid.");
+  }
+  return ExplorationStrategy;
+}
+
 IPAKind AnalyzerOptions::getIPAMode() {
   if (IPAMode == IPAK_NotSet) {
-
     // Use the User Mode to set the default IPA value.
     // Note, we have to add the string to the Config map for the ConfigDumper
     // checker to function properly.
@@ -63,7 +114,7 @@ IPAKind AnalyzerOptions::getIPAMode() {
     // Set the member variable.
     IPAMode = IPAConfig;
   }
-  
+
   return IPAMode;
 }
 
@@ -100,12 +151,37 @@ AnalyzerOptions::mayInlineCXXMemberFunction(CXXInlineableMemberKind K) {
 
 static StringRef toString(bool b) { return b ? "true" : "false"; }
 
-bool AnalyzerOptions::getBooleanOption(StringRef Name, bool DefaultVal) {
+StringRef AnalyzerOptions::getCheckerOption(StringRef CheckerName,
+                                            StringRef OptionName,
+                                            StringRef Default,
+                                            bool SearchInParents) {
+  // Search for a package option if the option for the checker is not specified
+  // and search in parents is enabled.
+  ConfigTable::const_iterator E = Config.end();
+  do {
+    ConfigTable::const_iterator I =
+        Config.find((Twine(CheckerName) + ":" + OptionName).str());
+    if (I != E)
+      return StringRef(I->getValue());
+    size_t Pos = CheckerName.rfind('.');
+    if (Pos == StringRef::npos)
+      return Default;
+    CheckerName = CheckerName.substr(0, Pos);
+  } while (!CheckerName.empty() && SearchInParents);
+  return Default;
+}
+
+bool AnalyzerOptions::getBooleanOption(StringRef Name, bool DefaultVal,
+                                       const CheckerBase *C,
+                                       bool SearchInParents) {
   // FIXME: We should emit a warning here if the value is something other than
   // "true", "false", or the empty string (meaning the default value),
   // but the AnalyzerOptions doesn't have access to a diagnostic engine.
+  StringRef Default = toString(DefaultVal);
   StringRef V =
-      Config.insert(std::make_pair(Name, toString(DefaultVal))).first->second;
+      C ? getCheckerOption(C->getTagDescription(), Name, Default,
+                           SearchInParents)
+        : StringRef(Config.insert(std::make_pair(Name, Default)).first->second);
   return llvm::StringSwitch<bool>(V)
       .Case("true", true)
       .Case("false", false)
@@ -113,15 +189,44 @@ bool AnalyzerOptions::getBooleanOption(StringRef Name, bool DefaultVal) {
 }
 
 bool AnalyzerOptions::getBooleanOption(Optional<bool> &V, StringRef Name,
-                                       bool DefaultVal) {
+                                       bool DefaultVal, const CheckerBase *C,
+                                       bool SearchInParents) {
   if (!V.hasValue())
-    V = getBooleanOption(Name, DefaultVal);
+    V = getBooleanOption(Name, DefaultVal, C, SearchInParents);
   return V.getValue();
 }
 
 bool AnalyzerOptions::includeTemporaryDtorsInCFG() {
   return getBooleanOption(IncludeTemporaryDtorsInCFG,
                           "cfg-temporary-dtors",
+                          /* Default = */ true);
+}
+
+bool AnalyzerOptions::includeImplicitDtorsInCFG() {
+  return getBooleanOption(IncludeImplicitDtorsInCFG,
+                          "cfg-implicit-dtors",
+                          /* Default = */ true);
+}
+
+bool AnalyzerOptions::includeLifetimeInCFG() {
+  return getBooleanOption(IncludeLifetimeInCFG, "cfg-lifetime",
+                          /* Default = */ false);
+}
+
+bool AnalyzerOptions::includeLoopExitInCFG() {
+  return getBooleanOption(IncludeLoopExitInCFG, "cfg-loopexit",
+                          /* Default = */ false);
+}
+
+bool AnalyzerOptions::includeRichConstructorsInCFG() {
+  return getBooleanOption(IncludeRichConstructorsInCFG,
+                          "cfg-rich-constructors",
+                          /* Default = */ true);
+}
+
+bool AnalyzerOptions::includeScopesInCFG() {
+  return getBooleanOption(IncludeScopesInCFG,
+                          "cfg-scopes",
                           /* Default = */ false);
 }
 
@@ -140,7 +245,7 @@ bool AnalyzerOptions::mayInlineTemplateFunctions() {
 bool AnalyzerOptions::mayInlineCXXAllocator() {
   return getBooleanOption(InlineCXXAllocator,
                           "c++-allocator-inlining",
-                          /*Default=*/false);
+                          /*Default=*/true);
 }
 
 bool AnalyzerOptions::mayInlineCXXContainerMethods() {
@@ -155,6 +260,11 @@ bool AnalyzerOptions::mayInlineCXXSharedPtrDtor() {
                           /*Default=*/false);
 }
 
+bool AnalyzerOptions::mayInlineCXXTemporaryDtors() {
+  return getBooleanOption(InlineCXXTemporaryDtors,
+                          "c++-temp-dtor-inlining",
+                          /*Default=*/true);
+}
 
 bool AnalyzerOptions::mayInlineObjCMethod() {
   return getBooleanOption(ObjCInliningMode,
@@ -183,6 +293,12 @@ bool AnalyzerOptions::shouldSuppressInlinedDefensiveChecks() {
 bool AnalyzerOptions::shouldSuppressFromCXXStandardLibrary() {
   return getBooleanOption(SuppressFromCXXStandardLibrary,
                           "suppress-c++-stdlib",
+                          /* Default = */ true);
+}
+
+bool AnalyzerOptions::shouldCrosscheckWithZ3() {
+  return getBooleanOption(CrosscheckWithZ3,
+                          "crosscheck-with-z3",
                           /* Default = */ false);
 }
 
@@ -199,17 +315,45 @@ bool AnalyzerOptions::shouldWriteStableReportFilename() {
                           /* Default = */ false);
 }
 
-int AnalyzerOptions::getOptionAsInteger(StringRef Name, int DefaultVal) {
+bool AnalyzerOptions::shouldSerializeStats() {
+  return getBooleanOption(SerializeStats,
+                          "serialize-stats",
+                          /* Default = */ false);
+}
+
+bool AnalyzerOptions::shouldElideConstructors() {
+  return getBooleanOption(ElideConstructors,
+                          "elide-constructors",
+                          /* Default = */ true);
+}
+
+int AnalyzerOptions::getOptionAsInteger(StringRef Name, int DefaultVal,
+                                        const CheckerBase *C,
+                                        bool SearchInParents) {
   SmallString<10> StrBuf;
   llvm::raw_svector_ostream OS(StrBuf);
   OS << DefaultVal;
 
-  StringRef V = Config.insert(std::make_pair(Name, OS.str())).first->second;
+  StringRef V = C ? getCheckerOption(C->getTagDescription(), Name, OS.str(),
+                                     SearchInParents)
+                  : StringRef(Config.insert(std::make_pair(Name, OS.str()))
+                                  .first->second);
+
   int Res = DefaultVal;
   bool b = V.getAsInteger(10, Res);
   assert(!b && "analyzer-config option should be numeric");
-  (void) b;
+  (void)b;
   return Res;
+}
+
+StringRef AnalyzerOptions::getOptionAsString(StringRef Name,
+                                             StringRef DefaultVal,
+                                             const CheckerBase *C,
+                                             bool SearchInParents) {
+  return C ? getCheckerOption(C->getTagDescription(), Name, DefaultVal,
+                              SearchInParents)
+           : StringRef(
+                 Config.insert(std::make_pair(Name, DefaultVal)).first->second);
 }
 
 unsigned AnalyzerOptions::getAlwaysInlineSize() {
@@ -220,7 +364,6 @@ unsigned AnalyzerOptions::getAlwaysInlineSize() {
 
 unsigned AnalyzerOptions::getMaxInlinableSize() {
   if (!MaxInlinableSize.hasValue()) {
-
     int DefaultValue = 0;
     UserModeKind HighLevelMode = getUserMode();
     switch (HighLevelMode) {
@@ -230,7 +373,7 @@ unsigned AnalyzerOptions::getMaxInlinableSize() {
         DefaultValue = 4;
         break;
       case UMK_Deep:
-        DefaultValue = 50;
+        DefaultValue = 100;
         break;
     }
 
@@ -245,10 +388,23 @@ unsigned AnalyzerOptions::getGraphTrimInterval() {
   return GraphTrimInterval.getValue();
 }
 
+unsigned AnalyzerOptions::getMaxSymbolComplexity() {
+  if (!MaxSymbolComplexity.hasValue())
+    MaxSymbolComplexity = getOptionAsInteger("max-symbol-complexity", 25);
+  return MaxSymbolComplexity.getValue();
+}
+
 unsigned AnalyzerOptions::getMaxTimesInlineLarge() {
   if (!MaxTimesInlineLarge.hasValue())
     MaxTimesInlineLarge = getOptionAsInteger("max-times-inline-large", 32);
   return MaxTimesInlineLarge.getValue();
+}
+
+unsigned AnalyzerOptions::getMinCFGSizeTreatFunctionsAsLarge() {
+  if (!MinCFGSizeTreatFunctionsAsLarge.hasValue())
+    MinCFGSizeTreatFunctionsAsLarge = getOptionAsInteger(
+      "min-cfg-size-treat-functions-as-large", 14);
+  return MinCFGSizeTreatFunctionsAsLarge.getValue();
 }
 
 unsigned AnalyzerOptions::getMaxNodesPerTopLevelFunction() {
@@ -262,7 +418,7 @@ unsigned AnalyzerOptions::getMaxNodesPerTopLevelFunction() {
         DefaultValue = 75000;
         break;
       case UMK_Deep:
-        DefaultValue = 150000;
+        DefaultValue = 225000;
         break;
     }
     MaxNodesPerTopLevelFunction = getOptionAsInteger("max-nodes", DefaultValue);
@@ -282,3 +438,58 @@ bool AnalyzerOptions::shouldConditionalizeStaticInitializers() {
   return getBooleanOption("cfg-conditional-static-initializers", true);
 }
 
+bool AnalyzerOptions::shouldInlineLambdas() {
+  if (!InlineLambdas.hasValue())
+    InlineLambdas = getBooleanOption("inline-lambdas", /*Default=*/true);
+  return InlineLambdas.getValue();
+}
+
+bool AnalyzerOptions::shouldWidenLoops() {
+  if (!WidenLoops.hasValue())
+    WidenLoops = getBooleanOption("widen-loops", /*Default=*/false);
+  return WidenLoops.getValue();
+}
+
+bool AnalyzerOptions::shouldUnrollLoops() {
+  if (!UnrollLoops.hasValue())
+    UnrollLoops = getBooleanOption("unroll-loops", /*Default=*/false);
+  return UnrollLoops.getValue();
+}
+
+bool AnalyzerOptions::shouldDisplayNotesAsEvents() {
+  if (!DisplayNotesAsEvents.hasValue())
+    DisplayNotesAsEvents =
+        getBooleanOption("notes-as-events", /*Default=*/false);
+  return DisplayNotesAsEvents.getValue();
+}
+
+bool AnalyzerOptions::shouldAggressivelySimplifyRelationalComparison() {
+  if (!AggressiveRelationalComparisonSimplification.hasValue())
+    AggressiveRelationalComparisonSimplification =
+      getBooleanOption("aggressive-relational-comparison-simplification",
+                       /*Default=*/false);
+  return AggressiveRelationalComparisonSimplification.getValue();
+}
+
+StringRef AnalyzerOptions::getCTUDir() {
+  if (!CTUDir.hasValue()) {
+    CTUDir = getOptionAsString("ctu-dir", "");
+    if (!llvm::sys::fs::is_directory(*CTUDir))
+      CTUDir = "";
+  }
+  return CTUDir.getValue();
+}
+
+bool AnalyzerOptions::naiveCTUEnabled() {
+  if (!NaiveCTU.hasValue()) {
+    NaiveCTU = getBooleanOption("experimental-enable-naive-ctu-analysis",
+                                /*Default=*/false);
+  }
+  return NaiveCTU.getValue();
+}
+
+StringRef AnalyzerOptions::getCTUIndexName() {
+  if (!CTUIndexName.hasValue())
+    CTUIndexName = getOptionAsString("ctu-index-name", "externalFnMap.txt");
+  return CTUIndexName.getValue();
+}

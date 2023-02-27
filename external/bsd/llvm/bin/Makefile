@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.14 2014/03/04 21:05:05 joerg Exp $
+#	$NetBSD: Makefile,v 1.19 2019/04/03 15:12:45 joerg Exp $
 
 .include <bsd.own.mk>
 
@@ -25,15 +25,19 @@ SUBDIR+=	\
 SUBDIR+= \
 	bugpoint \
 	clang-format \
+	clang-rename \
 	llc \
 	lli \
 	llvm-ar \
 	llvm-as \
 	llvm-bcanalyzer \
 	llvm-cov \
+	llvm-cxxdump \
+	llvm-cxxfilt \
 	llvm-diff \
 	llvm-dis \
 	llvm-dwarfdump \
+	llvm-dwp \
 	llvm-extract \
 	llvm-link \
 	llvm-mc \
@@ -42,9 +46,12 @@ SUBDIR+= \
 	llvm-profdata \
 	llvm-readobj \
 	llvm-size \
+	llvm-strings \
 	llvm-symbolizer \
-	macho-dumpx \
-	opt
+	llvm-xray \
+	opt \
+	sancov \
+	sanstats
 .endif
 
 .include <bsd.subdir.mk>

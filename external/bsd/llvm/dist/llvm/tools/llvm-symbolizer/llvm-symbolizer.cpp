@@ -15,14 +15,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "LLVMSymbolize.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/DebugInfo/Symbolize/DIPrinter.h"
+#include "llvm/DebugInfo/Symbolize/Symbolize.h"
+#include "llvm/Support/COM.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
+#include "llvm/Support/InitLLVM.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdio>
 #include <cstring>
@@ -43,12 +44,16 @@ static cl::opt<FunctionNameKind> ClPrintFunctions(
                clEnumValN(FunctionNameKind::ShortName, "short",
                           "print short function name"),
                clEnumValN(FunctionNameKind::LinkageName, "linkage",
-                          "print function linkage name"),
-               clEnumValEnd));
+                          "print function linkage name")));
 
 static cl::opt<bool>
-ClPrintInlining("inlining", cl::init(true),
-                cl::desc("Print all inlined frames for a given address"));
+    ClUseRelativeAddress("relative-address", cl::init(false),
+                         cl::desc("Interpret addresses as relative addresses"),
+                         cl::ReallyHidden);
+
+static cl::opt<bool>
+    ClPrintInlining("inlining", cl::init(true),
+                    cl::desc("Print all inlined frames for a given address"));
 
 static cl::opt<bool>
 ClDemangle("demangle", cl::init(true), cl::desc("Demangle function names"));
@@ -62,40 +67,58 @@ ClBinaryName("obj", cl::init(""),
              cl::desc("Path to object file to be symbolized (if not provided, "
                       "object file should be specified for each input line)"));
 
+static cl::opt<std::string>
+    ClDwpName("dwp", cl::init(""),
+              cl::desc("Path to DWP file to be use for any split CUs"));
+
 static cl::list<std::string>
 ClDsymHint("dsym-hint", cl::ZeroOrMore,
            cl::desc("Path to .dSYM bundles to search for debug info for the "
                     "object files"));
+static cl::opt<bool>
+    ClPrintAddress("print-address", cl::init(false),
+                   cl::desc("Show address before line information"));
 
-static bool parseCommand(bool &IsData, std::string &ModuleName,
-                         uint64_t &ModuleOffset) {
-  const char *kDataCmd = "DATA ";
-  const char *kCodeCmd = "CODE ";
-  const int kMaxInputStringLength = 1024;
-  const char kDelimiters[] = " \n";
-  char InputString[kMaxInputStringLength];
-  if (!fgets(InputString, sizeof(InputString), stdin))
+static cl::opt<bool>
+    ClPrettyPrint("pretty-print", cl::init(false),
+                  cl::desc("Make the output more human friendly"));
+
+static cl::opt<int> ClPrintSourceContextLines(
+    "print-source-context-lines", cl::init(0),
+    cl::desc("Print N number of source file context"));
+
+static cl::opt<bool> ClVerbose("verbose", cl::init(false),
+                               cl::desc("Print verbose line info"));
+
+template<typename T>
+static bool error(Expected<T> &ResOrErr) {
+  if (ResOrErr)
     return false;
-  IsData = false;
+  logAllUnhandledErrors(ResOrErr.takeError(), errs(),
+                        "LLVMSymbolizer: error reading file: ");
+  return true;
+}
+
+static bool parseCommand(StringRef InputString, bool &IsData,
+                         std::string &ModuleName, uint64_t &ModuleOffset) {
+  const char kDelimiters[] = " \n\r";
   ModuleName = "";
-  char *pos = InputString;
-  if (strncmp(pos, kDataCmd, strlen(kDataCmd)) == 0) {
-    IsData = true;
-    pos += strlen(kDataCmd);
-  } else if (strncmp(pos, kCodeCmd, strlen(kCodeCmd)) == 0) {
+  if (InputString.consume_front("CODE ")) {
     IsData = false;
-    pos += strlen(kCodeCmd);
+  } else if (InputString.consume_front("DATA ")) {
+    IsData = true;
   } else {
     // If no cmd, assume it's CODE.
     IsData = false;
   }
+  const char *pos = InputString.data();
   // Skip delimiters and parse input filename (if needed).
-  if (ClBinaryName == "") {
+  if (ClBinaryName.empty()) {
     pos += strspn(pos, kDelimiters);
     if (*pos == '"' || *pos == '\'') {
       char quote = *pos;
       pos++;
-      char *end = strchr(pos, quote);
+      const char *end = strchr(pos, quote);
       if (!end)
         return false;
       ModuleName = std::string(pos, end - pos);
@@ -111,20 +134,18 @@ static bool parseCommand(bool &IsData, std::string &ModuleName,
   // Skip delimiters and parse module offset.
   pos += strspn(pos, kDelimiters);
   int offset_length = strcspn(pos, kDelimiters);
-  if (StringRef(pos, offset_length).getAsInteger(0, ModuleOffset))
-    return false;
-  return true;
+  return !StringRef(pos, offset_length).getAsInteger(0, ModuleOffset);
 }
 
 int main(int argc, char **argv) {
-  // Print stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal();
-  PrettyStackTraceProgram X(argc, argv);
-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+  InitLLVM X(argc, argv);
+
+  llvm::sys::InitializeCOMRAII COM(llvm::sys::COMThreadingMode::MultiThreaded);
 
   cl::ParseCommandLineOptions(argc, argv, "llvm-symbolizer\n");
-  LLVMSymbolizer::Options Opts(ClUseSymbolTable, ClPrintFunctions,
-                               ClPrintInlining, ClDemangle, ClDefaultArch);
+  LLVMSymbolizer::Options Opts(ClPrintFunctions, ClUseSymbolTable, ClDemangle,
+                               ClUseRelativeAddress, ClDefaultArch);
+
   for (const auto &hint : ClDsymHint) {
     if (sys::path::extension(hint) == ".dSYM") {
       Opts.DsymHints.push_back(hint);
@@ -135,15 +156,47 @@ int main(int argc, char **argv) {
   }
   LLVMSymbolizer Symbolizer(Opts);
 
-  bool IsData = false;
-  std::string ModuleName;
-  uint64_t ModuleOffset;
-  while (parseCommand(IsData, ModuleName, ModuleOffset)) {
-    std::string Result =
-        IsData ? Symbolizer.symbolizeData(ModuleName, ModuleOffset)
-               : Symbolizer.symbolizeCode(ModuleName, ModuleOffset);
-    outs() << Result << "\n";
+  DIPrinter Printer(outs(), ClPrintFunctions != FunctionNameKind::None,
+                    ClPrettyPrint, ClPrintSourceContextLines, ClVerbose);
+
+  const int kMaxInputStringLength = 1024;
+  char InputString[kMaxInputStringLength];
+
+  while (true) {
+    if (!fgets(InputString, sizeof(InputString), stdin))
+      break;
+
+    bool IsData = false;
+    std::string ModuleName;
+    uint64_t ModuleOffset = 0;
+    if (!parseCommand(StringRef(InputString), IsData, ModuleName,
+                      ModuleOffset)) {
+      outs() << InputString;
+      continue;
+    }
+
+    if (ClPrintAddress) {
+      outs() << "0x";
+      outs().write_hex(ModuleOffset);
+      StringRef Delimiter = ClPrettyPrint ? ": " : "\n";
+      outs() << Delimiter;
+    }
+    if (IsData) {
+      auto ResOrErr = Symbolizer.symbolizeData(ModuleName, ModuleOffset);
+      Printer << (error(ResOrErr) ? DIGlobal() : ResOrErr.get());
+    } else if (ClPrintInlining) {
+      auto ResOrErr =
+          Symbolizer.symbolizeInlinedCode(ModuleName, ModuleOffset, ClDwpName);
+      Printer << (error(ResOrErr) ? DIInliningInfo()
+                                             : ResOrErr.get());
+    } else {
+      auto ResOrErr =
+          Symbolizer.symbolizeCode(ModuleName, ModuleOffset, ClDwpName);
+      Printer << (error(ResOrErr) ? DILineInfo() : ResOrErr.get());
+    }
+    outs() << "\n";
     outs().flush();
   }
+
   return 0;
 }

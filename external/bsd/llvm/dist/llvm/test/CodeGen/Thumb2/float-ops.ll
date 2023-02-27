@@ -102,16 +102,16 @@ entry:
 ; CHECK-LABEL: load_f:
 ; NONE: ldr r0, [r0]
 ; HARD: vldr s0, [r0]
-  %0 = load float* %a, align 4
+  %0 = load float, float* %a, align 4
   ret float %0
 }
 
 define double @load_d(double* %a) {
 entry:
 ; CHECK-LABEL: load_d:
-; NONE: ldm.w r0, {r0, r1}
+; NONE: ldm r0, {r0, r1}
 ; HARD: vldr d0, [r0]
-  %0 = load double* %a, align 8
+  %0 = load double, double* %a, align 8
   ret double %0
 }
 
@@ -127,9 +127,7 @@ entry:
 define void @store_d(double* %a, double %b) {
 entry:
 ; CHECK-LABEL: store_d:
-; NONE: mov r1, r3
-; NONE: str r2, [r0]
-; NONE: str r1, [r0, #4]
+; NONE: strd r2, r3, [r0]
 ; HARD: vstr d0, [r0]
   store double %b, double* %a, align 8
   ret void
@@ -261,9 +259,9 @@ define i64 @bitcast_d_to_i(double %a) {
 
 define float @select_f(float %a, float %b, i1 %c) {
 ; CHECK-LABEL: select_f:
-; NONE: tst.w   r2, #1
+; NONE: lsls    r2, r2, #31
 ; NONE: moveq   r0, r1
-; HARD: tst.w   r0, #1
+; HARD: lsls    r0, r0, #31
 ; VFP4-ALL: vmovne.f32      s1, s0
 ; VFP4-ALL: vmov.f32        s0, s1
 ; FP-ARMv8: vseleq.f32 s0, s1, s0
@@ -273,8 +271,8 @@ define float @select_f(float %a, float %b, i1 %c) {
 
 define double @select_d(double %a, double %b, i1 %c) {
 ; CHECK-LABEL: select_d:
-; NONE: ldr.w   [[REG:r[0-9]+]], [sp]
-; NONE: ands    [[REG]], [[REG]], #1
+; NONE: ldr{{(.w)?}}     [[REG:r[0-9]+]], [sp]
+; NONE  ands    [[REG]], [[REG]], #1
 ; NONE: moveq   r0, r2
 ; NONE: moveq   r1, r3
 ; SP: ands r0, r0, #1
@@ -284,7 +282,7 @@ define double @select_d(double %a, double %b, i1 %c) {
 ; SP-DAG: movne [[BLO]], [[ALO]]
 ; SP-DAG: movne [[BHI]], [[AHI]]
 ; SP: vmov d0, [[BLO]], [[BHI]]
-; DP: tst.w   r0, #1
+; DP: lsls   r0, r0, #31
 ; VFP4-DP: vmovne.f64      d1, d0
 ; VFP4-DP: vmov.f64        d0, d1
 ; FP-ARMV8: vseleq.f64      d0, d1, d0

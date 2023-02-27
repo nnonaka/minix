@@ -9,7 +9,7 @@
 // RUN: cd %t
 // RUN: cp %s %p/Inputs/range_based_for.gc* .
 
-// RUN: llvm-cov range_based_for.cpp | FileCheck %s --check-prefix=STDOUT
+// RUN: llvm-cov gcov range_based_for.cpp | FileCheck %s --check-prefix=STDOUT
 // STDOUT: File 'range_based_for.cpp'
 // STDOUT: Lines executed:100.00% of 5
 // STDOUT: range_based_for.cpp:creating 'range_based_for.cpp.gcov'
@@ -26,4 +26,4 @@ int main(int argc, const char *argv[]) { // GCOV: 1:    [[@LINE]]:int main(
 }                                        // GCOV: -:    [[@LINE]]:}
 
 // llvm-cov doesn't work on big endian yet
-// XFAIL: powerpc64-, s390x, mips-, mips64-, sparc
+// XFAIL: powerpc-, powerpc64-, s390x, mips-, mips64-, sparc

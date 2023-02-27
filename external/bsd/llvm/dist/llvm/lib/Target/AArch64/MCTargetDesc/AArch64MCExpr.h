@@ -35,6 +35,7 @@ public:
     VK_GOTTPREL = 0x005,
     VK_TPREL    = 0x006,
     VK_TLSDESC  = 0x007,
+    VK_SECREL   = 0x008,
     VK_SymLocBits = 0x00f,
 
     // Variants specifying which part of the final address calculation is
@@ -62,6 +63,7 @@ public:
     // since a user would write ":lo12:").
     VK_CALL              = VK_ABS,
     VK_ABS_PAGE          = VK_ABS      | VK_PAGE,
+    VK_ABS_PAGE_NC       = VK_ABS      | VK_PAGE    | VK_NC,
     VK_ABS_G3            = VK_ABS      | VK_G3,
     VK_ABS_G2            = VK_ABS      | VK_G2,
     VK_ABS_G2_S          = VK_SABS     | VK_G2,
@@ -95,8 +97,10 @@ public:
     VK_TPREL_HI12        = VK_TPREL    | VK_HI12,
     VK_TPREL_LO12        = VK_TPREL    | VK_PAGEOFF,
     VK_TPREL_LO12_NC     = VK_TPREL    | VK_PAGEOFF | VK_NC,
-    VK_TLSDESC_LO12      = VK_TLSDESC  | VK_PAGEOFF | VK_NC,
+    VK_TLSDESC_LO12      = VK_TLSDESC  | VK_PAGEOFF,
     VK_TLSDESC_PAGE      = VK_TLSDESC  | VK_PAGE,
+    VK_SECREL_LO12       = VK_SECREL   | VK_PAGEOFF,
+    VK_SECREL_HI12       = VK_SECREL   | VK_HI12,
 
     VK_INVALID  = 0xfff
   };
@@ -112,7 +116,7 @@ public:
   /// @name Construction
   /// @{
 
-  static const AArch64MCExpr *Create(const MCExpr *Expr, VariantKind Kind,
+  static const AArch64MCExpr *create(const MCExpr *Expr, VariantKind Kind,
                                    MCContext &Ctx);
 
   /// @}
@@ -120,7 +124,7 @@ public:
   /// @{
 
   /// Get the kind of this expression.
-  VariantKind getKind() const { return static_cast<VariantKind>(Kind); }
+  VariantKind getKind() const { return Kind; }
 
   /// Get the expression this modifier applies to.
   const MCExpr *getSubExpr() const { return Expr; }
@@ -145,15 +149,14 @@ public:
   /// (e.g. ":got:", ":lo12:").
   StringRef getVariantKindName() const;
 
-  void PrintImpl(raw_ostream &OS) const override;
+  void printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const override;
 
   void visitUsedExpr(MCStreamer &Streamer) const override;
 
-  const MCSection *FindAssociatedSection() const override;
+  MCFragment *findAssociatedFragment() const override;
 
-  bool EvaluateAsRelocatableImpl(MCValue &Res,
-                                 const MCAsmLayout *Layout,
-				 const MCFixup *Fixup) const override;
+  bool evaluateAsRelocatableImpl(MCValue &Res, const MCAsmLayout *Layout,
+                                 const MCFixup *Fixup) const override;
 
   void fixELFSymbolsInTLSFixups(MCAssembler &Asm) const override;
 
@@ -162,7 +165,6 @@ public:
   }
 
   static bool classof(const AArch64MCExpr *) { return true; }
-
 };
 } // end namespace llvm
 

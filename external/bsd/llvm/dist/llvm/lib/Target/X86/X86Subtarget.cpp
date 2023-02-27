@@ -11,19 +11,28 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "X86.h"
+
+#include "X86CallLowering.h"
+#include "X86LegalizerInfo.h"
+#include "X86RegisterBankInfo.h"
 #include "X86Subtarget.h"
-#include "X86InstrInfo.h"
+#include "MCTargetDesc/X86BaseInfo.h"
 #include "X86TargetMachine.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/CodeGen/GlobalISel/CallLowering.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -44,132 +53,132 @@ X86EarlyIfConv("x86-early-ifcvt", cl::Hidden,
                cl::desc("Enable early if-conversion on X86"));
 
 
-/// ClassifyBlockAddressReference - Classify a blockaddress reference for the
-/// current subtarget according to how we should reference it in a non-pcrel
-/// context.
-unsigned char X86Subtarget::ClassifyBlockAddressReference() const {
-  if (isPICStyleGOT())    // 32-bit ELF targets.
-    return X86II::MO_GOTOFF;
-
-  if (isPICStyleStubPIC())   // Darwin/32 in PIC mode.
-    return X86II::MO_PIC_BASE_OFFSET;
-
-  // Direct static reference to label.
-  return X86II::MO_NO_FLAG;
+/// Classify a blockaddress reference for the current subtarget according to how
+/// we should reference it in a non-pcrel context.
+unsigned char X86Subtarget::classifyBlockAddressReference() const {
+  return classifyLocalReference(nullptr);
 }
 
-/// ClassifyGlobalReference - Classify a global variable reference for the
-/// current subtarget according to how we should reference it in a non-pcrel
-/// context.
-unsigned char X86Subtarget::
-ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
-  // DLLImport only exists on windows, it is implemented as a load from a
-  // DLLIMPORT stub.
-  if (GV->hasDLLImportStorageClass())
-    return X86II::MO_DLLIMPORT;
+/// Classify a global variable reference for the current subtarget according to
+/// how we should reference it in a non-pcrel context.
+unsigned char
+X86Subtarget::classifyGlobalReference(const GlobalValue *GV) const {
+  return classifyGlobalReference(GV, *GV->getParent());
+}
 
-  bool isDecl = GV->isDeclarationForLinker();
-
-  // X86-64 in PIC mode.
-  if (isPICStyleRIPRel()) {
-    // Large model never uses stubs.
-    if (TM.getCodeModel() == CodeModel::Large)
-      return X86II::MO_NO_FLAG;
-
-    if (isTargetDarwin()) {
-      // If symbol visibility is hidden, the extra load is not needed if
-      // target is x86-64 or the symbol is definitely defined in the current
-      // translation unit.
-      if (GV->hasDefaultVisibility() &&
-          (isDecl || GV->isWeakForLinker()))
-        return X86II::MO_GOTPCREL;
-    } else if (!isTargetWin64()) {
-      assert(isTargetELF() && "Unknown rip-relative target");
-
-      // Extra load is needed for all externally visible.
-      if (!GV->hasLocalLinkage() && GV->hasDefaultVisibility())
-        return X86II::MO_GOTPCREL;
-    }
-
+unsigned char
+X86Subtarget::classifyLocalReference(const GlobalValue *GV) const {
+  // 64 bits can use %rip addressing for anything local.
+  if (is64Bit())
     return X86II::MO_NO_FLAG;
-  }
 
-  if (isPICStyleGOT()) {   // 32-bit ELF targets.
-    // Extra load is needed for all externally visible.
-    if (GV->hasLocalLinkage() || GV->hasHiddenVisibility())
-      return X86II::MO_GOTOFF;
-    return X86II::MO_GOT;
-  }
+  // If this is for a position dependent executable, the static linker can
+  // figure it out.
+  if (!isPositionIndependent())
+    return X86II::MO_NO_FLAG;
 
-  if (isPICStyleStubPIC()) {  // Darwin/32 in PIC mode.
-    // Determine whether we have a stub reference and/or whether the reference
-    // is relative to the PIC base or not.
+  // The COFF dynamic linker just patches the executable sections.
+  if (isTargetCOFF())
+    return X86II::MO_NO_FLAG;
 
-    // If this is a strong reference to a definition, it is definitely not
-    // through a stub.
-    if (!isDecl && !GV->isWeakForLinker())
-      return X86II::MO_PIC_BASE_OFFSET;
-
-    // Unless we have a symbol with hidden visibility, we have to go through a
-    // normal $non_lazy_ptr stub because this symbol might be resolved late.
-    if (!GV->hasHiddenVisibility())  // Non-hidden $non_lazy_ptr reference.
+  if (isTargetDarwin()) {
+    // 32 bit macho has no relocation for a-b if a is undefined, even if
+    // b is in the section that is being relocated.
+    // This means we have to use o load even for GVs that are known to be
+    // local to the dso.
+    if (GV && (GV->isDeclarationForLinker() || GV->hasCommonLinkage()))
       return X86II::MO_DARWIN_NONLAZY_PIC_BASE;
 
-    // If symbol visibility is hidden, we have a stub for common symbol
-    // references and external declarations.
-    if (isDecl || GV->hasCommonLinkage()) {
-      // Hidden $non_lazy_ptr reference.
-      return X86II::MO_DARWIN_HIDDEN_NONLAZY_PIC_BASE;
-    }
-
-    // Otherwise, no stub.
     return X86II::MO_PIC_BASE_OFFSET;
   }
 
-  if (isPICStyleStubNoDynamic()) {  // Darwin/32 in -mdynamic-no-pic mode.
-    // Determine whether we have a stub reference.
+  return X86II::MO_GOTOFF;
+}
 
-    // If this is a strong reference to a definition, it is definitely not
-    // through a stub.
-    if (!isDecl && !GV->isWeakForLinker())
-      return X86II::MO_NO_FLAG;
+unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
+                                                    const Module &M) const {
+  // Large model never uses stubs.
+  if (TM.getCodeModel() == CodeModel::Large)
+    return X86II::MO_NO_FLAG;
 
-    // Unless we have a symbol with hidden visibility, we have to go through a
-    // normal $non_lazy_ptr stub because this symbol might be resolved late.
-    if (!GV->hasHiddenVisibility())  // Non-hidden $non_lazy_ptr reference.
+  // Absolute symbols can be referenced directly.
+  if (GV) {
+    if (Optional<ConstantRange> CR = GV->getAbsoluteSymbolRange()) {
+      // See if we can use the 8-bit immediate form. Note that some instructions
+      // will sign extend the immediate operand, so to be conservative we only
+      // accept the range [0,128).
+      if (CR->getUnsignedMax().ult(128))
+        return X86II::MO_ABS8;
+      else
+        return X86II::MO_NO_FLAG;
+    }
+  }
+
+  if (TM.shouldAssumeDSOLocal(M, GV))
+    return classifyLocalReference(GV);
+
+  if (isTargetCOFF())
+    return X86II::MO_DLLIMPORT;
+
+  if (is64Bit())
+    return X86II::MO_GOTPCREL;
+
+  if (isTargetDarwin()) {
+    if (!isPositionIndependent())
       return X86II::MO_DARWIN_NONLAZY;
+    return X86II::MO_DARWIN_NONLAZY_PIC_BASE;
+  }
 
-    // Otherwise, no stub.
+  return X86II::MO_GOT;
+}
+
+unsigned char
+X86Subtarget::classifyGlobalFunctionReference(const GlobalValue *GV) const {
+  return classifyGlobalFunctionReference(GV, *GV->getParent());
+}
+
+unsigned char
+X86Subtarget::classifyGlobalFunctionReference(const GlobalValue *GV,
+                                              const Module &M) const {
+  if (TM.shouldAssumeDSOLocal(M, GV))
+    return X86II::MO_NO_FLAG;
+
+  if (isTargetCOFF()) {
+    assert(GV->hasDLLImportStorageClass() &&
+           "shouldAssumeDSOLocal gave inconsistent answer");
+    return X86II::MO_DLLIMPORT;
+  }
+
+  const Function *F = dyn_cast_or_null<Function>(GV);
+
+  if (isTargetELF()) {
+    if (is64Bit() && F && (CallingConv::X86_RegCall == F->getCallingConv()))
+      // According to psABI, PLT stub clobbers XMM8-XMM15.
+      // In Regcall calling convention those registers are used for passing
+      // parameters. Thus we need to prevent lazy binding in Regcall.
+      return X86II::MO_GOTPCREL;
+    // If PLT must be avoided then the call should be via GOTPCREL.
+    if (((F && F->hasFnAttribute(Attribute::NonLazyBind)) ||
+         (!F && M.getRtLibUseGOT())) &&
+        is64Bit())
+       return X86II::MO_GOTPCREL;
+    return X86II::MO_PLT;
+  }
+
+  if (is64Bit()) {
+    if (F && F->hasFnAttribute(Attribute::NonLazyBind))
+      // If the function is marked as non-lazy, generate an indirect call
+      // which loads from the GOT directly. This avoids runtime overhead
+      // at the cost of eager binding (and one extra byte of encoding).
+      return X86II::MO_GOTPCREL;
     return X86II::MO_NO_FLAG;
   }
 
-  // Direct static reference to global.
   return X86II::MO_NO_FLAG;
 }
 
-
-/// getBZeroEntry - This function returns the name of a function which has an
-/// interface like the non-standard bzero function, if such a function exists on
-/// the current subtarget and it is considered prefereable over memset with zero
-/// passed as the second argument. Otherwise it returns null.
-const char *X86Subtarget::getBZeroEntry() const {
-  // Darwin 10 has a __bzero entry point for this purpose.
-  if (getTargetTriple().isMacOSX() &&
-      !getTargetTriple().isMacOSXVersionLT(10, 6))
-    return "__bzero";
-
-  return nullptr;
-}
-
-bool X86Subtarget::hasSinCos() const {
-  return getTargetTriple().isMacOSX() &&
-    !getTargetTriple().isMacOSXVersionLT(10, 9) &&
-    is64Bit();
-}
-
-/// IsLegalToCallImmediateAddr - Return true if the subtarget allows calls
-/// to immediate address.
-bool X86Subtarget::IsLegalToCallImmediateAddr(const TargetMachine &TM) const {
+/// Return true if the subtarget allows calls to immediate address.
+bool X86Subtarget::isLegalToCallImmediateAddr() const {
   // FIXME: I386 PE/COFF supports PC relative calls using IMAGE_REL_I386_REL32
   // but WinCOFFObjectWriter::RecordRelocation cannot emit them.  Once it does,
   // the following check for Win32 should be removed.
@@ -193,13 +202,23 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
       FullFS = "+64bit,+sse2";
   }
 
-  // If feature string is not empty, parse features string.
+  // LAHF/SAHF are always supported in non-64-bit mode.
+  if (!In64BitMode) {
+    if (!FullFS.empty())
+      FullFS = "+sahf," + FullFS;
+    else
+      FullFS = "+sahf";
+  }
+
+  // Parse features string and set the CPU.
   ParseSubtargetFeatures(CPUName, FullFS);
 
-  // Make sure the right MCSchedModel is used.
-  InitCPUSchedModel(CPUName);
-
-  InstrItins = getInstrItineraryForCPU(CPUName);
+  // All CPUs that implement SSE4.2 or SSE4A support unaligned accesses of
+  // 16-bytes and under that are reasonably fast. These features were
+  // introduced with Intel's Nehalem/Silvermont and AMD's Family10h
+  // micro-architectures respectively.
+  if (hasSSE42() || hasSSE4A())
+    IsUAMem16Slow = false;
 
   // It's important to keep the MCSubtargetInfo feature bits in sync with
   // target data structure which is shared with MC code emitter, etc.
@@ -212,160 +231,97 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   else
     llvm_unreachable("Not 16-bit, 32-bit or 64-bit mode!");
 
-  DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
-               << ", 3DNowLevel " << X863DNowLevel
-               << ", 64bit " << HasX86_64 << "\n");
+  LLVM_DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
+                    << ", 3DNowLevel " << X863DNowLevel << ", 64bit "
+                    << HasX86_64 << "\n");
   assert((!In64BitMode || HasX86_64) &&
          "64-bit code requested on a subtarget that doesn't support it!");
 
-  // Stack alignment is 16 bytes on Darwin, Linux and Solaris (both
+  // Stack alignment is 16 bytes on Darwin, Linux, kFreeBSD and Solaris (both
   // 32 and 64 bit) and for all 64-bit targets.
   if (StackAlignOverride)
     stackAlignment = StackAlignOverride;
   else if (isTargetDarwin() || isTargetLinux() || isTargetSolaris() ||
-           In64BitMode)
+           isTargetKFreeBSD() || In64BitMode)
     stackAlignment = 16;
-}
 
-void X86Subtarget::initializeEnvironment() {
-  X86SSELevel = NoMMXSSE;
-  X863DNowLevel = NoThreeDNow;
-  HasCMov = false;
-  HasX86_64 = false;
-  HasPOPCNT = false;
-  HasSSE4A = false;
-  HasAES = false;
-  HasPCLMUL = false;
-  HasFMA = false;
-  HasFMA4 = false;
-  HasXOP = false;
-  HasTBM = false;
-  HasMOVBE = false;
-  HasRDRAND = false;
-  HasF16C = false;
-  HasFSGSBase = false;
-  HasLZCNT = false;
-  HasBMI = false;
-  HasBMI2 = false;
-  HasRTM = false;
-  HasHLE = false;
-  HasERI = false;
-  HasCDI = false;
-  HasPFI = false;
-  HasDQI = false;
-  HasBWI = false;
-  HasVLX = false;
-  HasADX = false;
-  HasSHA = false;
-  HasSGX = false;
-  HasPRFCHW = false;
-  HasRDSEED = false;
-  HasSMAP = false;
-  IsBTMemSlow = false;
-  IsSHLDSlow = false;
-  IsUAMemFast = false;
-  IsUAMem32Slow = false;
-  HasSSEUnalignedMem = false;
-  HasCmpxchg16b = false;
-  UseLeaForSP = false;
-  HasSlowDivide32 = false;
-  HasSlowDivide64 = false;
-  PadShortFunctions = false;
-  CallRegIndirect = false;
-  LEAUsesAG = false;
-  SlowLEA = false;
-  SlowIncDec = false;
-  UseSqrtEst = false;
-  UseReciprocalEst = false;
-  stackAlignment = 4;
-  // FIXME: this is a known good value for Yonah. How about others?
-  MaxInlineSizeThreshold = 128;
-}
+  // Some CPUs have more overhead for gather. The specified overhead is relative
+  // to the Load operation. "2" is the number provided by Intel architects. This
+  // parameter is used for cost estimation of Gather Op and comparison with
+  // other alternatives.
+  // TODO: Remove the explicit hasAVX512()?, That would mean we would only
+  // enable gather with a -march.
+  if (hasAVX512() || (hasAVX2() && hasFastGather()))
+    GatherOverhead = 2;
+  if (hasAVX512())
+    ScatterOverhead = 2;
 
-static std::string computeDataLayout(const Triple &TT) {
-  // X86 is little endian
-  std::string Ret = "e";
-
-  Ret += DataLayout::getManglingComponent(TT);
-  // X86 and x32 have 32 bit pointers.
-  if ((TT.isArch64Bit() &&
-       (TT.getEnvironment() == Triple::GNUX32 || TT.isOSNaCl())) ||
-      !TT.isArch64Bit())
-    Ret += "-p:32:32";
-
-  // Some ABIs align 64 bit integers and doubles to 64 bits, others to 32.
-  if (TT.isArch64Bit() || TT.isOSWindows() || TT.isOSNaCl())
-    Ret += "-i64:64";
-  else
-    Ret += "-f64:32:64";
-
-  // Some ABIs align long double to 128 bits, others to 32.
-  if (TT.isOSNaCl())
-    ; // No f80
-  else if (TT.isArch64Bit() || TT.isOSDarwin())
-    Ret += "-f80:128";
-  else
-    Ret += "-f80:32";
-
-  // The registers can hold 8, 16, 32 or, in x86-64, 64 bits.
-  if (TT.isArch64Bit())
-    Ret += "-n8:16:32:64";
-  else
-    Ret += "-n8:16:32";
-
-  // The stack is aligned to 32 bits on some ABIs and 128 bits on others.
-  if (!TT.isArch64Bit() && TT.isOSWindows())
-    Ret += "-S32";
-  else
-    Ret += "-S128";
-
-  return Ret;
+  // Consume the vector width attribute or apply any target specific limit.
+  if (PreferVectorWidthOverride)
+    PreferVectorWidth = PreferVectorWidthOverride;
+  else if (Prefer256Bit)
+    PreferVectorWidth = 256;
 }
 
 X86Subtarget &X86Subtarget::initializeSubtargetDependencies(StringRef CPU,
                                                             StringRef FS) {
-  initializeEnvironment();
   initSubtargetFeatures(CPU, FS);
   return *this;
 }
 
-X86Subtarget::X86Subtarget(const std::string &TT, const std::string &CPU,
-                           const std::string &FS, const X86TargetMachine &TM,
-                           unsigned StackAlignOverride)
-    : X86GenSubtargetInfo(TT, CPU, FS), X86ProcFamily(Others),
-      PICStyle(PICStyles::None), TargetTriple(TT),
-      DL(computeDataLayout(TargetTriple)),
+X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
+                           const X86TargetMachine &TM,
+                           unsigned StackAlignOverride,
+                           unsigned PreferVectorWidthOverride,
+                           unsigned RequiredVectorWidth)
+    : X86GenSubtargetInfo(TT, CPU, FS),
+      PICStyle(PICStyles::None), TM(TM), TargetTriple(TT),
       StackAlignOverride(StackAlignOverride),
+      PreferVectorWidthOverride(PreferVectorWidthOverride),
+      RequiredVectorWidth(RequiredVectorWidth),
       In64BitMode(TargetTriple.getArch() == Triple::x86_64),
       In32BitMode(TargetTriple.getArch() == Triple::x86 &&
                   TargetTriple.getEnvironment() != Triple::CODE16),
       In16BitMode(TargetTriple.getArch() == Triple::x86 &&
                   TargetTriple.getEnvironment() == Triple::CODE16),
-      TSInfo(DL), InstrInfo(initializeSubtargetDependencies(CPU, FS)),
-      TLInfo(TM), FrameLowering(TargetFrameLowering::StackGrowsDown,
-                                getStackAlignment(), is64Bit() ? -8 : -4) {
+      InstrInfo(initializeSubtargetDependencies(CPU, FS)), TLInfo(TM, *this),
+      FrameLowering(*this, getStackAlignment()) {
   // Determine the PICStyle based on the target selected.
-  if (TM.getRelocationModel() == Reloc::Static) {
-    // Unless we're in PIC or DynamicNoPIC mode, set the PIC style to None.
+  if (!isPositionIndependent())
     setPICStyle(PICStyles::None);
-  } else if (is64Bit()) {
-    // PIC in 64 bit mode is always rip-rel.
+  else if (is64Bit())
     setPICStyle(PICStyles::RIPRel);
-  } else if (isTargetCOFF()) {
+  else if (isTargetCOFF())
     setPICStyle(PICStyles::None);
-  } else if (isTargetDarwin()) {
-    if (TM.getRelocationModel() == Reloc::PIC_)
-      setPICStyle(PICStyles::StubPIC);
-    else {
-      assert(TM.getRelocationModel() == Reloc::DynamicNoPIC);
-      setPICStyle(PICStyles::StubDynamicNoPIC);
-    }
-  } else if (isTargetELF()) {
+  else if (isTargetDarwin())
+    setPICStyle(PICStyles::StubPIC);
+  else if (isTargetELF())
     setPICStyle(PICStyles::GOT);
-  }
+
+  CallLoweringInfo.reset(new X86CallLowering(*getTargetLowering()));
+  Legalizer.reset(new X86LegalizerInfo(*this, TM));
+
+  auto *RBI = new X86RegisterBankInfo(*getRegisterInfo());
+  RegBankInfo.reset(RBI);
+  InstSelector.reset(createX86InstructionSelector(TM, *this, *RBI));
+}
+
+const CallLowering *X86Subtarget::getCallLowering() const {
+  return CallLoweringInfo.get();
+}
+
+const InstructionSelector *X86Subtarget::getInstructionSelector() const {
+  return InstSelector.get();
+}
+
+const LegalizerInfo *X86Subtarget::getLegalizerInfo() const {
+  return Legalizer.get();
+}
+
+const RegisterBankInfo *X86Subtarget::getRegBankInfo() const {
+  return RegBankInfo.get();
 }
 
 bool X86Subtarget::enableEarlyIfConversion() const {
   return hasCMov() && X86EarlyIfConv;
 }
-

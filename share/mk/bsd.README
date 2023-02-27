@@ -159,12 +159,28 @@ MKCTF		If "no", do not build and install CTF tools, and also
 		during build.
 		Default: no
 
+NETBSD_OFFICIAL_RELEASE
+		If defined and set to "yes", the build targets an official
+		NetBSD release which is going to be available from
+		ftp.NetBSD.org / cdn.NetBSD.org. This modifies a few
+		default paths in the installer and also creates different
+		links in the install documentation.
+		The auto-build cluster uses this variable to distinguish
+		"daily" builds from real releases.
+		Default: undefined (no)
+
+NOCTF		Don't generate and manipulate CTF data of ELF binaries
+		during build. It is set internally for standalone programs.
+
 MKCVS		If "no", don't build or install cvs(1).
 		Default: yes
 
 MKDEBUG		If "no", don't build and install separate debugging symbols
 		into /usr/libdata/debug.
 		Default: no
+
+NODEBUG		Don't compile with debugging symbols during build.
+		It is set internally for standalone programs.
 
 MKDEBUGLIB	Build *_g.a debugging libraries, which are compiled
 		with -DDEBUG.
@@ -194,6 +210,14 @@ MKEXTSRC        If not "no", 'make build' also descends into either src/extsrc
 		to cross-build programs and libraries externally added by
 		users, and automatically enables creation of those sets.
 		Default: no
+
+MKFIRMWARE      If not "no", install the /libdata/firmware directory,
+		which is necessary for several drivers: athn(4), bwfm(4),
+		ipw(4), iwi(4), iwm(4), iwn(4), otus(4), rtwn(4), urtwn(4),
+		wpi(4), ral(4), rum(4), run(4), zyd(4), bcm43xx(4), and
+		the Tegra 124 SoC.
+		Default: yes on amd64, cobalt, evbarm evbmips, evbppc, hpcarm,
+		hppa, i386, mac68k, macppc, sandpoint, and sparc64, no elsewhere.
 
 MKGCC		If "no", don't build gcc(1) or any of the GCC-related
 		libraries (libgcc, libobjc, libstdc++).
@@ -269,6 +293,28 @@ MKLDAP		If "no", disables building of LDAP infrastructure
 		(libraries and support programs).
 		Default: yes
 
+MKLIBCSANITIZER	If "yes", use the selected sanitizer inside libc to compile
+		userland programs and libraries as defined in
+		USE_LIBCSANITIZER, which defaults to "undefined".
+
+		The undefined behavior detector is currently the only supported
+		sanitizer in this mode. Its runtime differs from the UBSan
+		available in MKSANITIZER, and it is reimplemented from scratch
+		as micro-UBSan in the user mode (uUBSan). Its code is shared
+		with the kernel mode variation (kUBSan). The runtime is
+		stripped down from C++ features, in particular -fsanitize=vptr
+		is not supported and explicitly disabled. The only runtime
+		configuration is restricted to the LIBC_UBSAN environment
+		variable, that is designed to be safe for hardening.
+
+		The USE_LIBCSANITIZER value is passed to the -fsanitize=
+		argument to the compiler in CFLAGS and CXXFLAGS, but not in
+		LDFLAGS, as the runtime part is located inside libc.
+
+		Additional sanitizer arguments can be passed through
+		LIBCSANITIZERFLAGS.
+		Default: no
+
 MKLIBCXX	If not "no", build and install libc++.
 		Default: no
 
@@ -287,6 +333,16 @@ MKLINKLIB	If "no", act as "MKLINT=no MKPICINSTALL=no MKPROFILE=no".
 
 MKLINT		If "no", don't build or install the lint libraries.
 		Default: yes
+
+MKLLVM		If "yes", build and install clang as host tool and target
+		compiler.  Use as system compiler is enabled with HAVE_LLVM
+		(see below for details).
+		Default: no
+
+MKLLVMRT	If "yes", build the LLVM PIC libraries necessary for the
+		AMDGPU backend and the native JIT of the target architecture,
+		if supported.
+		Default: no, enabled automatically with HAVE_MESA_VER=18.
 
 MKLVM		If "no", don't build or install the logical volume manager
 		and device mapper tools and libraries
@@ -315,6 +371,10 @@ MKNLS		If "no", don't build or install the NLS files and locale
 
 MKNPF		If "no", don't build or install the NPF and its modules.
 		Default: yes
+
+MKNSD		If "no", don't build or install the "nsd" DNS authoritative
+		server.
+		Default: no
 
 MKOBJ		If "no", don't enable the rule which creates objdirs,
 		and also acts as "MKOBJDIRS=no".
@@ -351,6 +411,9 @@ MKPIE		If "no", create regular executables. Otherwise create
 		PIE (Position Independent Executables).
 		Default: no
 
+NOPIE		Don't create PIE (Position Independent Executables)
+		It is set internally for standalone programs.
+
 MKPIGZGZIP	If "no", only install pigz as pigz, not gzip.
 		Default: no
 
@@ -363,6 +426,26 @@ MKPROFILE	If "no", don't build or install the profiling (*_p.a) libraries.
 MKREPRO         If "yes", create reproducable builds. This enables
 		different switches to make two builds from the same source tree
 		result in the same build results.
+		Default: no
+
+MKSANITIZER	if "yes", use the selected sanitizer to compile userland
+		programs as defined in USE_SANITIZER, which defaults to
+		"address". A selection of available sanitizers:
+			address:	A memory error detector (default)
+			thread:		A data race detector
+			memory:		An uninitialized memory read detector
+			undefined:	An undefined behavior detector
+			leak:		A memory leak detector
+			dataflow:	A general data flow analysis
+			cfi:		A control flow detector
+			safe-stack:	Protect against stack-based corruption
+			scudo:		The Scudo Hardened allocator
+		It's possible to specify multiple sanitizers within the
+		USE_SANITIZER option (comma separated). The USE_SANITIZER value
+		is passed to the -fsanitize= argument to the compiler.
+		Additional arguments can be passed through SANITIZERFLAGS.
+		The list of supported features and their valid combinations
+		depends on the compiler version and target CPU architecture.
 		Default: no
 
 MKSHARE		If "no", act as "MKCATPAGES=no MKDOC=no MKHTML=no MKINFO=no
@@ -388,6 +471,27 @@ MKSTATICLIB	If "no", don't build or install the normal static (*.a)
 		libraries.
 		Default: yes
 
+MKSTATICPIE	Compile in support for static pie binaries. These binaries
+		use a special support in crt0.o for resolving relative
+		relocations and require linker support.
+		Default: yes on platforms that support it.
+
+MKSTRIPSYM	If "yes", strip all local symbols from shared libraries;
+		the affect is equivalent to -x option of ld(1). If "no",
+		strip only temporary local symbols; the affect is equivalent
+		to -X option of ld(1). Keeping non-temporary local symbols
+		such as static function names is useful on using DTrace for
+		userland libraries and getting a backtrace from a rump kernel
+		loading shared libraries.
+		Default: yes
+
+MKTEGRAFIRMWARE	If "no", install the /libdata/firmware/nvidia directory,
+		which is necessary for the NVIDIA Tegra XHCI driver.
+		Default: yes on evbarm, no elsewhere.
+
+MKTOOLSDEBUG	If "yes" build the tools with debugging symbols.
+		Default: no
+
 MKTPM		If "no" then don't build the Trusted Platform Module
 		infrastructure.
 		Default: no
@@ -403,7 +507,7 @@ MKUPDATE 	If not "no", 'make install' only installs targets that are
 		installed counterparts.
 		Default: no
 
-MKX11		If not "no", 'make build' also descends into 
+MKX11		If not "no", 'make build' also descends into
 		src/external/mit/xorg to cross-build X11 and automatically
 		enables creation of X sets.
 		Default: no
@@ -475,6 +579,9 @@ USE_SSP		If "no", disables GCC stack protection code, which
 		of about 5%.
 		Default: "no", unless "USE_FORT" is set to "yes"
 
+NOSSP		Don't compile with stack protector during build.
+		It is set internally for standalone programs.
+
 USE_FORT 	If "yes" turns on substitute wrappers for commonly used
 		functions that do not do bounds checking regularly, but
 		they could in some cases by using the gcc
@@ -482,6 +589,9 @@ USE_FORT 	If "yes" turns on substitute wrappers for commonly used
 		size where it is known and detect buffer overflows.
 		These substitute functions are in /usr/include/ssp.
 		Default: depends on the part of the source tree
+
+NOFORT		Don't compile with substitute wrappers during build.
+		It is set internally for standalone programs.
 
 USE_YP		If "no", disables building YP (NIS) support into
 		various system utilities/libraries that support it.
@@ -491,6 +601,14 @@ USE_PIGZGZIP	If "no", use the host "gzip" program to compress things.
 		Otherwise, build tools/pigz, set TOOL_GZIP=${TOOL_PIGZ},
 		and use nbpigz to compress things.
 		Default: "no".
+
+USE_XZ_SETS	If "no", use the host "gzip" program to compress sets.
+		Otherwise use xz to compress things.
+		Default: "yes" for architectures with "enough" memory to
+		decompress, "no" for older ones.
+		This is currently incompatible with USE_PIGZGZIP, setting
+		USE_PIGZGZIP=yes sets USE_XZ_SETS=no by default for all
+		architectures.
 
 COPTS.lib<lib>
 OBJCOPTS.lib<lib>
@@ -649,8 +767,7 @@ X11SRCDIR.<package>
 		The path to the xorg src tree for the specificed package>.
 		[${X11SRCDIR}/external/mit/xorg/<package>/dist]
 
-X11ROOTDIR	Root directory of the X11 installation.  [/usr/X11R6 or
-		[/usr/X11R7]
+X11ROOTDIR	Root directory of the X11 installation.  [/usr/X11R7]
 
 X11BINDIR	X11 bin directory.  [${X11ROOTDIR}/bin]
 
@@ -752,6 +869,9 @@ EXTERNAL_TOOLCHAIN
 		compiler may not be able to build the library components of
 		the in-tree compiler.
 
+		This variable should be used in conjunction with an appropiate
+		HAVE_GCC or HAVE_LLVM setting to control the compiler flags.
+
 		NOTE: This variable is not yet used in as many places as
 		it should be.  Expect the exact semantics of this variable
 		to change in the short term as parts of the cross-compile
@@ -765,7 +885,9 @@ TOOL_AMIGAAOUT2BB	aout to Amiga bootblock converter.  [amiga-aout2bb]
 
 TOOL_AMIGAELF2BB	ELF to Amiga bootblock converter.  [amiga-elf2bb]
 
-TOOL_AMIGATXLT		Amige assembly language format translator.  [amiga-txlt]
+TOOL_AMIGATXLT		Amiga assembly language format translator.  [amiga-txlt]
+
+TOOL_ARMELF2AOUT	ELF to a.out executable converter [arm-elf2aout}
 
 TOOL_ASN1_COMPILE	ASN1 compiler.  [asn1_compile]
 
@@ -827,6 +949,8 @@ TOOL_INSTALL_INFO	Update info/dir entries.  [install-info]
 TOOL_JOIN		Relational database operator.  [join]
 
 TOOL_M4			M4 macro language processor.  [m4]
+
+TOOL_M68KELF2AOUT	ELF to a.out executable converter [m68k-elf2aout}
 
 TOOL_MACPPCFIXCOFF	Fix up xcoff headers for macppc.  [macppc-fixcoff]
 
@@ -1049,7 +1173,7 @@ UUDECODE_FILES	List of files which are stored as <file>.uue in the source
 
 UUDECODE_FILES_RENAME_<fn>
 		Rename the output from the decode to the provided name.
-		
+
 		*NOTE: These files are simply decoded, with no install or other
 		       rule applying implicitly except being added to the clean
 		       target.
@@ -1175,7 +1299,7 @@ LIBDIR		Target directory for libraries.
 
 MKARZERO	Normally, ar(1) sets the timestamps, uid, gid and
 		permissions in files inside its archives to those of
-		the file it was fed. This leads to non-reproduceable
+		the file it was fed. This leads to non-reproducible
 		builds. If MKARZERO is set to "yes" (default is the
 		same as MKREPRO, or "no" if MKREPRO is not defined),
 		then the "D" flag is passed to ar, causing the
@@ -1234,8 +1358,13 @@ SRCS		List of source files to build the library.  Suffix types
 		to .c files of the same name.  (This is not the default for
 		versions of make.)
 
-LIBDPLIBS	A list of the tuples:
+LIBDPLIBS/
+PROGDPLIBS	A list of the tuples:
 			libname  path-to-srcdir-of-libname
+
+		Instead of depending on installed versions of the libraries,
+		one can depend on their built version in the source directory.
+		This is useful for finding private libraries (LIBISPRIVATE).
 
 		For each tuple;
 		     *	LIBDO.libname contains the .OBJDIR of the library
@@ -1251,8 +1380,8 @@ LIBDPLIBS	A list of the tuples:
 		of the NetBSD source tree and only causes -llibname
 		to be added to LDADD.
 
-		This variable may be used for individual libraries, as
-		well as in parent directories to cache common libraries
+		This variable may be used for individual libraries/programs,
+		as well as in parent directories to cache common libraries
 		as a build-time optimization.
 
 The include file <bsd.lib.mk> includes the file named "../Makefile.inc"
@@ -1513,155 +1642,155 @@ DPADD		Additional dependencies for the program.  Usually used for
 
 		The following system libraries are predefined for DPADD:
 
-		LIBARCHIVE?=	${DESTDIR}/usr/lib/libarchive.a
-		LIBASN1?=	${DESTDIR}/usr/lib/libasn1.a
-		LIBATF_C?=	${DESTDIR}/usr/lib/libatf-c.a
-		LIBATF_CXX?=	${DESTDIR}/usr/lib/libatf-c++.a
-		LIBBIND9?=	${DESTDIR}/usr/lib/libbind9.a
-		LIBBLUETOOTH?=	${DESTDIR}/usr/lib/libbluetooth.a
-		LIBBSDMALLOC?=	${DESTDIR}/usr/lib/libbsdmalloc.a
-		LIBBZ2?=	${DESTDIR}/usr/lib/libbz2.a
-		LIBC?=		${DESTDIR}/usr/lib/libc.a
-		LIBCOMPAT?=	${DESTDIR}/usr/lib/libcompat.a
-		LIBCOM_ERR?=	${DESTDIR}/usr/lib/libcom_err.a
+		LIBARCHIVE?=		${DESTDIR}/usr/lib/libarchive.a
+		LIBASN1?=		${DESTDIR}/usr/lib/libasn1.a
+		LIBATF_C?=		${DESTDIR}/usr/lib/libatf-c.a
+		LIBATF_CXX?=		${DESTDIR}/usr/lib/libatf-c++.a
+		LIBBIND9?=		${DESTDIR}/usr/lib/libbind9.a
+		LIBBLUETOOTH?=		${DESTDIR}/usr/lib/libbluetooth.a
+		LIBBSDMALLOC?=		${DESTDIR}/usr/lib/libbsdmalloc.a
+		LIBBZ2?=		${DESTDIR}/usr/lib/libbz2.a
+		LIBC?=			${DESTDIR}/usr/lib/libc.a
+		LIBCOMPAT?=		${DESTDIR}/usr/lib/libcompat.a
+		LIBCOM_ERR?=		${DESTDIR}/usr/lib/libcom_err.a
 		LIBCRT0?=	${DESTDIR}/usr/lib/crt0.o
 		LIBCRTI?=	${DESTDIR}/usr/lib/crti.o
-		LIBCRYPT?=	${DESTDIR}/usr/lib/libcrypt.a
-		LIBCRYPTO?=	${DESTDIR}/usr/lib/libcrypto.a
+		LIBCRYPT?=		${DESTDIR}/usr/lib/libcrypt.a
+		LIBCRYPTO?=		${DESTDIR}/usr/lib/libcrypto.a
 		LIBCRYPTO_IDEA?=${DESTDIR}/usr/lib/libcrypto_idea.a
 		LIBCRYPTO_MDC2?=${DESTDIR}/usr/lib/libcrypto_mdc2.a
 		LIBCRYPTO_RC5?=	${DESTDIR}/usr/lib/libcrypto_rc5.a
-		LIBCURSES?=	${DESTDIR}/usr/lib/libcurses.a
-		LIBC_PIC?=	${DESTDIR}/usr/lib/libc_pic.a
-		LIBDBM?=	${DESTDIR}/usr/lib/libdbm.a
-		LIBDES?=	${DESTDIR}/usr/lib/libdes.a
-		LIBDNS?=	${DESTDIR}/usr/lib/libdns.a
-		LIBEDIT?=	${DESTDIR}/usr/lib/libedit.a
-		LIBEVENT?=	${DESTDIR}/usr/lib/libevent.a
+		LIBCURSES?=		${DESTDIR}/usr/lib/libcurses.a
+		LIBC_PIC?=		${DESTDIR}/usr/lib/libc_pic.a
+		LIBDBM?=		${DESTDIR}/usr/lib/libdbm.a
+		LIBDES?=		${DESTDIR}/usr/lib/libdes.a
+		LIBDNS?=		${DESTDIR}/usr/lib/libdns.a
+		LIBEDIT?=		${DESTDIR}/usr/lib/libedit.a
+		LIBEVENT?=		${DESTDIR}/usr/lib/libevent.a
 		LIBEVENT_OPENSSL?=	${DESTDIR}/usr/lib/libevent_openssl.a
 		LIBEVENT_PTHREADS?=	${DESTDIR}/usr/lib/libevent_pthreads.a
-		LIBEXPAT?=	${DESTDIR}/usr/lib/libexpat.a
-		LIBFETCH?=	${DESTDIR}/usr/lib/libfetch.a
-		LIBFORM?=	${DESTDIR}/usr/lib/libform.a
-		LIBFL?=		${DESTDIR}/usr/lib/libfl.a
-		LIBG2C?=	${DESTDIR}/usr/lib/libg2c.a
-		LIBGCC?=	${DESTDIR}/usr/lib/libgcc.a
-		LIBGNUMALLOC?=	${DESTDIR}/usr/lib/libgnumalloc.a
-		LIBGSSAPI?=	${DESTDIR}/usr/lib/libgssapi.a
-		LIBHDB?=	${DESTDIR}/usr/lib/libhdb.a
-		LIBHEIMBASE?=	${DESTDIR}/usr/lib/libheimbase.a
-		LIBHEIMNTLM?=	${DESTDIR}/usr/lib/libheimntlm.a
-		LIBHX500?=	${DESTDIR}/usr/lib/libhx500.a
-		LIBINTL?=	${DESTDIR}/usr/lib/libintl.a
-		LIBIPSEC?=	${DESTDIR}/usr/lib/libipsec.a
-		LIBISC?=	${DESTDIR}/usr/lib/libisc.a
-		LIBISCCC?=	${DESTDIR}/usr/lib/libisccc.a
-		LIBISCFG?=	${DESTDIR}/usr/lib/libiscfg.a
-		LIBKADM5CLNT?=	${DESTDIR}/usr/lib/libkadm5clnt.a
-		LIBKADM5SRV?=	${DESTDIR}/usr/lib/libkadm5srv.a
-		LIBKAFS?=	${DESTDIR}/usr/lib/libkafs.a
-		LIBKRB5?=	${DESTDIR}/usr/lib/libkrb5.a
-		LIBKVM?=	${DESTDIR}/usr/lib/libkvm.a
-		LIBL?=		${DESTDIR}/usr/lib/libl.a
-		LIBLBER?=	${DESTDIR}/usr/lib/liblber.a
-		LIBLDAP?=	${DESTDIR}/usr/lib/libldap.a
-		LIBLDAP_R?=	${DESTDIR}/usr/lib/libldap_r.a
-		LIBLUA?=	${DESTDIR}/usr/lib/liblua.a
-		LIBLUTOK?=	${DESTDIR}/usr/lib/liblutok.a
+		LIBEXPAT?=		${DESTDIR}/usr/lib/libexpat.a
+		LIBFETCH?=		${DESTDIR}/usr/lib/libfetch.a
+		LIBFL?=			${DESTDIR}/usr/lib/libfl.a
+		LIBFORM?=		${DESTDIR}/usr/lib/libform.a
+		LIBG2C?=		${DESTDIR}/usr/lib/libg2c.a
+		LIBGCC?=		${DESTDIR}/usr/lib/libgcc.a
+		LIBGNUMALLOC?=		${DESTDIR}/usr/lib/libgnumalloc.a
+		LIBGSSAPI?=		${DESTDIR}/usr/lib/libgssapi.a
+		LIBHDB?=		${DESTDIR}/usr/lib/libhdb.a
+		LIBHEIMBASE?=		${DESTDIR}/usr/lib/libheimbase.a
+		LIBHEIMNTLM?=		${DESTDIR}/usr/lib/libheimntlm.a
+		LIBHX500?=		${DESTDIR}/usr/lib/libhx500.a
+		LIBINTL?=		${DESTDIR}/usr/lib/libintl.a
+		LIBIPSEC?=		${DESTDIR}/usr/lib/libipsec.a
+		LIBISC?=		${DESTDIR}/usr/lib/libisc.a
+		LIBISCCC?=		${DESTDIR}/usr/lib/libisccc.a
+		LIBISCFG?=		${DESTDIR}/usr/lib/libiscfg.a
+		LIBKADM5CLNT?=		${DESTDIR}/usr/lib/libkadm5clnt.a
+		LIBKADM5SRV?=		${DESTDIR}/usr/lib/libkadm5srv.a
+		LIBKAFS?=		${DESTDIR}/usr/lib/libkafs.a
+		LIBKRB5?=		${DESTDIR}/usr/lib/libkrb5.a
+		LIBKVM?=		${DESTDIR}/usr/lib/libkvm.a
+		LIBL?=			${DESTDIR}/usr/lib/libl.a
+		LIBLBER?=		${DESTDIR}/usr/lib/liblber.a
+		LIBLDAP?=		${DESTDIR}/usr/lib/libldap.a
+		LIBLDAP_R?=		${DESTDIR}/usr/lib/libldap_r.a
+		LIBLUA?=		${DESTDIR}/usr/lib/liblua.a
+		LIBLUTOK?=		${DESTDIR}/usr/lib/liblutok.a
 		LIBLWRES?=	${DESTDIR}/usr/lib/liblwres.a
-		LIBM?=		${DESTDIR}/usr/lib/libm.a
-		LIBMAGIC?=	${DESTDIR}/usr/lib/libmagic.a
-		LIBMENU?=	${DESTDIR}/usr/lib/libmenu.a
-		LIBOBJC?=	${DESTDIR}/usr/lib/libobjc.a
-		LIBOSSAUDIO?=	${DESTDIR}/usr/lib/libossaudio.a
-		LIBPAM?=	${DESTDIR}/usr/lib/libpam.a
-		LIBPCAP?=	${DESTDIR}/usr/lib/libpcap.a
-		LIBPCI?=	${DESTDIR}/usr/lib/libpci.a
-		LIBPMC?=	${DESTDIR}/usr/lib/libpmc.a
-		LIBPOSIX?=	${DESTDIR}/usr/lib/libposix.a
-		LIBPTHREAD?=	${DESTDIR}/usr/lib/libpthread.a
+		LIBM?=			${DESTDIR}/usr/lib/libm.a
+		LIBMAGIC?=		${DESTDIR}/usr/lib/libmagic.a
+		LIBMENU?=		${DESTDIR}/usr/lib/libmenu.a
+		LIBOBJC?=		${DESTDIR}/usr/lib/libobjc.a
+		LIBOSSAUDIO?=		${DESTDIR}/usr/lib/libossaudio.a
+		LIBPAM?=		${DESTDIR}/usr/lib/libpam.a
+		LIBPCAP?=		${DESTDIR}/usr/lib/libpcap.a
+		LIBPCI?=		${DESTDIR}/usr/lib/libpci.a
+		LIBPMC?=		${DESTDIR}/usr/lib/libpmc.a
+		LIBPOSIX?=		${DESTDIR}/usr/lib/libposix.a
+		LIBPTHREAD?=		${DESTDIR}/usr/lib/libpthread.a
 		LIBPTHREAD_DBG?=${DESTDIR}/usr/lib/libpthread_dbg.a
-		LIBPUFFS?=	${DESTDIR}/usr/lib/libpuffs.a
-		LIBQUOTA?=	${DESTDIR}/usr/lib/libquota.a
-		LIBRADIUS?=	${DESTDIR}/usr/lib/libradius.a
-		LIBRESOLV?=	${DESTDIR}/usr/lib/libresolv.a
-		LIBRMT?=	${DESTDIR}/usr/lib/librmt.a
-		LIBROKEN?=	${DESTDIR}/usr/lib/libroken.a
-		LIBRPCSVC?=	${DESTDIR}/usr/lib/librpcsvc.a
-		LIBRT?=		${DESTDIR}/usr/lib/librt.a
-		LIBRUMP?=	${DESTDIR}/usr/lib/librump.a
-		LIBRUMPFS_CD9660FS?=${DESTDIR}/usr/lib/librumpfs_cd9660fs.a
-		LIBRUMPFS_EFS?=	${DESTDIR}/usr/lib/librumpfs_efs.a
-		LIBRUMPFS_EXT2FS?=${DESTDIR}/usr/lib/librumpfs_ext2fs.a
-		LIBRUMPFS_FFS?=	${DESTDIR}/usr/lib/librumpfs_ffs.a
-		LIBRUMPFS_HFS?=	${DESTDIR}/usr/lib/librumpfs_hfs.a
-		LIBRUMPFS_LFS?=	${DESTDIR}/usr/lib/librumpfs_lfs.a
-		LIBRUMPFS_MSDOSFS?=${DESTDIR}/usr/lib/librumpfs_msdosfs.a
-		LIBRUMPFS_NFS?=	${DESTDIR}/usr/lib/librumpfs_nfs.a
-		LIBRUMPFS_NTFS?=${DESTDIR}/usr/lib/librumpfs_ntfs.a
-		LIBRUMPFS_SYSPUFFS?=${DESTDIR}/usr/lib/librumpfs_syspuffs.a
-		LIBRUMPFS_TMPFS?=${DESTDIR}/usr/lib/librumpfs_tmpfs.a
-		LIBRUMPFS_UDF?=	${DESTDIR}/usr/lib/librumpfs_udf.a
-		LIBRUMPFS_UFS?=	${DESTDIR}/usr/lib/librumpfs_ufs.a
-		LIBRUMPUSER?=	${DESTDIR}/usr/lib/librumpuser.a
-		LIBSASLC?=	${DESTDIR}/usr/lib/libsaslc.a
-		LIBSKEY?=	${DESTDIR}/usr/lib/libskey.a
-		LIBSL?=		${DESTDIR}/usr/lib/libsl.a
-		LIBSQLITE3?=	${DESTDIR}/usr/lib/libsqlite3.a
-		LIBSS?=		${DESTDIR}/usr/lib/libss.a
-		LIBSSH?=	${DESTDIR}/usr/lib/libssh.a
-		LIBSSL?=	${DESTDIR}/usr/lib/libssl.a
-		LIBSSP?=	${DESTDIR}/usr/lib/libssp.a
-		LIBSTDCXX?=	${DESTDIR}/usr/lib/libstdc++.a
-		LIBSUPCXX?=	${DESTDIR}/usr/lib/libsupc++.a
-		LIBTERMINFO?=	${DESTDIR}/usr/lib/libterminfo.a
-		LIBTRE?=	${DESTDIR}/usr/lib/libtre.a
-		LIBUSBHID?=	${DESTDIR}/usr/lib/libusbhid.a
-		LIBUTIL?=	${DESTDIR}/usr/lib/libutil.a
-		LIBWIND?=	${DESTDIR}/usr/lib/libwind.a
-		LIBWRAP?=	${DESTDIR}/usr/lib/libwrap.a
-		LIBY?=		${DESTDIR}/usr/lib/liby.a
-		LIBZ?=		${DESTDIR}/usr/lib/libz.a
+		LIBPUFFS?=		${DESTDIR}/usr/lib/libpuffs.a
+		LIBQUOTA?=		${DESTDIR}/usr/lib/libquota.a
+		LIBRADIUS?=		${DESTDIR}/usr/lib/libradius.a
+		LIBRESOLV?=		${DESTDIR}/usr/lib/libresolv.a
+		LIBRMT?=		${DESTDIR}/usr/lib/librmt.a
+		LIBROKEN?=		${DESTDIR}/usr/lib/libroken.a
+		LIBRPCSVC?=		${DESTDIR}/usr/lib/librpcsvc.a
+		LIBRT?=			${DESTDIR}/usr/lib/librt.a
+		LIBRUMP?=		${DESTDIR}/usr/lib/librump.a
+		LIBRUMPFS_CD9660FS?=	${DESTDIR}/usr/lib/librumpfs_cd9660fs.a
+		LIBRUMPFS_EFS?=		${DESTDIR}/usr/lib/librumpfs_efs.a
+		LIBRUMPFS_EXT2FS?=	${DESTDIR}/usr/lib/librumpfs_ext2fs.a
+		LIBRUMPFS_FFS?=		${DESTDIR}/usr/lib/librumpfs_ffs.a
+		LIBRUMPFS_HFS?=		${DESTDIR}/usr/lib/librumpfs_hfs.a
+		LIBRUMPFS_LFS?=		${DESTDIR}/usr/lib/librumpfs_lfs.a
+		LIBRUMPFS_MSDOSFS?=	${DESTDIR}/usr/lib/librumpfs_msdosfs.a
+		LIBRUMPFS_NFS?=		${DESTDIR}/usr/lib/librumpfs_nfs.a
+		LIBRUMPFS_NTFS?=	${DESTDIR}/usr/lib/librumpfs_ntfs.a
+		LIBRUMPFS_SYSPUFFS?=	${DESTDIR}/usr/lib/librumpfs_syspuffs.a
+		LIBRUMPFS_TMPFS?=	${DESTDIR}/usr/lib/librumpfs_tmpfs.a
+		LIBRUMPFS_UDF?=		${DESTDIR}/usr/lib/librumpfs_udf.a
+		LIBRUMPFS_UFS?=		${DESTDIR}/usr/lib/librumpfs_ufs.a
+		LIBRUMPUSER?=		${DESTDIR}/usr/lib/librumpuser.a
+		LIBSASLC?=		${DESTDIR}/usr/lib/libsaslc.a
+		LIBSKEY?=		${DESTDIR}/usr/lib/libskey.a
+		LIBSL?=			${DESTDIR}/usr/lib/libsl.a
+		LIBSQLITE3?=		${DESTDIR}/usr/lib/libsqlite3.a
+		LIBSS?=			${DESTDIR}/usr/lib/libss.a
+		LIBSSH?=		${DESTDIR}/usr/lib/libssh.a
+		LIBSSL?=		${DESTDIR}/usr/lib/libssl.a
+		LIBSSP?=		${DESTDIR}/usr/lib/libssp.a
+		LIBSTDCXX?=		${DESTDIR}/usr/lib/libstdc++.a
+		LIBSUPCXX?=		${DESTDIR}/usr/lib/libsupc++.a
+		LIBTERMINFO?=		${DESTDIR}/usr/lib/libterminfo.a
+		LIBTRE?=		${DESTDIR}/usr/lib/libtre.a
+		LIBUSBHID?=		${DESTDIR}/usr/lib/libusbhid.a
+		LIBUTIL?=		${DESTDIR}/usr/lib/libutil.a
+		LIBWIND?=		${DESTDIR}/usr/lib/libwind.a
+		LIBWRAP?=		${DESTDIR}/usr/lib/libwrap.a
+		LIBY?=			${DESTDIR}/usr/lib/liby.a
+		LIBZ?=			${DESTDIR}/usr/lib/libz.a
 
 		The following X-Windows libraries are predefined for DPADD:
 
-		LIBFS?=		${DESTDIR}/usr/X11R7/lib/libFS.a
-		LIBGL?=		${DESTDIR}/usr/X11R7/lib/libGL.a
-		LIBGLU?=	${DESTDIR}/usr/X11R7/lib/libGLU.a
-		LIBICE?=	${DESTDIR}/usr/X11R7/lib/libICE.a
-		LIBSM?=		${DESTDIR}/usr/X11R7/lib/libSM.a
-		LIBX11?=	${DESTDIR}/usr/X11R7/lib/libX11.a
-		LIBX11_XCB?=	${DESTDIR}/usr/X11R7/lib/libX11-xcb.a
-		LIBXTRAP?=	${DESTDIR}/usr/X11R7/lib/libXTrap.a
-		LIBXAU?=	${DESTDIR}/usr/X11R7/lib/libXau.a
-		LIBXAW?=	${DESTDIR}/usr/X11R7/lib/libXaw.a
-		LIBXCB?=	${DESTDIR}/usr/X11R7/lib/libxcb.a
-		LIBXDMCP?=	${DESTDIR}/usr/X11R7/lib/libXdmcp.a
-		LIBXEXT?=	${DESTDIR}/usr/X11R7/lib/libXext.a
-		LIBXFONT?=	${DESTDIR}/usr/X11R7/lib/libXfont.a
-		LIBXFT?=	${DESTDIR}/usr/X11R7/lib/libXft.a
-		LIBXI?=		${DESTDIR}/usr/X11R7/lib/libXi.a
-		LIBXINERAMA?=	${DESTDIR}/usr/X11R7/lib/libXinerama.a
-		LIBXMU?=	${DESTDIR}/usr/X11R7/lib/libXmu.a
-		LIBXMUU?=	${DESTDIR}/usr/X11R7/lib/libXmuu.a
-		LIBXPM?=	${DESTDIR}/usr/X11R7/lib/libXpm.a
-		LIBXRANDR?=	${DESTDIR}/usr/X11R7/lib/libXrandr.a
-		LIBXRENDER?=	${DESTDIR}/usr/X11R7/lib/libXrender.a
-		LIBXSS?=	${DESTDIR}/usr/X11R7/lib/libXss.a
-		LIBXT?=		${DESTDIR}/usr/X11R7/lib/libXt.a
-		LIBXTST?=	${DESTDIR}/usr/X11R7/lib/libXtst.a
-		LIBXV?=		${DESTDIR}/usr/X11R7/lib/libXv.a
-		LIBXXF86DGA?=	${DESTDIR}/usr/X11R7/lib/libXxf86dga.a
-		LIBXXF86MISC?=	${DESTDIR}/usr/X11R7/lib/libXxf86misc.a
-		LIBXXF86VM?=	${DESTDIR}/usr/X11R7/lib/libXxf86vm.a
-		LIBDPS?=	${DESTDIR}/usr/X11R7/lib/libdps.a
-		LIBFNTSTUBS?=	${DESTDIR}/usr/X11R7/lib/libfntstubs.a
+		LIBFS?=			${DESTDIR}/usr/X11R7/lib/libFS.a
+		LIBGL?=			${DESTDIR}/usr/X11R7/lib/libGL.a
+		LIBGLU?=		${DESTDIR}/usr/X11R7/lib/libGLU.a
+		LIBICE?=		${DESTDIR}/usr/X11R7/lib/libICE.a
+		LIBSM?=			${DESTDIR}/usr/X11R7/lib/libSM.a
+		LIBX11?=		${DESTDIR}/usr/X11R7/lib/libX11.a
+		LIBX11_XCB?=		${DESTDIR}/usr/X11R7/lib/libX11-xcb.a
+		LIBXTRAP?=		${DESTDIR}/usr/X11R7/lib/libXTrap.a
+		LIBXAU?=		${DESTDIR}/usr/X11R7/lib/libXau.a
+		LIBXAW?=		${DESTDIR}/usr/X11R7/lib/libXaw.a
+		LIBXCB?=		${DESTDIR}/usr/X11R7/lib/libxcb.a
+		LIBXDMCP?=		${DESTDIR}/usr/X11R7/lib/libXdmcp.a
+		LIBXEXT?=		${DESTDIR}/usr/X11R7/lib/libXext.a
+		LIBXFONT?=		${DESTDIR}/usr/X11R7/lib/libXfont.a
+		LIBXFT?=		${DESTDIR}/usr/X11R7/lib/libXft.a
+		LIBXI?=			${DESTDIR}/usr/X11R7/lib/libXi.a
+		LIBXINERAMA?=		${DESTDIR}/usr/X11R7/lib/libXinerama.a
+		LIBXMU?=		${DESTDIR}/usr/X11R7/lib/libXmu.a
+		LIBXMUU?=		${DESTDIR}/usr/X11R7/lib/libXmuu.a
+		LIBXPM?=		${DESTDIR}/usr/X11R7/lib/libXpm.a
+		LIBXRANDR?=		${DESTDIR}/usr/X11R7/lib/libXrandr.a
+		LIBXRENDER?=		${DESTDIR}/usr/X11R7/lib/libXrender.a
+		LIBXSS?=		${DESTDIR}/usr/X11R7/lib/libXss.a
+		LIBXT?=			${DESTDIR}/usr/X11R7/lib/libXt.a
+		LIBXTST?=		${DESTDIR}/usr/X11R7/lib/libXtst.a
+		LIBXV?=			${DESTDIR}/usr/X11R7/lib/libXv.a
+		LIBXXF86DGA?=		${DESTDIR}/usr/X11R7/lib/libXxf86dga.a
+		LIBXXF86MISC?=		${DESTDIR}/usr/X11R7/lib/libXxf86misc.a
+		LIBXXF86VM?=		${DESTDIR}/usr/X11R7/lib/libXxf86vm.a
+		LIBDPS?=		${DESTDIR}/usr/X11R7/lib/libdps.a
+		LIBFNTSTUBS?=		${DESTDIR}/usr/X11R7/lib/libfntstubs.a
 		LIBFONTCACHE?=	${DESTDIR}/usr/X11R7/lib/libfontcache.a
-		LIBFONTCONFIG?=	${DESTDIR}/usr/X11R7/lib/libfontconfig.a
-		LIBFONTENC?=	${DESTDIR}/usr/X11R7/lib/libfontenc.a
-		LIBFREETYPE?=	${DESTDIR}/usr/X11R7/lib/libfreetype.a
-		LIBLBXUTIL?=	${DESTDIR}/usr/X11R7/lib/liblbxutil.a
-		LIBXKBFILE?=	${DESTDIR}/usr/X11R7/lib/libxkbfile.a
+		LIBFONTCONFIG?=		${DESTDIR}/usr/X11R7/lib/libfontconfig.a
+		LIBFONTENC?=		${DESTDIR}/usr/X11R7/lib/libfontenc.a
+		LIBFREETYPE?=		${DESTDIR}/usr/X11R7/lib/libfreetype.a
+		LIBLBXUTIL?=		${DESTDIR}/usr/X11R7/lib/liblbxutil.a
+		LIBXKBFILE?=		${DESTDIR}/usr/X11R7/lib/libxkbfile.a
 
 SHAREDSTRINGS	If defined, a new .c.o rule is used that results in shared
 		strings, using xstr(1). Note that this will not work with
@@ -1997,7 +2126,7 @@ HOST_COMPILE.cc		The host c++ compiler line with flags
 
 HOST_CPP		The host c pre-processor
 
-HOST_CPPFLAGS		The cost c pre-processor flags
+HOST_CPPFLAGS		The host c pre-processor flags
 
 HOST_CXX		The host c++ compiler
 

@@ -1,9 +1,11 @@
 ; Check the MCNullStreamer operates correctly, at least on a minimal test case.
 ;
-; RUN: llc -filetype=null -o %t -march=x86 %s
+; RUN: llc -filetype=null -o %t -mtriple=i686-- %s
 ; RUN: llc -filetype=null -o %t -mtriple=i686-cygwin %s
 
-define void @f0()  {
+source_filename = "test/CodeGen/X86/null-streamer.ll"
+
+define void @f0() {
   ret void
 }
 
@@ -12,18 +14,15 @@ define void @f1() {
 }
 
 !llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!11, !13}
+!llvm.module.flags = !{!7, !8}
 
-!0 = !{!"0x11\004\00 \001\00\000\00\000", !1, !2, !2, !3, !9, !2} ; [ DW_TAG_compile_unit ]
-!1 = !{!"", !""}
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: " ", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2, globals: !3, imports: !2)
+!1 = !DIFile(filename: "file.c", directory: "")
 !2 = !{}
 !3 = !{!4}
-!4 = !{!"0x2e\00\00\00\002\000\001\000\006\00256\001\002", !1, !5, !6, null, i32 ()* null, null, null, !2} ; [ DW_TAG_subprogram ]
-!5 = !{!"0x29", !1} ; [ DW_TAG_file_type ]
-!6 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !7, null, null, null} ; [ DW_TAG_subroutine_type ]
-!7 = !{!8}
-!8 = !{!"0x24\00\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ]
-!9 = !{!10}
-!10 = !{!"0x34\00i\00i\00_ZL1i\001\001\001", null, !5, !8, null, null} ; [ DW_TAG_variable ]
-!11 = !{i32 2, !"Dwarf Version", i32 3}
-!13 = !{i32 1, !"Debug Info Version", i32 2}
+!4 = !DIGlobalVariableExpression(var: !5, expr: !DIExpression())
+!5 = !DIGlobalVariable(name: "i", linkageName: "_ZL1i", scope: null, file: !1, line: 1, type: !6, isLocal: true, isDefinition: true)
+!6 = !DIBasicType(size: 32, align: 32, encoding: DW_ATE_signed)
+!7 = !{i32 2, !"Dwarf Version", i32 3}
+!8 = !{i32 1, !"Debug Info Version", i32 3}
+

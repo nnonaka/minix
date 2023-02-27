@@ -18,16 +18,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "NVPTX.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
 
 using namespace llvm;
 
 namespace {
-/// \brief NVPTXAssignValidGlobalNames
+/// NVPTXAssignValidGlobalNames
 class NVPTXAssignValidGlobalNames : public ModulePass {
 public:
   static char ID;
@@ -35,7 +36,7 @@ public:
 
   bool runOnModule(Module &M) override;
 
-  /// \brief Clean up the name to remove symbols invalid in PTX.
+  /// Clean up the name to remove symbols invalid in PTX.
   std::string cleanUpName(StringRef Name);
 };
 }
@@ -60,6 +61,11 @@ bool NVPTXAssignValidGlobalNames::runOnModule(Module &M) {
       GV.setName(cleanUpName(GV.getName()));
     }
   }
+
+  // Do the same for local functions.
+  for (Function &F : M.functions())
+    if (F.hasLocalLinkage())
+      F.setName(cleanUpName(F.getName()));
 
   return true;
 }

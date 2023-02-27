@@ -20,9 +20,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/IPO.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -31,7 +30,7 @@
 #include "llvm/IR/TypeFinder.h"
 #include "llvm/IR/ValueSymbolTable.h"
 #include "llvm/Pass.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/IPO.h"
 using namespace llvm;
 
 namespace {
@@ -142,9 +141,9 @@ static bool OnlyUsedBy(Value *V, Value *Usr) {
 static void RemoveDeadConstant(Constant *C) {
   assert(C->use_empty() && "Constant is not dead!");
   SmallPtrSet<Constant*, 4> Operands;
-  for (unsigned i = 0, e = C->getNumOperands(); i != e; ++i)
-    if (OnlyUsedBy(C->getOperand(i), C))
-      Operands.insert(cast<Constant>(C->getOperand(i)));
+  for (Value *Op : C->operands())
+    if (OnlyUsedBy(Op, C))
+      Operands.insert(cast<Constant>(Op));
   if (GlobalVariable *GV = dyn_cast<GlobalVariable>(C)) {
     if (!GV->hasLocalLinkage()) return;   // Don't delete non-static globals.
     GV->eraseFromParent();
@@ -211,16 +210,17 @@ static bool StripSymbolNames(Module &M, bool PreserveDbgInfo) {
 
   for (Module::global_iterator I = M.global_begin(), E = M.global_end();
        I != E; ++I) {
-    if (I->hasLocalLinkage() && llvmUsedValues.count(I) == 0)
+    if (I->hasLocalLinkage() && llvmUsedValues.count(&*I) == 0)
       if (!PreserveDbgInfo || !I->getName().startswith("llvm.dbg"))
         I->setName("");     // Internal symbols can't participate in linkage
   }
 
-  for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
-    if (I->hasLocalLinkage() && llvmUsedValues.count(I) == 0)
-      if (!PreserveDbgInfo || !I->getName().startswith("llvm.dbg"))
-        I->setName("");     // Internal symbols can't participate in linkage
-    StripSymtab(I->getValueSymbolTable(), PreserveDbgInfo);
+  for (Function &I : M) {
+    if (I.hasLocalLinkage() && llvmUsedValues.count(&I) == 0)
+      if (!PreserveDbgInfo || !I.getName().startswith("llvm.dbg"))
+        I.setName(""); // Internal symbols can't participate in linkage
+    if (auto *Symtab = I.getValueSymbolTable())
+      StripSymtab(*Symtab, PreserveDbgInfo);
   }
 
   // Remove all names from types.
@@ -230,6 +230,9 @@ static bool StripSymbolNames(Module &M, bool PreserveDbgInfo) {
 }
 
 bool StripSymbols::runOnModule(Module &M) {
+  if (skipModule(M))
+    return false;
+
   bool Changed = false;
   Changed |= StripDebugInfo(M);
   if (!OnlyDebugInfo)
@@ -238,10 +241,15 @@ bool StripSymbols::runOnModule(Module &M) {
 }
 
 bool StripNonDebugSymbols::runOnModule(Module &M) {
+  if (skipModule(M))
+    return false;
+
   return StripSymbolNames(M, true);
 }
 
 bool StripDebugDeclare::runOnModule(Module &M) {
+  if (skipModule(M))
+    return false;
 
   Function *Declare = M.getFunction("llvm.dbg.declare");
   std::vector<Constant*> DeadConstants;
@@ -287,6 +295,9 @@ bool StripDebugDeclare::runOnModule(Module &M) {
 /// optimized away by the optimizer. This special pass removes debug info for
 /// such symbols.
 bool StripDeadDebugInfo::runOnModule(Module &M) {
+  if (skipModule(M))
+    return false;
+
   bool Changed = false;
 
   LLVMContext &C = M.getContext();
@@ -302,65 +313,67 @@ bool StripDeadDebugInfo::runOnModule(Module &M) {
   // replace the current list of potentially dead global variables/functions
   // with the live list.
   SmallVector<Metadata *, 64> LiveGlobalVariables;
-  SmallVector<Metadata *, 64> LiveSubprograms;
-  DenseSet<const MDNode *> VisitedSet;
+  DenseSet<DIGlobalVariableExpression *> VisitedSet;
 
-  for (DICompileUnit DIC : F.compile_units()) {
-    assert(DIC.Verify() && "DIC must verify as a DICompileUnit.");
+  std::set<DIGlobalVariableExpression *> LiveGVs;
+  for (GlobalVariable &GV : M.globals()) {
+    SmallVector<DIGlobalVariableExpression *, 1> GVEs;
+    GV.getDebugInfo(GVEs);
+    for (auto *GVE : GVEs)
+      LiveGVs.insert(GVE);
+  }
 
-    // Create our live subprogram list.
-    DIArray SPs = DIC.getSubprograms();
-    bool SubprogramChange = false;
-    for (unsigned i = 0, e = SPs.getNumElements(); i != e; ++i) {
-      DISubprogram DISP(SPs.getElement(i));
-      assert(DISP.Verify() && "DISP must verify as a DISubprogram.");
+  std::set<DICompileUnit *> LiveCUs;
+  // Any CU referenced from a subprogram is live.
+  for (DISubprogram *SP : F.subprograms()) {
+    if (SP->getUnit())
+      LiveCUs.insert(SP->getUnit());
+  }
 
-      // Make sure we visit each subprogram only once.
-      if (!VisitedSet.insert(DISP).second)
-        continue;
-
-      // If the function referenced by DISP is not null, the function is live.
-      if (DISP.getFunction())
-        LiveSubprograms.push_back(DISP);
-      else
-        SubprogramChange = true;
-    }
-
+  bool HasDeadCUs = false;
+  for (DICompileUnit *DIC : F.compile_units()) {
     // Create our live global variable list.
-    DIArray GVs = DIC.getGlobalVariables();
     bool GlobalVariableChange = false;
-    for (unsigned i = 0, e = GVs.getNumElements(); i != e; ++i) {
-      DIGlobalVariable DIG(GVs.getElement(i));
-      assert(DIG.Verify() && "DIG must verify as DIGlobalVariable.");
+    for (auto *DIG : DIC->getGlobalVariables()) {
+      if (DIG->getExpression() && DIG->getExpression()->isConstant())
+        LiveGVs.insert(DIG);
 
       // Make sure we only visit each global variable only once.
       if (!VisitedSet.insert(DIG).second)
         continue;
 
-      // If the global variable referenced by DIG is not null, the global
-      // variable is live.
-      if (DIG.getGlobal())
+      // If a global variable references DIG, the global variable is live.
+      if (LiveGVs.count(DIG))
         LiveGlobalVariables.push_back(DIG);
       else
         GlobalVariableChange = true;
     }
 
-    // If we found dead subprograms or global variables, replace the current
-    // subprogram list/global variable list with our new live subprogram/global
-    // variable list.
-    if (SubprogramChange) {
-      DIC.replaceSubprograms(DIArray(MDNode::get(C, LiveSubprograms)));
-      Changed = true;
-    }
+    if (!LiveGlobalVariables.empty())
+      LiveCUs.insert(DIC);
+    else if (!LiveCUs.count(DIC))
+      HasDeadCUs = true;
 
+    // If we found dead global variables, replace the current global
+    // variable list with our new live global variable list.
     if (GlobalVariableChange) {
-      DIC.replaceGlobalVariables(DIArray(MDNode::get(C, LiveGlobalVariables)));
+      DIC->replaceGlobalVariables(MDTuple::get(C, LiveGlobalVariables));
       Changed = true;
     }
 
     // Reset lists for the next iteration.
-    LiveSubprograms.clear();
     LiveGlobalVariables.clear();
+  }
+
+  if (HasDeadCUs) {
+    // Delete the old node and replace it with a new one
+    NamedMDNode *NMD = M.getOrInsertNamedMetadata("llvm.dbg.cu");
+    NMD->clearOperands();
+    if (!LiveCUs.empty()) {
+      for (DICompileUnit *CU : LiveCUs)
+        NMD->addOperand(CU);
+    }
+    Changed = true;
   }
 
   return Changed;

@@ -1,4 +1,6 @@
-// RUN: %clang_cc1 -verify -fopenmp=libiomp5 %s
+// RUN: %clang_cc1 -verify -fopenmp %s -Wno-openmp-target
+
+// RUN: %clang_cc1 -verify -fopenmp-simd %s -Wno-openmp-target
 
 void foo() {
 }
@@ -44,6 +46,14 @@ public:
 S3 h;
 #pragma omp threadprivate(h) // expected-note {{defined as threadprivate or thread local}}
 
+namespace A {
+double x;
+#pragma omp threadprivate(x) // expected-note {{defined as threadprivate or thread local}}
+}
+namespace B {
+using A::x;
+}
+
 int main(int argc, char **argv) {
   const int d = 5;
   const int da[5] = { 0 };
@@ -76,7 +86,7 @@ int main(int argc, char **argv) {
   #pragma omp teams shared (S1) // expected-error {{'S1' does not refer to a value}}
   foo();
   #pragma omp target
-  #pragma omp teams shared (a, b, c, d, f)
+  #pragma omp teams shared (a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}}
   foo();
   #pragma omp target
   #pragma omp teams shared (argv[1]) // expected-error {{expected variable name}}
@@ -94,7 +104,7 @@ int main(int argc, char **argv) {
   #pragma omp teams shared(e, g)
   foo();
   #pragma omp target
-  #pragma omp teams shared(h) // expected-error {{threadprivate or thread local variable cannot be shared}}
+  #pragma omp teams shared(h, B::x) // expected-error 2 {{threadprivate or thread local variable cannot be shared}}
   foo();
   #pragma omp target
   #pragma omp teams private(i), shared(i) // expected-error {{private variable cannot be shared}} expected-note {{defined as private}}

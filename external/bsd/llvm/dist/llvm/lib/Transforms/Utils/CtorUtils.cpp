@@ -11,14 +11,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/BitVector.h"
 #include "llvm/Transforms/Utils/CtorUtils.h"
+#include "llvm/ADT/BitVector.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define DEBUG_TYPE "ctor_utils"
 
@@ -49,7 +49,7 @@ void removeGlobalCtors(GlobalVariable *GCL, const BitVector &CtorsToRemove) {
   GlobalVariable *NGV =
       new GlobalVariable(CA->getType(), GCL->isConstant(), GCL->getLinkage(),
                          CA, "", GCL->getThreadLocalMode());
-  GCL->getParent()->getGlobalList().insert(GCL, NGV);
+  GCL->getParent()->getGlobalList().insert(GCL->getIterator(), NGV);
   NGV->takeName(GCL);
 
   // Nuke the old list, replacing any uses with the new one.
@@ -70,8 +70,8 @@ std::vector<Function *> parseGlobalCtors(GlobalVariable *GV) {
   ConstantArray *CA = cast<ConstantArray>(GV->getInitializer());
   std::vector<Function *> Result;
   Result.reserve(CA->getNumOperands());
-  for (User::op_iterator i = CA->op_begin(), e = CA->op_end(); i != e; ++i) {
-    ConstantStruct *CS = cast<ConstantStruct>(*i);
+  for (auto &V : CA->operands()) {
+    ConstantStruct *CS = cast<ConstantStruct>(V);
     Result.push_back(dyn_cast<Function>(CS->getOperand(1)));
   }
   return Result;
@@ -93,10 +93,10 @@ GlobalVariable *findGlobalCtors(Module &M) {
     return GV;
   ConstantArray *CA = cast<ConstantArray>(GV->getInitializer());
 
-  for (User::op_iterator i = CA->op_begin(), e = CA->op_end(); i != e; ++i) {
-    if (isa<ConstantAggregateZero>(*i))
+  for (auto &V : CA->operands()) {
+    if (isa<ConstantAggregateZero>(V))
       continue;
-    ConstantStruct *CS = cast<ConstantStruct>(*i);
+    ConstantStruct *CS = cast<ConstantStruct>(V);
     if (isa<ConstantPointerNull>(CS->getOperand(1)))
       continue;
 
@@ -138,7 +138,7 @@ bool optimizeGlobalCtorsList(Module &M,
     if (!F)
       continue;
 
-    DEBUG(dbgs() << "Optimizing Global Constructor: " << *F << "\n");
+    LLVM_DEBUG(dbgs() << "Optimizing Global Constructor: " << *F << "\n");
 
     // We cannot simplify external ctor functions.
     if (F->empty())

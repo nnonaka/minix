@@ -19,6 +19,7 @@
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/DataLayout.h"
@@ -28,11 +29,12 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCTargetAsmParser.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -42,10 +44,8 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -62,7 +62,7 @@ using namespace llvm::opt;
 
 namespace {
 
-/// \brief Helper class for representing a single invocation of the assembler.
+/// Helper class for representing a single invocation of the assembler.
 struct AssemblerInvocation {
   /// @name Target Options
   /// @{
@@ -78,6 +78,9 @@ struct AssemblerInvocation {
   /// be a list of strings starting with '+' or '-'.
   std::vector<std::string> Features;
 
+  /// The list of symbol definitions.
+  std::vector<std::string> SymbolDefs;
+
   /// @}
   /// @name Language Options
   /// @{
@@ -86,12 +89,16 @@ struct AssemblerInvocation {
   unsigned NoInitialTextSection : 1;
   unsigned SaveTemporaryLabels : 1;
   unsigned GenDwarfForAssembly : 1;
-  unsigned CompressDebugSections : 1;
+  unsigned RelaxELFRelocations : 1;
   unsigned DwarfVersion;
   std::string DwarfDebugFlags;
   std::string DwarfDebugProducer;
   std::string DebugCompilationDir;
+  std::map<const std::string, const std::string> DebugPrefixMap;
+  llvm::DebugCompressionType CompressDebugSections =
+      llvm::DebugCompressionType::None;
   std::string MainFileName;
+  std::string SplitDwarfFile;
 
   /// @}
   /// @name Frontend Options
@@ -124,6 +131,10 @@ struct AssemblerInvocation {
   unsigned RelaxAll : 1;
   unsigned NoExecStack : 1;
   unsigned FatalWarnings : 1;
+  unsigned IncrementalLinkerCompatible : 1;
+
+  /// The name of the relocation model to use.
+  std::string RelocationModel;
 
   /// @}
 
@@ -140,7 +151,8 @@ public:
     RelaxAll = 0;
     NoExecStack = 0;
     FatalWarnings = 0;
-    DwarfVersion = 3;
+    IncrementalLinkerCompatible = 0;
+    DwarfVersion = 0;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,
@@ -160,70 +172,88 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
 
   const unsigned IncludedFlagsBitmask = options::CC1AsOption;
   unsigned MissingArgIndex, MissingArgCount;
-  std::unique_ptr<InputArgList> Args(
-      OptTbl->ParseArgs(Argv.begin(), Argv.end(), MissingArgIndex, MissingArgCount,
-                        IncludedFlagsBitmask));
+  InputArgList Args = OptTbl->ParseArgs(Argv, MissingArgIndex, MissingArgCount,
+                                        IncludedFlagsBitmask);
 
   // Check for missing argument error.
   if (MissingArgCount) {
     Diags.Report(diag::err_drv_missing_argument)
-        << Args->getArgString(MissingArgIndex) << MissingArgCount;
+        << Args.getArgString(MissingArgIndex) << MissingArgCount;
     Success = false;
   }
 
   // Issue errors on unknown arguments.
-  for (arg_iterator it = Args->filtered_begin(OPT_UNKNOWN),
-                    ie = Args->filtered_end();
-       it != ie; ++it) {
-    Diags.Report(diag::err_drv_unknown_argument) << (*it)->getAsString(*Args);
+  for (const Arg *A : Args.filtered(OPT_UNKNOWN)) {
+    auto ArgString = A->getAsString(Args);
+    std::string Nearest;
+    if (OptTbl->findNearest(ArgString, Nearest, IncludedFlagsBitmask) > 1)
+      Diags.Report(diag::err_drv_unknown_argument) << ArgString;
+    else
+      Diags.Report(diag::err_drv_unknown_argument_with_suggestion)
+          << ArgString << Nearest;
     Success = false;
   }
 
   // Construct the invocation.
 
   // Target Options
-  Opts.Triple = llvm::Triple::normalize(Args->getLastArgValue(OPT_triple));
-  Opts.CPU = Args->getLastArgValue(OPT_target_cpu);
-  Opts.Features = Args->getAllArgValues(OPT_target_feature);
+  Opts.Triple = llvm::Triple::normalize(Args.getLastArgValue(OPT_triple));
+  Opts.CPU = Args.getLastArgValue(OPT_target_cpu);
+  Opts.Features = Args.getAllArgValues(OPT_target_feature);
 
   // Use the default target triple if unspecified.
   if (Opts.Triple.empty())
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
 
   // Language Options
-  Opts.IncludePaths = Args->getAllArgValues(OPT_I);
-  Opts.NoInitialTextSection = Args->hasArg(OPT_n);
-  Opts.SaveTemporaryLabels = Args->hasArg(OPT_msave_temp_labels);
-  Opts.GenDwarfForAssembly = Args->hasArg(OPT_g_Flag);
-  Opts.CompressDebugSections = Args->hasArg(OPT_compress_debug_sections);
-  if (Args->hasArg(OPT_gdwarf_2))
-    Opts.DwarfVersion = 2;
-  if (Args->hasArg(OPT_gdwarf_3))
-    Opts.DwarfVersion = 3;
-  if (Args->hasArg(OPT_gdwarf_4))
-    Opts.DwarfVersion = 4;
-  Opts.DwarfDebugFlags = Args->getLastArgValue(OPT_dwarf_debug_flags);
-  Opts.DwarfDebugProducer = Args->getLastArgValue(OPT_dwarf_debug_producer);
-  Opts.DebugCompilationDir = Args->getLastArgValue(OPT_fdebug_compilation_dir);
-  Opts.MainFileName = Args->getLastArgValue(OPT_main_file_name);
+  Opts.IncludePaths = Args.getAllArgValues(OPT_I);
+  Opts.NoInitialTextSection = Args.hasArg(OPT_n);
+  Opts.SaveTemporaryLabels = Args.hasArg(OPT_msave_temp_labels);
+  // Any DebugInfoKind implies GenDwarfForAssembly.
+  Opts.GenDwarfForAssembly = Args.hasArg(OPT_debug_info_kind_EQ);
+
+  if (const Arg *A = Args.getLastArg(OPT_compress_debug_sections,
+                                     OPT_compress_debug_sections_EQ)) {
+    if (A->getOption().getID() == OPT_compress_debug_sections) {
+      // TODO: be more clever about the compression type auto-detection
+      Opts.CompressDebugSections = llvm::DebugCompressionType::GNU;
+    } else {
+      Opts.CompressDebugSections =
+          llvm::StringSwitch<llvm::DebugCompressionType>(A->getValue())
+              .Case("none", llvm::DebugCompressionType::None)
+              .Case("zlib", llvm::DebugCompressionType::Z)
+              .Case("zlib-gnu", llvm::DebugCompressionType::GNU)
+              .Default(llvm::DebugCompressionType::None);
+    }
+  }
+
+  Opts.RelaxELFRelocations = Args.hasArg(OPT_mrelax_relocations);
+  Opts.DwarfVersion = getLastArgIntValue(Args, OPT_dwarf_version_EQ, 2, Diags);
+  Opts.DwarfDebugFlags = Args.getLastArgValue(OPT_dwarf_debug_flags);
+  Opts.DwarfDebugProducer = Args.getLastArgValue(OPT_dwarf_debug_producer);
+  Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
+  Opts.MainFileName = Args.getLastArgValue(OPT_main_file_name);
+
+  for (const auto &Arg : Args.getAllArgValues(OPT_fdebug_prefix_map_EQ))
+    Opts.DebugPrefixMap.insert(StringRef(Arg).split('='));
 
   // Frontend Options
-  if (Args->hasArg(OPT_INPUT)) {
+  if (Args.hasArg(OPT_INPUT)) {
     bool First = true;
-    for (arg_iterator it = Args->filtered_begin(OPT_INPUT),
-           ie = Args->filtered_end(); it != ie; ++it, First=false) {
-      const Arg *A = it;
-      if (First)
+    for (const Arg *A : Args.filtered(OPT_INPUT)) {
+      if (First) {
         Opts.InputFile = A->getValue();
-      else {
-        Diags.Report(diag::err_drv_unknown_argument) << A->getAsString(*Args);
+        First = false;
+      } else {
+        Diags.Report(diag::err_drv_unknown_argument) << A->getAsString(Args);
         Success = false;
       }
     }
   }
-  Opts.LLVMArgs = Args->getAllArgValues(OPT_mllvm);
-  Opts.OutputPath = Args->getLastArgValue(OPT_o);
-  if (Arg *A = Args->getLastArg(OPT_filetype)) {
+  Opts.LLVMArgs = Args.getAllArgValues(OPT_mllvm);
+  Opts.OutputPath = Args.getLastArgValue(OPT_o);
+  Opts.SplitDwarfFile = Args.getLastArgValue(OPT_split_dwarf_file);
+  if (Arg *A = Args.getLastArg(OPT_filetype)) {
     StringRef Name = A->getValue();
     unsigned OutputType = StringSwitch<unsigned>(Name)
       .Case("asm", FT_Asm)
@@ -231,51 +261,48 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
       .Case("obj", FT_Obj)
       .Default(~0U);
     if (OutputType == ~0U) {
-      Diags.Report(diag::err_drv_invalid_value)
-        << A->getAsString(*Args) << Name;
+      Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << Name;
       Success = false;
     } else
       Opts.OutputType = FileType(OutputType);
   }
-  Opts.ShowHelp = Args->hasArg(OPT_help);
-  Opts.ShowVersion = Args->hasArg(OPT_version);
+  Opts.ShowHelp = Args.hasArg(OPT_help);
+  Opts.ShowVersion = Args.hasArg(OPT_version);
 
   // Transliterate Options
   Opts.OutputAsmVariant =
-      getLastArgIntValue(*Args.get(), OPT_output_asm_variant, 0, Diags);
-  Opts.ShowEncoding = Args->hasArg(OPT_show_encoding);
-  Opts.ShowInst = Args->hasArg(OPT_show_inst);
+      getLastArgIntValue(Args, OPT_output_asm_variant, 0, Diags);
+  Opts.ShowEncoding = Args.hasArg(OPT_show_encoding);
+  Opts.ShowInst = Args.hasArg(OPT_show_inst);
 
   // Assemble Options
-  Opts.RelaxAll = Args->hasArg(OPT_mrelax_all);
-  Opts.NoExecStack = Args->hasArg(OPT_mno_exec_stack);
-  Opts.FatalWarnings =  Args->hasArg(OPT_massembler_fatal_warnings);
+  Opts.RelaxAll = Args.hasArg(OPT_mrelax_all);
+  Opts.NoExecStack = Args.hasArg(OPT_mno_exec_stack);
+  Opts.FatalWarnings = Args.hasArg(OPT_massembler_fatal_warnings);
+  Opts.RelocationModel = Args.getLastArgValue(OPT_mrelocation_model, "pic");
+  Opts.IncrementalLinkerCompatible =
+      Args.hasArg(OPT_mincremental_linker_compatible);
+  Opts.SymbolDefs = Args.getAllArgValues(OPT_defsym);
 
   return Success;
 }
 
-static formatted_raw_ostream *GetOutputStream(AssemblerInvocation &Opts,
-                                              DiagnosticsEngine &Diags,
-                                              bool Binary) {
-  if (Opts.OutputPath.empty())
-    Opts.OutputPath = "-";
-
+static std::unique_ptr<raw_fd_ostream>
+getOutputStream(StringRef Path, DiagnosticsEngine &Diags, bool Binary) {
   // Make sure that the Out file gets unlinked from the disk if we get a
   // SIGINT.
-  if (Opts.OutputPath != "-")
-    sys::RemoveFileOnSignal(Opts.OutputPath);
+  if (Path != "-")
+    sys::RemoveFileOnSignal(Path);
 
   std::error_code EC;
-  raw_fd_ostream *Out = new raw_fd_ostream(
-      Opts.OutputPath, EC, (Binary ? sys::fs::F_None : sys::fs::F_Text));
+  auto Out = llvm::make_unique<raw_fd_ostream>(
+      Path, EC, (Binary ? sys::fs::F_None : sys::fs::F_Text));
   if (EC) {
-    Diags.Report(diag::err_fe_unable_to_open_output) << Opts.OutputPath
-                                                     << EC.message();
-    delete Out;
+    Diags.Report(diag::err_fe_unable_to_open_output) << Path << EC.message();
     return nullptr;
   }
 
-  return new formatted_raw_ostream(*Out, formatted_raw_ostream::DELETE_STREAM);
+  return Out;
 }
 
 static bool ExecuteAssembler(AssemblerInvocation &Opts,
@@ -311,23 +338,39 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
 
   // Ensure MCAsmInfo initialization occurs before any use, otherwise sections
   // may be created with a combination of default and explicit settings.
-  if (Opts.CompressDebugSections)
-    MAI->setCompressDebugSections(true);
+  MAI->setCompressDebugSections(Opts.CompressDebugSections);
+
+  MAI->setRelaxELFRelocations(Opts.RelaxELFRelocations);
 
   bool IsBinary = Opts.OutputType == AssemblerInvocation::FT_Obj;
-  std::unique_ptr<formatted_raw_ostream> Out(
-      GetOutputStream(Opts, Diags, IsBinary));
-  if (!Out)
+  if (Opts.OutputPath.empty())
+    Opts.OutputPath = "-";
+  std::unique_ptr<raw_fd_ostream> FDOS =
+      getOutputStream(Opts.OutputPath, Diags, IsBinary);
+  if (!FDOS)
     return true;
+  std::unique_ptr<raw_fd_ostream> DwoOS;
+  if (!Opts.SplitDwarfFile.empty())
+    DwoOS = getOutputStream(Opts.SplitDwarfFile, Diags, IsBinary);
 
   // FIXME: This is not pretty. MCContext has a ptr to MCObjectFileInfo and
   // MCObjectFileInfo needs a MCContext reference in order to initialize itself.
   std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
 
   MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
-  // FIXME: Assembler behavior can change with -static.
-  MOFI->InitMCObjectFileInfo(Opts.Triple,
-                             Reloc::Default, CodeModel::Default, Ctx);
+
+  bool PIC = false;
+  if (Opts.RelocationModel == "static") {
+    PIC = false;
+  } else if (Opts.RelocationModel == "pic") {
+    PIC = true;
+  } else {
+    assert(Opts.RelocationModel == "dynamic-no-pic" &&
+           "Invalid PIC model!");
+    PIC = false;
+  }
+
+  MOFI->InitMCObjectFileInfo(Triple(Opts.Triple), PIC, Ctx);
   if (Opts.SaveTemporaryLabels)
     Ctx.setAllowTemporaryLabels(false);
   if (Opts.GenDwarfForAssembly)
@@ -338,6 +381,9 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
     Ctx.setDwarfDebugProducer(StringRef(Opts.DwarfDebugProducer));
   if (!Opts.DebugCompilationDir.empty())
     Ctx.setCompilationDir(Opts.DebugCompilationDir);
+  if (!Opts.DebugPrefixMap.empty())
+    for (const auto &KV : Opts.DebugPrefixMap)
+      Ctx.addDebugPrefixMapEntry(KV.first, KV.second);
   if (!Opts.MainFileName.empty())
     Ctx.setMainFileName(StringRef(Opts.MainFileName));
   Ctx.setDwarfVersion(Opts.DwarfVersion);
@@ -356,33 +402,55 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   std::unique_ptr<MCSubtargetInfo> STI(
       TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
 
+  raw_pwrite_stream *Out = FDOS.get();
+  std::unique_ptr<buffer_ostream> BOS;
+
   // FIXME: There is a bit of code duplication with addPassesToEmitFile.
   if (Opts.OutputType == AssemblerInvocation::FT_Asm) {
-    MCInstPrinter *IP =
-      TheTarget->createMCInstPrinter(Opts.OutputAsmVariant, *MAI, *MCII, *MRI,
-                                     *STI);
-    MCCodeEmitter *CE = nullptr;
-    MCAsmBackend *MAB = nullptr;
-    if (Opts.ShowEncoding) {
-      CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
-      MAB = TheTarget->createMCAsmBackend(*MRI, Opts.Triple, Opts.CPU);
-    }
-    Str.reset(TheTarget->createAsmStreamer(Ctx, *Out, /*asmverbose*/true,
-                                           /*useDwarfDirectory*/ true,
-                                           IP, CE, MAB,
-                                           Opts.ShowInst));
+    MCInstPrinter *IP = TheTarget->createMCInstPrinter(
+        llvm::Triple(Opts.Triple), Opts.OutputAsmVariant, *MAI, *MCII, *MRI);
+
+    std::unique_ptr<MCCodeEmitter> CE;
+    if (Opts.ShowEncoding)
+      CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+    MCTargetOptions MCOptions;
+    std::unique_ptr<MCAsmBackend> MAB(
+        TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
+
+    auto FOut = llvm::make_unique<formatted_raw_ostream>(*Out);
+    Str.reset(TheTarget->createAsmStreamer(
+        Ctx, std::move(FOut), /*asmverbose*/ true,
+        /*useDwarfDirectory*/ true, IP, std::move(CE), std::move(MAB),
+        Opts.ShowInst));
   } else if (Opts.OutputType == AssemblerInvocation::FT_Null) {
     Str.reset(createNullStreamer(Ctx));
   } else {
     assert(Opts.OutputType == AssemblerInvocation::FT_Obj &&
            "Invalid file type!");
-    MCCodeEmitter *CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
-    MCAsmBackend *MAB = TheTarget->createMCAsmBackend(*MRI, Opts.Triple,
-                                                      Opts.CPU);
-    Str.reset(TheTarget->createMCObjectStreamer(Opts.Triple, Ctx, *MAB, *Out,
-                                                CE, *STI, Opts.RelaxAll));
+    if (!FDOS->supportsSeeking()) {
+      BOS = make_unique<buffer_ostream>(*FDOS);
+      Out = BOS.get();
+    }
+
+    std::unique_ptr<MCCodeEmitter> CE(
+        TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+    MCTargetOptions MCOptions;
+    std::unique_ptr<MCAsmBackend> MAB(
+        TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
+    std::unique_ptr<MCObjectWriter> OW =
+        DwoOS ? MAB->createDwoObjectWriter(*Out, *DwoOS)
+              : MAB->createObjectWriter(*Out);
+
+    Triple T(Opts.Triple);
+    Str.reset(TheTarget->createMCObjectStreamer(
+        T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI,
+        Opts.RelaxAll, Opts.IncrementalLinkerCompatible,
+        /*DWARFMustBeAtTheEnd*/ true));
     Str.get()->InitSections(Opts.NoExecStack);
   }
+
+  // Assembly to object compilation should leverage assembly info.
+  Str->setUseAssemblerInfoForParsing(true);
 
   bool Failed = false;
 
@@ -396,17 +464,36 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   if (!TAP)
     Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple;
 
+  // Set values for symbols, if any.
+  for (auto &S : Opts.SymbolDefs) {
+    auto Pair = StringRef(S).split('=');
+    auto Sym = Pair.first;
+    auto Val = Pair.second;
+    int64_t Value;
+    // We have already error checked this in the driver.
+    Val.getAsInteger(0, Value);
+    Ctx.setSymbolValue(Parser->getStreamer(), Sym, Value);
+  }
+
   if (!Failed) {
     Parser->setTargetParser(*TAP.get());
     Failed = Parser->Run(Opts.NoInitialTextSection);
   }
 
+  // Close Streamer first.
+  // It might have a reference to the output stream.
+  Str.reset();
   // Close the output stream early.
-  Out.reset();
+  BOS.reset();
+  FDOS.reset();
 
   // Delete output file if there were errors.
-  if (Failed && Opts.OutputPath != "-")
-    sys::fs::remove(Opts.OutputPath);
+  if (Failed) {
+    if (Opts.OutputPath != "-")
+      sys::fs::remove(Opts.OutputPath);
+    if (!Opts.SplitDwarfFile.empty() && Opts.SplitDwarfFile != "-")
+      sys::fs::remove(Opts.SplitDwarfFile);
+  }
 
   return Failed;
 }
@@ -422,11 +509,6 @@ static void LLVMErrorHandler(void *UserData, const std::string &Message,
 }
 
 int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal();
-  PrettyStackTraceProgram X(Argv.size(), Argv.data());
-  llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
-
   // Initialize targets and assembly printers/parsers.
   InitializeAllTargetInfos();
   InitializeAllTargetMCs();
@@ -453,7 +535,8 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
   if (Asm.ShowHelp) {
     std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
     Opts->PrintHelp(llvm::outs(), "clang -cc1as", "Clang Integrated Assembler",
-                    /*Include=*/driver::options::CC1AsOption, /*Exclude=*/0);
+                    /*Include=*/driver::options::CC1AsOption, /*Exclude=*/0,
+                    /*ShowAllAliases=*/false);
     return 0;
   }
 
@@ -470,12 +553,12 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
   // FIXME: Remove this, one day.
   if (!Asm.LLVMArgs.empty()) {
     unsigned NumArgs = Asm.LLVMArgs.size();
-    const char **Args = new const char*[NumArgs + 2];
+    auto Args = llvm::make_unique<const char*[]>(NumArgs + 2);
     Args[0] = "clang (LLVM option parsing)";
     for (unsigned i = 0; i != NumArgs; ++i)
       Args[i + 1] = Asm.LLVMArgs[i].c_str();
     Args[NumArgs + 1] = nullptr;
-    llvm::cl::ParseCommandLineOptions(NumArgs + 1, Args);
+    llvm::cl::ParseCommandLineOptions(NumArgs + 1, Args.get());
   }
 
   // Execute the invocation, unless there were parsing errors.
@@ -487,4 +570,3 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   return !!Failed;
 }
-

@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -std=c++98 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
-// RUN: %clang_cc1 -std=c++11 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
-// RUN: %clang_cc1 -std=c++14 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
-// RUN: %clang_cc1 -std=c++1z %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -triple %itanium_abi_triple -std=c++98 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -triple %itanium_abi_triple -std=c++11 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -triple %itanium_abi_triple -std=c++14 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: %clang_cc1 -triple %itanium_abi_triple -std=c++1z %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 
 namespace dr300 { // dr300: yes
   template<typename R, typename A> void f(R (&)(A)) {}
@@ -110,18 +110,6 @@ namespace dr305 { // dr305: no
     x->~X<char>(); // expected-error {{no member named}}
   }
 
-  // FIXME: This appears to be valid (but allowing the nested types might be a
-  // defect).
-  template<typename> struct Nested {
-    template<typename> struct Nested {};
-  };
-  void testNested(Nested<int> n) { n.~Nested<int>(); } // expected-error {{no member named}}
-#if __cplusplus < 201103L
-  // expected-error@-2 {{ambiguous}}
-  // expected-note@-6 {{here}}
-  // expected-note@-6 {{here}}
-#endif
-
 #if __cplusplus >= 201103L
   struct Y {
     template<typename T> using T1 = Y;
@@ -135,8 +123,7 @@ namespace dr305 { // dr305: no
     template<typename T> using T2 = T;
   };
   void k(Z *z) {
-    // FIXME: This diagnostic is terrible.
-    z->~T1<int>(); // expected-error {{'T1' following the 'template' keyword does not refer to a template}} expected-error +{{}}
+    z->~T1<int>(); // expected-error {{no member named 'T1' in 'dr305::Z'}} expected-error +{{}}
     z->~T2<int>(); // expected-error {{no member named '~int'}}
     z->~T2<Z>();
   }
@@ -170,9 +157,9 @@ namespace dr308 { // dr308: yes
   void f() {
     try {
       throw D();
-    } catch (const A&) {
+    } catch (const A&) { // expected-note {{for type 'const dr308::A &'}}
       // unreachable
-    } catch (const B&) {
+    } catch (const B&) { // expected-warning {{exception of type 'const dr308::B &' will be caught by earlier handler}}
       // get here instead
     }
   }
@@ -364,6 +351,57 @@ namespace dr329 { // dr329: 3.5
 
   void test() {
     h(a); // expected-note {{instantiation}}
+  }
+}
+
+namespace dr330 { // dr330: 7
+  // Conversions between P and Q will be allowed by P0388.
+  typedef int *(*P)[3];
+  typedef const int *const (*Q)[3];
+  typedef const int *Qinner[3];
+  typedef Qinner const *Q2; // same as Q, but 'const' written outside the array type
+  typedef const int *const (*R)[4];
+  typedef const int *const (*S)[];
+  typedef const int *(*T)[];
+  void f(P p, Q q, Q2 q2, R r, S s, T t) {
+    q = p; // ok
+    q2 = p; // ok
+    r = p; // expected-error {{incompatible}}
+    s = p; // expected-error {{incompatible}} (for now)
+    t = p; // expected-error {{incompatible}}
+    s = q; // expected-error {{incompatible}}
+    s = q2; // expected-error {{incompatible}}
+    s = t; // ok, adding const
+    t = s; // expected-error {{incompatible}}
+    (void) const_cast<P>(q);
+    (void) const_cast<P>(q2);
+    (void) const_cast<Q>(p);
+    (void) const_cast<Q2>(p);
+    (void) const_cast<S>(p); // expected-error {{not allowed}} (for now)
+    (void) const_cast<P>(s); // expected-error {{not allowed}} (for now)
+    (void) const_cast<S>(q); // expected-error {{not allowed}}
+    (void) const_cast<S>(q2); // expected-error {{not allowed}}
+    (void) const_cast<Q>(s); // expected-error {{not allowed}}
+    (void) const_cast<Q2>(s); // expected-error {{not allowed}}
+    (void) const_cast<T>(s);
+    (void) const_cast<S>(t);
+    (void) const_cast<T>(q); // expected-error {{not allowed}}
+    (void) const_cast<Q>(t); // expected-error {{not allowed}}
+
+    (void) reinterpret_cast<P>(q); // expected-error {{casts away qualifiers}}
+    (void) reinterpret_cast<P>(q2); // expected-error {{casts away qualifiers}}
+    (void) reinterpret_cast<Q>(p);
+    (void) reinterpret_cast<Q2>(p);
+    (void) reinterpret_cast<S>(p);
+    (void) reinterpret_cast<P>(s); // expected-error {{casts away qualifiers}}
+    (void) reinterpret_cast<S>(q);
+    (void) reinterpret_cast<S>(q2);
+    (void) reinterpret_cast<Q>(s);
+    (void) reinterpret_cast<Q2>(s);
+    (void) reinterpret_cast<T>(s); // expected-error {{casts away qualifiers}}
+    (void) reinterpret_cast<S>(t);
+    (void) reinterpret_cast<T>(q); // expected-error {{casts away qualifiers}}
+    (void) reinterpret_cast<Q>(t);
   }
 }
 
@@ -918,23 +956,45 @@ namespace dr372 { // dr372: no
       };
     };
   }
+
+  // FIXME: This is valid: deriving from A gives D access to A::B
+  namespace std_example {
+    class A {
+    protected:
+      struct B {}; // expected-note {{here}}
+    };
+    struct D : A::B, A {}; // expected-error {{protected}}
+  }
+
+  // FIXME: This is valid: deriving from A::B gives access to A::B!
+  namespace badwolf {
+    class A {
+    protected:
+      struct B; // expected-note {{here}}
+    };
+    struct A::B : A {};
+    struct C : A::B {}; // expected-error {{protected}}
+  }
 }
 
-namespace dr373 { // dr373: no
-  // FIXME: This is valid.
-  namespace X { int dr373; } // expected-note 2{{here}}
+namespace dr373 { // dr373: 5
+  namespace X { int dr373; }
   struct dr373 { // expected-note {{here}}
     void f() {
-      using namespace dr373::X; // expected-error {{no namespace named 'X' in 'dr373::dr373'}}
+      using namespace dr373::X;
       int k = dr373; // expected-error {{does not refer to a value}}
 
-      namespace Y = dr373::X; // expected-error {{no namespace named 'X' in 'dr373::dr373'}}
+      namespace Y = dr373::X;
       k = Y::dr373;
     }
   };
+
+  struct A { struct B {}; }; // expected-note 2{{here}}
+  namespace X = A::B;   // expected-error {{expected namespace name}}
+  using namespace A::B; // expected-error {{expected namespace name}}
 }
 
-namespace dr374 { // dr374: yes c++11
+namespace dr374 { // dr374: yes
   namespace N {
     template<typename T> void f();
     template<typename T> struct A { void f(); };
@@ -942,11 +1002,6 @@ namespace dr374 { // dr374: yes c++11
   template<> void N::f<char>() {}
   template<> void N::A<char>::f() {}
   template<> struct N::A<int> {};
-#if __cplusplus < 201103L
-  // expected-error@-4 {{extension}} expected-note@-7 {{here}}
-  // expected-error@-4 {{extension}} expected-note@-7 {{here}}
-  // expected-error@-4 {{extension}} expected-note@-8 {{here}}
-#endif
 }
 
 // dr375: dup 345

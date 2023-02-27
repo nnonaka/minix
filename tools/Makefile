@@ -140,7 +140,7 @@ SUBDIR+= .WAIT config
 .if ${MKLLVM} != "no" || ${MKLLVMRT} != "no"
 SUBDIR+= \
 	llvm .WAIT \
-	llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
+	llvm-lib/libLLVMDemangle llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
 	llvm-tblgen
 .endif
 .if ${MKLLVM} != "no"

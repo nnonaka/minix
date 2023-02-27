@@ -9,7 +9,7 @@
 // RUN: cd %t
 // RUN: cp %s %p/Inputs/copy_block_helper.gc* .
 
-// RUN: llvm-cov copy_block_helper.m | FileCheck %s --check-prefix=STDOUT
+// RUN: llvm-cov gcov copy_block_helper.m | FileCheck %s --check-prefix=STDOUT
 // STDOUT: File 'copy_block_helper.m'
 // STDOUT: Lines executed:100.00% of 5
 // STDOUT: copy_block_helper.m:creating 'copy_block_helper.m.gcov'
@@ -29,4 +29,4 @@ void test(id x) { // GCOV: -:    [[@LINE]]:void test
 int main(int argc, const char *argv[]) { test(0); }
 
 // llvm-cov doesn't work on big endian yet
-// XFAIL: powerpc64-, s390x, mips-, mips64-, sparc
+// XFAIL: powerpc-, powerpc64-, s390x, mips-, mips64-, sparc

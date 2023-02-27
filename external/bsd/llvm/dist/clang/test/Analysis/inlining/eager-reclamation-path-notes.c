@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-output=text -analyzer-config graph-trim-interval=5 -verify %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-output=plist-multi-file -analyzer-config graph-trim-interval=5 -analyzer-config path-diagnostics-alternate=false %s -o %t.plist
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-output=text -analyzer-config graph-trim-interval=5 -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-output=plist-multi-file -analyzer-config graph-trim-interval=5 %s -o %t.plist
 // RUN: FileCheck --input-file=%t.plist %s
 
 void use(int *ptr, int val) {
@@ -99,46 +99,12 @@ void testChainedCalls() {
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>21</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>col</key><integer>5</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -318,9 +284,12 @@ void testChainedCalls() {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;ptr&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>5c273b7f0421359833fde3f06e8a5c07</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>use</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>6</integer>
@@ -388,40 +357,6 @@ void testChainedCalls() {
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>41</integer>
 // CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>41</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>41</integer>
-// CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>41</integer>
-// CHECK-NEXT:            <key>col</key><integer>15</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>41</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -528,74 +463,6 @@ void testChainedCalls() {
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>33</integer>
 // CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>11</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>11</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>8</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>33</integer>
-// CHECK-NEXT:            <key>col</key><integer>8</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -775,9 +642,12 @@ void testChainedCalls() {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;ptr&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>1d1fa98a8e9fbfa90777dac9fc2795a8</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>use2</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>28</integer>

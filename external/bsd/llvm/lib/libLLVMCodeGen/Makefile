@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.30 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.34 2018/07/17 18:55:27 joerg Exp $
 
 LIB=	LLVMCodeGen
 
@@ -12,83 +12,111 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	AtomicExpandPass.cpp \
 	BasicTargetTransformInfo.cpp \
 	BranchFolding.cpp \
+	BranchRelaxation.cpp \
+	BreakFalseDeps.cpp \
+	BuiltinGCs.cpp \
 	CalcSpillWeights.cpp \
 	CallingConvLower.cpp \
+	CFIInstrInserter.cpp \
 	CodeGen.cpp \
 	CodeGenPrepare.cpp \
 	CriticalAntiDepBreaker.cpp \
-	DFAPacketizer.cpp \
 	DeadMachineInstructionElim.cpp \
+	DetectDeadLanes.cpp \
+	DFAPacketizer.cpp \
 	DwarfEHPrepare.cpp \
 	EarlyIfConversion.cpp \
 	EdgeBundles.cpp \
-	ErlangGC.cpp \
-	ExecutionDepsFix.cpp \
+	ExecutionDomainFix.cpp \
 	ExpandISelPseudos.cpp \
+	ExpandMemCmp.cpp \
 	ExpandPostRAPseudos.cpp \
-	ForwardControlFlowIntegrity.cpp \
+	ExpandReductions.cpp \
+	FaultMaps.cpp \
+	FEntryInserter.cpp \
+	FuncletLayout.cpp \
 	GCMetadata.cpp \
 	GCMetadataPrinter.cpp \
+	GCRootLowering.cpp \
 	GCStrategy.cpp \
 	GlobalMerge.cpp \
 	IfConversion.cpp \
+	ImplicitNullChecks.cpp \
+	IndirectBrExpandPass.cpp \
 	InlineSpiller.cpp \
 	InterferenceCache.cpp \
+	InterleavedAccessPass.cpp \
 	IntrinsicLowering.cpp \
-	JumpInstrTables.cpp \
-	LLVMTargetMachine.cpp \
 	LatencyPriorityQueue.cpp \
+	LazyMachineBlockFrequencyInfo.cpp \
 	LexicalScopes.cpp \
+	LiveDebugValues.cpp \
 	LiveDebugVariables.cpp \
 	LiveInterval.cpp \
-	LiveIntervalAnalysis.cpp \
+	LiveIntervals.cpp \
 	LiveIntervalUnion.cpp \
 	LivePhysRegs.cpp \
 	LiveRangeCalc.cpp \
 	LiveRangeEdit.cpp \
+	LiveRangeShrink.cpp \
 	LiveRegMatrix.cpp \
-	LiveStackAnalysis.cpp \
+	LiveRegUnits.cpp \
+	LiveStacks.cpp \
 	LiveVariables.cpp \
+	LLVMTargetMachine.cpp \
 	LocalStackSlotAllocation.cpp \
+	LoopTraversal.cpp \
+	LowerEmuTLS.cpp \
+	LowLevelType.cpp \
 	MachineBasicBlock.cpp \
-	MachineBranchProbabilityInfo.cpp \
 	MachineBlockFrequencyInfo.cpp \
 	MachineBlockPlacement.cpp \
+	MachineBranchProbabilityInfo.cpp \
+	MachineCombiner.cpp \
 	MachineCopyPropagation.cpp \
 	MachineCSE.cpp \
-	MachineCombiner.cpp \
 	MachineDominanceFrontier.cpp \
 	MachineDominators.cpp \
+	MachineFrameInfo.cpp \
 	MachineFunction.cpp \
-	MachineFunctionAnalysis.cpp \
 	MachineFunctionPass.cpp \
 	MachineFunctionPrinterPass.cpp \
-	MachineInstr.cpp \
 	MachineInstrBundle.cpp \
+	MachineInstr.cpp \
 	MachineLICM.cpp \
 	MachineLoopInfo.cpp \
 	MachineModuleInfo.cpp \
 	MachineModuleInfoImpls.cpp \
+	MachineOperand.cpp \
+	MachineOptimizationRemarkEmitter.cpp \
+	MachineOutliner.cpp \
 	MachinePassRegistry.cpp \
+	MachinePipeliner.cpp \
 	MachinePostDominators.cpp \
 	MachineRegionInfo.cpp \
 	MachineRegisterInfo.cpp \
-	MachineSSAUpdater.cpp \
 	MachineScheduler.cpp \
 	MachineSink.cpp \
+	MachineSSAUpdater.cpp \
 	MachineTraceMetrics.cpp \
 	MachineVerifier.cpp \
-	OcamlGC.cpp \
+	MacroFusion.cpp \
+	MIRCanonicalizerPass.cpp \
+	MIRPrinter.cpp \
+	MIRPrintingPass.cpp \
 	OptimizePHIs.cpp \
+	ParallelCG.cpp \
+	PatchableFunction.cpp \
+	PeepholeOptimizer.cpp \
 	PHIElimination.cpp \
 	PHIEliminationUtils.cpp \
-	Passes.cpp \
-	PeepholeOptimizer.cpp \
-	ScoreboardHazardRecognizer.cpp \
+	PostRAHazardRecognizer.cpp \
 	PostRASchedulerList.cpp \
+	PreISelIntrinsicLowering.cpp \
 	ProcessImplicitDefs.cpp \
 	PrologEpilogInserter.cpp \
 	PseudoSourceValue.cpp \
+	ReachingDefAnalysis.cpp \
 	RegAllocBase.cpp \
 	RegAllocBasic.cpp \
 	RegAllocFast.cpp \
@@ -98,10 +126,21 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	RegisterCoalescer.cpp \
 	RegisterPressure.cpp \
 	RegisterScavenging.cpp \
+	RegisterUsageInfo.cpp \
+	RegUsageInfoCollector.cpp \
+	RegUsageInfoPropagate.cpp \
+	RenameIndependentSubregs.cpp \
+	ResetMachineFunctionPass.cpp \
+	SafeStackColoring.cpp \
+	SafeStack.cpp \
+	SafeStackLayout.cpp \
+	ScalarizeMaskedMemIntrin.cpp \
 	ScheduleDAG.cpp \
 	ScheduleDAGInstrs.cpp \
 	ScheduleDAGPrinter.cpp \
-	ShadowStackGC.cpp \
+	ScoreboardHazardRecognizer.cpp \
+	ShadowStackGCLowering.cpp \
+	ShrinkWrap.cpp \
 	SjLjEHPrepare.cpp \
 	SlotIndexes.cpp \
 	SpillPlacement.cpp \
@@ -111,18 +150,24 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	StackMaps.cpp \
 	StackProtector.cpp \
 	StackSlotColoring.cpp \
-	StatepointExampleGC.cpp \
 	TailDuplication.cpp \
+	TailDuplicator.cpp \
 	TargetFrameLoweringImpl.cpp \
 	TargetInstrInfo.cpp \
 	TargetLoweringBase.cpp \
 	TargetLoweringObjectFileImpl.cpp \
 	TargetOptionsImpl.cpp \
+	TargetPassConfig.cpp \
 	TargetRegisterInfo.cpp \
 	TargetSchedule.cpp \
+	TargetSubtargetInfo.cpp \
 	TwoAddressInstructionPass.cpp \
 	UnreachableBlockElim.cpp \
-	VirtRegMap.cpp
+	ValueTypes.cpp \
+	VirtRegMap.cpp \
+	WasmEHPrepare.cpp \
+	WinEHPrepare.cpp \
+	XRayInstrumentation.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

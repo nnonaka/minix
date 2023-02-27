@@ -44,6 +44,12 @@ void bah() {
 }
 
 namespace warn_unused_CXX11 {
+class Status;
+class Foo {
+ public:
+  Status doStuff();
+};
+
 struct [[clang::warn_unused_result]] Status {
   bool ok() const;
   Status& operator=(const Status& x);
@@ -73,9 +79,22 @@ void lazy() {
   (void)DoYetAnotherThing();
 
   DoSomething(); // expected-warning {{ignoring return value}}
-  DoSomethingElse(); // expected-warning {{ignoring return value}}
-  DoAnotherThing(); // expected-warning {{ignoring return value}}
+  DoSomethingElse();
+  DoAnotherThing();
   DoYetAnotherThing();
+}
+
+template <typename T>
+class [[clang::warn_unused_result]] StatusOr {
+};
+StatusOr<int> doit();
+void test() {
+  Foo f;
+  f.doStuff(); // expected-warning {{ignoring return value}}
+  doit(); // expected-warning {{ignoring return value}}
+
+  auto func = []() { return Status(); };
+  func(); // expected-warning {{ignoring return value}}
 }
 }
 
@@ -141,3 +160,49 @@ void g() {
   (void)noexcept(f(), false); // Should not warn.
 }
 }
+
+namespace {
+// C++ Methods should warn even in their own class.
+struct [[clang::warn_unused_result]] S {
+  S DoThing() { return {}; };
+  S operator++(int) { return {}; };
+  S operator--(int) { return {}; };
+  // Improperly written prefix.
+  S operator++() { return {}; };
+  S operator--() { return {}; };
+};
+
+struct [[clang::warn_unused_result]] P {
+  P DoThing() { return {}; };
+};
+
+P operator++(const P &, int) { return {}; };
+P operator--(const P &, int) { return {}; };
+// Improperly written prefix.
+P operator++(const P &) { return {}; };
+P operator--(const P &) { return {}; };
+
+void f() {
+  S s;
+  P p;
+  s.DoThing(); // expected-warning {{ignoring return value}}
+  p.DoThing(); // expected-warning {{ignoring return value}}
+  // Only postfix is expected to warn when written correctly.
+  s++; // expected-warning {{ignoring return value}}
+  s--; // expected-warning {{ignoring return value}}
+  p++; // expected-warning {{ignoring return value}}
+  p--; // expected-warning {{ignoring return value}}
+  // Improperly written prefix operators should still warn.
+  ++s; // expected-warning {{ignoring return value}}
+  --s; // expected-warning {{ignoring return value}}
+  ++p; // expected-warning {{ignoring return value}}
+  --p; // expected-warning {{ignoring return value}}
+
+  // Silencing the warning by cast to void still works.
+  (void)s.DoThing();
+  (void)s++;
+  (void)p++;
+  (void)++s;
+  (void)++p;
+}
+} // namespace

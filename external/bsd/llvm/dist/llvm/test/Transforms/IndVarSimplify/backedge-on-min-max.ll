@@ -1,4 +1,5 @@
 ; RUN: opt < %s -indvars -S | FileCheck %s
+; RUN: opt -lcssa -loop-simplify -S < %s | opt -S -passes='require<targetir>,require<scalar-evolution>,require<domtree>,loop(indvars)'
 
 ;; --- signed ---
 
@@ -18,7 +19,7 @@ define void @min.signed.1(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -46,7 +47,7 @@ define void @min.signed.2(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -74,7 +75,7 @@ define void @min.signed.3(i32* %a, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -102,7 +103,7 @@ define void @min.signed.4(i32* %a, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -130,7 +131,7 @@ define void @max.signed.1(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -158,7 +159,7 @@ define void @max.signed.2(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -186,7 +187,7 @@ define void @max.signed.3(i32* %a, i32 %n, i32 %init) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -214,7 +215,7 @@ define void @max.signed.4(i32* %a, i32 %n, i32 %init) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -244,7 +245,7 @@ define void @min.unsigned.1(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -272,7 +273,7 @@ define void @min.unsigned.2(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -300,7 +301,7 @@ define void @min.unsigned.3(i32* %a, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -328,7 +329,7 @@ define void @min.unsigned.4(i32* %a, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -356,7 +357,7 @@ define void @max.unsigned.1(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -384,7 +385,7 @@ define void @max.unsigned.2(i32* %a, i32 %a_len, i32 %n) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -412,7 +413,7 @@ define void @max.unsigned.3(i32* %a, i32 %n, i32 %init) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 
@@ -440,7 +441,7 @@ define void @max.unsigned.4(i32* %a, i32 %n, i32 %init) {
 ; CHECK: br i1 true, label %ok, label %latch
 
  ok:
-  %addr = getelementptr i32* %a, i32 %idx
+  %addr = getelementptr i32, i32* %a, i32 %idx
   store i32 %idx, i32* %addr
   br label %latch
 

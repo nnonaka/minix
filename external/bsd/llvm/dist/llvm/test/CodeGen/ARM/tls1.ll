@@ -1,5 +1,5 @@
-; RUN: llc < %s -march=arm -mtriple=arm-linux-gnueabi | FileCheck %s
-; RUN: llc < %s -march=arm -mtriple=arm-linux-gnueabi -relocation-model=pic | \
+; RUN: llc < %s -mtriple=arm-linux-gnueabi | FileCheck %s
+; RUN: llc < %s -mtriple=arm-linux-gnueabi -relocation-model=pic | \
 ; RUN:   FileCheck %s --check-prefix=PIC
 
 
@@ -12,7 +12,7 @@
 
 define i32 @f() {
 entry:
-	%tmp1 = load i32* @i		; <i32> [#uses=1]
+	%tmp1 = load i32, i32* @i		; <i32> [#uses=1]
 	ret i32 %tmp1
 }
 

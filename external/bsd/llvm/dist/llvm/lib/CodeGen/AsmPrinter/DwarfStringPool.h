@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/DwarfStringPool.h - Dwarf Debug Framework -*- C++ -*--===//
+//===- llvm/CodeGen/DwarfStringPool.h - Dwarf Debug Framework ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,39 +11,43 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DWARFSTRINGPOOL_H
 
 #include "llvm/ADT/StringMap.h"
-#include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/Allocator.h"
-#include <utility>
 
 namespace llvm {
 
-class MCSymbol;
+class AsmPrinter;
 class MCSection;
-class StringRef;
 
 // Collection of strings for this unit and assorted symbols.
 // A String->Symbol mapping of strings used by indirect
 // references.
 class DwarfStringPool {
-  StringMap<std::pair<MCSymbol *, unsigned>, BumpPtrAllocator &> Pool;
+  using EntryTy = DwarfStringPoolEntry;
+
+  StringMap<EntryTy, BumpPtrAllocator &> Pool;
   StringRef Prefix;
+  unsigned NumBytes = 0;
+  bool ShouldCreateSymbols;
 
 public:
-  DwarfStringPool(BumpPtrAllocator &A, AsmPrinter &Asm, StringRef Prefix)
-      : Pool(A), Prefix(Prefix) {}
+  using EntryRef = DwarfStringPoolEntryRef;
 
-  void emit(AsmPrinter &Asm, const MCSection *StrSection,
-            const MCSection *OffsetSection = nullptr);
+  DwarfStringPool(BumpPtrAllocator &A, AsmPrinter &Asm, StringRef Prefix);
 
-  /// \brief Returns an entry into the string pool with the given
-  /// string text.
-  MCSymbol *getSymbol(AsmPrinter &Asm, StringRef Str);
-
-  /// \brief Returns the index into the string pool with the given
-  /// string text.
-  unsigned getIndex(AsmPrinter &Asm, StringRef Str);
+  void emit(AsmPrinter &Asm, MCSection *StrSection,
+            MCSection *OffsetSection = nullptr,
+            bool UseRelativeOffsets = false);
 
   bool empty() const { return Pool.empty(); }
+
+  unsigned size() const { return Pool.size(); }
+
+  /// Get a reference to an entry in the string pool.
+  EntryRef getEntry(AsmPrinter &Asm, StringRef Str);
 };
-}
-#endif
+
+} // end namespace llvm
+
+#endif // LLVM_LIB_CODEGEN_ASMPRINTER_DWARFSTRINGPOOL_H

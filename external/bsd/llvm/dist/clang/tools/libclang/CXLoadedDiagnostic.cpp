@@ -18,12 +18,12 @@
 #include "clang/Basic/LLVM.h"
 #include "clang/Frontend/SerializedDiagnosticReader.h"
 #include "clang/Frontend/SerializedDiagnostics.h"
-#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/MemoryBuffer.h"
+
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -36,7 +36,7 @@ namespace {
 class CXLoadedDiagnosticSetImpl : public CXDiagnosticSetImpl {
 public:
   CXLoadedDiagnosticSetImpl() : CXDiagnosticSetImpl(true), FakeFiles(FO) {}
-  virtual ~CXLoadedDiagnosticSetImpl() {}  
+  ~CXLoadedDiagnosticSetImpl() override {}
 
   llvm::BumpPtrAllocator Alloc;
   Strings Categories;
@@ -47,7 +47,7 @@ public:
   FileManager FakeFiles;
   llvm::DenseMap<unsigned, const FileEntry *> Files;
 
-  /// \brief Copy the string into our own allocator.
+  /// Copy the string into our own allocator.
   const char *copyString(StringRef Blob) {
     char *mem = Alloc.Allocate<char>(Blob.size() + 1);
     memcpy(mem, Blob.data(), Blob.size());
@@ -55,7 +55,7 @@ public:
     return mem;
   }
 };
-}
+} // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
 // Cleanup.
@@ -245,7 +245,7 @@ public:
 
   CXDiagnosticSet load(const char *file);
 };
-}
+} // end anonymous namespace
 
 CXDiagnosticSet DiagLoader::load(const char *file) {
   TopDiags = llvm::make_unique<CXLoadedDiagnosticSetImpl>();
@@ -263,7 +263,7 @@ CXDiagnosticSet DiagLoader::load(const char *file) {
       reportInvalidFile(EC.message());
       break;
     }
-    return 0;
+    return nullptr;
   }
 
   return (CXDiagnosticSet)TopDiags.release();
@@ -387,11 +387,9 @@ std::error_code DiagLoader::visitDiagnosticRecord(
   return std::error_code();
 }
 
-extern "C" {
 CXDiagnosticSet clang_loadDiagnostics(const char *file,
                                       enum CXLoadDiag_Error *error,
                                       CXString *errorString) {
   DiagLoader L(error, errorString);
   return L.load(file);
 }
-} // end extern 'C'.

@@ -1,4 +1,4 @@
-; RUN: llc < %s -mtriple=powerpc64-unknown-gnu-linux | FileCheck %s
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64-unknown-gnu-linux | FileCheck %s
 
 define void @test_shadow_optimization() {
 entry:
@@ -16,7 +16,7 @@ entry:
 ; CHECK: mtlr [[REG1]]
 ; CHECK: blr
 
-  tail call void (i64, i32, ...)* @llvm.experimental.stackmap(i64  0, i32  32)
+  tail call void (i64, i32, ...) @llvm.experimental.stackmap(i64  0, i32  32)
   ret void
 }
 

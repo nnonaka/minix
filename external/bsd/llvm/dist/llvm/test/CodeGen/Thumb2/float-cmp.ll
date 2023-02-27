@@ -15,7 +15,7 @@ define i1 @cmp_f_false(float %a, float %b) {
 define i1 @cmp_f_oeq(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_oeq:
 ; NONE: bl __aeabi_fcmpeq
-; HARD: vcmpe.f32
+; HARD: vcmp.f32
 ; HARD: moveq r0, #1
   %1 = fcmp oeq float %a, %b
   ret i1 %1
@@ -56,7 +56,7 @@ define i1 @cmp_f_one(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_one:
 ; NONE: bl __aeabi_fcmpgt
 ; NONE: bl __aeabi_fcmplt
-; HARD: vcmpe.f32
+; HARD: vcmp.f32
 ; HARD: movmi r0, #1
 ; HARD: movgt r0, #1
   %1 = fcmp one float %a, %b
@@ -69,11 +69,12 @@ define i1 @cmp_f_ord(float %a, float %b) {
 ; HARD: movvc r0, #1
   %1 = fcmp ord float %a, %b
   ret i1 %1
-}define i1 @cmp_f_ueq(float %a, float %b) {
+}
+define i1 @cmp_f_ueq(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_ueq:
 ; NONE: bl __aeabi_fcmpeq
 ; NONE: bl __aeabi_fcmpun
-; HARD: vcmpe.f32
+; HARD: vcmp.f32
 ; HARD: moveq r0, #1
 ; HARD: movvs r0, #1
   %1 = fcmp ueq float %a, %b
@@ -81,8 +82,9 @@ define i1 @cmp_f_ord(float %a, float %b) {
 }
 define i1 @cmp_f_ugt(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_ugt:
-; NONE: bl __aeabi_fcmpgt
-; NONE: bl __aeabi_fcmpun
+; NONE: bl __aeabi_fcmple
+; NONE-NEXT: clz r0, r0
+; NONE-NEXT: lsrs r0, r0, #5
 ; HARD: vcmpe.f32
 ; HARD: movhi r0, #1
   %1 = fcmp ugt float %a, %b
@@ -90,8 +92,9 @@ define i1 @cmp_f_ugt(float %a, float %b) {
 }
 define i1 @cmp_f_uge(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_uge:
-; NONE: bl __aeabi_fcmpge
-; NONE: bl __aeabi_fcmpun
+; NONE: bl __aeabi_fcmplt
+; NONE-NEXT: clz r0, r0
+; NONE-NEXT: lsrs r0, r0, #5
 ; HARD: vcmpe.f32
 ; HARD: movpl r0, #1
   %1 = fcmp uge float %a, %b
@@ -99,8 +102,9 @@ define i1 @cmp_f_uge(float %a, float %b) {
 }
 define i1 @cmp_f_ult(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_ult:
-; NONE: bl __aeabi_fcmplt
-; NONE: bl __aeabi_fcmpun
+; NONE: bl __aeabi_fcmpge
+; NONE-NEXT: clz r0, r0
+; NONE-NEXT: lsrs r0, r0, #5
 ; HARD: vcmpe.f32
 ; HARD: movlt r0, #1
   %1 = fcmp ult float %a, %b
@@ -108,8 +112,9 @@ define i1 @cmp_f_ult(float %a, float %b) {
 }
 define i1 @cmp_f_ule(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_ule:
-; NONE: bl __aeabi_fcmple
-; NONE: bl __aeabi_fcmpun
+; NONE: bl __aeabi_fcmpgt
+; NONE-NEXT: clz r0, r0
+; NONE-NEXT: lsrs r0, r0, #5
 ; HARD: vcmpe.f32
 ; HARD: movle r0, #1
   %1 = fcmp ule float %a, %b
@@ -118,7 +123,7 @@ define i1 @cmp_f_ule(float %a, float %b) {
 define i1 @cmp_f_une(float %a, float %b) {
 ; CHECK-LABEL: cmp_f_une:
 ; NONE: bl __aeabi_fcmpeq
-; HARD: vcmpe.f32
+; HARD: vcmp.f32
 ; HARD: movne r0, #1
   %1 = fcmp une float %a, %b
   ret i1 %1
@@ -150,7 +155,7 @@ define i1 @cmp_d_oeq(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_oeq:
 ; NONE: bl __aeabi_dcmpeq
 ; SP: bl __aeabi_dcmpeq
-; DP: vcmpe.f64
+; DP: vcmp.f64
 ; DP: moveq r0, #1
   %1 = fcmp oeq double %a, %b
   ret i1 %1
@@ -197,7 +202,7 @@ define i1 @cmp_d_one(double %a, double %b) {
 ; NONE: bl __aeabi_dcmplt
 ; SP: bl __aeabi_dcmpgt
 ; SP: bl __aeabi_dcmplt
-; DP: vcmpe.f64
+; DP: vcmp.f64
 ; DP: movmi r0, #1
 ; DP: movgt r0, #1
   %1 = fcmp one double %a, %b
@@ -214,10 +219,8 @@ define i1 @cmp_d_ord(double %a, double %b) {
 }
 define i1 @cmp_d_ugt(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_ugt:
-; NONE: bl __aeabi_dcmpgt
-; NONE: bl __aeabi_dcmpun
-; SP: bl __aeabi_dcmpgt
-; SP: bl __aeabi_dcmpun
+; NONE: bl __aeabi_dcmple
+; SP: bl __aeabi_dcmple
 ; DP: vcmpe.f64
 ; DP: movhi r0, #1
   %1 = fcmp ugt double %a, %b
@@ -226,10 +229,8 @@ define i1 @cmp_d_ugt(double %a, double %b) {
 
 define i1 @cmp_d_ult(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_ult:
-; NONE: bl __aeabi_dcmplt
-; NONE: bl __aeabi_dcmpun
-; SP: bl __aeabi_dcmplt
-; SP: bl __aeabi_dcmpun
+; NONE: bl __aeabi_dcmpge
+; SP: bl __aeabi_dcmpge
 ; DP: vcmpe.f64
 ; DP: movlt r0, #1
   %1 = fcmp ult double %a, %b
@@ -259,7 +260,7 @@ define i1 @cmp_d_ueq(double %a, double %b) {
 ; NONE: bl __aeabi_dcmpun
 ; SP: bl __aeabi_dcmpeq
 ; SP: bl __aeabi_dcmpun
-; DP: vcmpe.f64
+; DP: vcmp.f64
 ; DP: moveq r0, #1
 ; DP: movvs r0, #1
   %1 = fcmp ueq double %a, %b
@@ -268,10 +269,8 @@ define i1 @cmp_d_ueq(double %a, double %b) {
 
 define i1 @cmp_d_uge(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_uge:
-; NONE: bl __aeabi_dcmpge
-; NONE: bl __aeabi_dcmpun
-; SP: bl __aeabi_dcmpge
-; SP: bl __aeabi_dcmpun
+; NONE: bl __aeabi_dcmplt
+; SP: bl __aeabi_dcmplt
 ; DP: vcmpe.f64
 ; DP: movpl r0, #1
   %1 = fcmp uge double %a, %b
@@ -280,10 +279,8 @@ define i1 @cmp_d_uge(double %a, double %b) {
 
 define i1 @cmp_d_ule(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_ule:
-; NONE: bl __aeabi_dcmple
-; NONE: bl __aeabi_dcmpun
-; SP: bl __aeabi_dcmple
-; SP: bl __aeabi_dcmpun
+; NONE: bl __aeabi_dcmpgt
+; SP: bl __aeabi_dcmpgt
 ; DP: vcmpe.f64
 ; DP: movle r0, #1
   %1 = fcmp ule double %a, %b
@@ -294,7 +291,7 @@ define i1 @cmp_d_une(double %a, double %b) {
 ; CHECK-LABEL: cmp_d_une:
 ; NONE: bl __aeabi_dcmpeq
 ; SP: bl __aeabi_dcmpeq
-; DP: vcmpe.f64
+; DP: vcmp.f64
 ; DP: movne r0, #1
   %1 = fcmp une double %a, %b
   ret i1 %1

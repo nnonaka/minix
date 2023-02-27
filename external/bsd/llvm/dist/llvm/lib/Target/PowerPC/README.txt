@@ -256,7 +256,7 @@ _clamp0g:
         cmpwi cr0, r3, 0
         li r2, 0
         blt cr0, LBB1_2
-; BB#1:                                                     ; %entry
+; %bb.1:                                                    ; %entry
         mr r2, r3
 LBB1_2:                                                     ; %entry
         mr r3, r2
@@ -589,6 +589,17 @@ entry:
 	%tmp34 = zext i1 %tmp3 to i32		; <i32> [#uses=1]
 	ret i32 %tmp34
 }
+
+//===---------------------------------------------------------------------===//
+for the following code:
+
+void foo (float *__restrict__ a, int *__restrict__ b, int n) {
+      a[n] = b[n]  * 2.321;
+}
+
+we load b[n] to GPR, then move it VSX register and convert it float. We should 
+use vsx scalar integer load instructions to avoid direct moves
+
 //===----------------------------------------------------------------------===//
 ; RUN: llvm-as < %s | llc -march=ppc32 | not grep fneg
 
@@ -621,3 +632,34 @@ void foo() {
   bar(x);
   __asm__("" ::: "cr2");
 }
+
+//===-------------------------------------------------------------------------===
+Naming convention for instruction formats is very haphazard.
+We have agreed on a naming scheme as follows:
+
+<INST_form>{_<OP_type><OP_len>}+
+
+Where:
+INST_form is the instruction format (X-form, etc.)
+OP_type is the operand type - one of OPC (opcode), RD (register destination),
+                              RS (register source),
+                              RDp (destination register pair),
+                              RSp (source register pair), IM (immediate),
+                              XO (extended opcode)
+OP_len is the length of the operand in bits
+
+VSX register operands would be of length 6 (split across two fields),
+condition register fields of length 3.
+We would not need denote reserved fields in names of instruction formats.
+
+//===----------------------------------------------------------------------===//
+
+Instruction fusion was introduced in ISA 2.06 and more opportunities added in
+ISA 2.07.  LLVM needs to add infrastructure to recognize fusion opportunities
+and force instruction pairs to be scheduled together.
+
+-----------------------------------------------------------------------------
+
+More general handling of any_extend and zero_extend:
+
+See https://reviews.llvm.org/D24924#555306

@@ -41,7 +41,7 @@ CLEANFILES+=strings
 
 .cc.o .cpp.o .cxx.o .C.o:
 	${CXX} -E ${CPPFLAGS} ${CXXFLAGS} ${.IMPSRC} | xstr -c -
-	@mv -f x.c x.cc
+	@${MV} x.c x.cc
 	@${CXX} ${CPPFLAGS} ${CXXFLAGS} -c x.cc -o ${.TARGET}
 .if defined(CTFCONVERT)
 	${CTFCONVERT} ${CTFFLAGS} ${.TARGET}

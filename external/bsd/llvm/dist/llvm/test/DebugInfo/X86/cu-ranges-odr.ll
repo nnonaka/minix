@@ -1,5 +1,5 @@
-; RUN: llc -split-dwarf=Enable -O0 %s -mtriple=x86_64-unknown-linux-gnu -filetype=obj -o %t
-; RUN: llvm-dwarfdump -debug-dump=all %t | FileCheck %s
+; RUN: llc -split-dwarf-file=foo.dwo -O0 %s -mtriple=x86_64-unknown-linux-gnu -filetype=obj -o %t
+; RUN: llvm-dwarfdump -all %t | FileCheck %s
 ; RUN: llvm-readobj --relocations %t | FileCheck --check-prefix=CHECK-RELOCS %s
 
 ; From:
@@ -18,79 +18,81 @@
 ; Check that we have a relocation against the .debug_ranges section.
 ; CHECK-RELOCS: R_X86_64_32 .debug_ranges 0x0
 
+source_filename = "test/DebugInfo/X86/cu-ranges-odr.ll"
+
 %class.A = type { i32 }
 
-@a = global %class.A zeroinitializer, align 4
+@a = global %class.A zeroinitializer, align 4, !dbg !0
 @llvm.global_ctors = appending global [1 x { i32, void ()* }] [{ i32, void ()* } { i32 65535, void ()* @_GLOBAL__I_a }]
 
-define internal void @__cxx_global_var_init() section ".text.startup" {
+define internal void @__cxx_global_var_init() section ".text.startup" !dbg !18 {
 entry:
-  call void @_ZN1AC2Ei(%class.A* @a, i32 0), !dbg !26
-  ret void, !dbg !26
+  call void @_ZN1AC2Ei(%class.A* @a, i32 0), !dbg !21
+  ret void, !dbg !21
 }
 
 ; Function Attrs: nounwind uwtable
-define linkonce_odr void @_ZN1AC2Ei(%class.A* %this, i32 %i) unnamed_addr #0 align 2 {
+define linkonce_odr void @_ZN1AC2Ei(%class.A* %this, i32 %i) unnamed_addr #0 align 2 !dbg !22 {
 entry:
   %this.addr = alloca %class.A*, align 8
   %i.addr = alloca i32, align 4
   store %class.A* %this, %class.A** %this.addr, align 8
-  call void @llvm.dbg.declare(metadata %class.A** %this.addr, metadata !27, metadata !{!"0x102"}), !dbg !29
+  call void @llvm.dbg.declare(metadata %class.A** %this.addr, metadata !23, metadata !25), !dbg !26
   store i32 %i, i32* %i.addr, align 4
-  call void @llvm.dbg.declare(metadata i32* %i.addr, metadata !30, metadata !{!"0x102"}), !dbg !31
-  %this1 = load %class.A** %this.addr
-  %a = getelementptr inbounds %class.A* %this1, i32 0, i32 0, !dbg !31
-  %0 = load i32* %i.addr, align 4, !dbg !31
-  store i32 %0, i32* %a, align 4, !dbg !31
-  ret void, !dbg !31
+  call void @llvm.dbg.declare(metadata i32* %i.addr, metadata !27, metadata !25), !dbg !28
+  %this1 = load %class.A*, %class.A** %this.addr
+  %a = getelementptr inbounds %class.A, %class.A* %this1, i32 0, i32 0, !dbg !28
+  %0 = load i32, i32* %i.addr, align 4, !dbg !28
+  store i32 %0, i32* %a, align 4, !dbg !28
+  ret void, !dbg !28
 }
 
 ; Function Attrs: nounwind readnone
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
-define internal void @_GLOBAL__I_a() section ".text.startup" {
+define internal void @_GLOBAL__I_a() section ".text.startup" !dbg !29 {
 entry:
-  call void @__cxx_global_var_init(), !dbg !32
-  ret void, !dbg !32
+  call void @__cxx_global_var_init(), !dbg !31
+  ret void, !dbg !31
 }
 
 attributes #0 = { nounwind uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!23, !24}
-!llvm.ident = !{!25}
+!llvm.dbg.cu = !{!11}
+!llvm.module.flags = !{!15, !16}
+!llvm.ident = !{!17}
 
-!0 = !{!"0x11\004\00clang version 3.5 (trunk 199923) (llvm/trunk 199940)\000\00\000\00\001", !1, !2, !3, !13, !21, !2} ; [ DW_TAG_compile_unit ] [/usr/local/google/home/echristo/tmp/baz.cpp] [DW_LANG_C_plus_plus]
-!1 = !{!"baz.cpp", !"/usr/local/google/home/echristo/tmp"}
-!2 = !{}
-!3 = !{!4}
-!4 = !{!"0x2\00A\001\0032\0032\000\000\000", !1, null, null, !5, null, null, !"_ZTS1A"} ; [ DW_TAG_class_type ] [A] [line 1, size 32, align 32, offset 0] [def] [from ]
-!5 = !{!6, !8}
-!6 = !{!"0xd\00a\005\0032\0032\000\001", !1, !"_ZTS1A", !7} ; [ DW_TAG_member ] [a] [line 5, size 32, align 32, offset 0] [private] [from int]
-!7 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!8 = !{!"0x2e\00A\00A\00\003\000\000\000\006\00256\000\003", !1, !"_ZTS1A", !9, null, null, null, i32 0, !12} ; [ DW_TAG_subprogram ] [line 3] [A]
-!9 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !10, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!10 = !{null, !11, !7}
-!11 = !{!"0xf\00\000\0064\0064\000\001088", null, null, !"_ZTS1A"} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [artificial] [from _ZTS1A]
-!12 = !{i32 786468}
-!13 = !{!14, !18, !19}
-!14 = !{!"0x2e\00__cxx_global_var_init\00__cxx_global_var_init\00\008\001\001\000\006\00256\000\008", !1, !15, !16, null, void ()* @__cxx_global_var_init, null, null, !2} ; [ DW_TAG_subprogram ] [line 8] [local] [def] [__cxx_global_var_init]
-!15 = !{!"0x29", !1}         ; [ DW_TAG_file_type ] [/usr/local/google/home/echristo/tmp/baz.cpp]
-!16 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !17, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!17 = !{null}
-!18 = !{!"0x2e\00A\00A\00_ZN1AC2Ei\003\000\001\000\006\00256\000\003", !1, !"_ZTS1A", !9, null, void (%class.A*, i32)* @_ZN1AC2Ei, null, !8, !2} ; [ DW_TAG_subprogram ] [line 3] [def] [A]
-!19 = !{!"0x2e\00\00\00_GLOBAL__I_a\003\001\001\000\006\0064\000\003", !1, !15, !20, null, void ()* @_GLOBAL__I_a, null, null, !2} ; [ DW_TAG_subprogram ] [line 3] [local] [def]
-!20 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !2, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!21 = !{!22}
-!22 = !{!"0x34\00a\00a\00\008\000\001", null, !15, !4, %class.A* @a, null} ; [ DW_TAG_variable ] [a] [line 8] [def]
-!23 = !{i32 2, !"Dwarf Version", i32 4}
-!24 = !{i32 1, !"Debug Info Version", i32 2}
-!25 = !{!"clang version 3.5 (trunk 199923) (llvm/trunk 199940)"}
-!26 = !MDLocation(line: 8, scope: !14)
-!27 = !{!"0x101\00this\0016777216\001088", !18, null, !28} ; [ DW_TAG_arg_variable ] [this] [line 0]
-!28 = !{!"0xf\00\000\0064\0064\000\000", null, null, !"_ZTS1A"} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [from _ZTS1A]
-!29 = !MDLocation(line: 0, scope: !18)
-!30 = !{!"0x101\00i\0033554435\000", !18, !15, !7} ; [ DW_TAG_arg_variable ] [i] [line 3]
-!31 = !MDLocation(line: 3, scope: !18)
-!32 = !MDLocation(line: 3, scope: !19)
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "a", scope: null, file: !2, line: 8, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "baz.cpp", directory: "/usr/local/google/home/echristo/tmp")
+!3 = !DICompositeType(tag: DW_TAG_class_type, name: "A", file: !2, line: 1, size: 32, align: 32, elements: !4, identifier: "_ZTS1A")
+!4 = !{!5, !7}
+!5 = !DIDerivedType(tag: DW_TAG_member, name: "a", scope: !3, file: !2, line: 5, baseType: !6, size: 32, align: 32, flags: DIFlagPrivate)
+!6 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!7 = !DISubprogram(name: "A", scope: !3, file: !2, line: 3, type: !8, isLocal: false, isDefinition: false, scopeLine: 3, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false)
+!8 = !DISubroutineType(types: !9)
+!9 = !{null, !10, !6}
+!10 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !3, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer)
+!11 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "clang version 3.5 (trunk 199923) (llvm/trunk 199940)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !12, retainedTypes: !13, globals: !14, imports: !12)
+!12 = !{}
+!13 = !{!3}
+!14 = !{!0}
+!15 = !{i32 2, !"Dwarf Version", i32 4}
+!16 = !{i32 1, !"Debug Info Version", i32 3}
+!17 = !{!"clang version 3.5 (trunk 199923) (llvm/trunk 199940)"}
+!18 = distinct !DISubprogram(name: "__cxx_global_var_init", scope: !2, file: !2, line: 8, type: !19, isLocal: true, isDefinition: true, scopeLine: 8, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !11, retainedNodes: !12)
+!19 = !DISubroutineType(types: !20)
+!20 = !{null}
+!21 = !DILocation(line: 8, scope: !18)
+!22 = distinct !DISubprogram(name: "A", linkageName: "_ZN1AC2Ei", scope: !3, file: !2, line: 3, type: !8, isLocal: false, isDefinition: true, scopeLine: 3, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !11, declaration: !7, retainedNodes: !12)
+!23 = !DILocalVariable(name: "this", arg: 1, scope: !22, type: !24, flags: DIFlagArtificial | DIFlagObjectPointer)
+!24 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !3, size: 64, align: 64)
+!25 = !DIExpression()
+!26 = !DILocation(line: 0, scope: !22)
+!27 = !DILocalVariable(name: "i", arg: 2, scope: !22, file: !2, line: 3, type: !6)
+!28 = !DILocation(line: 3, scope: !22)
+!29 = distinct !DISubprogram(linkageName: "_GLOBAL__I_a", scope: !2, file: !2, line: 3, type: !30, isLocal: true, isDefinition: true, scopeLine: 3, virtualIndex: 6, flags: DIFlagArtificial, isOptimized: false, unit: !11, retainedNodes: !12)
+!30 = !DISubroutineType(types: !12)
+!31 = !DILocation(line: 3, scope: !29)
+

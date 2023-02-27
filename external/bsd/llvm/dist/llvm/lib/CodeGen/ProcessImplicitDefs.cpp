@@ -13,14 +13,14 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
-#define DEBUG_TYPE "processimplicitdefs"
+#define DEBUG_TYPE "processimpdefs"
 
 namespace {
 /// Process IMPLICIT_DEF instructions and make sure there is one implicit_def
@@ -44,21 +44,19 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &au) const override;
 
-  bool runOnMachineFunction(MachineFunction &fn) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 };
 } // end anonymous namespace
 
 char ProcessImplicitDefs::ID = 0;
 char &llvm::ProcessImplicitDefsID = ProcessImplicitDefs::ID;
 
-INITIALIZE_PASS_BEGIN(ProcessImplicitDefs, "processimpdefs",
-                "Process Implicit Definitions", false, false)
-INITIALIZE_PASS_END(ProcessImplicitDefs, "processimpdefs",
+INITIALIZE_PASS(ProcessImplicitDefs, DEBUG_TYPE,
                 "Process Implicit Definitions", false, false)
 
 void ProcessImplicitDefs::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
-  AU.addPreserved<AliasAnalysis>();
+  AU.addPreserved<AAResultsWrapperPass>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 
@@ -68,14 +66,14 @@ bool ProcessImplicitDefs::canTurnIntoImplicitDef(MachineInstr *MI) {
       !MI->isRegSequence() &&
       !MI->isPHI())
     return false;
-  for (MIOperands MO(MI); MO.isValid(); ++MO)
-    if (MO->isReg() && MO->isUse() && MO->readsReg())
+  for (const MachineOperand &MO : MI->operands())
+    if (MO.isReg() && MO.isUse() && MO.readsReg())
       return false;
   return true;
 }
 
 void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
-  DEBUG(dbgs() << "Processing " << *MI);
+  LLVM_DEBUG(dbgs() << "Processing " << *MI);
   unsigned Reg = MI->getOperand(0).getReg();
 
   if (TargetRegisterInfo::isVirtualRegister(Reg)) {
@@ -86,7 +84,7 @@ void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
       MachineInstr *UserMI = MO.getParent();
       if (!canTurnIntoImplicitDef(UserMI))
         continue;
-      DEBUG(dbgs() << "Converting to IMPLICIT_DEF: " << *UserMI);
+      LLVM_DEBUG(dbgs() << "Converting to IMPLICIT_DEF: " << *UserMI);
       UserMI->setDesc(TII->get(TargetOpcode::IMPLICIT_DEF));
       WorkList.insert(UserMI);
     }
@@ -96,21 +94,21 @@ void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
 
   // This is a physreg implicit-def.
   // Look for the first instruction to use or define an alias.
-  MachineBasicBlock::instr_iterator UserMI = MI;
+  MachineBasicBlock::instr_iterator UserMI = MI->getIterator();
   MachineBasicBlock::instr_iterator UserE = MI->getParent()->instr_end();
   bool Found = false;
   for (++UserMI; UserMI != UserE; ++UserMI) {
-    for (MIOperands MO(UserMI); MO.isValid(); ++MO) {
-      if (!MO->isReg())
+    for (MachineOperand &MO : UserMI->operands()) {
+      if (!MO.isReg())
         continue;
-      unsigned UserReg = MO->getReg();
+      unsigned UserReg = MO.getReg();
       if (!TargetRegisterInfo::isPhysicalRegister(UserReg) ||
           !TRI->regsOverlap(Reg, UserReg))
         continue;
       // UserMI uses or redefines Reg. Set <undef> flags on all uses.
       Found = true;
-      if (MO->isUse())
-        MO->setIsUndef();
+      if (MO.isUse())
+        MO.setIsUndef();
     }
     if (Found)
       break;
@@ -118,7 +116,7 @@ void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
 
   // If we found the using MI, we can erase the IMPLICIT_DEF.
   if (Found) {
-    DEBUG(dbgs() << "Physreg user: " << *UserMI);
+    LLVM_DEBUG(dbgs() << "Physreg user: " << *UserMI);
     MI->eraseFromParent();
     return;
   }
@@ -127,15 +125,15 @@ void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
   // Leave the physreg IMPLICIT_DEF, but trim any extra operands.
   for (unsigned i = MI->getNumOperands() - 1; i; --i)
     MI->RemoveOperand(i);
-  DEBUG(dbgs() << "Keeping physreg: " << *MI);
+  LLVM_DEBUG(dbgs() << "Keeping physreg: " << *MI);
 }
 
 /// processImplicitDefs - Process IMPLICIT_DEF instructions and turn them into
 /// <undef> operands.
 bool ProcessImplicitDefs::runOnMachineFunction(MachineFunction &MF) {
 
-  DEBUG(dbgs() << "********** PROCESS IMPLICIT DEFS **********\n"
-               << "********** Function: " << MF.getName() << '\n');
+  LLVM_DEBUG(dbgs() << "********** PROCESS IMPLICIT DEFS **********\n"
+                    << "********** Function: " << MF.getName() << '\n');
 
   bool Changed = false;
 
@@ -151,13 +149,13 @@ bool ProcessImplicitDefs::runOnMachineFunction(MachineFunction &MF) {
     for (MachineBasicBlock::instr_iterator MBBI = MFI->instr_begin(),
          MBBE = MFI->instr_end(); MBBI != MBBE; ++MBBI)
       if (MBBI->isImplicitDef())
-        WorkList.insert(MBBI);
+        WorkList.insert(&*MBBI);
 
     if (WorkList.empty())
       continue;
 
-    DEBUG(dbgs() << "BB#" << MFI->getNumber() << " has " << WorkList.size()
-                 << " implicit defs.\n");
+    LLVM_DEBUG(dbgs() << printMBBReference(*MFI) << " has " << WorkList.size()
+                      << " implicit defs.\n");
     Changed = true;
 
     // Drain the WorkList to recursively process any new implicit defs.

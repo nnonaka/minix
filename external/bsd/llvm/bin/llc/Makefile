@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.21 2014/08/10 17:34:19 joerg Exp $
+#	$NetBSD: Makefile,v 1.25 2018/07/17 18:55:25 joerg Exp $
 
 PROG_CXX=	llc
 NOMAN=		yes
@@ -10,7 +10,11 @@ NOMAN=		yes
 SRCS=	llc.cpp
 
 LLVM_LIBS+= \
+	Vectorize \
+	MIRParser \
 	AsmPrinter \
+	DebugInfoMSF \
+	DebugInfoCodeView \
 	IRReader \
 	AsmParser \
 	BitReader \
@@ -25,6 +29,7 @@ LLVM_LIBS+= \
 	ARMMCTargetDesc \
 	ARMAsmParser \
 	ARMAsmPrinter \
+	ARMUtils \
 	MipsCodeGen \
 	MipsTargetInfo \
 	MipsAsmParser \
@@ -46,10 +51,13 @@ LLVM_LIBS+= \
 	X86AsmParser \
 	X86AsmPrinter \
 	X86Utils \
+	GlobalISel \
 	MCDisassembler \
 	Object \
 	SelectionDAG \
 	CodeGen \
+	ProfileData \
+	Instrumentation \
 	ScalarOpts \
 	TransformsUtils \
 	Analysis \
@@ -57,7 +65,9 @@ LLVM_LIBS+= \
 	MCParser \
 	MC \
 	IR \
-	Support
+	BinaryFormat \
+	Support \
+	Demangle
 
 LDADD+=	-lz
 DPADD+=	${LIBZ}

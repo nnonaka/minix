@@ -1,4 +1,4 @@
-//===--- Rewriter.cpp - Code rewriting interface --------------------------===//
+//===- Rewriter.cpp - Code rewriting interface ----------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,12 +16,23 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticIDs.h"
 #include "clang/Basic/FileManager.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Lex/Lexer.h"
+#include "clang/Rewrite/Core/RewriteBuffer.h"
+#include "clang/Rewrite/Core/RewriteRope.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/Config/llvm-config.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <system_error>
+#include <utility>
+
 using namespace clang;
 
 raw_ostream &RewriteBuffer::write(raw_ostream &os) const {
@@ -33,9 +44,9 @@ raw_ostream &RewriteBuffer::write(raw_ostream &os) const {
   return os;
 }
 
-/// \brief Return true if this character is non-new-line whitespace:
+/// Return true if this character is non-new-line whitespace:
 /// ' ', '\\t', '\\f', '\\v', '\\r'.
-static inline bool isWhitespace(unsigned char c) {
+static inline bool isWhitespaceExceptNL(unsigned char c) {
   switch (c) {
   case ' ':
   case '\t':
@@ -54,7 +65,7 @@ void RewriteBuffer::RemoveText(unsigned OrigOffset, unsigned Size,
   if (Size == 0) return;
 
   unsigned RealOffset = getMappedOffset(OrigOffset, true);
-  assert(RealOffset+Size < Buffer.size() && "Invalid location");
+  assert(RealOffset+Size <= Buffer.size() && "Invalid location");
 
   // Remove the dead characters.
   Buffer.erase(RealOffset, Size);
@@ -80,7 +91,7 @@ void RewriteBuffer::RemoveText(unsigned OrigOffset, unsigned Size,
   
     unsigned lineSize = 0;
     posI = curLineStart;
-    while (posI != end() && isWhitespace(*posI)) {
+    while (posI != end() && isWhitespaceExceptNL(*posI)) {
       ++posI;
       ++lineSize;
     }
@@ -93,7 +104,6 @@ void RewriteBuffer::RemoveText(unsigned OrigOffset, unsigned Size,
 
 void RewriteBuffer::InsertText(unsigned OrigOffset, StringRef Str,
                                bool InsertAfter) {
-
   // Nothing to insert, exit early.
   if (Str.empty()) return;
 
@@ -116,7 +126,6 @@ void RewriteBuffer::ReplaceText(unsigned OrigOffset, unsigned OrigLength,
     AddReplaceDelta(OrigOffset, NewStr.size() - OrigLength);
 }
 
-
 //===----------------------------------------------------------------------===//
 // Rewriter class
 //===----------------------------------------------------------------------===//
@@ -129,10 +138,8 @@ int Rewriter::getRangeSize(const CharSourceRange &Range,
       !isRewritable(Range.getEnd())) return -1;
 
   FileID StartFileID, EndFileID;
-  unsigned StartOff, EndOff;
-
-  StartOff = getLocationOffsetAndFileID(Range.getBegin(), StartFileID);
-  EndOff   = getLocationOffsetAndFileID(Range.getEnd(), EndFileID);
+  unsigned StartOff = getLocationOffsetAndFileID(Range.getBegin(), StartFileID);
+  unsigned EndOff = getLocationOffsetAndFileID(Range.getEnd(), EndFileID);
 
   if (StartFileID != EndFileID)
     return -1;
@@ -147,7 +154,6 @@ int Rewriter::getRangeSize(const CharSourceRange &Range,
     StartOff = RB.getMappedOffset(StartOff, !opts.IncludeInsertsAtBeginOfRange);
   }
 
-
   // Adjust the end offset to the end of the last token, instead of being the
   // start of the last token if this is a token range.
   if (Range.isTokenRange())
@@ -160,17 +166,15 @@ int Rewriter::getRangeSize(SourceRange Range, RewriteOptions opts) const {
   return getRangeSize(CharSourceRange::getTokenRange(Range), opts);
 }
 
-
 /// getRewrittenText - Return the rewritten form of the text in the specified
 /// range.  If the start or end of the range was unrewritable or if they are
 /// in different buffers, this returns an empty string.
 ///
 /// Note that this method is not particularly efficient.
-///
 std::string Rewriter::getRewrittenText(SourceRange Range) const {
   if (!isRewritable(Range.getBegin()) ||
       !isRewritable(Range.getEnd()))
-    return "";
+    return {};
 
   FileID StartFileID, EndFileID;
   unsigned StartOff, EndOff;
@@ -178,7 +182,7 @@ std::string Rewriter::getRewrittenText(SourceRange Range) const {
   EndOff   = getLocationOffsetAndFileID(Range.getEnd(), EndFileID);
 
   if (StartFileID != EndFileID)
-    return ""; // Start and end in different buffers.
+    return {}; // Start and end in different buffers.
 
   // If edits have been made to this buffer, the delta between the range may
   // have changed.
@@ -214,14 +218,12 @@ std::string Rewriter::getRewrittenText(SourceRange Range) const {
 unsigned Rewriter::getLocationOffsetAndFileID(SourceLocation Loc,
                                               FileID &FID) const {
   assert(Loc.isValid() && "Invalid location");
-  std::pair<FileID,unsigned> V = SourceMgr->getDecomposedLoc(Loc);
+  std::pair<FileID, unsigned> V = SourceMgr->getDecomposedLoc(Loc);
   FID = V.first;
   return V.second;
 }
 
-
 /// getEditBuffer - Get or create a RewriteBuffer for the specified FileID.
-///
 RewriteBuffer &Rewriter::getEditBuffer(FileID FID) {
   std::map<FileID, RewriteBuffer>::iterator I =
     RewriteBuffers.lower_bound(FID);
@@ -256,7 +258,7 @@ bool Rewriter::InsertText(SourceLocation Loc, StringRef Str,
     StringRef indentSpace;
     {
       unsigned i = lineOffs;
-      while (isWhitespace(MB[i]))
+      while (isWhitespaceExceptNL(MB[i]))
         ++i;
       indentSpace = MB.substr(lineOffs, i-lineOffs);
     }
@@ -363,12 +365,12 @@ bool Rewriter::IncreaseIndentation(CharSourceRange range,
   StringRef parentSpace, startSpace;
   {
     unsigned i = parentLineOffs;
-    while (isWhitespace(MB[i]))
+    while (isWhitespaceExceptNL(MB[i]))
       ++i;
     parentSpace = MB.substr(parentLineOffs, i-parentLineOffs);
 
     i = startLineOffs;
-    while (isWhitespace(MB[i]))
+    while (isWhitespaceExceptNL(MB[i]))
       ++i;
     startSpace = MB.substr(startLineOffs, i-startLineOffs);
   }
@@ -384,7 +386,7 @@ bool Rewriter::IncreaseIndentation(CharSourceRange range,
   for (unsigned lineNo = startLineNo; lineNo <= endLineNo; ++lineNo) {
     unsigned offs = Content->SourceLineCache[lineNo];
     unsigned i = offs;
-    while (isWhitespace(MB[i]))
+    while (isWhitespaceExceptNL(MB[i]))
       ++i;
     StringRef origIndent = MB.substr(offs, i-offs);
     if (origIndent.startswith(startSpace))
@@ -395,6 +397,7 @@ bool Rewriter::IncreaseIndentation(CharSourceRange range,
 }
 
 namespace {
+
 // A wrapper for a file stream that atomically overwrites the target.
 //
 // Creates a file output stream for a temporary file in the constructor,
@@ -405,11 +408,11 @@ class AtomicallyMovedFile {
 public:
   AtomicallyMovedFile(DiagnosticsEngine &Diagnostics, StringRef Filename,
                       bool &AllWritten)
-    : Diagnostics(Diagnostics), Filename(Filename), AllWritten(AllWritten) {
+      : Diagnostics(Diagnostics), Filename(Filename), AllWritten(AllWritten) {
     TempFilename = Filename;
     TempFilename += "-%%%%%%%%";
     int FD;
-    if (llvm::sys::fs::createUniqueFile(TempFilename.str(), FD, TempFilename)) {
+    if (llvm::sys::fs::createUniqueFile(TempFilename, FD, TempFilename)) {
       AllWritten = false;
       Diagnostics.Report(clang::diag::err_unable_to_make_temp)
         << TempFilename;
@@ -421,19 +424,15 @@ public:
   ~AtomicallyMovedFile() {
     if (!ok()) return;
 
-    FileStream->flush();
-#ifdef LLVM_ON_WIN32
-    // Win32 does not allow rename/removing opened files.
-    FileStream.reset();
-#endif
-    if (std::error_code ec =
-            llvm::sys::fs::rename(TempFilename.str(), Filename)) {
+    // Close (will also flush) theFileStream.
+    FileStream->close();
+    if (std::error_code ec = llvm::sys::fs::rename(TempFilename, Filename)) {
       AllWritten = false;
       Diagnostics.Report(clang::diag::err_unable_to_rename_temp)
         << TempFilename << Filename << ec.message();
       // If the remove fails, there's not a lot we can do - this is already an
       // error.
-      llvm::sys::fs::remove(TempFilename.str());
+      llvm::sys::fs::remove(TempFilename);
     }
   }
 
@@ -447,7 +446,8 @@ private:
   std::unique_ptr<llvm::raw_fd_ostream> FileStream;
   bool &AllWritten;
 };
-} // end anonymous namespace
+
+} // namespace
 
 bool Rewriter::overwriteChangedFiles() {
   bool AllWritten = true;

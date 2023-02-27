@@ -19,26 +19,25 @@
 
 namespace llvm {
 
-class AArch64InstrInfo;
-class AArch64Subtarget;
 class MachineFunction;
 class RegScavenger;
 class TargetRegisterClass;
+class Triple;
 
-struct AArch64RegisterInfo : public AArch64GenRegisterInfo {
-private:
-  const AArch64InstrInfo *TII;
-  const AArch64Subtarget *STI;
+class AArch64RegisterInfo final : public AArch64GenRegisterInfo {
+  const Triple &TT;
 
 public:
-  AArch64RegisterInfo(const AArch64InstrInfo *tii, const AArch64Subtarget *sti);
+  AArch64RegisterInfo(const Triple &TT);
 
   bool isReservedReg(const MachineFunction &MF, unsigned Reg) const;
 
   /// Code Generation virtual methods...
+  const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;
   const MCPhysReg *
-  getCalleeSavedRegs(const MachineFunction *MF = nullptr) const override;
-  const uint32_t *getCallPreservedMask(CallingConv::ID) const override;
+  getCalleeSavedRegsViaCopy(const MachineFunction *MF) const;
+  const uint32_t *getCallPreservedMask(const MachineFunction &MF,
+                                       CallingConv::ID) const override;
 
   unsigned getCSRFirstUseCost() const override {
     // The cost will be compared against BlockFrequency where entry has the
@@ -46,6 +45,10 @@ public:
     // cold path instead of using a callee-saved register.
     return 5;
   }
+
+  const TargetRegisterClass *
+  getSubClassWithSubReg(const TargetRegisterClass *RC,
+                        unsigned Idx) const override;
 
   // Calls involved in thread-local variable lookup save more registers than
   // normal calls, so they need a different mask to represent this.
@@ -59,21 +62,28 @@ public:
   ///
   /// Should return NULL in the case that the calling convention does not have
   /// this property
-  const uint32_t *getThisReturnPreservedMask(CallingConv::ID) const;
+  const uint32_t *getThisReturnPreservedMask(const MachineFunction &MF,
+                                             CallingConv::ID) const;
+
+  /// Stack probing calls preserve different CSRs to the normal CC.
+  const uint32_t *getWindowsStackProbePreservedMask() const;
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
+  bool isConstantPhysReg(unsigned PhysReg) const override;
   const TargetRegisterClass *
   getPointerRegClass(const MachineFunction &MF,
                      unsigned Kind = 0) const override;
   const TargetRegisterClass *
   getCrossCopyRegClass(const TargetRegisterClass *RC) const override;
 
+  bool enableMultipleCopyHints() const override { return true; }
+
   bool requiresRegisterScavenging(const MachineFunction &MF) const override;
   bool useFPForScavengingIndex(const MachineFunction &MF) const override;
   bool requiresFrameIndexScavenging(const MachineFunction &MF) const override;
 
   bool needsFrameBaseReg(MachineInstr *MI, int64_t Offset) const override;
-  bool isFrameOffsetLegal(const MachineInstr *MI,
+  bool isFrameOffsetLegal(const MachineInstr *MI, unsigned BaseReg,
                           int64_t Offset) const override;
   void materializeFrameBaseRegister(MachineBasicBlock *MBB, unsigned BaseReg,
                                     int FrameIdx,
@@ -94,6 +104,10 @@ public:
 
   unsigned getRegPressureLimit(const TargetRegisterClass *RC,
                                MachineFunction &MF) const override;
+
+  bool trackLivenessAfterRegAlloc(const MachineFunction&) const override {
+    return true;
+  }
 };
 
 } // end namespace llvm

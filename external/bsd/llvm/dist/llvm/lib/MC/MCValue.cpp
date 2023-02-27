@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCValue.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -15,7 +16,7 @@
 
 using namespace llvm;
 
-void MCValue::print(raw_ostream &OS, const MCAsmInfo *MAI) const {
+void MCValue::print(raw_ostream &OS) const {
   if (isAbsolute()) {
     OS << getConstant();
     return;
@@ -26,11 +27,11 @@ void MCValue::print(raw_ostream &OS, const MCAsmInfo *MAI) const {
   if (getRefKind())
     OS << ':' << getRefKind() <<  ':';
 
-  getSymA()->print(OS);
+  OS << *getSymA();
 
   if (getSymB()) {
     OS << " - ";
-    getSymB()->print(OS);
+    OS << *getSymB();
   }
 
   if (getConstant())
@@ -38,8 +39,8 @@ void MCValue::print(raw_ostream &OS, const MCAsmInfo *MAI) const {
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void MCValue::dump() const {
-  print(dbgs(), nullptr);
+LLVM_DUMP_METHOD void MCValue::dump() const {
+  print(dbgs());
 }
 #endif
 

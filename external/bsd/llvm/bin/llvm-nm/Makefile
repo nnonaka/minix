@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2015/01/29 20:41:34 joerg Exp $
+#	$NetBSD: Makefile,v 1.8 2018/07/17 18:55:26 joerg Exp $
 
 PROG_CXX=	llvm-nm
 NOMAN=		yes
@@ -19,6 +19,7 @@ LLVM_LIBS+= \
 	ARMMCTargetDesc \
 	ARMAsmPrinter \
 	ARMTargetInfo \
+	ARMUtils \
 	MipsAsmParser \
 	MipsMCTargetDesc \
 	MipsAsmPrinter \
@@ -44,7 +45,9 @@ LLVM_LIBS+= \
 	MC \
 	BitReader \
 	IR \
-	Support
+	BinaryFormat \
+	Support \
+	Demangle
 
 LDADD+=	-lz
 DPADD+=	${LIBZ}

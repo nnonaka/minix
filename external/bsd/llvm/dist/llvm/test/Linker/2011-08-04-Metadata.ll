@@ -2,33 +2,44 @@
 ; RUN: llvm-dis < %t.bc | FileCheck %s
 ; Test if internal global variable's debug info is merged appropriately or not.
 
-;CHECK:   !"0x34\00x\00x\00\002\001\001", !{{[0-9]+}}, !{{[0-9]+}}, !{{[0-9]+}}, i32* @x}
-;CHECK:   !"0x34\00x\00x\00\001\001\001", !{{[0-9]+}}, !{{[0-9]+}}, !{{[0-9]+}}, i32* @x1}
+; CHECK: @x = internal global i32 0, align 4, !dbg [[DI1:![0-9]+]]
+; CHECK: @x.1 = internal global i32 0, align 4, !dbg [[DI2:![0-9]+]]
+
+; CHECK: [[DI1]] = !DIGlobalVariableExpression(var: [[V1:.*]], expr: !DIExpression())
+; CHECK: [[V1]] = !DIGlobalVariable(name: "x",
+; CHECK-NOT:                        linkageName:
+; CHECK: [[DI2]] = !DIGlobalVariableExpression(var: [[V2:.*]], expr: !DIExpression())
+; CHECK: [[V2]] = !DIGlobalVariable(name: "x",
+; CHECK-NOT:                        linkageName:
+source_filename = "test/Linker/2011-08-04-Metadata.ll"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-apple-macosx10.7.0"
 
-@x = internal global i32 0, align 4
+@x = internal global i32 0, align 4, !dbg !0
 
-define void @foo() nounwind uwtable ssp {
+; Function Attrs: nounwind ssp uwtable
+define void @foo() #0 !dbg !8 {
 entry:
-  store i32 1, i32* @x, align 4, !dbg !7
-  ret void, !dbg !7
+  store i32 1, i32* @x, align 4, !dbg !11
+  ret void, !dbg !11
 }
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!11}
-!llvm.dbg.sp = !{!1}
-!llvm.dbg.gv = !{!5}
+attributes #0 = { nounwind ssp uwtable }
 
-!0 = !{!"0x11\0012\00clang version 3.0 ()\001\00\000\00\000", !9, !4, !4, !10, null, null} ; [ DW_TAG_compile_unit ]
-!1 = !{!"0x2e\00foo\00foo\00\003\000\001\000\006\000\000\000", !9, !2, !3, null, void ()* @foo, null, null, null} ; [ DW_TAG_subprogram ] [line 3] [def] [scope 0] [foo]
-!2 = !{!"0x29", !9} ; [ DW_TAG_file_type ]
-!3 = !{!"0x15\00\000\000\000\000\000\000", !9, !2, null, !4, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!4 = !{null}
-!5 = !{!"0x34\00x\00x\00\002\001\001", !0, !2, !6, i32* @x} ; [ DW_TAG_variable ]
-!6 = !{!"0x24\00int\000\0032\0032\000\000\005", null, !0} ; [ DW_TAG_base_type ]
-!7 = !MDLocation(line: 3, column: 14, scope: !8)
-!8 = !{!"0xb\003\0012\000", !9, !1} ; [ DW_TAG_lexical_block ]
-!9 = !{!"/tmp/one.c", !"/Volumes/Lalgate/Slate/D"}
-!10 = !{!1}
-!11 = !{i32 1, !"Debug Info Version", i32 2}
+!llvm.dbg.cu = !{!2}
+!llvm.module.flags = !{!7}
+
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "x", scope: !2, file: !3, line: 2, type: !6, isLocal: true, isDefinition: true)
+!2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 3.0 ()", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, retainedTypes: !4, globals: !5)
+!3 = !DIFile(filename: "/tmp/one.c", directory: "/Volumes/Lalgate/Slate/D")
+!4 = !{}
+!5 = !{!0}
+!6 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!7 = !{i32 1, !"Debug Info Version", i32 3}
+!8 = distinct !DISubprogram(name: "foo", scope: !3, file: !3, line: 3, type: !9, isLocal: false, isDefinition: true, virtualIndex: 6, isOptimized: false, unit: !2)
+!9 = !DISubroutineType(types: !10)
+!10 = !{null}
+!11 = !DILocation(line: 3, column: 14, scope: !12)
+!12 = distinct !DILexicalBlock(scope: !8, file: !3, line: 3, column: 12)
+

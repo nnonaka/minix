@@ -1,4 +1,4 @@
-//===--- CodeCompleteConsumer.cpp - Code Completion Interface ---*- C++ -*-===//
+//===- CodeCompleteConsumer.cpp - Code Completion Interface ---------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,20 +10,30 @@
 //  This file implements the CodeCompleteConsumer class.
 //
 //===----------------------------------------------------------------------===//
+
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang-c/Index.h"
-#include "clang/AST/DeclCXX.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/DeclBase.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
-#include "clang/Sema/Scope.h"
+#include "clang/AST/DeclarationName.h"
+#include "clang/AST/Type.h"
+#include "clang/Basic/IdentifierTable.h"
 #include "clang/Sema/Sema.h"
-#include "llvm/ADT/STLExtras.h"
+#include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
-#include <cstring>
-#include <functional>
+#include <cassert>
+#include <cstdint>
+#include <string>
 
 using namespace clang;
 
@@ -32,7 +42,7 @@ using namespace clang;
 //===----------------------------------------------------------------------===//
 
 bool CodeCompletionContext::wantConstructorResults() const {
-  switch (Kind) {
+  switch (CCKind) {
   case CCC_Recovery:
   case CCC_Statement:
   case CCC_Expression:
@@ -75,12 +85,87 @@ bool CodeCompletionContext::wantConstructorResults() const {
   llvm_unreachable("Invalid CodeCompletionContext::Kind!");
 }
 
+StringRef clang::getCompletionKindString(CodeCompletionContext::Kind Kind) {
+  using CCKind = CodeCompletionContext::Kind;
+  switch (Kind) {
+  case CCKind::CCC_Other:
+    return "Other";
+  case CCKind::CCC_OtherWithMacros:
+    return "OtherWithMacros";
+  case CCKind::CCC_TopLevel:
+    return "TopLevel";
+  case CCKind::CCC_ObjCInterface:
+    return "ObjCInterface";
+  case CCKind::CCC_ObjCImplementation:
+    return "ObjCImplementation";
+  case CCKind::CCC_ObjCIvarList:
+    return "ObjCIvarList";
+  case CCKind::CCC_ClassStructUnion:
+    return "ClassStructUnion";
+  case CCKind::CCC_Statement:
+    return "Statement";
+  case CCKind::CCC_Expression:
+    return "Expression";
+  case CCKind::CCC_ObjCMessageReceiver:
+    return "ObjCMessageReceiver";
+  case CCKind::CCC_DotMemberAccess:
+    return "DotMemberAccess";
+  case CCKind::CCC_ArrowMemberAccess:
+    return "ArrowMemberAccess";
+  case CCKind::CCC_ObjCPropertyAccess:
+    return "ObjCPropertyAccess";
+  case CCKind::CCC_EnumTag:
+    return "EnumTag";
+  case CCKind::CCC_UnionTag:
+    return "UnionTag";
+  case CCKind::CCC_ClassOrStructTag:
+    return "ClassOrStructTag";
+  case CCKind::CCC_ObjCProtocolName:
+    return "ObjCProtocolName";
+  case CCKind::CCC_Namespace:
+    return "Namespace";
+  case CCKind::CCC_Type:
+    return "Type";
+  case CCKind::CCC_Name:
+    return "Name";
+  case CCKind::CCC_PotentiallyQualifiedName:
+    return "PotentiallyQualifiedName";
+  case CCKind::CCC_MacroName:
+    return "MacroName";
+  case CCKind::CCC_MacroNameUse:
+    return "MacroNameUse";
+  case CCKind::CCC_PreprocessorExpression:
+    return "PreprocessorExpression";
+  case CCKind::CCC_PreprocessorDirective:
+    return "PreprocessorDirective";
+  case CCKind::CCC_NaturalLanguage:
+    return "NaturalLanguage";
+  case CCKind::CCC_SelectorName:
+    return "SelectorName";
+  case CCKind::CCC_TypeQualifiers:
+    return "TypeQualifiers";
+  case CCKind::CCC_ParenthesizedExpression:
+    return "ParenthesizedExpression";
+  case CCKind::CCC_ObjCInstanceMessage:
+    return "ObjCInstanceMessage";
+  case CCKind::CCC_ObjCClassMessage:
+    return "ObjCClassMessage";
+  case CCKind::CCC_ObjCInterfaceName:
+    return "ObjCInterfaceName";
+  case CCKind::CCC_ObjCCategoryName:
+    return "ObjCCategoryName";
+  case CCKind::CCC_Recovery:
+    return "Recovery";
+  }
+  llvm_unreachable("Invalid CodeCompletionContext::Kind!");
+}
+
 //===----------------------------------------------------------------------===//
 // Code completion string implementation
 //===----------------------------------------------------------------------===//
+
 CodeCompletionString::Chunk::Chunk(ChunkKind Kind, const char *Text) 
-  : Kind(Kind), Text("")
-{
+    : Kind(Kind), Text("") {
   switch (Kind) {
   case CK_TypedText:
   case CK_Text:
@@ -194,10 +279,9 @@ CodeCompletionString::CodeCompletionString(const Chunk *Chunks,
                                            unsigned NumAnnotations,
                                            StringRef ParentName,
                                            const char *BriefComment)
-  : NumChunks(NumChunks), NumAnnotations(NumAnnotations),
-    Priority(Priority), Availability(Availability),
-    ParentName(ParentName), BriefComment(BriefComment)
-{ 
+    : NumChunks(NumChunks), NumAnnotations(NumAnnotations),
+      Priority(Priority), Availability(Availability),
+      ParentName(ParentName), BriefComment(BriefComment) { 
   assert(NumChunks <= 0xffff);
   assert(NumAnnotations <= 0xffff);
 
@@ -220,7 +304,6 @@ const char *CodeCompletionString::getAnnotation(unsigned AnnotationNr) const {
   else
     return nullptr;
 }
-
 
 std::string CodeCompletionString::getAsString() const {
   std::string Result;
@@ -251,25 +334,22 @@ const char *CodeCompletionString::getTypedText() const {
   return nullptr;
 }
 
-const char *CodeCompletionAllocator::CopyString(StringRef String) {
-  char *Mem = (char *)Allocate(String.size() + 1, 1);
-  std::copy(String.begin(), String.end(), Mem);
-  Mem[String.size()] = 0;
-  return Mem;
-}
-
-const char *CodeCompletionAllocator::CopyString(Twine String) {
+const char *CodeCompletionAllocator::CopyString(const Twine &String) {
+  SmallString<128> Data;
+  StringRef Ref = String.toStringRef(Data);
   // FIXME: It would be more efficient to teach Twine to tell us its size and
   // then add a routine there to fill in an allocated char* with the contents
   // of the string.
-  SmallString<128> Data;
-  return CopyString(String.toStringRef(Data));
+  char *Mem = (char *)Allocate(Ref.size() + 1, 1);
+  std::copy(Ref.begin(), Ref.end(), Mem);
+  Mem[Ref.size()] = 0;
+  return Mem;
 }
 
 StringRef CodeCompletionTUInfo::getParentName(const DeclContext *DC) {
   const NamedDecl *ND = dyn_cast<NamedDecl>(DC);
   if (!ND)
-    return StringRef();
+    return {};
   
   // Check whether we've already cached the parent name.
   StringRef &CachedParentName = ParentNames[DC];
@@ -279,7 +359,7 @@ StringRef CodeCompletionTUInfo::getParentName(const DeclContext *DC) {
   // If we already processed this DeclContext and assigned empty to it, the
   // data pointer will be non-null.
   if (CachedParentName.data() != nullptr)
-    return StringRef();
+    return {};
 
   // Find the interesting names.
   SmallVector<const DeclContext *, 2> Contexts;
@@ -312,8 +392,8 @@ StringRef CodeCompletionTUInfo::getParentName(const DeclContext *DC) {
         if (!Interface) {
           // Assign an empty StringRef but with non-null data to distinguish
           // between empty because we didn't process the DeclContext yet.
-          CachedParentName = StringRef((const char *)~0U, 0);
-          return StringRef();
+          CachedParentName = StringRef((const char *)(uintptr_t)~0U, 0);
+          return {};
         }
         
         OS << Interface->getName() << '(' << Cat->getName() << ')';
@@ -330,9 +410,9 @@ StringRef CodeCompletionTUInfo::getParentName(const DeclContext *DC) {
 
 CodeCompletionString *CodeCompletionBuilder::TakeString() {
   void *Mem = getAllocator().Allocate(
-                  sizeof(CodeCompletionString) + sizeof(Chunk) * Chunks.size()
-                                    + sizeof(const char *) * Annotations.size(),
-                                 llvm::alignOf<CodeCompletionString>());
+      sizeof(CodeCompletionString) + sizeof(Chunk) * Chunks.size() +
+          sizeof(const char *) * Annotations.size(),
+      alignof(CodeCompletionString));
   CodeCompletionString *Result 
     = new (Mem) CodeCompletionString(Chunks.data(), Chunks.size(),
                                      Priority, Availability,
@@ -377,9 +457,8 @@ void CodeCompletionBuilder::AddChunk(CodeCompletionString::ChunkKind CK,
 }
 
 void CodeCompletionBuilder::addParentContext(const DeclContext *DC) {
-  if (DC->isTranslationUnit()) {
+  if (DC->isTranslationUnit())
     return;
-  }
   
   if (DC->isFunctionOrMethod())
     return;
@@ -429,7 +508,23 @@ CodeCompleteConsumer::OverloadCandidate::getFunctionType() const {
 // Code completion consumer implementation
 //===----------------------------------------------------------------------===//
 
-CodeCompleteConsumer::~CodeCompleteConsumer() { }
+CodeCompleteConsumer::~CodeCompleteConsumer() = default;
+
+bool PrintingCodeCompleteConsumer::isResultFilteredOut(StringRef Filter,
+                                                CodeCompletionResult Result) {
+  switch (Result.Kind) {
+  case CodeCompletionResult::RK_Declaration:
+    return !(Result.Declaration->getIdentifier() &&
+            Result.Declaration->getIdentifier()->getName().startswith(Filter));
+  case CodeCompletionResult::RK_Keyword:
+    return !StringRef(Result.Keyword).startswith(Filter);
+  case CodeCompletionResult::RK_Macro:
+    return !Result.Macro->getName().startswith(Filter);
+  case CodeCompletionResult::RK_Pattern:
+    return !StringRef(Result.Pattern->getAsString()).startswith(Filter);
+  }
+  llvm_unreachable("Unknown code completion result Kind.");
+}
 
 void 
 PrintingCodeCompleteConsumer::ProcessCodeCompleteResults(Sema &SemaRef,
@@ -438,8 +533,12 @@ PrintingCodeCompleteConsumer::ProcessCodeCompleteResults(Sema &SemaRef,
                                                          unsigned NumResults) {
   std::stable_sort(Results, Results + NumResults);
   
+  StringRef Filter = SemaRef.getPreprocessor().getCodeCompletionFilter();
+
   // Print the results.
   for (unsigned I = 0; I != NumResults; ++I) {
+    if(!Filter.empty() && isResultFilteredOut(Filter, Results[I]))
+      continue;
     OS << "COMPLETION: ";
     switch (Results[I].Kind) {
     case CodeCompletionResult::RK_Declaration:
@@ -447,14 +546,32 @@ PrintingCodeCompleteConsumer::ProcessCodeCompleteResults(Sema &SemaRef,
       if (Results[I].Hidden)
         OS << " (Hidden)";
       if (CodeCompletionString *CCS 
-            = Results[I].CreateCodeCompletionString(SemaRef, getAllocator(),
+            = Results[I].CreateCodeCompletionString(SemaRef, Context,
+                                                    getAllocator(),
                                                     CCTUInfo,
                                                     includeBriefComments())) {
         OS << " : " << CCS->getAsString();
         if (const char *BriefComment = CCS->getBriefComment())
           OS << " : " << BriefComment;
       }
-        
+      for (const FixItHint &FixIt : Results[I].FixIts) {
+        const SourceLocation BLoc = FixIt.RemoveRange.getBegin();
+        const SourceLocation ELoc = FixIt.RemoveRange.getEnd();
+
+        SourceManager &SM = SemaRef.SourceMgr;
+        std::pair<FileID, unsigned> BInfo = SM.getDecomposedLoc(BLoc);
+        std::pair<FileID, unsigned> EInfo = SM.getDecomposedLoc(ELoc);
+        // Adjust for token ranges.
+        if (FixIt.RemoveRange.isTokenRange())
+          EInfo.second += Lexer::MeasureTokenLength(ELoc, SM, SemaRef.LangOpts);
+
+        OS << " (requires fix-it:"
+           << " {" << SM.getLineNumber(BInfo.first, BInfo.second) << ':'
+           << SM.getColumnNumber(BInfo.first, BInfo.second) << '-'
+           << SM.getLineNumber(EInfo.first, EInfo.second) << ':'
+           << SM.getColumnNumber(EInfo.first, EInfo.second) << "}"
+           << " to \"" << FixIt.CodeToInsert << "\")";
+      }
       OS << '\n';
       break;
       
@@ -462,25 +579,49 @@ PrintingCodeCompleteConsumer::ProcessCodeCompleteResults(Sema &SemaRef,
       OS << Results[I].Keyword << '\n';
       break;
         
-    case CodeCompletionResult::RK_Macro: {
+    case CodeCompletionResult::RK_Macro:
       OS << Results[I].Macro->getName();
       if (CodeCompletionString *CCS 
-            = Results[I].CreateCodeCompletionString(SemaRef, getAllocator(),
+            = Results[I].CreateCodeCompletionString(SemaRef, Context,
+                                                    getAllocator(),
                                                     CCTUInfo,
                                                     includeBriefComments())) {
         OS << " : " << CCS->getAsString();
       }
       OS << '\n';
       break;
-    }
         
-    case CodeCompletionResult::RK_Pattern: {
+    case CodeCompletionResult::RK_Pattern:
       OS << "Pattern : " 
          << Results[I].Pattern->getAsString() << '\n';
       break;
     }
+  }
+}
+
+// This function is used solely to preserve the former presentation of overloads
+// by "clang -cc1 -code-completion-at", since CodeCompletionString::getAsString
+// needs to be improved for printing the newer and more detailed overload
+// chunks.
+static std::string getOverloadAsString(const CodeCompletionString &CCS) {
+  std::string Result;
+  llvm::raw_string_ostream OS(Result);
+
+  for (auto &C : CCS) {
+    switch (C.Kind) {
+    case CodeCompletionString::CK_Informative:
+    case CodeCompletionString::CK_ResultType:
+      OS << "[#" << C.Text << "#]";
+      break;
+
+    case CodeCompletionString::CK_CurrentParameter:
+      OS << "<#" << C.Text << "#>";
+      break;
+
+    default: OS << C.Text; break;
     }
   }
+  return OS.str();
 }
 
 void 
@@ -491,13 +632,14 @@ PrintingCodeCompleteConsumer::ProcessOverloadCandidates(Sema &SemaRef,
   for (unsigned I = 0; I != NumCandidates; ++I) {
     if (CodeCompletionString *CCS
           = Candidates[I].CreateSignatureString(CurrentArg, SemaRef,
-                                                getAllocator(), CCTUInfo)) {
-      OS << "OVERLOAD: " << CCS->getAsString() << "\n";
+                                                getAllocator(), CCTUInfo,
+                                                includeBriefComments())) {
+      OS << "OVERLOAD: " << getOverloadAsString(*CCS) << "\n";
     }
   }
 }
 
-/// \brief Retrieve the effective availability of the given declaration.
+/// Retrieve the effective availability of the given declaration.
 static AvailabilityResult getDeclAvailability(const Decl *D) {
   AvailabilityResult AR = D->getAvailability();
   if (isa<EnumConstantDecl>(D))
@@ -512,7 +654,7 @@ void CodeCompletionResult::computeCursorKindAndAvailability(bool Accessible) {
       // Do nothing: Patterns can come with cursor kinds!
       break;
     }
-    // Fall through
+    LLVM_FALLTHROUGH;
       
   case RK_Declaration: {
     // Set the availability based on attributes.
@@ -559,28 +701,24 @@ void CodeCompletionResult::computeCursorKindAndAvailability(bool Accessible) {
     Availability = CXAvailability_NotAccessible;
 }
 
-/// \brief Retrieve the name that should be used to order a result.
+/// Retrieve the name that should be used to order a result.
 ///
 /// If the name needs to be constructed as a string, that string will be
 /// saved into Saved and the returned StringRef will refer to it.
-static StringRef getOrderedName(const CodeCompletionResult &R,
-                                    std::string &Saved) {
-  switch (R.Kind) {
-    case CodeCompletionResult::RK_Keyword:
-      return R.Keyword;
-      
-    case CodeCompletionResult::RK_Pattern:
-      return R.Pattern->getTypedText();
-      
-    case CodeCompletionResult::RK_Macro:
-      return R.Macro->getName();
-      
-    case CodeCompletionResult::RK_Declaration:
+StringRef CodeCompletionResult::getOrderedName(std::string &Saved) const {
+  switch (Kind) {
+    case RK_Keyword:
+      return Keyword;
+    case RK_Pattern:
+      return Pattern->getTypedText();
+    case RK_Macro:
+      return Macro->getName();
+    case RK_Declaration:
       // Handle declarations below.
       break;
   }
   
-  DeclarationName Name = R.Declaration->getDeclName();
+  DeclarationName Name = Declaration->getDeclName();
   
   // If the name is a simple identifier (by far the common case), or a
   // zero-argument selector, just return a reference to that identifier.
@@ -598,8 +736,8 @@ static StringRef getOrderedName(const CodeCompletionResult &R,
 bool clang::operator<(const CodeCompletionResult &X, 
                       const CodeCompletionResult &Y) {
   std::string XSaved, YSaved;
-  StringRef XStr = getOrderedName(X, XSaved);
-  StringRef YStr = getOrderedName(Y, YSaved);
+  StringRef XStr = X.getOrderedName(XSaved);
+  StringRef YStr = Y.getOrderedName(YSaved);
   int cmp = XStr.compare_lower(YStr);
   if (cmp)
     return cmp < 0;

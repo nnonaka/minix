@@ -3,10 +3,10 @@
 ; RUN: llc <%s -march=sparc   -relocation-model=pic    | FileCheck %s --check-prefix=pic
 ; RUN: llc <%s -march=sparcv9 -relocation-model=pic    | FileCheck %s --check-prefix=pic
 
-; RUN: llc <%s -march=sparc   -relocation-model=static -filetype=obj | llvm-readobj -r | FileCheck %s --check-prefix=v8abs-obj
-; RUN: llc <%s -march=sparcv9 -relocation-model=static -filetype=obj | llvm-readobj -r | FileCheck %s --check-prefix=v9abs-obj
-; RUN: llc <%s -march=sparc   -relocation-model=pic    -filetype=obj | llvm-readobj -r | FileCheck %s --check-prefix=pic-obj
-; RUN: llc <%s -march=sparcv9 -relocation-model=pic    -filetype=obj | llvm-readobj -r | FileCheck %s --check-prefix=pic-obj
+; RUN: llc <%s -march=sparc   -relocation-model=static -filetype=obj | llvm-readobj -r -t | FileCheck %s --check-prefix=v8abs-obj
+; RUN: llc <%s -march=sparcv9 -relocation-model=static -filetype=obj | llvm-readobj -r -t | FileCheck %s --check-prefix=v9abs-obj
+; RUN: llc <%s -march=sparc   -relocation-model=pic    -filetype=obj | llvm-readobj -r -t | FileCheck %s --check-prefix=pic-obj
+; RUN: llc <%s -march=sparcv9 -relocation-model=pic    -filetype=obj | llvm-readobj -r -t | FileCheck %s --check-prefix=pic-obj
 
 @local_symbol = internal thread_local global i32 0
 @extern_symbol = external thread_local global i32
@@ -34,7 +34,7 @@
 
 define i32 @test_tls_local() {
 entry:
-  %0 = load i32* @local_symbol, align 4
+  %0 = load i32, i32* @local_symbol, align 4
   %1 = add i32 %0, 1
   store i32 %1, i32* @local_symbol, align 4
   ret i32 %1
@@ -68,7 +68,7 @@ entry:
 
 define i32 @test_tls_extern() {
 entry:
-  %0 = load i32* @extern_symbol, align 4
+  %0 = load i32, i32* @extern_symbol, align 4
   %1 = add i32 %0, 1
   store i32 %1, i32* @extern_symbol, align 4
   ret i32 %1
@@ -99,14 +99,14 @@ entry:
 ; v9abs-obj: ]
 
 ; pic-obj: Relocations [
-; pic-obj:  Section (2) .rela.text {
+; pic-obj:  Section {{.*}} .rela.text {
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_PC22 _GLOBAL_OFFSET_TABLE_ 0x4
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_PC10 _GLOBAL_OFFSET_TABLE_ 0x8
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDO_HIX22 local_symbol 0x0
-; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDO_LOX10 local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDM_HI22 local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDM_LO10 local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDM_ADD local_symbol 0x0
+; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDO_LOX10 local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDM_CALL local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_LDO_ADD local_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_PC22 _GLOBAL_OFFSET_TABLE_ 0x4
@@ -116,4 +116,15 @@ entry:
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_GD_ADD extern_symbol 0x0
 ; pic-obj:    0x{{[0-9,A-F]+}} R_SPARC_TLS_GD_CALL extern_symbol 0x0
 ; pic-obj: ]
+; pic-obj:      Symbols [
+; pic-obj:        Symbol {
+; pic-obj:          Name: __tls_get_addr ({{[0-9]+}})
+; pic-obj-NEXT:     Value: 0x0
+; pic-obj-NEXT:     Size: 0
+; pic-obj-NEXT:     Binding: Global (0x1)
+; pic-obj-NEXT:     Type: None (0x0)
+; pic-obj-NEXT:     Other: 0
+; pic-obj-NEXT:     Section: Undefined (0x0)
+; pic-obj-NEXT:   }
+; pic-obj:      ]
 

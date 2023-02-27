@@ -20,6 +20,16 @@ define void @truncStore.v4i32(<4 x i32> %a, <4 x i16>* %result) {
   ret void
 }
 
+define void @truncStore.v4i8(<4 x i32> %a, <4 x i8>* %result) {
+; CHECK-LABEL: truncStore.v4i8:
+; CHECK:      xtn [[TMP:(v[0-9]+)]].4h, v{{[0-9]+}}.4s
+; CHECK-NEXT: xtn [[TMP2:(v[0-9]+)]].8b, [[TMP]].8h
+; CHECK-NEXT: str s{{[0-9]+}}, [x{{[0-9]+}}]
+  %b = trunc <4 x i32> %a to <4 x i8>
+  store <4 x i8> %b, <4 x i8>* %result
+  ret void
+}
+
 define void @truncStore.v8i16(<8 x i16> %a, <8 x i8>* %result) {
 ; CHECK-LABEL: truncStore.v8i16:
 ; CHECK: xtn v{{[0-9]+}}.8b, v{{[0-9]+}}.8h
@@ -34,7 +44,7 @@ define void @truncStore.v8i16(<8 x i16> %a, <8 x i8>* %result) {
 define <4 x i32> @loadSExt.v4i8(<4 x i8>* %ref) {
 ; CHECK-LABEL: loadSExt.v4i8:
 ; CHECK: ldrsb
-  %a = load <4 x i8>* %ref
+  %a = load <4 x i8>, <4 x i8>* %ref
   %conv = sext <4 x i8> %a to <4 x i32>
   ret <4 x i32> %conv
 }
@@ -42,7 +52,7 @@ define <4 x i32> @loadSExt.v4i8(<4 x i8>* %ref) {
 define <4 x i32> @loadZExt.v4i8(<4 x i8>* %ref) {
 ; CHECK-LABEL: loadZExt.v4i8:
 ; CHECK: ldrb
-  %a = load <4 x i8>* %ref
+  %a = load <4 x i8>, <4 x i8>* %ref
   %conv = zext <4 x i8> %a to <4 x i32>
   ret <4 x i32> %conv
 }
@@ -50,7 +60,7 @@ define <4 x i32> @loadZExt.v4i8(<4 x i8>* %ref) {
 define i32 @loadExt.i32(<4 x i8>* %ref) {
 ; CHECK-LABEL: loadExt.i32:
 ; CHECK: ldrb
-  %a = load <4 x i8>* %ref
+  %a = load <4 x i8>, <4 x i8>* %ref
   %vecext = extractelement <4 x i8> %a, i32 0
   %conv = zext i8 %vecext to i32
   ret i32 %conv

@@ -95,7 +95,7 @@ bool edit::rewriteObjCRedundantCallWithLiteral(const ObjCMessageExpr *Msg,
 // rewriteToObjCSubscriptSyntax.
 //===----------------------------------------------------------------------===//
 
-/// \brief Check for classes that accept 'objectForKey:' (or the other selectors
+/// Check for classes that accept 'objectForKey:' (or the other selectors
 /// that the migrator handles) but return their instances as 'id', resulting
 /// in the compiler resolving 'objectForKey:' as the method from NSDictionary.
 ///
@@ -355,7 +355,7 @@ bool edit::rewriteToObjCLiteralSyntax(const ObjCMessageExpr *Msg,
   return false;
 }
 
-/// \brief Returns true if the immediate message arguments of \c Msg should not
+/// Returns true if the immediate message arguments of \c Msg should not
 /// be rewritten because it will interfere with the rewrite of the parent
 /// message expression. e.g.
 /// \code
@@ -372,7 +372,7 @@ static bool shouldNotRewriteImmediateMessageArgs(const ObjCMessageExpr *Msg,
 // rewriteToArrayLiteral.
 //===----------------------------------------------------------------------===//
 
-/// \brief Adds an explicit cast to 'id' if the type is not objc object.
+/// Adds an explicit cast to 'id' if the type is not objc object.
 static void objectifyExpr(const Expr *E, Commit &commit);
 
 static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
@@ -434,7 +434,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
 // rewriteToDictionaryLiteral.
 //===----------------------------------------------------------------------===//
 
-/// \brief If \c Msg is an NSArray creation message or literal, this gets the
+/// If \c Msg is an NSArray creation message or literal, this gets the
 /// objects that were used to create it.
 /// \returns true if it is an NSArray and we got objects, or false otherwise.
 static bool getNSArrayObjects(const Expr *E, const NSAPI &NS,
@@ -798,24 +798,28 @@ static bool rewriteToNumberLiteral(const ObjCMessageExpr *Msg,
   case NSAPI::NSNumberWithUnsignedInt:
   case NSAPI::NSNumberWithUnsignedInteger:
     CallIsUnsigned = true;
+    LLVM_FALLTHROUGH;
   case NSAPI::NSNumberWithInt:
   case NSAPI::NSNumberWithInteger:
     break;
 
   case NSAPI::NSNumberWithUnsignedLong:
     CallIsUnsigned = true;
+    LLVM_FALLTHROUGH;
   case NSAPI::NSNumberWithLong:
     CallIsLong = true;
     break;
 
   case NSAPI::NSNumberWithUnsignedLongLong:
     CallIsUnsigned = true;
+    LLVM_FALLTHROUGH;
   case NSAPI::NSNumberWithLongLong:
     CallIsLongLong = true;
     break;
 
   case NSAPI::NSNumberWithDouble:
     CallIsDouble = true;
+    LLVM_FALLTHROUGH;
   case NSAPI::NSNumberWithFloat:
     CallIsFloating = true;
     break;
@@ -1076,7 +1080,12 @@ static bool rewriteToNumericBoxedExpression(const ObjCMessageExpr *Msg,
     case CK_CopyAndAutoreleaseBlockObject:
     case CK_BuiltinFnToFnPtr:
     case CK_ZeroToOCLEvent:
+    case CK_ZeroToOCLQueue:
+    case CK_IntToOCLSampler:
       return false;
+
+    case CK_BooleanToSignedIntegral:
+      llvm_unreachable("OpenCL-specific cast in Objective-C?");
     }
   }
 

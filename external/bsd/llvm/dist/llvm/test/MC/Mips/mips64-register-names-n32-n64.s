@@ -3,7 +3,7 @@
 # RUN: FileCheck -check-prefix=WARNING %s < %t0
 #
 # RUN: llvm-mc %s -triple=mips64-unknown-freebsd -show-encoding \
-# RUN:     -mattr=-n64,+n32 2>%t1 | FileCheck %s
+# RUN:     -target-abi n32 2>%t1 | FileCheck %s
 # RUN: FileCheck -check-prefix=WARNING %s < %t1
 #
 # Check that the register names are mapped to their correct numbers for n32/n64
@@ -13,6 +13,7 @@
 .set noat
 daddiu	$zero, $zero, 0     # CHECK: encoding: [0x64,0x00,0x00,0x00]
 daddiu	$at, $zero, 0       # CHECK: encoding: [0x64,0x01,0x00,0x00]
+daddiu	$AT, $zero, 0       # CHECK: encoding: [0x64,0x01,0x00,0x00]
 daddiu	$v0, $zero, 0       # CHECK: encoding: [0x64,0x02,0x00,0x00]
 daddiu	$v1, $zero, 0       # CHECK: encoding: [0x64,0x03,0x00,0x00]
 daddiu	$a0, $zero, 0       # CHECK: encoding: [0x64,0x04,0x00,0x00]

@@ -15,31 +15,26 @@
 #include "SparcMCExpr.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCELF.h"
 #include "llvm/MC/MCObjectStreamer.h"
-#include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCSymbolELF.h"
 #include "llvm/Object/ELF.h"
-
 
 using namespace llvm;
 
 #define DEBUG_TYPE "sparcmcexpr"
 
 const SparcMCExpr*
-SparcMCExpr::Create(VariantKind Kind, const MCExpr *Expr,
+SparcMCExpr::create(VariantKind Kind, const MCExpr *Expr,
                       MCContext &Ctx) {
     return new (Ctx) SparcMCExpr(Kind, Expr);
 }
 
-
-
-void SparcMCExpr::PrintImpl(raw_ostream &OS) const
-{
+void SparcMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
 
   bool closeParen = printVariantKind(OS, Kind);
 
   const MCExpr *Expr = getSubExpr();
-  Expr->print(OS);
+  Expr->print(OS, MAI);
 
   if (closeParen)
     OS << ')';
@@ -63,6 +58,8 @@ bool SparcMCExpr::printVariantKind(raw_ostream &OS, VariantKind Kind)
     // FIXME: use %got22/%got10, if system assembler supports them.
   case VK_Sparc_GOT22:    OS << "%hi("; break;
   case VK_Sparc_GOT10:    OS << "%lo("; break;
+  case VK_Sparc_GOT13:    closeParen = false; break;
+  case VK_Sparc_13:       closeParen = false; break;
   case VK_Sparc_WPLT30:   closeParen = false; break;
   case VK_Sparc_R_DISP32: OS << "%r_disp32("; break;
   case VK_Sparc_TLS_GD_HI22:   OS << "%tgd_hi22(";   break;
@@ -101,6 +98,7 @@ SparcMCExpr::VariantKind SparcMCExpr::parseVariantKind(StringRef name)
     .Case("pc10",  VK_Sparc_PC10)
     .Case("got22", VK_Sparc_GOT22)
     .Case("got10", VK_Sparc_GOT10)
+    .Case("got13", VK_Sparc_GOT13)
     .Case("r_disp32",   VK_Sparc_R_DISP32)
     .Case("tgd_hi22",   VK_Sparc_TLS_GD_HI22)
     .Case("tgd_lo10",   VK_Sparc_TLS_GD_LO10)
@@ -137,6 +135,8 @@ Sparc::Fixups SparcMCExpr::getFixupKind(SparcMCExpr::VariantKind Kind) {
   case VK_Sparc_PC10:     return Sparc::fixup_sparc_pc10;
   case VK_Sparc_GOT22:    return Sparc::fixup_sparc_got22;
   case VK_Sparc_GOT10:    return Sparc::fixup_sparc_got10;
+  case VK_Sparc_GOT13:    return Sparc::fixup_sparc_got13;
+  case VK_Sparc_13:       return Sparc::fixup_sparc_13;
   case VK_Sparc_WPLT30:   return Sparc::fixup_sparc_wplt30;
   case VK_Sparc_TLS_GD_HI22:   return Sparc::fixup_sparc_tls_gd_hi22;
   case VK_Sparc_TLS_GD_LO10:   return Sparc::fixup_sparc_tls_gd_lo10;
@@ -160,10 +160,10 @@ Sparc::Fixups SparcMCExpr::getFixupKind(SparcMCExpr::VariantKind Kind) {
 }
 
 bool
-SparcMCExpr::EvaluateAsRelocatableImpl(MCValue &Res,
+SparcMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
                                        const MCAsmLayout *Layout,
                                        const MCFixup *Fixup) const {
-  return getSubExpr()->EvaluateAsRelocatable(Res, Layout, Fixup);
+  return getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup);
 }
 
 static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
@@ -184,8 +184,7 @@ static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
 
   case MCExpr::SymbolRef: {
     const MCSymbolRefExpr &SymRef = *cast<MCSymbolRefExpr>(Expr);
-    MCSymbolData &SD = Asm.getOrCreateSymbolData(SymRef.getSymbol());
-    MCELF::SetType(SD, ELF::STT_TLS);
+    cast<MCSymbolELF>(SymRef.getSymbol()).setType(ELF::STT_TLS);
     break;
   }
 
@@ -199,14 +198,26 @@ static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
 void SparcMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   switch(getKind()) {
   default: return;
+  case VK_Sparc_TLS_GD_CALL:
+  case VK_Sparc_TLS_LDM_CALL: {
+    // The corresponding relocations reference __tls_get_addr, as they call it,
+    // but this is only implicit; we must explicitly add it to our symbol table
+    // to bind it for these uses.
+    MCSymbol *Symbol = Asm.getContext().getOrCreateSymbol("__tls_get_addr");
+    Asm.registerSymbol(*Symbol);
+    auto ELFSymbol = cast<MCSymbolELF>(Symbol);
+    if (!ELFSymbol->isBindingSet()) {
+      ELFSymbol->setBinding(ELF::STB_GLOBAL);
+      ELFSymbol->setExternal(true);
+    }
+    LLVM_FALLTHROUGH;
+  }
   case VK_Sparc_TLS_GD_HI22:
   case VK_Sparc_TLS_GD_LO10:
   case VK_Sparc_TLS_GD_ADD:
-  case VK_Sparc_TLS_GD_CALL:
   case VK_Sparc_TLS_LDM_HI22:
   case VK_Sparc_TLS_LDM_LO10:
   case VK_Sparc_TLS_LDM_ADD:
-  case VK_Sparc_TLS_LDM_CALL:
   case VK_Sparc_TLS_LDO_HIX22:
   case VK_Sparc_TLS_LDO_LOX10:
   case VK_Sparc_TLS_LDO_ADD:

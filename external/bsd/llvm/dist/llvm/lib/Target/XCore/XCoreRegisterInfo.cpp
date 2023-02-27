@@ -30,7 +30,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
@@ -204,12 +204,11 @@ static void InsertSPConstInst(MachineBasicBlock::iterator II,
 }
 
 bool XCoreRegisterInfo::needsFrameMoves(const MachineFunction &MF) {
-  return MF.getMMI().hasDebugInfo() ||
-    MF.getFunction()->needsUnwindTableEntry();
+  return MF.getMMI().hasDebugInfo() || MF.getFunction().needsUnwindTableEntry();
 }
 
-const MCPhysReg* XCoreRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF)
-                                                                         const {
+const MCPhysReg *
+XCoreRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   // The callee saved registers LR & FP are explicitly handled during
   // emitPrologue & emitEpilogue and related functions.
   static const MCPhysReg CalleeSavedRegs[] = {
@@ -222,7 +221,7 @@ const MCPhysReg* XCoreRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF
     XCore::R8, XCore::R9,
     0
   };
-  const TargetFrameLowering *TFI = MF->getSubtarget().getFrameLowering();
+  const XCoreFrameLowering *TFI = getFrameLowering(*MF);
   if (TFI->hasFP(*MF))
     return CalleeSavedRegsFP;
   return CalleeSavedRegs;
@@ -230,7 +229,7 @@ const MCPhysReg* XCoreRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF
 
 BitVector XCoreRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const XCoreFrameLowering *TFI = getFrameLowering(MF);
 
   Reserved.set(XCore::CP);
   Reserved.set(XCore::DP);
@@ -270,19 +269,18 @@ XCoreRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   const XCoreInstrInfo &TII =
       *static_cast<const XCoreInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
-  int Offset = MF.getFrameInfo()->getObjectOffset(FrameIndex);
-  int StackSize = MF.getFrameInfo()->getStackSize();
+  const XCoreFrameLowering *TFI = getFrameLowering(MF);
+  int Offset = MF.getFrameInfo().getObjectOffset(FrameIndex);
+  int StackSize = MF.getFrameInfo().getStackSize();
 
   #ifndef NDEBUG
-  DEBUG(errs() << "\nFunction         : " 
-        << MF.getName() << "\n");
-  DEBUG(errs() << "<--------->\n");
-  DEBUG(MI.print(errs()));
-  DEBUG(errs() << "FrameIndex         : " << FrameIndex << "\n");
-  DEBUG(errs() << "FrameOffset        : " << Offset << "\n");
-  DEBUG(errs() << "StackSize          : " << StackSize << "\n");
-  #endif
+  LLVM_DEBUG(errs() << "\nFunction         : " << MF.getName() << "\n");
+  LLVM_DEBUG(errs() << "<--------->\n");
+  LLVM_DEBUG(MI.print(errs()));
+  LLVM_DEBUG(errs() << "FrameIndex         : " << FrameIndex << "\n");
+  LLVM_DEBUG(errs() << "FrameOffset        : " << Offset << "\n");
+  LLVM_DEBUG(errs() << "StackSize          : " << StackSize << "\n");
+#endif
 
   Offset += StackSize;
 
@@ -300,7 +298,8 @@ XCoreRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
   
   assert(Offset%4 == 0 && "Misaligned stack offset");
-  DEBUG(errs() << "Offset             : " << Offset << "\n" << "<--------->\n");
+  LLVM_DEBUG(errs() << "Offset             : " << Offset << "\n"
+                    << "<--------->\n");
   Offset/=4;
   
   unsigned Reg = MI.getOperand(0).getReg();
@@ -324,7 +323,7 @@ XCoreRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 
 unsigned XCoreRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  const XCoreFrameLowering *TFI = getFrameLowering(MF);
 
   return TFI->hasFP(MF) ? XCore::R10 : XCore::SP;
 }

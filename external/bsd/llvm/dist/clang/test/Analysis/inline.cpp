@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,unix.Malloc,debug.ExprInspection -analyzer-config ipa=inlining -analyzer-config c++-allocator-inlining=true -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix.Malloc,debug.ExprInspection -analyzer-config ipa=inlining -analyzer-config c++-allocator-inlining=true -verify %s
 
 void clang_analyzer_eval(bool);
 void clang_analyzer_checkInlined(bool);
@@ -275,7 +275,7 @@ namespace DefaultArgs {
 
     clang_analyzer_eval(defaultReferenceZero(1) == -1); // expected-warning{{TRUE}}
     clang_analyzer_eval(defaultReferenceZero() == 0); // expected-warning{{TRUE}}
-}
+  }
 
   double defaultFloatReference(const double &i = 42) {
     return -i;
@@ -300,6 +300,13 @@ namespace DefaultArgs {
     clang_analyzer_eval(defaultString("xyz") == 'y'); // expected-warning{{TRUE}}
     clang_analyzer_eval(defaultString() == 'b'); // expected-warning{{TRUE}}
   }
+
+  const void * const void_string = "abc";
+
+  void testBitcastedString() {
+    clang_analyzer_eval(0 != void_string); // expected-warning{{TRUE}}
+    clang_analyzer_eval('b' == ((char *)void_string)[1]); // expected-warning{{TRUE}}
+  }
 }
 
 namespace OperatorNew {
@@ -308,17 +315,13 @@ namespace OperatorNew {
     int value;
 
     IntWrapper(int input) : value(input) {
-      // We don't want this constructor to be inlined unless we can actually
-      // use the proper region for operator new.
-      // See PR12014 and <rdar://problem/12180598>.
-      clang_analyzer_checkInlined(false); // no-warning
+      clang_analyzer_checkInlined(true); // expected-warning{{TRUE}}
     }
   };
 
   void test() {
     IntWrapper *obj = new IntWrapper(42);
-    // should be TRUE
-    clang_analyzer_eval(obj->value == 42); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(obj->value == 42); // expected-warning{{TRUE}}
     delete obj;
   }
 
@@ -328,8 +331,9 @@ namespace OperatorNew {
 
     clang_analyzer_eval(alias == obj); // expected-warning{{TRUE}}
 
-    // should be TRUE
-    clang_analyzer_eval(obj->value == 42); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(obj->value == 42); // expected-warning{{TRUE}}
+    // Because malloc() was never free()d:
+    // expected-warning@-2{{Potential leak of memory pointed to by 'alias'}}
   }
 }
 
@@ -434,6 +438,6 @@ namespace rdar12409977  {
 namespace bug16307 {
   void one_argument(int a) { }
   void call_with_less() {
-    reinterpret_cast<void (*)()>(one_argument)(); // expected-warning{{Function taking 1 argument}}
+    reinterpret_cast<void (*)()>(one_argument)(); // expected-warning{{Function taking 1 argument is called with fewer (0)}}
   }
 }

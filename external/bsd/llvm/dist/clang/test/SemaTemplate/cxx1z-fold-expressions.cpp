@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -std=c++1z -verify %s
+// RUN: %clang_cc1 -std=c++2a -verify %s
 
 template<typename ...T> constexpr auto sum(T ...t) { return (... + t); }
 template<typename ...T> constexpr auto product(T ...t) { return (t * ...); }
@@ -25,10 +26,6 @@ constexpr bool check() {
 static_assert(check());
 
 template<int ...N> void empty() {
-  static_assert((N + ...) == 0);
-  static_assert((N * ...) == 1);
-  static_assert((N | ...) == 0);
-  static_assert((N & ...) == -1);
   static_assert((N || ...) == false);
   static_assert((N && ...) == true);
   (N, ...);
@@ -36,14 +33,19 @@ template<int ...N> void empty() {
 template void empty<>();
 
 // An empty fold-expression isn't a null pointer just because it's an integer
-// with value 0.
+// with value 0. (This is no longer an issue since empty pack expansions don't
+// produce integers any more.)
 template<int ...N> void null_ptr() {
-  void *p = (N + ...); // expected-error {{rvalue of type 'int'}}
-  void *q = (N | ...); // expected-error {{rvalue of type 'int'}}
+  void *p = (N || ...); // expected-error {{rvalue of type 'bool'}}
+  void *q = (N , ...); // expected-error {{rvalue of type 'void'}}
 }
 template void null_ptr<>(); // expected-note {{in instantiation of}}
 
 template<int ...N> void bad_empty() {
+  (N + ...); // expected-error {{empty expansion for operator '+' with no fallback}}
+  (N * ...); // expected-error {{empty expansion for operator '*' with no fallback}}
+  (N | ...); // expected-error {{empty expansion for operator '|' with no fallback}}
+  (N & ...); // expected-error {{empty expansion for operator '&' with no fallback}}
   (N - ...); // expected-error {{empty expansion for operator '-' with no fallback}}
   (N / ...); // expected-error {{empty expansion for operator '/' with no fallback}}
   (N % ...); // expected-error {{empty expansion for operator '%' with no fallback}}
@@ -75,3 +77,18 @@ template<typename T, typename ...Ts> constexpr decltype(auto) apply(T &t, Ts ...
   return (t.*....*ts);
 }
 static_assert(&apply(a, &A::b, &A::B::c, &A::B::C::d, &A::B::C::D::e) == &a.b.c.d.e);
+
+#if __cplusplus > 201703L
+// The <=> operator is unique among binary operators in not being a
+// fold-operator.
+// FIXME: This diagnostic is not great.
+template<typename ...T> constexpr auto spaceship1(T ...t) { return (t <=> ...); } // expected-error {{expected expression}}
+template<typename ...T> constexpr auto spaceship2(T ...t) { return (... <=> t); } // expected-error {{expected expression}}
+template<typename ...T> constexpr auto spaceship3(T ...t) { return (t <=> ... <=> 0); } // expected-error {{expected expression}}
+#endif
+
+// The GNU binary conditional operator ?: is not recognized as a fold-operator.
+// FIXME: Why not? This seems like it would be useful.
+template<typename ...T> constexpr auto binary_conditional1(T ...t) { return (t ?: ...); } // expected-error {{expected expression}}
+template<typename ...T> constexpr auto binary_conditional2(T ...t) { return (... ?: t); } // expected-error {{expected expression}}
+template<typename ...T> constexpr auto binary_conditional3(T ...t) { return (t ?: ... ?: 0); } // expected-error {{expected expression}}

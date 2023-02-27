@@ -25,7 +25,7 @@ void test0() {
   // Test passing a literal floating-point value to a function that takes an integer.
   foo(1.2F); // expected-warning {{implicit conversion from 'float' to 'int' changes value from 1.2 to 1}}
 
-  int y10 = -1.2F;  // expected-warning {{implicit conversion from 'float' to 'int' changes value from 1.2 to 1}}
+  int y10 = -1.2F;  // expected-warning {{implicit conversion from 'float' to 'int' changes value from -1.2 to -1}}
 
   // -Wliteral-conversion does NOT catch const values.
   // (-Wconversion DOES catch them.)
@@ -38,3 +38,25 @@ void test0() {
   int y = (24*60*60) * 0.25;
   int pennies = 123.45 * 100;
 }
+
+// Similarly, test floating point conversion to bool. Only float values of zero
+// are converted to false; everything else is converted to true.
+void test1() {
+  bool b1 = 0.99f; // expected-warning {{implicit conversion from 'float' to 'bool' changes value from 0.99 to true}}
+  bool b2 = 0.99; // expected-warning {{implicit conversion from 'double' to 'bool' changes value from 0.99 to true}}
+  // These do not warn because they can be directly converted to integral
+  // values.
+  bool b3 = 0.0f;
+  bool b4 = 0.0;
+
+  // These all warn because they overflow the target type.
+  short s = 32768.0; // expected-warning{{implicit conversion of out of range value from 'double' to 'short' is undefined}}
+  unsigned short us = 65536.0; // expected-warning{{implicit conversion of out of range value from 'double' to 'unsigned short' is undefined}}
+
+  short s2 = -32769.0; // expected-warning{{implicit conversion of out of range value from 'double' to 'short' is undefined}}
+  unsigned short us2 = -65537.0; // expected-warning{{implicit conversion of out of range value from 'double' to 'unsigned short' is undefined}}
+}
+
+int a() { return 2147483647.5; } // expected-warning{{implicit conversion from 'double' to 'int' changes value from 2147483647.5 to 2147483647}}
+unsigned b() { return -.5; } // expected-warning{{implicit conversion from 'double' to 'unsigned int' changes value from -0.5 to 0}}
+

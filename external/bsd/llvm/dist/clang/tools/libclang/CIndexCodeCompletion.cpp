@@ -16,6 +16,7 @@
 #include "CIndexDiagnostic.h"
 #include "CLog.h"
 #include "CXCursor.h"
+#include "CXSourceLocation.h"
 #include "CXString.h"
 #include "CXTranslationUnit.h"
 #include "clang/AST/Decl.h"
@@ -32,6 +33,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/Timer.h"
@@ -54,8 +56,6 @@
 
 using namespace clang;
 using namespace clang::cxindex;
-
-extern "C" {
 
 enum CXCompletionChunkKind
 clang_getCompletionChunkKind(CXCompletionString completion_string,
@@ -243,7 +243,7 @@ clang_getCompletionBriefComment(CXCompletionString completion_string) {
 
 namespace {
 
-/// \brief The CXCodeCompleteResults structure we allocate internally;
+/// The CXCodeCompleteResults structure we allocate internally;
 /// the client only sees the initial CXCodeCompleteResults structure.
 ///
 /// Normally, clients of CXString shouldn't care whether or not a CXString is
@@ -254,67 +254,105 @@ struct AllocatedCXCodeCompleteResults : public CXCodeCompleteResults {
   AllocatedCXCodeCompleteResults(IntrusiveRefCntPtr<FileManager> FileMgr);
   ~AllocatedCXCodeCompleteResults();
   
-  /// \brief Diagnostics produced while performing code completion.
+  /// Diagnostics produced while performing code completion.
   SmallVector<StoredDiagnostic, 8> Diagnostics;
 
-  /// \brief Allocated API-exposed wrappters for Diagnostics.
+  /// Allocated API-exposed wrappters for Diagnostics.
   SmallVector<CXStoredDiagnostic *, 8> DiagnosticsWrappers;
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts;
   
-  /// \brief Diag object
+  /// Diag object
   IntrusiveRefCntPtr<DiagnosticsEngine> Diag;
   
-  /// \brief Language options used to adjust source locations.
+  /// Language options used to adjust source locations.
   LangOptions LangOpts;
 
-  /// \brief File manager, used for diagnostics.
+  /// File manager, used for diagnostics.
   IntrusiveRefCntPtr<FileManager> FileMgr;
 
-  /// \brief Source manager, used for diagnostics.
+  /// Source manager, used for diagnostics.
   IntrusiveRefCntPtr<SourceManager> SourceMgr;
   
-  /// \brief Temporary files that should be removed once we have finished
-  /// with the code-completion results.
-  std::vector<std::string> TemporaryFiles;
-
-  /// \brief Temporary buffers that will be deleted once we have finished with
+  /// Temporary buffers that will be deleted once we have finished with
   /// the code-completion results.
   SmallVector<const llvm::MemoryBuffer *, 1> TemporaryBuffers;
   
-  /// \brief Allocator used to store globally cached code-completion results.
-  IntrusiveRefCntPtr<clang::GlobalCodeCompletionAllocator>
-    CachedCompletionAllocator;
-  
-  /// \brief Allocator used to store code completion results.
-  IntrusiveRefCntPtr<clang::GlobalCodeCompletionAllocator>
-    CodeCompletionAllocator;
-  
-  /// \brief Context under which completion occurred.
+  /// Allocator used to store globally cached code-completion results.
+  std::shared_ptr<clang::GlobalCodeCompletionAllocator>
+      CachedCompletionAllocator;
+
+  /// Allocator used to store code completion results.
+  std::shared_ptr<clang::GlobalCodeCompletionAllocator> CodeCompletionAllocator;
+
+  /// Context under which completion occurred.
   enum clang::CodeCompletionContext::Kind ContextKind;
   
-  /// \brief A bitfield representing the acceptable completions for the
+  /// A bitfield representing the acceptable completions for the
   /// current context.
   unsigned long long Contexts;
   
-  /// \brief The kind of the container for the current context for completions.
+  /// The kind of the container for the current context for completions.
   enum CXCursorKind ContainerKind;
 
-  /// \brief The USR of the container for the current context for completions.
+  /// The USR of the container for the current context for completions.
   std::string ContainerUSR;
 
-  /// \brief a boolean value indicating whether there is complete information
+  /// a boolean value indicating whether there is complete information
   /// about the container
   unsigned ContainerIsIncomplete;
   
-  /// \brief A string containing the Objective-C selector entered thus far for a
+  /// A string containing the Objective-C selector entered thus far for a
   /// message send.
   std::string Selector;
+
+  /// Vector of fix-its for each completion result that *must* be applied
+  /// before that result for the corresponding completion item.
+  std::vector<std::vector<FixItHint>> FixItsVector;
 };
 
 } // end anonymous namespace
 
-/// \brief Tracks the number of code-completion result objects that are 
+unsigned clang_getCompletionNumFixIts(CXCodeCompleteResults *results,
+                                      unsigned completion_index) {
+  AllocatedCXCodeCompleteResults *allocated_results = (AllocatedCXCodeCompleteResults *)results;
+
+  if (!allocated_results || allocated_results->FixItsVector.size() <= completion_index)
+    return 0;
+
+  return static_cast<unsigned>(allocated_results->FixItsVector[completion_index].size());
+}
+
+CXString clang_getCompletionFixIt(CXCodeCompleteResults *results,
+                                  unsigned completion_index,
+                                  unsigned fixit_index,
+                                  CXSourceRange *replacement_range) {
+  AllocatedCXCodeCompleteResults *allocated_results = (AllocatedCXCodeCompleteResults *)results;
+
+  if (!allocated_results || allocated_results->FixItsVector.size() <= completion_index) {
+    if (replacement_range)
+      *replacement_range = clang_getNullRange();
+    return cxstring::createNull();
+  }
+
+  ArrayRef<FixItHint> FixIts = allocated_results->FixItsVector[completion_index];
+  if (FixIts.size() <= fixit_index) {
+    if (replacement_range)
+      *replacement_range = clang_getNullRange();
+    return cxstring::createNull();
+  }
+
+  const FixItHint &FixIt = FixIts[fixit_index];
+  if (replacement_range) {
+    *replacement_range = cxloc::translateSourceRange(
+        *allocated_results->SourceMgr, allocated_results->LangOpts,
+        FixIt.RemoveRange);
+  }
+
+  return cxstring::createRef(FixIt.CodeToInsert.c_str());
+}
+
+/// Tracks the number of code-completion result objects that are 
 /// currently active.
 ///
 /// Used for debugging purposes only.
@@ -326,12 +364,13 @@ static unsigned CodeCompletionResultObjects;
   
 AllocatedCXCodeCompleteResults::AllocatedCXCodeCompleteResults(
     IntrusiveRefCntPtr<FileManager> FileMgr)
-    : CXCodeCompleteResults(),
-      DiagOpts(new DiagnosticOptions),
+    : CXCodeCompleteResults(), DiagOpts(new DiagnosticOptions),
       Diag(new DiagnosticsEngine(
           IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs), &*DiagOpts)),
-      FileMgr(FileMgr), SourceMgr(new SourceManager(*Diag, *FileMgr)),
-      CodeCompletionAllocator(new clang::GlobalCodeCompletionAllocator),
+      FileMgr(std::move(FileMgr)),
+      SourceMgr(new SourceManager(*Diag, *this->FileMgr)),
+      CodeCompletionAllocator(
+          std::make_shared<clang::GlobalCodeCompletionAllocator>()),
       Contexts(CXCompletionContext_Unknown),
       ContainerKind(CXCursor_InvalidCode), ContainerIsIncomplete(1) {
   if (getenv("LIBCLANG_OBJTRACKING"))
@@ -343,8 +382,6 @@ AllocatedCXCodeCompleteResults::~AllocatedCXCodeCompleteResults() {
   llvm::DeleteContainerPointers(DiagnosticsWrappers);
   delete [] Results;
 
-  for (unsigned I = 0, N = TemporaryFiles.size(); I != N; ++I)
-    llvm::sys::fs::remove(TemporaryFiles[I]);
   for (unsigned I = 0, N = TemporaryBuffers.size(); I != N; ++I)
     delete TemporaryBuffers[I];
 
@@ -352,8 +389,6 @@ AllocatedCXCodeCompleteResults::~AllocatedCXCodeCompleteResults() {
     fprintf(stderr, "--- %u completion results\n",
             --CodeCompletionResultObjects);
 }
-  
-} // end extern "C"
 
 static unsigned long long getContextsForContextKind(
                                           enum CodeCompletionContext::Kind kind, 
@@ -539,16 +574,18 @@ namespace {
       : CodeCompleteConsumer(Opts, false), 
         AllocatedResults(Results), CCTUInfo(Results.CodeCompletionAllocator),
         TU(TranslationUnit) { }
-    ~CaptureCompletionResults() { Finish(); }
+    ~CaptureCompletionResults() override { Finish(); }
 
     void ProcessCodeCompleteResults(Sema &S, 
                                     CodeCompletionContext Context,
                                     CodeCompletionResult *Results,
                                     unsigned NumResults) override {
       StoredResults.reserve(StoredResults.size() + NumResults);
+      if (includeFixIts())
+        AllocatedResults.FixItsVector.reserve(NumResults);
       for (unsigned I = 0; I != NumResults; ++I) {
-        CodeCompletionString *StoredCompletion        
-          = Results[I].CreateCodeCompletionString(S, getAllocator(),
+        CodeCompletionString *StoredCompletion
+          = Results[I].CreateCodeCompletionString(S, Context, getAllocator(),
                                                   getCodeCompletionTUInfo(),
                                                   includeBriefComments());
         
@@ -556,8 +593,10 @@ namespace {
         R.CursorKind = Results[I].CursorKind;
         R.CompletionString = StoredCompletion;
         StoredResults.push_back(R);
+        if (includeFixIts())
+          AllocatedResults.FixItsVector.emplace_back(std::move(Results[I].FixIts));
       }
-      
+
       enum CodeCompletionContext::Kind contextKind = Context.getKind();
       
       AllocatedResults.ContextKind = contextKind;
@@ -625,10 +664,11 @@ namespace {
       for (unsigned I = 0; I != NumCandidates; ++I) {
         CodeCompletionString *StoredCompletion
           = Candidates[I].CreateSignatureString(CurrentArg, S, getAllocator(),
-                                                getCodeCompletionTUInfo());
+                                                getCodeCompletionTUInfo(),
+                                                includeBriefComments());
         
         CXCompletionResult R;
-        R.CursorKind = CXCursor_NotImplemented;
+        R.CursorKind = CXCursor_OverloadCandidate;
         R.CompletionString = StoredCompletion;
         StoredResults.push_back(R);
       }
@@ -651,42 +691,30 @@ namespace {
   };
 }
 
-extern "C" {
-struct CodeCompleteAtInfo {
-  CXTranslationUnit TU;
-  const char *complete_filename;
-  unsigned complete_line;
-  unsigned complete_column;
-  ArrayRef<CXUnsavedFile> unsaved_files;
-  unsigned options;
-  CXCodeCompleteResults *result;
-};
-void clang_codeCompleteAt_Impl(void *UserData) {
-  CodeCompleteAtInfo *CCAI = static_cast<CodeCompleteAtInfo*>(UserData);
-  CXTranslationUnit TU = CCAI->TU;
-  const char *complete_filename = CCAI->complete_filename;
-  unsigned complete_line = CCAI->complete_line;
-  unsigned complete_column = CCAI->complete_column;
-  unsigned options = CCAI->options;
+static CXCodeCompleteResults *
+clang_codeCompleteAt_Impl(CXTranslationUnit TU, const char *complete_filename,
+                          unsigned complete_line, unsigned complete_column,
+                          ArrayRef<CXUnsavedFile> unsaved_files,
+                          unsigned options) {
   bool IncludeBriefComments = options & CXCodeComplete_IncludeBriefComments;
-  CCAI->result = nullptr;
+  bool SkipPreamble = options & CXCodeComplete_SkipPreamble;
+  bool IncludeFixIts = options & CXCodeComplete_IncludeCompletionsWithFixIts;
 
 #ifdef UDP_CODE_COMPLETION_LOGGER
 #ifdef UDP_CODE_COMPLETION_LOGGER_PORT
   const llvm::TimeRecord &StartTime =  llvm::TimeRecord::getCurrentTime();
 #endif
 #endif
-
   bool EnableLogging = getenv("LIBCLANG_CODE_COMPLETION_LOGGING") != nullptr;
 
   if (cxtu::isNotUsableTU(TU)) {
     LOG_BAD_TU(TU);
-    return;
+    return nullptr;
   }
 
   ASTUnit *AST = cxtu::getASTUnit(TU);
   if (!AST)
-    return;
+    return nullptr;
 
   CIndexer *CXXIdx = TU->CIdx;
   if (CXXIdx->isOptEnabled(CXGlobalOpt_ThreadBackgroundPriorityForEditing))
@@ -697,7 +725,7 @@ void clang_codeCompleteAt_Impl(void *UserData) {
   // Perform the remapping of source files.
   SmallVector<ASTUnit::RemappedFile, 4> RemappedFiles;
 
-  for (auto &UF : CCAI->unsaved_files) {
+  for (auto &UF : unsaved_files) {
     std::unique_ptr<llvm::MemoryBuffer> MB =
         llvm::MemoryBuffer::getMemBufferCopy(getContents(UF), UF.Filename);
     RemappedFiles.push_back(std::make_pair(UF.Filename, MB.release()));
@@ -716,18 +744,28 @@ void clang_codeCompleteAt_Impl(void *UserData) {
   // Create a code-completion consumer to capture the results.
   CodeCompleteOptions Opts;
   Opts.IncludeBriefComments = IncludeBriefComments;
+  Opts.LoadExternal = !SkipPreamble;
+  Opts.IncludeFixIts = IncludeFixIts;
   CaptureCompletionResults Capture(Opts, *Results, &TU);
 
   // Perform completion.
+  std::vector<const char *> CArgs;
+  for (const auto &Arg : TU->Arguments)
+    CArgs.push_back(Arg.c_str());
+  std::string CompletionInvocation =
+      llvm::formatv("-code-completion-at={0}:{1}:{2}", complete_filename,
+                    complete_line, complete_column)
+          .str();
+  LibclangInvocationReporter InvocationReporter(
+      *CXXIdx, LibclangInvocationReporter::OperationKind::CompletionOperation,
+      TU->ParsingOptions, CArgs, CompletionInvocation, unsaved_files);
   AST->CodeComplete(complete_filename, complete_line, complete_column,
-                    RemappedFiles,
-                    (options & CXCodeComplete_IncludeMacros),
+                    RemappedFiles, (options & CXCodeComplete_IncludeMacros),
                     (options & CXCodeComplete_IncludeCodePatterns),
-                    IncludeBriefComments,
-                    Capture,
-                    *Results->Diag, Results->LangOpts, *Results->SourceMgr,
-                    *Results->FileMgr, Results->Diagnostics,
-                    Results->TemporaryBuffers);
+                    IncludeBriefComments, Capture,
+                    CXXIdx->getPCHContainerOperations(), *Results->Diag,
+                    Results->LangOpts, *Results->SourceMgr, *Results->FileMgr,
+                    Results->Diagnostics, Results->TemporaryBuffers);
 
   Results->DiagnosticsWrappers.resize(Results->Diagnostics.size());
 
@@ -811,8 +849,9 @@ void clang_codeCompleteAt_Impl(void *UserData) {
   }
 #endif
 #endif
-  CCAI->result = Results;
+  return Results;
 }
+
 CXCodeCompleteResults *clang_codeCompleteAt(CXTranslationUnit TU,
                                             const char *complete_filename,
                                             unsigned complete_line,
@@ -828,25 +867,23 @@ CXCodeCompleteResults *clang_codeCompleteAt(CXTranslationUnit TU,
   if (num_unsaved_files && !unsaved_files)
     return nullptr;
 
-  CodeCompleteAtInfo CCAI = {TU, complete_filename, complete_line,
-    complete_column, llvm::makeArrayRef(unsaved_files, num_unsaved_files),
-    options, nullptr};
-
-  if (getenv("LIBCLANG_NOTHREADS")) {
-    clang_codeCompleteAt_Impl(&CCAI);
-    return CCAI.result;
-  }
+  CXCodeCompleteResults *result;
+  auto CodeCompleteAtImpl = [=, &result]() {
+    result = clang_codeCompleteAt_Impl(
+        TU, complete_filename, complete_line, complete_column,
+        llvm::makeArrayRef(unsaved_files, num_unsaved_files), options);
+  };
 
   llvm::CrashRecoveryContext CRC;
 
-  if (!RunSafely(CRC, clang_codeCompleteAt_Impl, &CCAI)) {
+  if (!RunSafely(CRC, CodeCompleteAtImpl)) {
     fprintf(stderr, "libclang: crash detected in code completion\n");
     cxtu::getASTUnit(TU)->setUnsafeToFree(true);
     return nullptr;
   } else if (getenv("LIBCLANG_RESOURCE_USAGE"))
     PrintLibclangResourceUsage(TU);
 
-  return CCAI.result;
+  return result;
 }
 
 unsigned clang_defaultCodeCompleteOptions(void) {
@@ -931,9 +968,7 @@ CXString clang_codeCompleteGetObjCSelector(CXCodeCompleteResults *ResultsIn) {
   return cxstring::createDup(Results->Selector);
 }
   
-} // end extern "C"
-
-/// \brief Simple utility function that appends a \p New string to the given
+/// Simple utility function that appends a \p New string to the given
 /// \p Old string, using the \p Buffer for storage.
 ///
 /// \param Old The string to which we are appending. This parameter will be
@@ -957,7 +992,7 @@ static void AppendToString(StringRef &Old, StringRef New,
   Old = Buffer.str();
 }
 
-/// \brief Get the typed-text blocks from the given code-completion string
+/// Get the typed-text blocks from the given code-completion string
 /// and return them as a single string.
 ///
 /// \param String The code-completion string whose typed-text blocks will be
@@ -984,7 +1019,7 @@ namespace {
         = (CodeCompletionString *)XR.CompletionString;
       CodeCompletionString *Y
         = (CodeCompletionString *)YR.CompletionString;
-      
+
       SmallString<256> XBuffer;
       StringRef XText = GetTypedName(X, XBuffer);
       SmallString<256> YBuffer;
@@ -1005,9 +1040,7 @@ namespace {
   };
 }
 
-extern "C" {
-  void clang_sortCodeCompletionResults(CXCompletionResult *Results,
-                                       unsigned NumResults) {
-    std::stable_sort(Results, Results + NumResults, OrderCompletionResults());
-  }
+void clang_sortCodeCompletionResults(CXCompletionResult *Results,
+                                     unsigned NumResults) {
+  std::stable_sort(Results, Results + NumResults, OrderCompletionResults());
 }

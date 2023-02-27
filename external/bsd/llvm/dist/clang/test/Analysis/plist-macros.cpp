@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,unix -analyzer-eagerly-assume -verify %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,unix -analyzer-eagerly-assume -analyzer-output=plist-multi-file -analyzer-config path-diagnostics-alternate=ture %s -o %t.plist
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix -analyzer-eagerly-assume -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix -analyzer-eagerly-assume -analyzer-output=plist-multi-file %s -o %t.plist
 // RUN: FileCheck --input-file=%t.plist %s
 
 
@@ -65,6 +65,7 @@ if (y) \
   ;
 int useMultiNote(int *p, int y) {;
   y++;
+  if (p) {}
   multiNoteMacro
 
   return *p; // expected-warning {{Dereference of null pointer}}
@@ -218,11 +219,14 @@ void test2(int *p) {
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Memory allocated by malloc() should be deallocated by free(), not &apos;delete&apos;</string>
-// CHECK-NEXT:    <key>category</key><string>Memory Error</string>
+// CHECK-NEXT:    <key>category</key><string>Memory error</string>
 // CHECK-NEXT:    <key>type</key><string>Bad deallocator</string>
+// CHECK-NEXT:    <key>check_name</key><string>unix.MismatchedDeallocator</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>81d63a132b4ef0cc96734c17440a1c26</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>noteOnMacro</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>6</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>6</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>16</integer>
@@ -312,11 +316,14 @@ void test2(int *p) {
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of memory pointed to by &apos;x&apos;</string>
-// CHECK-NEXT:    <key>category</key><string>Memory Error</string>
+// CHECK-NEXT:    <key>category</key><string>Memory error</string>
 // CHECK-NEXT:    <key>type</key><string>Memory leak</string>
+// CHECK-NEXT:    <key>check_name</key><string>unix.Malloc</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>2d723d9fb4e5f10dd54a7396866dfce4</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>macroIsFirstInFunction</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>21</integer>
@@ -559,9 +566,12 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>3570104919aab3f953357f8c87b68bd7</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>macroInExpression</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>4</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>4</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>30</integer>
@@ -804,9 +814,12 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>deff163b13f3fd860bc332498b0dbc59</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>macroInExpressionNoNote</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>5</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>5</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>39</integer>
@@ -903,7 +916,7 @@ void test2(int *p) {
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
 // CHECK-NEXT:          <key>line</key><integer>45</integer>
-// CHECK-NEXT:          <key>col</key><integer>18</integer>
+// CHECK-NEXT:          <key>col</key><integer>21</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:        </array>
@@ -1015,9 +1028,12 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>b67b58d85375752578e947b77c6aa70c</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>macroWithArgInExpression</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>4</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>4</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>47</integer>
@@ -1158,9 +1174,12 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>b53410f6c0d3d07e62ce5c6f91a1810a</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>useMultiNoteMacroWithError</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>2</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>2</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>56</integer>
@@ -1198,7 +1217,41 @@ void test2(int *p) {
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>68</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -1210,7 +1263,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
 // CHECK-NEXT:       <key>line</key><integer>68</integer>
-// CHECK-NEXT:       <key>col</key><integer>3</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
 // CHECK-NEXT:      <key>ranges</key>
@@ -1218,12 +1271,12 @@ void test2(int *p) {
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
 // CHECK-NEXT:          <key>line</key><integer>68</integer>
-// CHECK-NEXT:          <key>col</key><integer>3</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
 // CHECK-NEXT:          <key>line</key><integer>68</integer>
-// CHECK-NEXT:          <key>col</key><integer>16</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:        </array>
@@ -1235,10 +1288,44 @@ void test2(int *p) {
 // CHECK-NEXT:      <string>Assuming &apos;p&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>69</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>69</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>68</integer>
+// CHECK-NEXT:       <key>line</key><integer>69</integer>
 // CHECK-NEXT:       <key>col</key><integer>3</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1246,12 +1333,12 @@ void test2(int *p) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>68</integer>
+// CHECK-NEXT:          <key>line</key><integer>69</integer>
 // CHECK-NEXT:          <key>col</key><integer>3</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>68</integer>
+// CHECK-NEXT:          <key>line</key><integer>69</integer>
 // CHECK-NEXT:          <key>col</key><integer>16</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -1271,12 +1358,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>line</key><integer>69</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>68</integer>
+// CHECK-NEXT:            <key>line</key><integer>69</integer>
 // CHECK-NEXT:            <key>col</key><integer>16</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1284,12 +1371,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>8</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1305,12 +1392,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>8</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1318,12 +1405,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>10</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>70</integer>
+// CHECK-NEXT:            <key>line</key><integer>71</integer>
 // CHECK-NEXT:            <key>col</key><integer>10</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1335,7 +1422,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>70</integer>
+// CHECK-NEXT:       <key>line</key><integer>71</integer>
 // CHECK-NEXT:       <key>col</key><integer>10</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1343,12 +1430,12 @@ void test2(int *p) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>70</integer>
+// CHECK-NEXT:          <key>line</key><integer>71</integer>
 // CHECK-NEXT:          <key>col</key><integer>11</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>70</integer>
+// CHECK-NEXT:          <key>line</key><integer>71</integer>
 // CHECK-NEXT:          <key>col</key><integer>11</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -1364,12 +1451,15 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>41f58f9549aa1867e461a7996a8d335c</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>useMultiNote</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>4</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>5</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>70</integer>
+// CHECK-NEXT:    <key>line</key><integer>71</integer>
 // CHECK-NEXT:    <key>col</key><integer>10</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>
@@ -1381,7 +1471,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>82</integer>
+// CHECK-NEXT:       <key>line</key><integer>83</integer>
 // CHECK-NEXT:       <key>col</key><integer>3</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1389,13 +1479,13 @@ void test2(int *p) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>82</integer>
+// CHECK-NEXT:          <key>line</key><integer>83</integer>
 // CHECK-NEXT:          <key>col</key><integer>3</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>82</integer>
-// CHECK-NEXT:          <key>col</key><integer>9</integer>
+// CHECK-NEXT:          <key>line</key><integer>83</integer>
+// CHECK-NEXT:          <key>col</key><integer>12</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:        </array>
@@ -1410,7 +1500,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>82</integer>
+// CHECK-NEXT:       <key>line</key><integer>83</integer>
 // CHECK-NEXT:       <key>col</key><integer>3</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1418,13 +1508,13 @@ void test2(int *p) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>82</integer>
+// CHECK-NEXT:          <key>line</key><integer>83</integer>
 // CHECK-NEXT:          <key>col</key><integer>3</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>82</integer>
-// CHECK-NEXT:          <key>col</key><integer>9</integer>
+// CHECK-NEXT:          <key>line</key><integer>83</integer>
+// CHECK-NEXT:          <key>col</key><integer>12</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:        </array>
@@ -1439,7 +1529,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>75</integer>
+// CHECK-NEXT:       <key>line</key><integer>76</integer>
 // CHECK-NEXT:       <key>col</key><integer>1</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1457,12 +1547,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>75</integer>
+// CHECK-NEXT:            <key>line</key><integer>76</integer>
 // CHECK-NEXT:            <key>col</key><integer>1</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>75</integer>
+// CHECK-NEXT:            <key>line</key><integer>76</integer>
 // CHECK-NEXT:            <key>col</key><integer>4</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1470,12 +1560,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>76</integer>
+// CHECK-NEXT:            <key>line</key><integer>77</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>76</integer>
+// CHECK-NEXT:            <key>line</key><integer>77</integer>
 // CHECK-NEXT:            <key>col</key><integer>4</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1491,12 +1581,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>76</integer>
+// CHECK-NEXT:            <key>line</key><integer>77</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>76</integer>
+// CHECK-NEXT:            <key>line</key><integer>77</integer>
 // CHECK-NEXT:            <key>col</key><integer>4</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1504,12 +1594,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1525,12 +1615,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>3</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1538,12 +1628,12 @@ void test2(int *p) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>6</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>78</integer>
+// CHECK-NEXT:            <key>line</key><integer>79</integer>
 // CHECK-NEXT:            <key>col</key><integer>6</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -1555,7 +1645,7 @@ void test2(int *p) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>78</integer>
+// CHECK-NEXT:       <key>line</key><integer>79</integer>
 // CHECK-NEXT:       <key>col</key><integer>6</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -1563,12 +1653,12 @@ void test2(int *p) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>78</integer>
+// CHECK-NEXT:          <key>line</key><integer>79</integer>
 // CHECK-NEXT:          <key>col</key><integer>4</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>78</integer>
+// CHECK-NEXT:          <key>line</key><integer>79</integer>
 // CHECK-NEXT:          <key>col</key><integer>4</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -1584,12 +1674,15 @@ void test2(int *p) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;a&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>2dc47a4afc2f349f12217b38588769f4</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>null_deref</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>3</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>3</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>78</integer>
+// CHECK-NEXT:    <key>line</key><integer>79</integer>
 // CHECK-NEXT:    <key>col</key><integer>6</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>

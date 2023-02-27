@@ -1,5 +1,4 @@
 ; REQUIRES: object-emission
-; RUN: %llc_dwarf -O0 -filetype=obj < %s | llvm-dwarfdump - | FileCheck %s
 
 ; Generated from the following source compiled with clang++ -gmlt:
 ; void f1() {}
@@ -77,7 +76,6 @@
 ; CHECK-NOT: {{DW_TAG|DW_AT}}
 ; CHECK: NULL
 
-
 ; CHECK: .debug_ranges contents:
 
 ; ... some addresses (depends on platform (such as platforms with function
@@ -89,35 +87,30 @@
 
 
 ; Check that we don't emit any pubnames or pubtypes under -gmlt
-; CHECK: .debug_pubnames contents:
-; CHECK-NOT: Offset
-
-; CHECK: .debug_pubtypes contents:
-; CHECK-NOT: Offset
-
-; CHECK: .apple{{.*}} contents:
+; CHECK-NOT: .debug_pubnames contents:
+; CHECK-NOT: .debug_pubtypes contents:
 
 ; Function Attrs: nounwind uwtable
-define void @_Z2f1v() #0 {
+define void @_Z2f1v() #0 !dbg !4 {
 entry:
   ret void, !dbg !13
 }
 
 ; Function Attrs: nounwind uwtable
-define void @_Z2f2v() #0 section "__TEXT,__bar" {
+define void @_Z2f2v() #0 section "__TEXT,__bar" !dbg !7 {
 entry:
   ret void, !dbg !14
 }
 
 ; Function Attrs: alwaysinline nounwind uwtable
-define void @_Z2f3v() #1 {
+define void @_Z2f3v() #1 !dbg !8 {
 entry:
   call void @_Z2f1v(), !dbg !15
   ret void, !dbg !16
 }
 
 ; Function Attrs: nounwind uwtable
-define void @_Z2f4v() #0 {
+define void @_Z2f4v() #0 !dbg !9 {
 entry:
   call void @_Z2f1v() #2, !dbg !17
   ret void, !dbg !19
@@ -131,23 +124,22 @@ attributes #2 = { nounwind }
 !llvm.module.flags = !{!10, !11}
 !llvm.ident = !{!12}
 
-!0 = !{!"0x11\004\00clang version 3.6.0 \000\00\000\00\002", !1, !2, !2, !3, !2, !2} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/gmlt.cpp] [DW_LANG_C_plus_plus]
-!1 = !{!"gmlt.cpp", !"/tmp/dbginfo"}
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.6.0 ", isOptimized: false, emissionKind: LineTablesOnly, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
+!1 = !DIFile(filename: "gmlt.cpp", directory: "/tmp/dbginfo")
 !2 = !{}
-!3 = !{!4, !7, !8, !9}
-!4 = !{!"0x2e\00f1\00f1\00\001\000\001\000\006\00256\000\001", !1, !5, !6, null, void ()* @_Z2f1v, null, null, !2} ; [ DW_TAG_subprogram ] [line 1] [def] [f1]
-!5 = !{!"0x29", !1}          ; [ DW_TAG_file_type ] [/tmp/dbginfo/gmlt.cpp]
-!6 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !2, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!7 = !{!"0x2e\00f2\00f2\00\002\000\001\000\006\00256\000\002", !1, !5, !6, null, void ()* @_Z2f2v, null, null, !2} ; [ DW_TAG_subprogram ] [line 2] [def] [f2]
-!8 = !{!"0x2e\00f3\00f3\00\003\000\001\000\006\00256\000\003", !1, !5, !6, null, void ()* @_Z2f3v, null, null, !2} ; [ DW_TAG_subprogram ] [line 3] [def] [f3]
-!9 = !{!"0x2e\00f4\00f4\00\004\000\001\000\006\00256\000\004", !1, !5, !6, null, void ()* @_Z2f4v, null, null, !2} ; [ DW_TAG_subprogram ] [line 4] [def] [f4]
+!4 = distinct !DISubprogram(name: "f1", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 1, file: !1, scope: !5, type: !6, retainedNodes: !2)
+!5 = !DIFile(filename: "gmlt.cpp", directory: "/tmp/dbginfo")
+!6 = !DISubroutineType(types: !2)
+!7 = distinct !DISubprogram(name: "f2", line: 2, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 2, file: !1, scope: !5, type: !6, retainedNodes: !2)
+!8 = distinct !DISubprogram(name: "f3", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !1, scope: !5, type: !6, retainedNodes: !2)
+!9 = distinct !DISubprogram(name: "f4", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !1, scope: !5, type: !6, retainedNodes: !2)
 !10 = !{i32 2, !"Dwarf Version", i32 4}
-!11 = !{i32 2, !"Debug Info Version", i32 2}
+!11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{!"clang version 3.6.0 "}
-!13 = !MDLocation(line: 1, column: 12, scope: !4)
-!14 = !MDLocation(line: 2, column: 53, scope: !7)
-!15 = !MDLocation(line: 3, column: 44, scope: !8)
-!16 = !MDLocation(line: 3, column: 50, scope: !8)
-!17 = !MDLocation(line: 3, column: 44, scope: !8, inlinedAt: !18)
-!18 = !MDLocation(line: 4, column: 13, scope: !9)
-!19 = !MDLocation(line: 4, column: 19, scope: !9)
+!13 = !DILocation(line: 1, column: 12, scope: !4)
+!14 = !DILocation(line: 2, column: 53, scope: !7)
+!15 = !DILocation(line: 3, column: 44, scope: !8)
+!16 = !DILocation(line: 3, column: 50, scope: !8)
+!17 = !DILocation(line: 3, column: 44, scope: !8, inlinedAt: !18)
+!18 = !DILocation(line: 4, column: 13, scope: !9)
+!19 = !DILocation(line: 4, column: 19, scope: !9)

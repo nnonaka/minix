@@ -1,4 +1,4 @@
-//===- IdentifierResolver.cpp - Lexical Scope Name lookup -------*- C++ -*-===//
+//===- IdentifierResolver.cpp - Lexical Scope Name lookup -----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,10 +14,16 @@
 
 #include "clang/Sema/IdentifierResolver.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/DeclBase.h"
+#include "clang/AST/DeclarationName.h"
+#include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Lex/ExternalPreprocessorSource.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Scope.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstdint>
 
 using namespace clang;
 
@@ -35,17 +41,17 @@ class IdentifierResolver::IdDeclInfoMap {
   /// impossible to add something to a pre-C++0x STL container without
   /// a completely unnecessary copy.
   struct IdDeclInfoPool {
-    IdDeclInfoPool(IdDeclInfoPool *Next) : Next(Next) {}
-    
     IdDeclInfoPool *Next;
     IdDeclInfo Pool[POOL_SIZE];
+
+    IdDeclInfoPool(IdDeclInfoPool *Next) : Next(Next) {}
   };
   
-  IdDeclInfoPool *CurPool;
-  unsigned int CurIndex;
+  IdDeclInfoPool *CurPool = nullptr;
+  unsigned int CurIndex = POOL_SIZE;
 
 public:
-  IdDeclInfoMap() : CurPool(nullptr), CurIndex(POOL_SIZE) {}
+  IdDeclInfoMap() = default;
 
   ~IdDeclInfoMap() {
     IdDeclInfoPool *Cur = CurPool;
@@ -59,7 +65,6 @@ public:
   /// It creates a new IdDeclInfo if one was not created before for this id.
   IdDeclInfo &operator[](DeclarationName Name);
 };
-
 
 //===----------------------------------------------------------------------===//
 // IdDeclInfo Implementation
@@ -83,9 +88,7 @@ void IdentifierResolver::IdDeclInfo::RemoveDecl(NamedDecl *D) {
 //===----------------------------------------------------------------------===//
 
 IdentifierResolver::IdentifierResolver(Preprocessor &PP)
-  : LangOpt(PP.getLangOpts()), PP(PP),
-    IdDeclInfos(new IdDeclInfoMap) {
-}
+    : LangOpt(PP.getLangOpts()), PP(PP), IdDeclInfos(new IdDeclInfoMap) {}
 
 IdentifierResolver::~IdentifierResolver() {
   delete IdDeclInfos;
@@ -98,7 +101,7 @@ bool IdentifierResolver::isDeclInScope(Decl *D, DeclContext *Ctx, Scope *S,
                                        bool AllowInlineNamespace) const {
   Ctx = Ctx->getRedeclContext();
 
-  if (Ctx->isFunctionOrMethod() || S->isFunctionPrototypeScope()) {
+  if (Ctx->isFunctionOrMethod() || (S && S->isFunctionPrototypeScope())) {
     // Ignore the scopes associated within transparent declaration contexts.
     while (S->getEntity() && S->getEntity()->isTransparentContext())
       S = S->getParent();
@@ -245,14 +248,16 @@ IdentifierResolver::begin(DeclarationName Name) {
 }
 
 namespace {
-  enum DeclMatchKind {
-    DMK_Different,
-    DMK_Replace,
-    DMK_Ignore
-  };
-}
 
-/// \brief Compare two declarations to see whether they are different or,
+enum DeclMatchKind {
+  DMK_Different,
+  DMK_Replace,
+  DMK_Ignore
+};
+
+} // namespace
+
+/// Compare two declarations to see whether they are different or,
 /// if they are the same, whether the new declaration should replace the 
 /// existing declaration.
 static DeclMatchKind compareDeclarations(NamedDecl *Existing, NamedDecl *New) {
@@ -266,6 +271,11 @@ static DeclMatchKind compareDeclarations(NamedDecl *Existing, NamedDecl *New) {
 
   // If the declarations are redeclarations of each other, keep the newest one.
   if (Existing->getCanonicalDecl() == New->getCanonicalDecl()) {
+    // If we're adding an imported declaration, don't replace another imported
+    // declaration.
+    if (Existing->isFromASTFile() && New->isFromASTFile())
+      return DMK_Different;
+
     // If either of these is the most recent declaration, use it.
     Decl *MostRecent = Existing->getMostRecentDecl();
     if (Existing == MostRecent)
@@ -376,7 +386,7 @@ void IdentifierResolver::updatingIdentifier(IdentifierInfo &II) {
     PP.getExternalSource()->updateOutOfDateIdentifier(II);
   
   if (II.isFromAST())
-    II.setChangedSinceDeserialization();
+    II.setFETokenInfoChangedSinceDeserialization();
 }
 
 //===----------------------------------------------------------------------===//

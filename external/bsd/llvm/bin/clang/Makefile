@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.33 2015/01/29 20:41:33 joerg Exp $
+#	$NetBSD: Makefile,v 1.38 2019/04/03 15:21:58 joerg Exp $
 
 PROG_CXX=	clang
 NOMAN=		yes
@@ -20,7 +20,8 @@ SYMLINKS+=	clang ${BINDIR}/cpp
 
 SRCS=	driver.cpp \
 	cc1_main.cpp \
-	cc1as_main.cpp
+	cc1as_main.cpp \
+	cc1gen_reproducer_main.cpp
 
 CLANG_LIBS+= \
 	clangFrontendTool \
@@ -29,26 +30,47 @@ CLANG_LIBS+= \
 	clangStaticAnalyzerFrontend \
 	clangStaticAnalyzerCheckers \
 	clangStaticAnalyzerCore \
-	clangDriver \
-	clangSerialization \
+	clangCrossTU \
+	clangIndex \
+	clangASTMatchers \
 	clangCodeGen \
+	clangFrontendRewrite \
+	clangFrontend \
+	clangSerialization \
 	clangParse \
 	clangSema \
-	clangEdit \
 	clangAnalysis \
-	clangFrontendRewrite \
+	clangEdit \
+	clangDriver \
 	clangRewrite \
 	clangAST \
 	clangLex \
 	clangBasic
 
 LLVM_LIBS+= \
+	TransformsAggressiveInstCombine \
+	TransformsCoroutines \
+	ProfileDataCoverage \
+	LTO \
 	ObjCARC \
+	Passes \
 	ipo \
 	IRReader \
 	AsmParser \
 	BitReader \
-	BitWriter \
+	BitWriter
+
+.if !defined(HOSTPROG)
+LLVM_LIBS+= \
+	AMDGPUCodeGen \
+	AMDGPUTargetInfo \
+	AMDGPUAsmParser \
+	AMDGPUMCTargetDesc \
+	AMDGPUAsmPrinter \
+	AMDGPUUtils
+.endif
+
+LLVM_LIBS+= \
 	AArch64CodeGen \
 	AArch64TargetInfo \
 	AArch64AsmParser \
@@ -60,6 +82,7 @@ LLVM_LIBS+= \
 	ARMMCTargetDesc \
 	ARMAsmParser \
 	ARMAsmPrinter \
+	ARMUtils \
 	MipsCodeGen \
 	MipsTargetInfo \
 	MipsAsmPrinter \
@@ -81,8 +104,11 @@ LLVM_LIBS+= \
 	X86Utils \
 	X86AsmParser \
 	X86AsmPrinter \
+	GlobalISel \
 	SelectionDAG \
 	AsmPrinter \
+	DebugInfoCodeView \
+	DebugInfoMSF \
 	CodeGen \
 	Vectorize \
 	Target \
@@ -90,17 +116,18 @@ LLVM_LIBS+= \
 	Instrumentation \
 	ScalarOpts \
 	ProfileData \
-	Analysis \
 	MCDisassembler \
 	MCParser \
 	MC \
+	Analysis \
 	Object \
 	Linker \
 	TransformsUtils \
-	ipa \
 	IR \
 	Option \
-	Support
+	BinaryFormat \
+	Support \
+	Demangle
 
 .include "${.PARSEDIR}/../../link.mk"
 

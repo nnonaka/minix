@@ -15,10 +15,16 @@
 //===----------------------------------------------------------------------===//
 // SGX instructions
 
+let SchedRW = [WriteSystem], Predicates = [HasSGX] in {
 // ENCLS - Execute an Enclave System Function of Specified Leaf Number
 def ENCLS : I<0x01, MRM_CF, (outs), (ins),
-             "encls", []>, TB, Requires<[HasSGX]>;
+             "encls", []>, TB;
 
 // ENCLU - Execute an Enclave User Function of Specified Leaf Number
 def ENCLU : I<0x01, MRM_D7, (outs), (ins),
-             "enclu", []>, TB, Requires<[HasSGX]>;
+             "enclu", []>, TB;
+
+// ENCLV - Execute an Enclave VMM Function of Specified Leaf Number
+def ENCLV : I<0x01, MRM_C0, (outs), (ins),
+             "enclv", []>, TB;
+} // SchedRW

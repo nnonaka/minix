@@ -1,9 +1,7 @@
-// RUN: %clang_cc1 %s -O3 -triple=x86_64-apple-darwin -target-feature +lzcnt -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 -ffreestanding %s -triple=x86_64-apple-darwin -target-feature +lzcnt -emit-llvm -o - | FileCheck %s
 
-// Don't include mm_malloc.h, it's system specific.
-#define __MM_MALLOC_H
 
-#include <x86intrin.h>
+#include <immintrin.h>
 
 unsigned short test__lzcnt16(unsigned short __X)
 {

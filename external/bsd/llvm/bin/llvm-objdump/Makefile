@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.11 2015/01/29 20:41:34 joerg Exp $
+#	$NetBSD: Makefile,v 1.15 2018/07/17 18:55:26 joerg Exp $
 
 PROG_CXX=	llvm-objdump
 NOMAN=		yes
@@ -10,7 +10,8 @@ NOMAN=		yes
 SRCS=	llvm-objdump.cpp \
 	COFFDump.cpp \
 	ELFDump.cpp \
-	MachODump.cpp
+	MachODump.cpp \
+	WasmDump.cpp
 
 LLVM_LIBS+= \
 	AArch64Disassembler \
@@ -24,6 +25,7 @@ LLVM_LIBS+= \
 	ARMMCTargetDesc \
 	ARMAsmPrinter \
 	ARMTargetInfo \
+	ARMUtils \
 	MipsDisassembler \
 	MipsAsmParser \
 	MipsMCTargetDesc \
@@ -48,13 +50,18 @@ LLVM_LIBS+= \
 	X86Utils \
 	CodeGen \
 	MCDisassembler \
-	DebugInfo \
+	DebugInfoDWARF \
+	DebugInfoSymbolize \
+	DebugInfoPDB \
+	DebugInfoPDBNative \
 	Object \
 	BitReader \
 	MCParser \
 	MC \
 	IR \
-	Support
+	BinaryFormat \
+	Support \
+	Demangle
 
 LDADD+=	-lz
 DPADD+=	${LIBZ}

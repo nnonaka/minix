@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -triple powerpc64le-unknown-linux-gnu -target-cpu power8 \
-// RUN:     -faltivec -verify %s
+// RUN:     -target-feature +altivec -verify %s
 
 // Test special behavior of Altivec intrinsics in this file.
 
@@ -14,5 +14,5 @@ int main()
 }
 // FIXME: As noted in ms-intrin.cpp, it would be nice if we didn't have to
 // hard-code the line number from altivec.h here.
-// expected-note@altivec.h:2389 {{deprecated here}}
-// expected-note@altivec.h:2524 {{deprecated here}}
+// expected-note@altivec.h:* {{deprecated here}}
+// expected-note@altivec.h:* {{deprecated here}}

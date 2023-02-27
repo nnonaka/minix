@@ -5,6 +5,20 @@
 
 #define nil ((void *)0)
 
+void checkNSDictionaryUnavailableDiagnostic() {
+  id key;
+  id value;
+  id dict = @{ key : value }; // expected-error {{definition of class NSDictionary must be available to use Objective-C dictionary literals}}
+}
+
+@class NSDictionary; // expected-note {{forward declaration of class here}}
+
+void checkNSDictionaryFDDiagnostic() {
+  id key;
+  id value;
+  id dic = @{ key : value }; // expected-error {{definition of class NSDictionary must be available to use Objective-C dictionary literals}}
+}
+
 @interface NSNumber
 + (NSNumber *)numberWithChar:(char)value;
 + (NSNumber *)numberWithInt:(int)value;
@@ -49,3 +63,10 @@ int main() {
 	return 0;
 }
 
+enum XXXYYYZZZType { XXXYYYZZZTypeAny }; // expected-note {{'XXXYYYZZZTypeAny' declared here}}
+void foo() {
+  NSDictionary *d = @{
+    @"A" : @(XXXYYYZZZTypeA), // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeA'; did you mean 'XXXYYYZZZTypeAny'}}
+    @"F" : @(XXXYYYZZZTypeSomethingSomething), // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeSomethingSomething'}}
+  };
+}

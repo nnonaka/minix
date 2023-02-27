@@ -17,7 +17,6 @@
 #include "CXTranslationUnit.h"
 #include "clang-c/Index.h"
 #include "clang/Frontend/ASTUnit.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace clang;
@@ -97,7 +96,7 @@ CXString createRef(StringRef String) {
 
 CXString createDup(StringRef String) {
   CXString Result;
-  char *Spelling = static_cast<char *>(malloc(String.size() + 1));
+  char *Spelling = static_cast<char *>(llvm::safe_malloc(String.size() + 1));
   memmove(Spelling, String.data(), String.size());
   Spelling[String.size()] = 0;
   Result.data = Spelling;
@@ -110,6 +109,15 @@ CXString createCXString(CXStringBuf *buf) {
   Str.data = buf;
   Str.private_flags = (unsigned) CXS_StringBuf;
   return Str;
+}
+
+CXStringSet *createSet(const std::vector<std::string> &Strings) {
+  CXStringSet *Set = new CXStringSet;
+  Set->Count = Strings.size();
+  Set->Strings = new CXString[Set->Count];
+  for (unsigned SI = 0, SE = Set->Count; SI < SE; ++SI)
+    Set->Strings[SI] = createDup(Strings[SI]);
+  return Set;
 }
 
 
@@ -153,7 +161,6 @@ bool isManagedByPool(CXString str) {
 // libClang public APIs.
 //===----------------------------------------------------------------------===//
 
-extern "C" {
 const char *clang_getCString(CXString string) {
   if (string.private_flags == (unsigned) CXS_StringBuf) {
     return static_cast<const cxstring::CXStringBuf *>(string.data)->Data.data();
@@ -175,5 +182,11 @@ void clang_disposeString(CXString string) {
       break;
   }
 }
-} // end: extern "C"
+
+void clang_disposeStringSet(CXStringSet *set) {
+  for (unsigned SI = 0, SE = set->Count; SI < SE; ++SI)
+    clang_disposeString(set->Strings[SI]);
+  delete[] set->Strings;
+  delete set;
+}
 

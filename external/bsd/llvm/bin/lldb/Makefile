@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4 2014/08/10 17:34:20 joerg Exp $
+#	$NetBSD: Makefile,v 1.7 2018/07/17 18:55:25 joerg Exp $
 
 PROG_CXX=	lldb
 NOMAN=		yes
@@ -105,6 +105,7 @@ LLVM_LIBS+= \
 	ARMMCTargetDesc \
 	ARMAsmPrinter \
 	ARMDisassembler \
+	ARMUtils \
 	MipsCodeGen \
 	MipsTargetInfo \
 	MipsAsmParser \
@@ -147,11 +148,11 @@ LLVM_LIBS+= \
 	Linker \
 	TransformsUtils \
 	Analysis \
-	ipa \
 	IR \
 	ProfileData \
 	Option \
-	Support
+	Support \
+	Demangle
 
 LDADD+=	-ledit -lterminfo -lexecinfo -lz
 DPADD+=	${LIBEDIT} ${LIBTERMINFO} ${LIBEXECINFO} ${LIBZ}

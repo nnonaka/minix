@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-output=text -verify %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-output=plist-multi-file -analyzer-config path-diagnostics-alternate=false %s -o %t.plist
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-output=text -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-output=plist-multi-file  %s -o %t.plist
 // RUN: FileCheck --input-file=%t.plist %s
 
 void foo_irrelevant(int c) {
@@ -12,7 +12,7 @@ void foo(int c, int *x) {
     if (c)
            //expected-note@-1{{Assuming 'c' is not equal to 0}}
            //expected-note@-2{{Taking true branch}}
-        return;
+           return; // expected-note{{Returning without writing to '*x'}}
     *x = 5;
 }
 
@@ -51,7 +51,7 @@ void initStruct(int x, struct WithFields *X) {
   if (x <= 0) //expected-note {{Taking true branch}}
               //expected-note@-1 {{Assuming 'x' is <= 0}}
 
-    return;
+    return; //expected-note{{Returning without writing to 'X->f1'}}
   X->f1 = getValidPtr();
 }
 double testPassingParentRegionStruct(int x) {
@@ -293,12 +293,94 @@ double testPassingParentRegionStruct(int x) {
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>15</integer>
-// CHECK-NEXT:            <key>col</key><integer>9</integer>
+// CHECK-NEXT:            <key>col</key><integer>12</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
 // CHECK-NEXT:            <key>line</key><integer>15</integer>
-// CHECK-NEXT:            <key>col</key><integer>14</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>12</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>12</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>15</integer>
+// CHECK-NEXT:       <key>col</key><integer>12</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>depth</key><integer>1</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Returning without writing to &apos;*x&apos;</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Returning without writing to &apos;*x&apos;</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>12</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>12</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>15</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -435,9 +517,12 @@ double testPassingParentRegionStruct(int x) {
 // CHECK-NEXT:    <key>description</key><string>The left operand of &apos;+&apos; is a garbage value</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Result of operation is garbage or undefined</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.UndefinedBinaryOperatorResult</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>ae5e3bd03d6d97614947942dae18e1da</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>use</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>7</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>7</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>26</integer>
@@ -752,9 +837,12 @@ double testPassingParentRegionStruct(int x) {
 // CHECK-NEXT:    <key>description</key><string>The right operand of &apos;*&apos; is a garbage value</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Result of operation is garbage or undefined</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.UndefinedBinaryOperatorResult</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>96cf3258da3df14d13cd5c2236c9cb27</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>testPassingParentRegionArray</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>4</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>4</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>42</integer>
@@ -1037,6 +1125,88 @@ double testPassingParentRegionStruct(int x) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>5</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>5</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>54</integer>
+// CHECK-NEXT:       <key>col</key><integer>5</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>depth</key><integer>1</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Returning without writing to &apos;X-&gt;f1&apos;</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Returning without writing to &apos;X-&gt;f1&apos;</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>5</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>5</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>54</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
@@ -1166,9 +1336,12 @@ double testPassingParentRegionStruct(int x) {
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from field &apos;f1&apos;)</string>
 // CHECK-NEXT:    <key>category</key><string>Logic error</string>
 // CHECK-NEXT:    <key>type</key><string>Dereference of null pointer</string>
+// CHECK-NEXT:    <key>check_name</key><string>core.NullDereference</string>
+// CHECK-NEXT:    <!-- This hash is experimental and going to change! -->
+// CHECK-NEXT:    <key>issue_hash_content_of_line_in_context</key><string>299055864402de225b0ab4f2ecd8e76c</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>testPassingParentRegionStruct</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>5</string>
+// CHECK-NEXT:   <key>issue_hash_function_offset</key><string>5</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>62</integer>

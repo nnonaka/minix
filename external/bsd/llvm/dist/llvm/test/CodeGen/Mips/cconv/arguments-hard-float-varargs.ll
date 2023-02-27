@@ -1,14 +1,14 @@
-; RUN: llc -march=mips -relocation-model=static < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=O32 --check-prefix=O32BE %s
-; RUN: llc -march=mipsel -relocation-model=static < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=O32 --check-prefix=O32LE %s
+; RUN: llc -march=mips -relocation-model=static < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM32,O32,O32BE %s
+; RUN: llc -march=mipsel -relocation-model=static < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM32,O32,O32LE %s
 
-; RUN-TODO: llc -march=mips64 -relocation-model=static -mattr=-n64,+o32 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=O32 %s
-; RUN-TODO: llc -march=mips64el -relocation-model=static -mattr=-n64,+o32 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=O32 %s
+; RUN-TODO: llc -march=mips64 -relocation-model=static -target-abi o32 < %s | FileCheck --check-prefixes=ALL,SYM32,O32 %s
+; RUN-TODO: llc -march=mips64el -relocation-model=static -target-abi o32 < %s | FileCheck --check-prefixes=ALL,SYM32,O32 %s
 
-; RUN: llc -march=mips64 -relocation-model=static -mattr=-n64,+n32 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=N32 --check-prefix=NEW --check-prefix=NEWBE %s
-; RUN: llc -march=mips64el -relocation-model=static -mattr=-n64,+n32 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM32 --check-prefix=N32 --check-prefix=NEW --check-prefix=NEWLE %s
+; RUN: llc -march=mips64 -relocation-model=static -target-abi n32 < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM32,N32,NEW,NEWBE %s
+; RUN: llc -march=mips64el -relocation-model=static -target-abi n32 < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM32,N32,NEW,NEWLE %s
 
-; RUN: llc -march=mips64 -relocation-model=static -mattr=-n64,+n64 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM64 --check-prefix=N64 --check-prefix=NEW --check-prefix=NEWBE %s
-; RUN: llc -march=mips64el -relocation-model=static -mattr=-n64,+n64 < %s | FileCheck --check-prefix=ALL --check-prefix=SYM64 --check-prefix=N64 --check-prefix=NEW --check-prefix=NEWLE %s
+; RUN: llc -march=mips64 -relocation-model=static -target-abi n64 < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM64,N64,NEW,NEWBE %s
+; RUN: llc -march=mips64el -relocation-model=static -target-abi n64 < %s | FileCheck -allow-deprecated-dag-overlap --check-prefixes=ALL,SYM64,N64,NEW,NEWLE %s
 
 ; Test the effect of varargs on floating point types in the non-variable part
 ; of the argument list as specified by section 2 of the MIPSpro N32 Handbook.
@@ -25,14 +25,14 @@
 define void @double_args(double %a, ...)
                          nounwind {
 entry:
-        %0 = getelementptr [11 x double]* @doubles, i32 0, i32 1
+        %0 = getelementptr [11 x double], [11 x double]* @doubles, i32 0, i32 1
         store volatile double %a, double* %0
 
         %ap = alloca i8*
         %ap2 = bitcast i8** %ap to i8*
         call void @llvm.va_start(i8* %ap2)
         %b = va_arg i8** %ap, double
-        %1 = getelementptr [11 x double]* @doubles, i32 0, i32 2
+        %1 = getelementptr [11 x double], [11 x double]* @doubles, i32 0, i32 2
         store volatile double %b, double* %1
         call void @llvm.va_end(i8* %ap2)
         ret void
@@ -42,7 +42,7 @@ entry:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
 ; SYM32-DAG:         addiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(doubles)
-; SYM64-DAG:         ld [[R2:\$[0-9]]], %got_disp(doubles)(
+; SYM64-DAG:         daddiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(doubles)
 
 ; O32 forbids using floating point registers for the non-variable portion.
 ; N32/N64 allow it.
@@ -90,14 +90,14 @@ entry:
 
 define void @float_args(float %a, ...) nounwind {
 entry:
-        %0 = getelementptr [11 x float]* @floats, i32 0, i32 1
+        %0 = getelementptr [11 x float], [11 x float]* @floats, i32 0, i32 1
         store volatile float %a, float* %0
 
         %ap = alloca i8*
         %ap2 = bitcast i8** %ap to i8*
         call void @llvm.va_start(i8* %ap2)
         %b = va_arg i8** %ap, float
-        %1 = getelementptr [11 x float]* @floats, i32 0, i32 2
+        %1 = getelementptr [11 x float], [11 x float]* @floats, i32 0, i32 2
         store volatile float %b, float* %1
         call void @llvm.va_end(i8* %ap2)
         ret void
@@ -107,7 +107,7 @@ entry:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
 ; SYM32-DAG:         addiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(floats)
-; SYM64-DAG:         ld [[R2:\$[0-9]]], %got_disp(floats)(
+; SYM64-DAG:         daddiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(floats)
 
 ; The first four arguments are the same in O32/N32/N64.
 ; The non-variable portion should be unaffected.

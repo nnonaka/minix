@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.6 2012/07/13 19:32:51 christos Exp $
+#	$NetBSD: Makefile,v 1.10 2018/09/23 13:32:54 christos Exp $
 
 WARNS?=	2	# XXX -Wcast-qual
 
@@ -10,7 +10,7 @@ BINDIR=/usr/bin
 USE_FORT?= yes	# cryptographic software
 
 # RCSid:
-#	$Id: Makefile,v 1.6 2012/07/13 19:32:51 christos Exp $
+#	$Id: Makefile,v 1.10 2018/09/23 13:32:54 christos Exp $
 #
 #	@(#) Copyright (c) 1995 Simon J. Gerraty
 #
@@ -29,9 +29,10 @@ PROG=	openssl
 
 SRCS=	openssl.c
 SRCS+=	apps.c ecparam.c ec.c pkeyparam.c genpkey.c pkey.c pkeyutl.c ts.c cms.c
-SRCS+=	s_cb.c s_socket.c
-SRCS+=	app_rand.c
-SRCS+=	verify.c asn1pars.c req.c dgst.c dh.c dhparam.c enc.c passwd.c gendh.c errstr.c ca.c \
+SRCS+=	s_cb.c s_socket.c bf_prefix.c storeutl.c
+SRCS+=	app_rand.c rehash.c
+SRCS+=	verify.c asn1pars.c req.c dgst.c dhparam.c enc.c passwd.c errstr.c \
+	opt.c ca.c \
 	pkcs7.c crl2p7.c crl.c \
 	rsa.c rsautl.c dsa.c dsaparam.c \
 	x509.c genrsa.c gendsa.c prime.c s_server.c s_client.c speed.c \
@@ -39,23 +40,17 @@ SRCS+=	verify.c asn1pars.c req.c dgst.c dh.c dhparam.c enc.c passwd.c gendh.c er
 	ciphers.c nseq.c pkcs12.c pkcs8.c spkac.c smime.c rand.c engine.c ocsp.c
 
 CPPFLAGS+= -DMONOLITH -DUSE_SSL -I${OPENSSLSRC}
+CPPFLAGS+= -I${OPENSSLSRC}/include -I${OPENSSLSRC}/../include
 
-# with normal OpenSSL, OPENSSL_NO_RC5 changes ABI due to change in
-# struct/union.  we nuked it in our header files and it is now safe.
-.if ${MKCRYPTO_RC5} == "no"
-CPPFLAGS+= -DOPENSSL_NO_RC5
-.else
-LDADD+=	-lcrypto_rc5
-DPADD+=	${LIBCRYPTO_RC5}
-.endif
-
-# this must be _after_ the libcrypto_rc5/libcrypto_idea entries.
 LDADD+=	-lssl -lcrypto -lcrypt
 DPADD+=	${LIBSSL} ${LIBCRYPTO} ${LIBCRYPT}
 
 CRYPTODIST=	${NETBSDSRCDIR}/crypto
 .include "${NETBSDSRCDIR}/crypto/Makefile.openssl"
 .PATH:	${OPENSSLSRC}/apps
+
+.PATH:	${OPENSSLSRC}/engines
+SRCS+=	e_padlock.c
 
 #LINKS=	openssl verify \
 #	openssl asn1pars \
@@ -95,8 +90,19 @@ CRYPTODIST=	${NETBSDSRCDIR}/crypto
 #	openssl ocsp
 
 .if ${MKSHARE} != "no"
-FILES=  CA.sh CA.pl openssl.cnf
+FILES=  CA.pl openssl.cnf
+FILESBUILD= yes
 FILESDIR=/usr/share/examples/openssl
+
+CA.pl:	CA.pl.in
+	${_MKTARGET_CREATE}
+	rm -f ${.TARGET}
+	${TOOL_SED} \
+	    -e 's@{- \$$config{hashbangperl} -}@/usr/bin/env perl@' \
+	    ${.ALLSRC} > ${.TARGET}
+
+CLEANFILES+=CA.pl
+
 .endif
 
 .include <bsd.prog.mk>

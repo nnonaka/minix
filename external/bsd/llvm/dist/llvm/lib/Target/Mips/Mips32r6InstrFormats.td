@@ -11,8 +11,26 @@
 //
 //===----------------------------------------------------------------------===//
 
-class MipsR6Inst : MipsInst<(outs), (ins), "", [], NoItinerary, FrmOther>,
-                   PredicateControl {
+class R6MMR6Rel;
+
+def MipsR62MicroMipsR6 : InstrMapping {
+  let FilterClass = "R6MMR6Rel";
+  // Instructions with the same BaseOpcode and isNVStore values form a row.
+  let RowFields = ["BaseOpcode"];
+  // Instructions with the same predicate sense form a column.
+  let ColFields = ["Arch"];
+  // The key column is the unpredicated instructions.
+  let KeyCol = ["mipsr6"];
+  // Value columns are PredSense=true and PredSense=false
+  let ValueCols = [["mipsr6"], ["micromipsr6"]];
+}
+
+class MipsR6Arch<string opstr> {
+  string Arch = "mipsr6";
+  string BaseOpcode = opstr;
+}
+
+class MipsR6Inst : MipsInst<(outs), (ins), "", [], NoItinerary, FrmOther> {
   let DecoderNamespace = "Mips32r6_64r6";
   let EncodingPredicates = [HasStdEnc];
 }
@@ -26,6 +44,7 @@ class MipsR6Inst : MipsInst<(outs), (ins), "", [], NoItinerary, FrmOther>,
 class OPGROUP<bits<6> Val> {
   bits<6> Value = Val;
 }
+def OPGROUP_COP0     : OPGROUP<0b010000>;
 def OPGROUP_COP1     : OPGROUP<0b010001>;
 def OPGROUP_COP2     : OPGROUP<0b010010>;
 def OPGROUP_ADDI     : OPGROUP<0b001000>;
@@ -180,6 +199,21 @@ class BAL_FM : MipsR6Inst {
   let Inst{25-21} = 0b00000;
   let Inst{20-16} = OPCODE5_BGEZAL.Value;
   let Inst{15-0} = offset;
+}
+
+class COP0_EVP_DVP_FM<bits<1> sc> : MipsR6Inst {
+  bits<5> rt;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = OPGROUP_COP0.Value;
+  let Inst{25-21} = 0b01011;
+  let Inst{20-16} = rt;
+  let Inst{15-11} = 0b00000;
+  let Inst{10-6}  = 0b00000;
+  let Inst{5}     = sc;
+  let Inst{4-3}   = 0b00;
+  let Inst{2-0}   = 0b100;
 }
 
 class COP1_2R_FM<bits<6> funct, FIELD_FMT Format> : MipsR6Inst {
@@ -341,7 +375,7 @@ class SPECIAL_SDBBP_FM : MipsR6Inst {
 }
 
 // This class is ambiguous with other branches:
-//   BEQC/BNEC require that rs > rt
+//   BEQC/BNEC require that rs < rt && rs != 0
 class CMP_BRANCH_2R_OFF16_FM<OPGROUP funct> : MipsR6Inst {
   bits<5> rs;
   bits<5> rt;
@@ -540,4 +574,31 @@ class COP2LDST_FM<OPCODE5 Operation> : MipsR6Inst {
   let Inst{20-16} = rt;
   let Inst{15-11} = base;
   let Inst{10-0}  = offset;
+}
+
+class SPECIAL3_2R_SZ_CRC<bits<2> sz, bits<3> direction> : MipsR6Inst {
+  bits<5> rs;
+  bits<5> rt;
+
+  let Inst{31-26} = OPGROUP_SPECIAL3.Value;
+  let Inst{25-21} = rs;
+  let Inst{20-16} = rt;
+  let Inst{15-11} = 0b00000;
+  let Inst{10-8} = direction;
+  let Inst{7-6} = sz;
+  let Inst{5-0} = 0b001111;
+
+  string DecoderMethod = "DecodeCRC";
+}
+
+class SPECIAL3_GINV<bits<2> ginv> : MipsR6Inst {
+  bits<5> rs;
+  bits<2> type_;
+
+  let Inst{31-26} = OPGROUP_SPECIAL3.Value;
+  let Inst{25-21} = rs;
+  let Inst{20-10} = 0x0;
+  let Inst{9-8}   = type_;
+  let Inst{7-6}   = ginv;
+  let Inst{5-0}   = 0b111101;
 }

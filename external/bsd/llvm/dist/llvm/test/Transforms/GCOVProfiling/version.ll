@@ -1,14 +1,23 @@
-; RUN: echo '!9 = !{!"%/T/version.ll", !0}' > %t1
-; RUN: cat %s %t1 > %t2
-; RUN: opt -insert-gcov-profiling -disable-output < %t2
-; RUN: head -c8 %T/version.gcno | grep '^oncg.204'
-; RUN: rm %T/version.gcno
-; RUN: not opt -insert-gcov-profiling -default-gcov-version=asdfasdf -disable-output < %t2
-; RUN: opt -insert-gcov-profiling -default-gcov-version=407* -disable-output < %t2
-; RUN: head -c8 %T/version.gcno | grep '^oncg.704'
-; RUN: rm %T/version.gcno
+; RUN: rm -rf %t && mkdir -p %t
+; RUN: echo '!9 = !{!"%/t/version.ll", !0}' > %t/1
+; RUN: cat %s %t/1 > %t/2
+; RUN: opt -insert-gcov-profiling -disable-output < %t/2
+; RUN: head -c8 %t/version.gcno | grep '^oncg.204'
+; RUN: rm %t/version.gcno
+; RUN: not opt -insert-gcov-profiling -default-gcov-version=asdfasdf -disable-output < %t/2
+; RUN: opt -insert-gcov-profiling -default-gcov-version=407* -disable-output < %t/2
+; RUN: head -c8 %t/version.gcno | grep '^oncg.704'
+; RUN: rm %t/version.gcno
 
-define void @test() {
+; RUN: opt -passes=insert-gcov-profiling -disable-output < %t/2
+; RUN: head -c8 %t/version.gcno | grep '^oncg.204'
+; RUN: rm %t/version.gcno
+; RUN: not opt -passes=insert-gcov-profiling -default-gcov-version=asdfasdf -disable-output < %t/2
+; RUN: opt -passes=insert-gcov-profiling -default-gcov-version=407* -disable-output < %t/2
+; RUN: head -c8 %t/version.gcno | grep '^oncg.704'
+; RUN: rm %t/version.gcno
+
+define void @test() !dbg !5 {
   ret void, !dbg !8
 }
 
@@ -16,15 +25,14 @@ define void @test() {
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!12}
 
-!0 = !{!"0x11\004\00clang version 3.3 (trunk 176994)\000\00\000\00\000", !11, !3, !3, !4, !3, null} ; [ DW_TAG_compile_unit ] [./version] [DW_LANG_C_plus_plus]
-!2 = !{!"0x29", !11} ; [ DW_TAG_file_type ]
-!3 = !{i32 0}
-!4 = !{!5}
-!5 = !{!"0x2e\00test\00test\00\001\000\001\000\006\00256\000\001", !10, !6, !7, null, void ()* @test, null, null, !3} ; [ DW_TAG_subprogram ] [line 1] [def] [test]
-!6 = !{!"0x29", !10} ; [ DW_TAG_file_type ]
-!7 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !3, i32 0} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!8 = !MDLocation(line: 1, scope: !5)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.3 (trunk 176994)", isOptimized: false, emissionKind: FullDebug, file: !11, enums: !3, retainedTypes: !3, globals: !3)
+!2 = !DIFile(filename: "version", directory: "/usr/local/google/home/nlewycky")
+!3 = !{}
+!5 = distinct !DISubprogram(name: "test", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 1, file: !10, scope: !6, type: !7, retainedNodes: !3)
+!6 = !DIFile(filename: "<stdin>", directory: ".")
+!7 = !DISubroutineType(types: !{null})
+!8 = !DILocation(line: 1, scope: !5)
 ;; !9 is added through the echo line at the top.
-!10 = !{!"<stdin>", !"."}
-!11 = !{!"version", !"/usr/local/google/home/nlewycky"}
-!12 = !{i32 1, !"Debug Info Version", i32 2}
+!10 = !DIFile(filename: "<stdin>", directory: ".")
+!11 = !DIFile(filename: "version", directory: "/usr/local/google/home/nlewycky")
+!12 = !{i32 1, !"Debug Info Version", i32 3}

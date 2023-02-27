@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2012/10/28 17:07:46 joerg Exp $
+#	$NetBSD: Makefile,v 1.8 2018/07/17 18:55:29 joerg Exp $
 
 LIB=	LLVMipo
 
@@ -6,27 +6,41 @@ LIB=	LLVMipo
 
 .PATH: ${LLVM_SRCDIR}/lib/Transforms/IPO
 
-SRCS+=	ArgumentPromotion.cpp \
+SRCS+=	AlwaysInliner.cpp \
+	ArgumentPromotion.cpp \
 	BarrierNoopPass.cpp \
+	BlockExtractor.cpp \
+	CalledValuePropagation.cpp \
 	ConstantMerge.cpp \
+	CrossDSOCFI.cpp \
 	DeadArgumentElimination.cpp \
+	ElimAvailExtern.cpp \
 	ExtractGV.cpp \
+	ForceFunctionAttrs.cpp \
 	FunctionAttrs.cpp \
+	FunctionImport.cpp \
 	GlobalDCE.cpp \
 	GlobalOpt.cpp \
+	GlobalSplit.cpp \
+	InferFunctionAttrs.cpp \
+	Inliner.cpp \
+	InlineSimple.cpp \
+	Internalize.cpp \
 	IPConstantPropagation.cpp \
 	IPO.cpp \
-	InlineAlways.cpp \
-	InlineSimple.cpp \
-	Inliner.cpp \
-	Internalize.cpp \
 	LoopExtractor.cpp \
+	LowerTypeTests.cpp \
 	MergeFunctions.cpp \
 	PartialInlining.cpp \
 	PassManagerBuilder.cpp \
 	PruneEH.cpp \
+	SampleProfile.cpp \
+	SCCP.cpp \
 	StripDeadPrototypes.cpp \
-	StripSymbols.cpp
+	StripSymbols.cpp \
+	SyntheticCountsPropagation.cpp \
+	ThinLTOBitcodeWriter.cpp \
+	WholeProgramDevirt.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

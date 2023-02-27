@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.10 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.14 2018/07/17 18:55:28 joerg Exp $
 
 LIB=	LLVMPowerPCCodeGen
 
@@ -7,22 +7,36 @@ LIB=	LLVMPowerPCCodeGen
 .PATH: ${LLVM_SRCDIR}/lib/Target/PowerPC
 
 SRCS+=	PPCAsmPrinter.cpp \
+	PPCBoolRetToInt.cpp \
+	PPCBranchCoalescing.cpp \
 	PPCBranchSelector.cpp \
+	PPCCCState.cpp \
 	PPCCTRLoops.cpp \
+	PPCEarlyReturn.cpp \
+	PPCExpandISEL.cpp \
+	PPCFastISel.cpp \
+	PPCFrameLowering.cpp \
 	PPCHazardRecognizers.cpp \
 	PPCInstrInfo.cpp \
 	PPCISelDAGToDAG.cpp \
 	PPCISelLowering.cpp \
-	PPCFastISel.cpp \
-	PPCFrameLowering.cpp \
+	PPCLoopPreIncPrep.cpp \
 	PPCMachineFunctionInfo.cpp \
 	PPCMCInstLower.cpp \
+	PPCMIPeephole.cpp \
+	PPCPreEmitPeephole.cpp \
+	PPCQPXLoadSplat.cpp \
+	PPCReduceCRLogicals.cpp \
 	PPCRegisterInfo.cpp \
-	PPCSelectionDAGInfo.cpp \
 	PPCSubtarget.cpp \
 	PPCTargetMachine.cpp \
 	PPCTargetObjectFile.cpp \
-	PPCTargetTransformInfo.cpp
+	PPCTargetTransformInfo.cpp \
+	PPCTLSDynamicCall.cpp \
+	PPCTOCRegDeps.cpp \
+	PPCVSXCopy.cpp \
+	PPCVSXFMAMutate.cpp \
+	PPCVSXSwapRemoval.cpp \
 
 TABLEGEN_SRC=		PPC.td
 TABLEGEN_INCLUDES=	-I${LLVM_SRCDIR}/lib/Target/PowerPC

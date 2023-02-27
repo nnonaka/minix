@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.42 2015/01/29 20:41:34 joerg Exp $
+# $NetBSD: Makefile,v 1.50 2019/04/03 15:21:58 joerg Exp $
 
 .include <bsd.own.mk>
 
@@ -6,15 +6,20 @@ SUBDIR=	\
 	libLLVMAnalysis \
 	libLLVMAsmParser \
 	libLLVMAsmPrinter \
+	libLLVMBinaryFormat \
 	libLLVMBitReader \
 	libLLVMBitWriter \
 	libLLVMCodeGen \
+	libLLVMDebugInfoCodeView \
+	libLLVMDebugInfoMSF \
+	libLLVMDemangle \
+	libLLVMGlobalISel \
 	libLLVMIR \
 	libLLVMIRReader \
 	libLLVMInstCombine \
 	libLLVMInstrumentation \
-	libLLVMipa \
 	libLLVMipo \
+	libLLVMLTO \
 	libLLVMLinker \
 	libLLVMMC \
 	libLLVMMCDisassembler \
@@ -22,12 +27,16 @@ SUBDIR=	\
 	libLLVMObjCARC \
 	libLLVMObject \
 	libLLVMOption \
+	libLLVMPasses \
 	libLLVMProfileData \
+	libLLVMProfileDataCoverage \
 	libLLVMScalarOpts \
 	libLLVMSelectionDAG \
 	libLLVMSupport \
 	libLLVMTableGen \
 	libLLVMTarget \
+	libLLVMTransformsAggressiveInstCombine \
+	libLLVMTransformsCoroutines \
 	libLLVMTransformsUtils \
 	libLLVMVectorize \
 	libLLVMAArch64CodeGen \
@@ -37,7 +46,21 @@ SUBDIR=	\
 	libLLVMSparcCodeGen \
 	libLLVMX86CodeGen
 
+.if !defined(HOSTLIB) && !defined(_BSD_HOSTINIT_MK_)
+SUBDIR+= \
+	libLLVMAMDGPUCodeGen
+.endif
+
 SUBDIR+= .WAIT
+
+.if !defined(HOSTLIB) && !defined(_BSD_HOSTINIT_MK_)
+SUBDIR+= \
+	libLLVMAMDGPUMCTargetDesc \
+	libLLVMAMDGPUAsmPrinter \
+	libLLVMAMDGPUTargetInfo \
+	libLLVMAMDGPUAsmParser \
+	libLLVMAMDGPUUtils
+.endif
 
 SUBDIR+= \
 	libLLVMAArch64AsmParser \
@@ -52,7 +75,8 @@ SUBDIR+= \
 	libLLVMARMAsmPrinter \
 	libLLVMARMDisassembler \
 	libLLVMARMMCTargetDesc \
-	libLLVMARMTargetInfo
+	libLLVMARMTargetInfo \
+	libLLVMARMUtils
 
 SUBDIR+= \
 	libLLVMMipsAsmParser \
@@ -87,22 +111,28 @@ SUBDIR+= \
 SUBDIR+= \
 	libLLVMExecutionEngine \
 	libLLVMMCJIT \
+	libLLVMMIRParser \
+	libLLVMOrc \
 	libLLVMRuntimeDyld
 .endif
 
 .if (${NO_LLVM_DEVELOPER:Uno} == "no" && ${LLVM_DEVELOPER:U} == "yes") || ${MKLLD} == "yes"
 SUBDIR+= \
-	libLLVMDebugInfo
+	libLLVMDebugInfoDWARF \
+	libLLVMDebugInfoPDB \
+	libLLVMDebugInfoPDBNative \
+	libLLVMDebugInfoSymbolize
 .endif
 
 .if ${NO_LLVM_DEVELOPER:Uno} == "no" && ${LLVM_DEVELOPER:U} == "yes"
 SUBDIR+= \
-	libLLVMCppBackend \
-	libLLVMCppBackendInfo \
 	libLLVMHello \
 	libLLVMInterpreter \
-	libLLVMLTO \
-	libLLVMLineEditor
+	libLLVMLineEditor \
+	libLLVMObjectYAML \
+	libLLVMToolDrivers \
+	libLLVMToolDriversDlltool \
+	libLLVMXRay
 .endif
 
 .if defined(__MINIX)
@@ -115,13 +145,16 @@ SUBDIR+= \
 	libclangAnalysis \
 	libclangARCMigrate \
 	libclangAST \
+	libclangASTMatchers \
 	libclangBasic \
 	libclangCodeGen \
+	libclangCrossTU \
 	libclangDriver \
 	libclangEdit \
 	libclangFrontend \
 	libclangFrontendRewrite \
 	libclangFrontendTool \
+	libclangIndex \
 	libclangLex \
 	libclangParse \
 	libclangRewrite \
@@ -134,12 +167,12 @@ SUBDIR+= \
 
 .if ${NO_LLVM_DEVELOPER:Uno} == "no" && ${LLVM_DEVELOPER:U} == "yes"
 SUBDIR+= \
-	libclangASTMatchers \
 	libclangASTMatchersDynamic \
 	libclangFormat \
-	libclangIndex \
 	libclangTooling \
-	libclangToolingCore
+	libclangToolingCore \
+	libclangToolingInclusions \
+	libclangToolingRefactoring
 .endif
 
 .if ${MKLLD} != "no"

@@ -1,58 +1,70 @@
-#	$NetBSD: Makefile,v 1.14 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.18 2018/07/17 18:55:27 joerg Exp $
 
 LIB=	LLVMARMCodeGen
 
 .include <bsd.init.mk>
 
+CPPFLAGS+=	-I${LLVM_SRCDIR}/lib/Target/ARM
+
 .PATH: ${LLVM_SRCDIR}/lib/Target/ARM
 
 SRCS+=	ARMAsmPrinter.cpp \
+	A15SDOptimizer.cpp \
 	ARMBaseInstrInfo.cpp \
 	ARMBaseRegisterInfo.cpp \
+	ARMCallLowering.cpp \
+	ARMComputeBlockSize.cpp \
 	ARMConstantIslandPass.cpp \
 	ARMConstantPoolValue.cpp \
 	ARMExpandPseudoInsts.cpp \
 	ARMFastISel.cpp \
 	ARMFrameLowering.cpp \
 	ARMHazardRecognizer.cpp \
+	ARMInstrInfo.cpp \
+	ARMInstructionSelector.cpp \
 	ARMISelDAGToDAG.cpp \
 	ARMISelLowering.cpp \
-	ARMInstrInfo.cpp \
+	ARMLegalizerInfo.cpp \
 	ARMLoadStoreOptimizer.cpp \
-	ARMMCInstLower.cpp \
 	ARMMachineFunctionInfo.cpp \
+	ARMMacroFusion.cpp \
+	ARMMCInstLower.cpp \
 	ARMOptimizeBarriersPass.cpp \
+	ARMParallelDSP.cpp \
+	ARMRegisterBankInfo.cpp \
 	ARMRegisterInfo.cpp \
 	ARMSelectionDAGInfo.cpp \
 	ARMSubtarget.cpp \
 	ARMTargetMachine.cpp \
 	ARMTargetObjectFile.cpp \
 	ARMTargetTransformInfo.cpp \
-	A15SDOptimizer.cpp \
 	MLxExpansionPass.cpp \
-	Thumb1InstrInfo.cpp \
 	Thumb1FrameLowering.cpp \
-	Thumb1RegisterInfo.cpp \
-	Thumb2ITBlockPass.cpp \
+	Thumb1InstrInfo.cpp \
 	Thumb2InstrInfo.cpp \
-	Thumb2RegisterInfo.cpp \
-	Thumb2SizeReduction.cpp
+	Thumb2ITBlockPass.cpp \
+	Thumb2SizeReduction.cpp \
+	ThumbRegisterInfo.cpp
 
 TABLEGEN_SRC=		ARM.td
 TABLEGEN_INCLUDES=	-I${LLVM_SRCDIR}/lib/Target/ARM
 TABLEGEN_OUTPUT= \
-	ARMGenRegisterInfo.inc|-gen-register-info \
-	ARMGenInstrInfo.inc|-gen-instr-info \
+	ARMGenAsmMatcher.inc|-gen-asm-matcher \
+	ARMGenAsmWriter.inc|-gen-asm-writer \
+	ARMGenCallingConv.inc|-gen-callingconv \
 	ARMGenCodeEmitter.inc|-gen-emitter \
+	ARMGenDAGISel.inc|-gen-dag-isel \
+	ARMGenDisassemblerTables.inc|-gen-disassembler \
+	ARMGenFastISel.inc|-gen-fast-isel \
+	ARMGenGlobalISel.inc|-gen-global-isel \
+	ARMGenInstrInfo.inc|-gen-instr-info \
 	ARMGenMCCodeEmitter.inc|-gen-emitter \
 	ARMGenMCPseudoLowering.inc|-gen-pseudo-lowering \
-	ARMGenAsmWriter.inc|-gen-asm-writer \
-	ARMGenAsmMatcher.inc|-gen-asm-matcher \
-	ARMGenDAGISel.inc|-gen-dag-isel \
-	ARMGenFastISel.inc|-gen-fast-isel \
-	ARMGenCallingConv.inc|-gen-callingconv \
+	ARMGenRegisterBank.inc|-gen-register-bank \
+	ARMGenRegisterInfo.inc|-gen-register-info \
 	ARMGenSubtargetInfo.inc|-gen-subtarget \
-	ARMGenDisassemblerTables.inc|-gen-disassembler
+	ARMGenSystemRegister.inc|-gen-searchable-tables
+
 
 .include "${.PARSEDIR}/../../tablegen.mk"
 

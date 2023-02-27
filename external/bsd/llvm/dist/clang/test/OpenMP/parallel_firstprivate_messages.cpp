@@ -1,4 +1,6 @@
-// RUN: %clang_cc1 -verify -fopenmp=libiomp5 -ferror-limit 100 %s
+// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
 
 void foo() {
 }
@@ -47,13 +49,22 @@ public:
 S3 h;
 #pragma omp threadprivate(h) // expected-note {{defined as threadprivate or thread local}}
 
+namespace A {
+double x;
+#pragma omp threadprivate(x) // expected-note {{defined as threadprivate or thread local}}
+}
+namespace B {
+using A::x;
+}
+
 int main(int argc, char **argv) {
-  const int d = 5;
+  const int d = 5; // expected-note {{variable 'd' declared const here}}
   const int da[5] = { 0 };
   S4 e(4);
   S5 g(5);
   int i;
-  int &j = i; // expected-note {{'j' defined here}}
+  int &j = i;
+  static int m;
   #pragma omp parallel firstprivate // expected-error {{expected '(' after 'firstprivate'}}
   #pragma omp parallel firstprivate ( // expected-error {{expected expression}} expected-error {{expected ')'}} expected-note {{to match this '('}}
   #pragma omp parallel firstprivate () // expected-error {{expected expression}}
@@ -63,6 +74,8 @@ int main(int argc, char **argv) {
   #pragma omp parallel firstprivate (argc)
   #pragma omp parallel firstprivate (S1) // expected-error {{'S1' does not refer to a value}}
   #pragma omp parallel firstprivate (a, b, c, d, f) // expected-error {{firstprivate variable with incomplete type 'S1'}}
+  #pragma omp parallel firstprivate (d)
+    d = 5; // expected-error {{cannot assign to variable 'd' with const-qualified type}}
   #pragma omp parallel firstprivate (argv[1]) // expected-error {{expected variable name}}
   #pragma omp parallel firstprivate(ba)
   #pragma omp parallel firstprivate(ca)
@@ -70,12 +83,13 @@ int main(int argc, char **argv) {
   #pragma omp parallel firstprivate(S2::S2s)
   #pragma omp parallel firstprivate(S2::S2sc)
   #pragma omp parallel firstprivate(e, g) // expected-error {{calling a private constructor of class 'S4'}} expected-error {{calling a private constructor of class 'S5'}}
-  #pragma omp parallel firstprivate(h) // expected-error {{threadprivate or thread local variable cannot be firstprivate}}
+  #pragma omp parallel firstprivate(h, B::x) // expected-error 2 {{threadprivate or thread local variable cannot be firstprivate}}
   #pragma omp parallel private(i), firstprivate(i) // expected-error {{private variable cannot be firstprivate}} expected-note{{defined as private}}
   foo();
   #pragma omp parallel shared(i)
   #pragma omp parallel firstprivate(i)
-  #pragma omp parallel firstprivate(j) // expected-error {{arguments of OpenMP clause 'firstprivate' cannot be of reference type}}
+  #pragma omp parallel firstprivate(j)
+  #pragma omp parallel firstprivate(m)
   foo();
 
   return 0;

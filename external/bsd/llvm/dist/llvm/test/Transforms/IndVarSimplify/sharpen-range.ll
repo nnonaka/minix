@@ -1,4 +1,5 @@
 ;; RUN: opt -S < %s -indvars | FileCheck %s
+; RUN: opt -lcssa -loop-simplify -S < %s | opt -S -passes='require<targetir>,require<scalar-evolution>,require<domtree>,loop(indvars)'
 
 ;; Check if llvm can narrow !range metadata based on loop entry
 ;; predicates.
@@ -8,7 +9,7 @@ declare void @abort()
 define i1 @bounded_below_slt(i32* nocapture readonly %buffer) {
 ; CHECK-LABEL: bounded_below_slt
 entry:
-  %length = load i32* %buffer, !range !0
+  %length = load i32, i32* %buffer, !range !0
   %entry.pred = icmp eq i32 %length, 0
   br i1 %entry.pred, label %abort, label %loop.preheader
 
@@ -42,7 +43,7 @@ oob:
 define i1 @bounded_below_sle(i32* nocapture readonly %buffer) {
 ; CHECK-LABEL: bounded_below_sle
 entry:
-  %length = load i32* %buffer, !range !0
+  %length = load i32, i32* %buffer, !range !0
   %entry.pred = icmp eq i32 %length, 0
   br i1 %entry.pred, label %abort, label %loop.preheader
 
@@ -92,7 +93,7 @@ loop.begin:
 loop:
 ; CHECK: loop
   %.sum = add i64 %i.01, -2
-  %v = getelementptr inbounds i8* null, i64 %.sum
+  %v = getelementptr inbounds i8, i8* null, i64 %.sum
   %r = tail call i32 @check(i8* %v)
   %c = icmp eq i32 %r, 0
   br i1 %c, label %loop.end, label %abort.now

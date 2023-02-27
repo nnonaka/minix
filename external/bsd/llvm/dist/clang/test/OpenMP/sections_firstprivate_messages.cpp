@@ -1,4 +1,6 @@
-// RUN: %clang_cc1 -verify -fopenmp=libiomp5 %s
+// RUN: %clang_cc1 -verify -fopenmp %s
+
+// RUN: %clang_cc1 -verify -fopenmp-simd %s
 
 void foo() {
 }
@@ -65,7 +67,7 @@ int foomain(int argc, char **argv) {
   I e(4);
   C g(5);
   int i;
-  int &j = i; // expected-note {{'j' defined here}}
+  int &j = i;
 #pragma omp parallel
 #pragma omp sections firstprivate // expected-error {{expected '(' after 'firstprivate'}}
   {
@@ -135,7 +137,7 @@ int foomain(int argc, char **argv) {
   {
     int v = 0;
     int i;                           // expected-note {{variable with automatic storage duration is predetermined as private; perhaps you forget to enclose 'omp sections' directive into a parallel or another task region?}}
-#pragma omp sections firstprivate(i) // expected-error {{private variable cannot be firstprivate}}
+#pragma omp sections firstprivate(i) // expected-error {{firstprivate variable must be shared}}
     {
       foo();
     }
@@ -143,7 +145,7 @@ int foomain(int argc, char **argv) {
   }
 #pragma omp parallel shared(i)
 #pragma omp parallel private(i)
-#pragma omp sections firstprivate(j) // expected-error {{arguments of OpenMP clause 'firstprivate' cannot be of reference type}}
+#pragma omp sections firstprivate(j)
   {
     foo();
   }
@@ -170,6 +172,14 @@ int foomain(int argc, char **argv) {
   return 0;
 }
 
+namespace A {
+double x;
+#pragma omp threadprivate(x) // expected-note {{defined as threadprivate or thread local}}
+}
+namespace B {
+using A::x;
+}
+
 int main(int argc, char **argv) {
   const int d = 5;
   const int da[5] = {0};
@@ -178,7 +188,7 @@ int main(int argc, char **argv) {
   S3 m;
   S6 n(2);
   int i;
-  int &j = i; // expected-note {{'j' defined here}}
+  int &j = i;
 #pragma omp parallel
 #pragma omp sections firstprivate // expected-error {{expected '(' after 'firstprivate'}}
   {
@@ -281,7 +291,7 @@ int main(int argc, char **argv) {
     foo();
   }
 #pragma omp parallel
-#pragma omp sections firstprivate(h) // expected-error {{threadprivate or thread local variable cannot be firstprivate}}
+#pragma omp sections firstprivate(h, B::x) // expected-error 2 {{threadprivate or thread local variable cannot be firstprivate}}
   {
     foo();
   }
@@ -296,7 +306,7 @@ int main(int argc, char **argv) {
     foo();
   }
 #pragma omp parallel
-#pragma omp sections firstprivate(j) // expected-error {{arguments of OpenMP clause 'firstprivate' cannot be of reference type}}
+#pragma omp sections firstprivate(j)
   {
     foo();
   }
@@ -314,7 +324,7 @@ int main(int argc, char **argv) {
   {
     int v = 0;
     int i;                           // expected-note {{variable with automatic storage duration is predetermined as private; perhaps you forget to enclose 'omp sections' directive into a parallel or another task region?}}
-#pragma omp sections firstprivate(i) // expected-error {{private variable cannot be firstprivate}}
+#pragma omp sections firstprivate(i) // expected-error {{firstprivate variable must be shared}}
     {
       foo();
     }
@@ -327,6 +337,11 @@ int main(int argc, char **argv) {
   }
 #pragma omp parallel reduction(+ : i) // expected-note {{defined as reduction}}
 #pragma omp sections firstprivate(i)  // expected-error {{firstprivate variable must be shared}}
+  {
+    foo();
+  }
+  static int r;
+#pragma omp sections firstprivate(r) // OK
   {
     foo();
   }

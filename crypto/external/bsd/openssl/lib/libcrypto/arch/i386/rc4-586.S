@@ -29,14 +29,13 @@ RC4:
 	movl	(%edi,%eax,4),%ecx
 	andl	$-4,%edx
 	jz	.L002loop1
-	testl	$-8,%edx
 	movl	%ebp,32(%esp)
+	testl	$-8,%edx
 	jz	.L003go4loop4
 	call	.L004PIC_me_up
 .L004PIC_me_up:
 	popl	%ebp
-	leal	_GLOBAL_OFFSET_TABLE_+[.-.L004PIC_me_up](%ebp),%ebp
-	movl	OPENSSL_ia32cap_P@GOT(%ebp),%ebp
+	leal	OPENSSL_ia32cap_P-.L004PIC_me_up(%ebp),%ebp
 	btl	$26,(%ebp)
 	jnc	.L003go4loop4
 	movl	32(%esp),%ebp
@@ -267,11 +266,11 @@ RC4:
 	popl	%ebp
 	ret
 .size	RC4,.-.L_RC4_begin
-.globl	private_RC4_set_key
-.type	private_RC4_set_key,@function
+.globl	RC4_set_key
+.type	RC4_set_key,@function
 .align	16
-private_RC4_set_key:
-.L_private_RC4_set_key_begin:
+RC4_set_key:
+.L_RC4_set_key_begin:
 	pushl	%ebp
 	pushl	%ebx
 	pushl	%esi
@@ -282,8 +281,7 @@ private_RC4_set_key:
 	call	.L010PIC_me_up
 .L010PIC_me_up:
 	popl	%edx
-	leal	_GLOBAL_OFFSET_TABLE_+[.-.L010PIC_me_up](%edx),%edx
-	movl	OPENSSL_ia32cap_P@GOT(%edx),%edx
+	leal	OPENSSL_ia32cap_P-.L010PIC_me_up(%edx),%edx
 	leal	8(%edi),%edi
 	leal	(%esi,%ebp,1),%esi
 	negl	%ebp
@@ -345,7 +343,7 @@ private_RC4_set_key:
 	popl	%ebx
 	popl	%ebp
 	ret
-.size	private_RC4_set_key,.-.L_private_RC4_set_key_begin
+.size	RC4_set_key,.-.L_RC4_set_key_begin
 .globl	RC4_options
 .type	RC4_options,@function
 .align	16
@@ -358,8 +356,7 @@ RC4_options:
 	call	.L020PIC_me_up
 .L020PIC_me_up:
 	popl	%edx
-	leal	_GLOBAL_OFFSET_TABLE_+[.-.L020PIC_me_up](%edx),%edx
-	movl	OPENSSL_ia32cap_P@GOT(%edx),%edx
+	leal	OPENSSL_ia32cap_P-.L020PIC_me_up(%edx),%edx
 	movl	(%edx),%edx
 	btl	$20,%edx
 	jc	.L0211xchar
@@ -381,4 +378,4 @@ RC4_options:
 .byte	111,64,111,112,101,110,115,115,108,46,111,114,103,62,0
 .align	64
 .size	RC4_options,.-.L_RC4_options_begin
-.comm	OPENSSL_ia32cap_P,8,4
+.comm	OPENSSL_ia32cap_P,16,4

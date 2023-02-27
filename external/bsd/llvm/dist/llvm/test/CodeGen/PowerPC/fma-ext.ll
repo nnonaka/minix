@@ -1,5 +1,5 @@
-; RUN: llc < %s -march=ppc32 -fp-contract=fast -mattr=-vsx | FileCheck %s
-; RUN: llc < %s -mtriple=powerpc64-unknown-linux-gnu -fp-contract=fast -mattr=+vsx -mcpu=pwr7 | FileCheck -check-prefix=CHECK-VSX %s
+; RUN: llc -verify-machineinstrs < %s -mtriple=ppc32-- -fp-contract=fast -mattr=-vsx -disable-ppc-vsx-fma-mutation=false | FileCheck %s
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64-unknown-linux-gnu -fp-contract=fast -mattr=+vsx -mcpu=pwr7 -disable-ppc-vsx-fma-mutation=false | FileCheck -check-prefix=CHECK-VSX %s
 
 define double @test_FMADD_EXT1(float %A, float %B, double %C) {
     %D = fmul float %A, %B          ; <float> [#uses=1]
@@ -60,34 +60,34 @@ define double @test_FMSUB_EXT2(float %A, float %B, double %C) {
 
 define double @test_FMSUB_EXT3(float %A, float %B, double %C) {
     %D = fmul float %A, %B          ; <float> [#uses=1]
-    %E = fsub float -0.000000e+00, %D ;		<float> [#uses=1]
+    %E = fsub float -0.000000e+00, %D ;    <float> [#uses=1]
     %F = fpext float %E to double   ; <double> [#uses=1]
     %G = fsub double %F, %C         ; <double> [#uses=1]
     ret double %G
 ; CHECK-LABEL: test_FMSUB_EXT3:
-; CHECK: fneg
-; CHECK-NEXT: fmsub
+; CHECK: fnmadd
+
 ; CHECK-NEXT: blr
                                 
 ; CHECK-VSX-LABEL: test_FMSUB_EXT3:
-; CHECK-VSX: xsnegdp
-; CHECK-VSX-NEXT: xsmsubmdp
+; CHECK-VSX: xsnmaddmdp
+
 ; CHECK-VSX-NEXT: blr
 }
     
 define double @test_FMSUB_EXT4(float %A, float %B, double %C) {
     %D = fmul float %A, %B          ; <float> [#uses=1]
     %E = fpext float %D to double   ; <double> [#uses=1]
-    %F = fsub double -0.000000e+00, %E ;		<double> [#uses=1]
+    %F = fsub double -0.000000e+00, %E ;    <double> [#uses=1]
     %G = fsub double %F, %C         ; <double> [#uses=1]
     ret double %G
 ; CHECK-LABEL: test_FMSUB_EXT4:
-; CHECK: fneg
-; CHECK-NEXT: fmsub
+; CHECK: fnmadd
+
 ; CHECK-NEXT: blr
                                 
 ; CHECK-VSX-LABEL: test_FMSUB_EXT4:
-; CHECK-VSX: xsnegdp
-; CHECK-VSX-NEXT: xsmsubmdp
+; CHECK-VSX: xsnmaddmdp
+
 ; CHECK-VSX-NEXT: blr
 }  

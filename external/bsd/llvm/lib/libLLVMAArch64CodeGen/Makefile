@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.6 2015/01/29 20:41:34 joerg Exp $
+#	$NetBSD: Makefile,v 1.9 2018/07/17 18:55:27 joerg Exp $
 
 LIB=	LLVMAArch64CodeGen
 
@@ -10,27 +10,34 @@ CPPFLAGS+=	-I${LLVM_SRCDIR}/lib/Target/AArch64
 
 SRCS+=	AArch64A53Fix835769.cpp \
 	AArch64A57FPLoadBalancing.cpp \
-	AArch64AddressTypePromotion.cpp \
 	AArch64AdvSIMDScalarPass.cpp \
 	AArch64AsmPrinter.cpp \
-	AArch64BranchRelaxation.cpp \
+	AArch64CallLowering.cpp \
 	AArch64CleanupLocalDynamicTLSPass.cpp \
 	AArch64CollectLOH.cpp \
-	AArch64ConditionOptimizer.cpp \
+	AArch64CondBrTuning.cpp \
 	AArch64ConditionalCompares.cpp \
+	AArch64ConditionOptimizer.cpp \
 	AArch64DeadRegisterDefinitionsPass.cpp \
 	AArch64ExpandPseudoInsts.cpp \
+	AArch64FalkorHWPFFix.cpp \
 	AArch64FastISel.cpp \
 	AArch64FrameLowering.cpp \
 	AArch64InstrInfo.cpp \
+	AArch64InstructionSelector.cpp \
 	AArch64ISelDAGToDAG.cpp \
 	AArch64ISelLowering.cpp \
+	AArch64LegalizerInfo.cpp \
 	AArch64LoadStoreOptimizer.cpp \
+	AArch64MacroFusion.cpp \
 	AArch64MCInstLower.cpp \
 	AArch64PBQPRegAlloc.cpp \
 	AArch64PromoteConstant.cpp \
+	AArch64RedundantCopyElimination.cpp \
+	AArch64RegisterBankInfo.cpp \
 	AArch64RegisterInfo.cpp \
 	AArch64SelectionDAGInfo.cpp \
+	AArch64SIMDInstrOpt.cpp \
 	AArch64StorePairSuppress.cpp \
 	AArch64Subtarget.cpp \
 	AArch64TargetMachine.cpp \
@@ -47,11 +54,14 @@ TABLEGEN_OUTPUT= \
 	AArch64GenDAGISel.inc|-gen-dag-isel \
 	AArch64GenDisassemblerTables.inc|-gen-disassembler \
 	AArch64GenFastISel.inc|-gen-fast-isel \
+	AArch64GenGlobalISel.inc|-gen-global-isel \
 	AArch64GenInstrInfo.inc|-gen-instr-info \
 	AArch64GenMCCodeEmitter.inc|-gen-emitter \
 	AArch64GenMCPseudoLowering.inc|-gen-pseudo-lowering \
+	AArch64GenRegisterBank.inc|-gen-register-bank \
 	AArch64GenRegisterInfo.inc|-gen-register-info \
-	AArch64GenSubtargetInfo.inc|-gen-subtarget
+	AArch64GenSubtargetInfo.inc|-gen-subtarget \
+	AArch64GenSystemOperands.inc|-gen-searchable-tables
 
 .include "${.PARSEDIR}/../../tablegen.mk"
 

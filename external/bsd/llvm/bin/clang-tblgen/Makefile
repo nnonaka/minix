@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4 2013/07/07 21:36:42 joerg Exp $
+#	$NetBSD: Makefile,v 1.7 2018/07/17 18:55:25 joerg Exp $
 
 PROG_CXX=	clang-tblgen
 NOMAN=		yes
@@ -12,14 +12,17 @@ SRCS=	ClangASTNodesEmitter.cpp \
 	ClangCommentCommandInfoEmitter.cpp \
 	ClangCommentHTMLNamedCharacterReferenceEmitter.cpp \
 	ClangCommentHTMLTagsEmitter.cpp \
+	ClangDataCollectorsEmitter.cpp \
 	ClangDiagnosticsEmitter.cpp \
+	ClangOptionDocEmitter.cpp \
 	ClangSACheckersEmitter.cpp \
 	NeonEmitter.cpp \
 	TableGen.cpp
 
 LLVM_LIBS+= \
 	TableGen \
-	Support
+	Support \
+	Demangle
 
 .include "${.PARSEDIR}/../../link.mk"
 

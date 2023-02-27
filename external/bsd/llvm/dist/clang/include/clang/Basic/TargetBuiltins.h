@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Enumerates target-specific builtins in their own namespaces within
+/// Enumerates target-specific builtins in their own namespaces within
 /// namespace ::clang.
 ///
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,7 @@
 #ifndef LLVM_CLANG_BASIC_TARGETBUILTINS_H
 #define LLVM_CLANG_BASIC_TARGETBUILTINS_H
 
+#include <stdint.h>
 #include "clang/Basic/Builtins.h"
 #undef PPC
 
@@ -30,7 +31,7 @@ namespace clang {
   };
   }
 
-  /// \brief ARM builtins
+  /// ARM builtins
   namespace ARM {
     enum {
       LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -41,7 +42,7 @@ namespace clang {
     };
   }
 
-  /// \brief AArch64 builtins
+  /// AArch64 builtins
   namespace AArch64 {
   enum {
     LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
@@ -52,7 +53,7 @@ namespace clang {
   };
   }
 
-  /// \brief PPC builtins
+  /// PPC builtins
   namespace PPC {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -62,7 +63,7 @@ namespace clang {
     };
   }
 
-  /// \brief NVPTX builtins
+  /// NVPTX builtins
   namespace NVPTX {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -72,27 +73,31 @@ namespace clang {
     };
   }
 
-  /// \brief R600 builtins
-  namespace R600 {
+  /// AMDGPU builtins
+  namespace AMDGPU {
   enum {
     LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
   #define BUILTIN(ID, TYPE, ATTRS) BI##ID,
-  #include "clang/Basic/BuiltinsR600.def"
+  #include "clang/Basic/BuiltinsAMDGPU.def"
     LastTSBuiltin
   };
   }
 
-  /// \brief X86 builtins
+  /// X86 builtins
   namespace X86 {
-    enum {
-        LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
 #define BUILTIN(ID, TYPE, ATTRS) BI##ID,
 #include "clang/Basic/BuiltinsX86.def"
-        LastTSBuiltin
-    };
+    FirstX86_64Builtin,
+    LastX86CommonBuiltin = FirstX86_64Builtin - 1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsX86_64.def"
+    LastTSBuiltin
+  };
   }
 
-  /// \brief Flags to identify the types for overloaded Neon builtins.
+  /// Flags to identify the types for overloaded Neon builtins.
   ///
   /// These must be kept in sync with the flags in utils/TableGen/NeonEmitter.h.
   class NeonTypeFlags {
@@ -135,7 +140,7 @@ namespace clang {
     bool isQuad() const { return (Flags & QuadFlag) != 0; }
   };
 
-  /// \brief Hexagon builtins
+  /// Hexagon builtins
   namespace Hexagon {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -145,7 +150,17 @@ namespace clang {
     };
   }
 
-  /// \brief MIPS builtins
+  /// Nios2 builtins
+  namespace Nios2 {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsNios2.def"
+    LastTSBuiltin
+  };
+  }
+
+  /// MIPS builtins
   namespace Mips {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -155,7 +170,7 @@ namespace clang {
     };
   }
 
-  /// \brief XCore builtins
+  /// XCore builtins
   namespace XCore {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -165,7 +180,7 @@ namespace clang {
     };
   }
 
-  /// \brief Le64 builtins
+  /// Le64 builtins
   namespace Le64 {
   enum {
     LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
@@ -173,6 +188,26 @@ namespace clang {
   #include "clang/Basic/BuiltinsLe64.def"
     LastTSBuiltin
   };
+  }
+
+  /// SystemZ builtins
+  namespace SystemZ {
+    enum {
+        LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsSystemZ.def"
+        LastTSBuiltin
+    };
+  }
+
+  /// WebAssembly builtins
+  namespace WebAssembly {
+    enum {
+      LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsWebAssembly.def"
+      LastTSBuiltin
+    };
   }
 
 } // end namespace clang.

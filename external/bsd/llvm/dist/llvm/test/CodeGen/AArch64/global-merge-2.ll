@@ -1,6 +1,6 @@
-; RUN: llc %s -mtriple=aarch64-none-linux-gnu -enable-global-merge -global-merge-on-external -o - | FileCheck %s
-; RUN: llc %s -mtriple=aarch64-linux-gnuabi -enable-global-merge -global-merge-on-external -o - | FileCheck %s
-; RUN: llc %s -mtriple=aarch64-apple-ios -enable-global-merge -global-merge-on-external -o - | FileCheck %s --check-prefix=CHECK-APPLE-IOS
+; RUN: llc %s -mtriple=aarch64-none-linux-gnu -aarch64-enable-global-merge -global-merge-on-external -o - | FileCheck %s
+; RUN: llc %s -mtriple=aarch64-linux-gnuabi -aarch64-enable-global-merge -global-merge-on-external -o - | FileCheck %s
+; RUN: llc %s -mtriple=aarch64-apple-ios -aarch64-enable-global-merge -global-merge-on-external -o - | FileCheck %s --check-prefix=CHECK-APPLE-IOS
 
 @x = global i32 0, align 4
 @y = global i32 0, align 4
@@ -27,26 +27,26 @@ define void @g1(i32 %a1, i32 %a2) {
   ret void
 }
 
-;CHECK:	.type	_MergedGlobals_x,@object // @_MergedGlobals_x
-;CHECK:	.globl	_MergedGlobals_x
-;CHECK:	.align	3
-;CHECK: _MergedGlobals_x:
-;CHECK:	.size	_MergedGlobals_x, 12
+;CHECK:	.type	.L_MergedGlobals,@object // @_MergedGlobals
+;CHECK:	.local	.L_MergedGlobals
+;CHECK:	.comm	.L_MergedGlobals,12,4
 
 ;CHECK:	.globl	x
-;CHECK: x = _MergedGlobals_x
+;CHECK: .set x, .L_MergedGlobals
+;CHECK: .size x, 4
 ;CHECK:	.globl	y
-;CHECK: y = _MergedGlobals_x+4
+;CHECK: .set y, .L_MergedGlobals+4
+;CHECK: .size y, 4
 ;CHECK:	.globl	z
-;CHECK: z = _MergedGlobals_x+8
+;CHECK: .set z, .L_MergedGlobals+8
+;CHECK: .size z, 4
 
-;CHECK-APPLE-IOS: .globl	__MergedGlobals_x       ; @_MergedGlobals_x
-;CHECK-APPLE-IOS: .zerofill __DATA,__common,__MergedGlobals_x,12,3
+;CHECK-APPLE-IOS: .zerofill __DATA,__common,__MergedGlobals_x,12,2
 
 ;CHECK-APPLE-IOS: .globl	_x
-;CHECK-APPLE-IOS: _x = __MergedGlobals_x
+;CHECK-APPLE-IOS: .set {{.*}}, __MergedGlobals_x
 ;CHECK-APPLE-IOS: .globl	_y
-;CHECK-APPLE-IOS: _y = __MergedGlobals_x+4
+;CHECK-APPLE-IOS: .set _y, __MergedGlobals_x+4
 ;CHECK-APPLE-IOS: .globl	_z
-;CHECK-APPLE-IOS: _z = __MergedGlobals_x+8
+;CHECK-APPLE-IOS: .set _z, __MergedGlobals_x+8
 ;CHECK-APPLE-IOS: .subsections_via_symbols

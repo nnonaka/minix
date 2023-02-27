@@ -1,8 +1,16 @@
 # RUN: llvm-mc -triple powerpc64-unknown-unknown --show-encoding %s | FileCheck -check-prefix=CHECK-BE %s
 # RUN: llvm-mc -triple powerpc64le-unknown-unknown --show-encoding %s | FileCheck -check-prefix=CHECK-LE %s
 
-# CHECK-BE: mtmsr 4, 0                       # encoding: [0x7c,0x80,0x01,0x24]
-# CHECK-LE: mtmsr 4, 0                       # encoding: [0x24,0x01,0x80,0x7c]
+# CHECK-BE: hrfid                            # encoding: [0x4c,0x00,0x02,0x24]
+# CHECK-LE: hrfid                            # encoding: [0x24,0x02,0x00,0x4c]
+            hrfid
+
+# CHECK-BE: nap                              # encoding: [0x4c,0x00,0x03,0x64]
+# CHECK-LE: nap                              # encoding: [0x64,0x03,0x00,0x4c]
+            nap   
+
+# CHECK-BE: mtmsr 4                          # encoding: [0x7c,0x80,0x01,0x24]
+# CHECK-LE: mtmsr 4                          # encoding: [0x24,0x01,0x80,0x7c]
             mtmsr %r4
 
 # CHECK-BE: mtmsr 4, 1                       # encoding: [0x7c,0x81,0x01,0x24]
@@ -13,8 +21,8 @@
 # CHECK-LE: mfmsr 4                         # encoding: [0xa6,0x00,0x80,0x7c]
             mfmsr %r4
 
-# CHECK-BE: mtmsrd 4, 0                     # encoding: [0x7c,0x80,0x01,0x64]
-# CHECK-LE: mtmsrd 4, 0                     # encoding: [0x64,0x01,0x80,0x7c]
+# CHECK-BE: mtmsrd 4                        # encoding: [0x7c,0x80,0x01,0x64]
+# CHECK-LE: mtmsrd 4                        # encoding: [0x64,0x01,0x80,0x7c]
             mtmsrd %r4
 
 # CHECK-BE: mtmsrd 4, 1                     # encoding: [0x7c,0x81,0x01,0x64]
@@ -94,8 +102,8 @@
 # CHECK-LE: mtspr 22, 4                     # encoding: [0xa6,0x03,0x96,0x7c]
             mtdec %r4
 
-# CHECK-BE: mfspr 4, 287                    # encoding: [0x7c,0x9f,0x42,0xa6]
-# CHECK-LE: mfspr 4, 287                    # encoding: [0xa6,0x42,0x9f,0x7c]
+# CHECK-BE: mfpvr 4                         # encoding: [0x7c,0x9f,0x42,0xa6]
+# CHECK-LE: mfpvr 4                         # encoding: [0xa6,0x42,0x9f,0x7c]
             mfpvr %r4
 
 # CHECK-BE: mfspr 4, 25                     # encoding: [0x7c,0x99,0x02,0xa6]
@@ -134,6 +142,10 @@
 # CHECK-LE: slbmfee 4, 5                    # encoding: [0x26,0x2f,0x80,0x7c]
             slbmfee %r4, %r5
 
+# CHECK-BE: slbmfev 2, 3                    # encoding: [0x7c,0x40,0x1e,0xa6]
+# CHECK-LE: slbmfev 2, 3                    # encoding: [0xa6,0x1e,0x40,0x7c]
+            slbmfev %r2, %r3
+
 # CHECK-BE: slbia                           # encoding: [0x7c,0x00,0x03,0xe4]
 # CHECK-LE: slbia                           # encoding: [0xe4,0x03,0x00,0x7c]
             slbia
@@ -146,12 +158,12 @@
 # CHECK-LE: tlbiel 4                        # encoding: [0x24,0x22,0x00,0x7c]
             tlbiel %r4
 
-# CHECK-BE: tlbie 4,0                       # encoding: [0x7c,0x00,0x22,0x64]
-# CHECK-LE: tlbie 4,0                       # encoding: [0x64,0x22,0x00,0x7c]
+# CHECK-BE: tlbie 4                         # encoding: [0x7c,0x00,0x22,0x64]
+# CHECK-LE: tlbie 4                         # encoding: [0x64,0x22,0x00,0x7c]
             tlbie %r4, 0
 
-# CHECK-BE: tlbie 4,0                       # encoding: [0x7c,0x00,0x22,0x64]
-# CHECK-LE: tlbie 4,0                       # encoding: [0x64,0x22,0x00,0x7c]
+# CHECK-BE: tlbie 4                         # encoding: [0x7c,0x00,0x22,0x64]
+# CHECK-LE: tlbie 4                         # encoding: [0x64,0x22,0x00,0x7c]
             tlbie %r4
 
 # CHECK-BE: rfi                             # encoding: [0x4c,0x00,0x00,0x64]
@@ -185,3 +197,16 @@
 # CHECK-BE: tlbsx 11, 12                    # encoding: [0x7c,0x0b,0x67,0x24]
 # CHECK-LE: tlbsx 11, 12                    # encoding: [0x24,0x67,0x0b,0x7c]
             tlbsx %r11, %r12
+
+# CHECK-BE: mfpmr 5, 400                    # encoding: [0x7c,0xb0,0x62,0x9c]
+# CHECK-LE: mfpmr 5, 400                    # encoding: [0x9c,0x62,0xb0,0x7c]
+            mfpmr 5, 400
+# CHECK-BE: mtpmr 400, 6                    # encoding: [0x7c,0xd0,0x63,0x9c]
+# CHECK-LE: mtpmr 400, 6                    # encoding: [0x9c,0x63,0xd0,0x7c]
+            mtpmr 400, 6
+# CHECK-BE: icblc 0, 0, 8                      # encoding: [0x7c,0x00,0x41,0xcc]
+# CHECK-LE: icblc 0, 0, 8                      # encoding: [0xcc,0x41,0x00,0x7c]
+            icblc 0, 0, 8
+# CHECK-BE: icbtls 0, 0, 9                     # encoding: [0x7c,0x00,0x4b,0xcc]
+# CHECK-LE: icbtls 0, 0, 9                     # encoding: [0xcc,0x4b,0x00,0x7c]
+            icbtls 0, 0, 9

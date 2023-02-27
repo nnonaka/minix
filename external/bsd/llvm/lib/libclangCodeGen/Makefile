@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.12 2015/01/29 20:41:36 joerg Exp $
+#	$NetBSD: Makefile,v 1.16 2018/07/17 18:55:30 joerg Exp $
 
 LIB=	clangCodeGen
 
@@ -12,11 +12,12 @@ SRCS+=	BackendUtil.cpp \
 	CGBuiltin.cpp \
 	CGCUDANV.cpp \
 	CGCUDARuntime.cpp \
+	CGCXX.cpp \
+	CGCXXABI.cpp \
 	CGCall.cpp \
 	CGClass.cpp \
 	CGCleanup.cpp \
-	CGCXX.cpp \
-	CGCXXABI.cpp \
+	CGCoroutine.cpp \
 	CGDebugInfo.cpp \
 	CGDecl.cpp \
 	CGDeclCXX.cpp \
@@ -27,13 +28,16 @@ SRCS+=	BackendUtil.cpp \
 	CGExprConstant.cpp \
 	CGExprCXX.cpp \
 	CGExprScalar.cpp \
+	CGGPUBuiltin.cpp \
 	CGLoopInfo.cpp \
+	CGNonTrivialStruct.cpp \
 	CGObjC.cpp \
 	CGObjCGNU.cpp \
 	CGObjCMac.cpp \
 	CGObjCRuntime.cpp \
 	CGOpenCLRuntime.cpp \
 	CGOpenMPRuntime.cpp \
+	CGOpenMPRuntimeNVPTX.cpp \
 	CGRecordLayoutBuilder.cpp \
 	CGStmt.cpp \
 	CGStmtOpenMP.cpp \
@@ -46,12 +50,17 @@ SRCS+=	BackendUtil.cpp \
 	CodeGenPGO.cpp \
 	CodeGenTBAA.cpp \
 	CodeGenTypes.cpp \
+	ConstantInitBuilder.cpp \
 	CoverageMappingGen.cpp \
 	ItaniumCXXABI.cpp \
+	MacroPPCallbacks.cpp \
 	MicrosoftCXXABI.cpp \
 	ModuleBuilder.cpp \
+	ObjectFilePCHContainerOperations.cpp \
 	SanitizerMetadata.cpp \
-	TargetInfo.cpp
+	SwiftCallingConv.cpp \
+	TargetInfo.cpp \
+	VarBypassDetector.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

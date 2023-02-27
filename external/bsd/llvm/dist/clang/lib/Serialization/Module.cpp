@@ -1,4 +1,4 @@
-//===--- Module.cpp - Module description ------------------------*- C++ -*-===//
+//===- Module.cpp - Module description ------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,47 +11,19 @@
 //  been loaded from an AST file.
 //
 //===----------------------------------------------------------------------===//
+
 #include "clang/Serialization/Module.h"
 #include "ASTReaderInternals.h"
-#include "llvm/Support/MemoryBuffer.h"
+#include "clang/Serialization/ContinuousRangeMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
 using namespace serialization;
 using namespace reader;
 
-ModuleFile::ModuleFile(ModuleKind Kind, unsigned Generation)
-  : Kind(Kind), File(nullptr), Signature(0), DirectlyImported(false),
-    Generation(Generation), SizeInBits(0),
-    LocalNumSLocEntries(0), SLocEntryBaseID(0),
-    SLocEntryBaseOffset(0), SLocEntryOffsets(nullptr),
-    LocalNumIdentifiers(0),
-    IdentifierOffsets(nullptr), BaseIdentifierID(0),
-    IdentifierTableData(nullptr), IdentifierLookupTable(nullptr),
-    LocalNumMacros(0), MacroOffsets(nullptr),
-    BasePreprocessedEntityID(0),
-    PreprocessedEntityOffsets(nullptr), NumPreprocessedEntities(0),
-    LocalNumHeaderFileInfos(0), 
-    HeaderFileInfoTableData(nullptr), HeaderFileInfoTable(nullptr),
-    LocalNumSubmodules(0), BaseSubmoduleID(0),
-    LocalNumSelectors(0), SelectorOffsets(nullptr), BaseSelectorID(0),
-    SelectorLookupTableData(nullptr), SelectorLookupTable(nullptr),
-    LocalNumDecls(0), DeclOffsets(nullptr), BaseDeclID(0),
-    LocalNumCXXBaseSpecifiers(0), CXXBaseSpecifiersOffsets(nullptr),
-    FileSortedDecls(nullptr), NumFileSortedDecls(0),
-    RedeclarationsMap(nullptr), LocalNumRedeclarationsInMap(0),
-    ObjCCategoriesMap(nullptr), LocalNumObjCCategoriesInMap(0),
-    LocalNumTypes(0), TypeOffsets(nullptr), BaseTypeIndex(0)
-{}
-
 ModuleFile::~ModuleFile() {
-  for (DeclContextInfosMap::iterator I = DeclContextInfos.begin(),
-       E = DeclContextInfos.end();
-       I != E; ++I) {
-    if (I->second.NameLookupTableData)
-      delete I->second.NameLookupTableData;
-  }
-  
   delete static_cast<ASTIdentifierLookupTable *>(IdentifierLookupTable);
   delete static_cast<HeaderFileInfoLookupTable *>(HeaderFileInfoTable);
   delete static_cast<ASTSelectorLookupTable *>(SelectorLookupTable);
@@ -64,7 +36,8 @@ dumpLocalRemap(StringRef Name,
   if (Map.begin() == Map.end())
     return;
   
-  typedef ContinuousRangeMap<Key, Offset, InitialCapacity> MapType;
+  using MapType = ContinuousRangeMap<Key, Offset, InitialCapacity>;
+
   llvm::errs() << "  " << Name << ":\n";
   for (typename MapType::const_iterator I = Map.begin(), IEnd = Map.end(); 
        I != IEnd; ++I) {
@@ -72,7 +45,7 @@ dumpLocalRemap(StringRef Name,
   }
 }
 
-void ModuleFile::dump() {
+LLVM_DUMP_METHOD void ModuleFile::dump() {
   llvm::errs() << "\nModule: " << FileName << "\n";
   if (!Imports.empty()) {
     llvm::errs() << "  Imports: ";

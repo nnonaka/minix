@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 /// \file
-/// \brief Defines the Objective-C statement AST node classes.
+/// Defines the Objective-C statement AST node classes.
 
 #ifndef LLVM_CLANG_AST_STMTOBJC_H
 #define LLVM_CLANG_AST_STMTOBJC_H
@@ -18,7 +18,7 @@
 
 namespace clang {
 
-/// \brief Represents Objective-C's collection statement.
+/// Represents Objective-C's collection statement.
 ///
 /// This is represented as 'for (element 'in' collection-expression)' stmt.
 class ObjCForCollectionStmt : public Stmt {
@@ -70,7 +70,7 @@ public:
   }
 };
 
-/// \brief Represents Objective-C's \@catch statement.
+/// Represents Objective-C's \@catch statement.
 class ObjCAtCatchStmt : public Stmt {
 private:
   VarDecl *ExceptionDecl;
@@ -116,14 +116,15 @@ public:
   child_range children() { return child_range(&Body, &Body + 1); }
 };
 
-/// \brief Represents Objective-C's \@finally statement
+/// Represents Objective-C's \@finally statement
 class ObjCAtFinallyStmt : public Stmt {
-  Stmt *AtFinallyStmt;
   SourceLocation AtFinallyLoc;
+  Stmt *AtFinallyStmt;
+
 public:
   ObjCAtFinallyStmt(SourceLocation atFinallyLoc, Stmt *atFinallyStmt)
-  : Stmt(ObjCAtFinallyStmtClass),
-    AtFinallyStmt(atFinallyStmt), AtFinallyLoc(atFinallyLoc) {}
+      : Stmt(ObjCAtFinallyStmtClass), AtFinallyLoc(atFinallyLoc),
+        AtFinallyStmt(atFinallyStmt) {}
 
   explicit ObjCAtFinallyStmt(EmptyShell Empty) :
     Stmt(ObjCAtFinallyStmtClass, Empty) { }
@@ -149,7 +150,7 @@ public:
   }
 };
 
-/// \brief Represents Objective-C's \@try ... \@catch ... \@finally statement.
+/// Represents Objective-C's \@try ... \@catch ... \@finally statement.
 class ObjCAtTryStmt : public Stmt {
 private:
   // The location of the @ in the \@try.
@@ -161,7 +162,7 @@ private:
   // Whether this statement has a \@finally statement.
   bool HasFinally : 1;
   
-  /// \brief Retrieve the statements that are stored after this \@try statement.
+  /// Retrieve the statements that are stored after this \@try statement.
   ///
   /// The order of the statements in memory follows the order in the source,
   /// with the \@try body first, followed by the \@catch statements (if any)
@@ -188,38 +189,38 @@ public:
   static ObjCAtTryStmt *CreateEmpty(const ASTContext &Context,
                                     unsigned NumCatchStmts, bool HasFinally);
   
-  /// \brief Retrieve the location of the @ in the \@try.
+  /// Retrieve the location of the @ in the \@try.
   SourceLocation getAtTryLoc() const { return AtTryLoc; }
   void setAtTryLoc(SourceLocation Loc) { AtTryLoc = Loc; }
 
-  /// \brief Retrieve the \@try body.
+  /// Retrieve the \@try body.
   const Stmt *getTryBody() const { return getStmts()[0]; }
   Stmt *getTryBody() { return getStmts()[0]; }
   void setTryBody(Stmt *S) { getStmts()[0] = S; }
 
-  /// \brief Retrieve the number of \@catch statements in this try-catch-finally
+  /// Retrieve the number of \@catch statements in this try-catch-finally
   /// block.
   unsigned getNumCatchStmts() const { return NumCatchStmts; }
   
-  /// \brief Retrieve a \@catch statement.
+  /// Retrieve a \@catch statement.
   const ObjCAtCatchStmt *getCatchStmt(unsigned I) const {
     assert(I < NumCatchStmts && "Out-of-bounds @catch index");
     return cast_or_null<ObjCAtCatchStmt>(getStmts()[I + 1]);
   }
   
-  /// \brief Retrieve a \@catch statement.
+  /// Retrieve a \@catch statement.
   ObjCAtCatchStmt *getCatchStmt(unsigned I) {
     assert(I < NumCatchStmts && "Out-of-bounds @catch index");
     return cast_or_null<ObjCAtCatchStmt>(getStmts()[I + 1]);
   }
   
-  /// \brief Set a particular catch statement.
+  /// Set a particular catch statement.
   void setCatchStmt(unsigned I, ObjCAtCatchStmt *S) {
     assert(I < NumCatchStmts && "Out-of-bounds @catch index");
     getStmts()[I + 1] = S;
   }
   
-  /// \brief Retrieve the \@finally statement, if any.
+  /// Retrieve the \@finally statement, if any.
   const ObjCAtFinallyStmt *getFinallyStmt() const {
     if (!HasFinally)
       return nullptr;
@@ -250,7 +251,7 @@ public:
   }
 };
 
-/// \brief Represents Objective-C's \@synchronized statement.
+/// Represents Objective-C's \@synchronized statement.
 ///
 /// Example:
 /// \code
@@ -260,9 +261,9 @@ public:
 /// \endcode
 class ObjCAtSynchronizedStmt : public Stmt {
 private:
+  SourceLocation AtSynchronizedLoc;
   enum { SYNC_EXPR, SYNC_BODY, END_EXPR };
   Stmt* SubStmts[END_EXPR];
-  SourceLocation AtSynchronizedLoc;
 
 public:
   ObjCAtSynchronizedStmt(SourceLocation atSynchronizedLoc, Stmt *synchExpr,
@@ -308,10 +309,11 @@ public:
   }
 };
 
-/// \brief Represents Objective-C's \@throw statement.
+/// Represents Objective-C's \@throw statement.
 class ObjCAtThrowStmt : public Stmt {
-  Stmt *Throw;
   SourceLocation AtThrowLoc;
+  Stmt *Throw;
+
 public:
   ObjCAtThrowStmt(SourceLocation atThrowLoc, Stmt *throwExpr)
   : Stmt(ObjCAtThrowStmtClass), Throw(throwExpr) {
@@ -324,7 +326,7 @@ public:
   Expr *getThrowExpr() { return reinterpret_cast<Expr*>(Throw); }
   void setThrowExpr(Stmt *S) { Throw = S; }
 
-  SourceLocation getThrowLoc() { return AtThrowLoc; }
+  SourceLocation getThrowLoc() const LLVM_READONLY { return AtThrowLoc; }
   void setThrowLoc(SourceLocation Loc) { AtThrowLoc = Loc; }
 
   SourceLocation getLocStart() const LLVM_READONLY { return AtThrowLoc; }
@@ -339,15 +341,14 @@ public:
   child_range children() { return child_range(&Throw, &Throw+1); }
 };
 
-/// \brief Represents Objective-C's \@autoreleasepool Statement
+/// Represents Objective-C's \@autoreleasepool Statement
 class ObjCAutoreleasePoolStmt : public Stmt {
-  Stmt *SubStmt;
   SourceLocation AtLoc;
+  Stmt *SubStmt;
+
 public:
-  ObjCAutoreleasePoolStmt(SourceLocation atLoc, 
-                            Stmt *subStmt)
-  : Stmt(ObjCAutoreleasePoolStmtClass),
-    SubStmt(subStmt), AtLoc(atLoc) {}
+  ObjCAutoreleasePoolStmt(SourceLocation atLoc, Stmt *subStmt)
+      : Stmt(ObjCAutoreleasePoolStmtClass), AtLoc(atLoc), SubStmt(subStmt) {}
 
   explicit ObjCAutoreleasePoolStmt(EmptyShell Empty) :
     Stmt(ObjCAutoreleasePoolStmtClass, Empty) { }

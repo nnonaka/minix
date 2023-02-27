@@ -1,6 +1,6 @@
-# RUN: llvm-mc %s -triple=mipsel -show-encoding -mcpu=mips32r2 -mattr=micromips \
+# RUN: llvm-mc %s -triple=mipsel -show-encoding -mcpu=mips32r2 -mattr=micromips -show-inst \
 # RUN: | FileCheck -check-prefix=CHECK-EL %s
-# RUN: llvm-mc %s -triple=mips -show-encoding -mcpu=mips32r2 -mattr=micromips \
+# RUN: llvm-mc %s -triple=mips -show-encoding -mcpu=mips32r2 -mattr=micromips -show-inst \
 # RUN: | FileCheck -check-prefix=CHECK-EB %s
 # Check that the assembler can handle the documented syntax
 # for control instructions.
@@ -11,43 +11,55 @@
 #------------------------------------------------------------------------------
 # CHECK-EL:    sdbbp                      # encoding: [0x00,0x00,0x7c,0xdb]
 # CHECK-EL:    sdbbp 34                   # encoding: [0x22,0x00,0x7c,0xdb]
-# CHECK-EL:    .set push
-# CHECK-EL:    .set mips32r2
-# CHECK-EL:    rdhwr $5, $29
-# CHECK-EL:    .set pop                   # encoding: [0xbd,0x00,0x3c,0x6b]
+# CHECK-EL-NOT:    .set push
+# CHECK-EL-NOT:    .set mips32r2
+# CHECK-EL:    rdhwr $5, $29              # encoding: [0xbd,0x00,0x3c,0x6b]
+# CHECK-EL-NOT:    .set pop
 # CHECK-EL:    cache 1, 8($5)             # encoding: [0x25,0x20,0x08,0x60]
 # CHECK-EL:    pref 1, 8($5)              # encoding: [0x25,0x60,0x08,0x20]
 # CHECK-EL:    ssnop                      # encoding: [0x00,0x00,0x00,0x08]
 # CHECK-EL:    ehb                        # encoding: [0x00,0x00,0x00,0x18]
 # CHECK-EL:    pause                      # encoding: [0x00,0x00,0x00,0x28]
 # CHECK-EL:    break                      # encoding: [0x00,0x00,0x07,0x00]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} BREAK_MM
 # CHECK-EL:    break 7                    # encoding: [0x07,0x00,0x07,0x00]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} BREAK_MM
 # CHECK-EL:    break 7, 5                 # encoding: [0x07,0x00,0x47,0x01]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} BREAK_MM
 # CHECK-EL:    syscall                    # encoding: [0x00,0x00,0x7c,0x8b]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} SYSCALL_MM
 # CHECK-EL:    syscall 396                # encoding: [0x8c,0x01,0x7c,0x8b]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} SYSCALL_MM
 # CHECK-EL:    eret                       # encoding: [0x00,0x00,0x7c,0xf3]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} ERET_MM
 # CHECK-EL:    deret                      # encoding: [0x00,0x00,0x7c,0xe3]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} DERET_MM
 # CHECK-EL:    di                         # encoding: [0x00,0x00,0x7c,0x47]
-# CHECK-EL:    di                         # encoding: [0x00,0x00,0x7c,0x47]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} DI_MM
 # CHECK-EL:    di  $10                    # encoding: [0x0a,0x00,0x7c,0x47]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} DI_MM
 # CHECK-EL:    ei                         # encoding: [0x00,0x00,0x7c,0x57]
-# CHECK-EL:    ei                         # encoding: [0x00,0x00,0x7c,0x57]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} EI_MM
 # CHECK-EL:    ei  $10                    # encoding: [0x0a,0x00,0x7c,0x57]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} EI_MM
 # CHECK-EL:    wait                       # encoding: [0x00,0x00,0x7c,0x93]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} WAIT_MM
 # CHECK-EL:    wait 17                    # encoding: [0x11,0x00,0x7c,0x93]
+# CHECK-EL-NEXT:                          # <MCInst #{{[0-9]+}} WAIT_MM
 # CHECK-EL:    tlbp                       # encoding: [0x00,0x00,0x7c,0x03]
 # CHECK-EL:    tlbr                       # encoding: [0x00,0x00,0x7c,0x13]
 # CHECK-EL:    tlbwi                      # encoding: [0x00,0x00,0x7c,0x23]
 # CHECK-EL:    tlbwr                      # encoding: [0x00,0x00,0x7c,0x33]
+# CHECK-EL:    prefx 1, $3($5)            # encoding: [0x65,0x54,0xa0,0x09]
 #------------------------------------------------------------------------------
 # Big endian
 #------------------------------------------------------------------------------
 # CHECK-EB:   sdbbp                       # encoding: [0x00,0x00,0xdb,0x7c]
 # CHECK-EB:   sdbbp 34                    # encoding: [0x00,0x22,0xdb,0x7c]
-# CHECK-EB:   .set push
-# CHECK-EB:   .set mips32r2
-# CHECK-EB:   rdhwr $5, $29
-# CHECK-EB:   .set pop                    # encoding: [0x00,0xbd,0x6b,0x3c]
+# CHECK-EB-NOT:    .set push
+# CHECK-EB-NOT:    .set mips32r2
+# CHECK-EB:   rdhwr $5, $29               # encoding: [0x00,0xbd,0x6b,0x3c]
+# CHECK-EB-NOT:    .set pop
 # CHECK-EB:   cache 1, 8($5)              # encoding: [0x20,0x25,0x60,0x08]
 # CHECK-EB:   pref 1, 8($5)               # encoding: [0x60,0x25,0x20,0x08]
 # CHECK-EB:   ssnop                       # encoding: [0x00,0x00,0x08,0x00]
@@ -72,6 +84,7 @@
 # CHECK-EB:   tlbr                        # encoding: [0x00,0x00,0x13,0x7c]
 # CHECK-EB:   tlbwi                       # encoding: [0x00,0x00,0x23,0x7c]
 # CHECK-EB:   tlbwr                       # encoding: [0x00,0x00,0x33,0x7c]
+# CHECK-EB:   prefx 1, $3($5)             # encoding: [0x54,0x65,0x09,0xa0]
 
     sdbbp
     sdbbp 34
@@ -100,3 +113,5 @@
     tlbr
     tlbwi
     tlbwr
+    prefx 1, $3($5)
+
