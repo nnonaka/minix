@@ -36,7 +36,7 @@ static int schedule_process(struct schedproc * rmp, unsigned flags);
 #define DEFAULT_USER_TIME_SLICE 200
 
 /* processes created by RS are sysytem processes */
-#define is_system_proc(p)	((p)->parent == RS_PROC_NR)
+#define is_system_proc(p)	((p)->parent == RS_PROC_NR || (p)->endpoint <= LAST_SPECIAL_PROC_NR)
 
 static unsigned cpu_proc[CONFIG_MAX_CPUS];
 
@@ -53,21 +53,23 @@ static int pick_cpu(struct schedproc * proc)
 {
 #ifdef CONFIG_SMP
 	unsigned cpu, c;
-	unsigned cpu_load = (unsigned) -1;
+	unsigned cpu_load;
 	
 	if (machine.processors_count == 1)
+		return machine.bsp_id;
+	if (is_system_porc(proc))
 		return machine.bsp_id;
 
 	/* if no other cpu available, try BSP */
 	cpu = machine.bsp_id;
-	cpu_load = cpu_proc[machine.bsp_id];
+	cpu_load = 1 + cpu_proc[machine.bsp_id];
 	for (c = 0; c < machine.processors_count; c++) {
 		/* skip dead cpus */
 		if (!cpu_is_available(c))
 			continue;
 		if(!GET_BIT(proc->cpu_mask,c))
 			continue;
-		if (c != machine.bsp_id && cpu_load > cpu_proc[c]) {
+		if (c != machine.bsp_id && cpu_load >= cpu_proc[c]) {
 			cpu_load = cpu_proc[c];
 			cpu = c;
 		}

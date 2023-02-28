@@ -222,9 +222,6 @@ static void ap_finish_booting(void)
 	/* Set up sysenter/syscall. */
 	setup_sysenter_syscall();
 
-	/* Set up sysenter/syscall. */
-	setup_sysenter_syscall();
-
 	/*
 	 * Finish processor initialisation.  CPUs must be excluded from running.
 	 * lapic timer calibration locks and unlocks the BKL because of the
