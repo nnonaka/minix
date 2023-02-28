@@ -58,6 +58,7 @@ static int try_async(struct proc *caller_ptr);
 static int try_one(endpoint_t receive_e, struct proc *src_ptr,
 	struct proc *dst_ptr);
 static struct proc * pick_proc(void);
+static void enqueue_head(struct proc *rp);
 
 /* all idles share the same idle_priv structure */
 static struct priv idle_priv;
@@ -165,8 +166,7 @@ static void switch_address_space_idle(void)
 	 * when the CPU wakes up the kernel is mapped and no surprises happen.
 	 * This is only a problem if more than 1 cpus are available
 	 */
-	//if (cpuid == bsp_cpu_id)
-		switch_address_space(proc_addr(VM_PROC_NR));
+	switch_address_space(proc_addr(VM_PROC_NR));
 #endif
 }
 
@@ -303,10 +303,9 @@ void switch_to_user(void)
 	 */
 	struct proc * p;
 #ifdef CONFIG_SMP
-	int tlb_must_refresh;
-not_runnable_pick_new:
-	tlb_must_refresh = 0;
+	int tlb_must_refresh = 0;
 #endif
+
 	p = get_cpulocal_var(proc_ptr);
 	/*
 	 * if the current process is still runnable check the misc flags and let
@@ -319,9 +318,7 @@ not_runnable_pick_new:
 	 * need to pick a new one here and start from scratch. Also if the
 	 * current process wasn't runnable, we pick a new one here
 	 */
-#ifndef CONFIG_SMP
 not_runnable_pick_new:
-#endif
 	if (proc_is_preempted(p)) {
 		p->p_rts_flags &= ~RTS_PREEMPTED;
 		if (proc_is_runnable(p)) {
@@ -359,13 +356,7 @@ check_misc_flags:
 		(MF_KCALL_RESUME | MF_DELIVERMSG |
 		 MF_SC_DEFER | MF_SC_TRACE | MF_SC_ACTIVE)) {
 
-#ifdef CONFIG_SMP
-		if (!proc_is_runnable(p))
-			// something crazy happened!
-			goto not_runnable_pick_new;
-#else
 		assert(proc_is_runnable(p));
-#endif
 		if (p->p_misc_flags & MF_KCALL_RESUME) {
 			kernel_call_resume(p);
 		}
@@ -1676,7 +1667,7 @@ void enqueue(
  * process on a run queue. We have to put this process back at the fron to be
  * fair
  */
-void enqueue_head(struct proc *rp)
+static void enqueue_head(struct proc *rp)
 {
   const int q = rp->p_priority;	 		/* scheduling queue to use */
 

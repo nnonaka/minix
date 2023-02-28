@@ -42,7 +42,6 @@ void bsp_finish_booting(void)
   sprofiling = 0;      /* we're not profiling until instructed to */
 #endif /* SPROFILE */
 
-  setup_sysenter_syscall();
   cpu_identify();
 
   vm_running = 0;
@@ -104,9 +103,6 @@ void bsp_finish_booting(void)
 
   /* Kernel may no longer use bits of memory as VM will be running soon */
   kernel_may_alloc = 0;
-#ifdef CONFIG_SMP
-  wait_for_APs_to_finish_booting();
-#endif
 
   switch_to_user();
   NOT_REACHABLE;

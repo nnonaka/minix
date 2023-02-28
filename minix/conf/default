@@ -1,9 +1,9 @@
 #
 #  Minix kernel make configuration
 #
-USE_SYSDEBUG=yes
-USE_APIC=yes
+#USE_SYSDEBUG=yes
+#USE_APIC=yes
 
-CONFIG_SMP=yes
-CONFIG_MAX_CPUS=8
+#CONFIG_SMP=yes
+#CONFIG_MAX_CPUS=8
 

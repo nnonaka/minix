@@ -13,7 +13,6 @@
 #include <machine/cmos.h>
 #include <machine/bios.h>
 
-#include "kernel/kernel.h"
 #include "kernel/spinlock.h"
 #include "kernel/smp.h"
 #include "apic.h"
@@ -219,9 +218,6 @@ static void ap_finish_booting(void)
 	/* inform the world of our presence. */
 	ap_cpu_ready = cpu;
 
-	/* Set up sysenter/syscall. */
-	setup_sysenter_syscall();
-
 	/*
 	 * Finish processor initialisation.  CPUs must be excluded from running.
 	 * lapic timer calibration locks and unlocks the BKL because of the
@@ -302,7 +298,6 @@ void smp_init (void)
 	ioapic_enabled = 0;
 
 	tss_init_all();
-	setup_sysenter_syscall();
 
 	/* 
 	 * we still run on the boot stack and we cannot use cpuid as its value

@@ -219,7 +219,7 @@ struct proc {
 		rts = (rp)->p_rts_flags;				\
 		(rp)->p_rts_flags &= ~(f);				\
 		if(!rts_f_is_runnable(rts) && proc_is_runnable(rp)) {	\
-		(rp)->p_cpu_time_left > 1 ? enqueue(rp) : enqueue(rp);\
+			enqueue(rp);					\
 		}							\
 	} while(0)
 
