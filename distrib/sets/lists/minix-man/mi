@@ -2724,11 +2724,13 @@
 ./usr/man/man3/recno.3                                  minix-man
 ./usr/man/man3/refresh.3                                minix-man
 ./usr/man/man3/refuse.3                                 minix-man
+#./usr/man/man3/regasub.3                                minix-man
 ./usr/man/man3/regcomp.3                                minix-man
 ./usr/man/man3/regerror.3                               minix-man
 ./usr/man/man3/regex.3                                  minix-man
 ./usr/man/man3/regexec.3                                minix-man
 ./usr/man/man3/regfree.3                                minix-man
+#./usr/man/man3/regnsub.3                                minix-man
 ./usr/man/man3/remainder.3                              minix-man
 ./usr/man/man3/remainderf.3                             minix-man
 ./usr/man/man3/remove.3                                 minix-man
@@ -3619,6 +3621,7 @@
 ./usr/man/man9/prop_dictionary_copyin_ioctl.9           minix-man
 ./usr/man/man9/prop_dictionary_copyout_ioctl.9          minix-man
 ./usr/man/whatis.db                                     minix-man
+#./usr/share/info/flex.info                              minix-man
 ./var                                                   minix-man
 ./var/db                                                minix-man
 ./var/db/obsolete                                       minix-man

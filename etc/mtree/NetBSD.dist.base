@@ -729,6 +729,7 @@
 ./var/db/xkb
 ./var/games			uname=games gname=games mode=0775
 ./var/heimdal
+./var/log
 ./var/mail			mode=1777
 ./var/run
 ./var/run/lwresd		mode=0775 gname=named
@@ -744,6 +745,7 @@
 /set type=dir uid=0 gid=0 mode=1777
 ./tmp
 ./usr/tmp
+./var/tmp
 
 /set type=dir uid=2 gid=0 mode=755
 ./usr/tests/minix-posix

@@ -32,10 +32,12 @@ IMAGEMB=	${INSTIMAGEMB}
 SWAPMB=		0			# no swap
 OMIT_SWAPIMG=	yes			# nothing to write
 
-KERN_SET?=	kern-GENERIC
-SETS?=		modules base etc
+KERN_SET?=	minix-kernel
+SETS?=		minix-base minix-comp minix-games minix-man minix-tests tests
 
 FSTAB_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/fstab.install.in
+
+USE_MBR?=	no
 
 .if ${USE_MBR} != "no"
 DISKPROTO_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/diskproto.noswap.mbr.in
@@ -48,6 +50,9 @@ IMGDIR_EXTRA=	${RELEASEDIR}/${RELEASEMACHINEDIR}	${RELEASEMACHINEDIR}
 IMGDIR_EXCLUDE= 	-s ',./installation/cdrom.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/installimage.*,,gp'
+.if defined(MD_IMGDIR_EXCLUDE)
+IMGDIR_EXCLUDE+=	${MD_IMGDIR_EXCLUDE}
+.endif
 
 IMGBASE=        ${INSTIMGBASE}
 
@@ -62,7 +67,7 @@ INSTIMG_RELEASEDIR?=	${RELEASEMACHINEDIR}/installation/installimage
 MKDIR?=		mkdir -p
 
 install_image: check_INSTIMGBASE check_RELEASEDIR ${IMGBASE}.img.gz
-	${MKDIR} ${INSTIMG_RELEASEDIR}
+	${MKDIR} ${MKDIRPERM} ${INSTIMG_RELEASEDIR}
 	${RELEASE_INSTALL} ${IMGBASE}.img.gz ${INSTIMG_RELEASEDIR}
 	# note ${MAKESUM} will be calculated in src/etc/Makefile
 

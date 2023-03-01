@@ -29,24 +29,15 @@
 ./etc/Distfile			type=file mode=0644 optional
 ./etc/amd			type=dir  mode=0755 optional
 ./etc/apm			type=dir  mode=0755 optional
-./etc/bluetooth			type=dir  mode=0755
-./etc/bluetooth/btattach.conf	type=file mode=0644
-./etc/bluetooth/btdevctl.conf	type=file mode=0644
-./etc/bluetooth/hosts		type=file mode=0644
-./etc/bluetooth/protocols	type=file mode=0644
 ./etc/bootparams		type=file mode=0644 optional
 ./etc/bootptab			type=file mode=0644 optional
 ./etc/ccd.conf			type=file mode=0644 optional
 ./etc/cgd			type=dir  mode=0700 optional
 ./etc/cgd/cgd.conf		type=file mode=0600 optional tags=nodiff
-./etc/changelist		type=file mode=0644
 ./etc/crontab			type=file mode=0644 optional
 ./etc/csh.cshrc			type=file mode=0644
 ./etc/csh.login			type=file mode=0644
 ./etc/csh.logout		type=file mode=0644
-./etc/daily			type=file mode=0644
-./etc/daily.conf		type=file mode=0644
-./etc/daily.local		type=file mode=0644 optional
 ./etc/defaultdomain		type=file mode=0644 optional
 ./etc/defaults			type=dir  mode=0755
 ./etc/defaults/daily.conf	type=file mode=0444
@@ -62,20 +53,19 @@
 ./etc/dhcpcd.hook		type=file mode=0644 optional
 ./etc/dhcpd.conf		type=file mode=0644 optional
 ./etc/disktab			type=file mode=0644
-./etc/dm.conf			type=file mode=0644
 ./etc/dumpdates			type=file mode=0664 gname=operator optional tags=exclude
 ./etc/envsys.conf		type=file mode=0644 optional
 ./etc/ethers			type=file mode=0644 optional
 ./etc/exports			type=file mode=0644 optional
 ./etc/floppytab			type=file mode=0644
 ./etc/fstab			type=file mode=0644
-./etc/ftpchroot			type=file mode=0644
+./etc/ftpchroot			type=file mode=0644 optional
 ./etc/ftpd.conf			type=file mode=0644 optional
-./etc/ftpusers			type=file mode=0644
+./etc/ftpusers			type=file mode=0644 optional
 ./etc/ftpwelcome		type=file mode=0644 optional
 ./etc/gateways			type=file mode=0644 optional
 ./etc/gettytab			type=file mode=0644
-./etc/gpio.conf			type=file mode=0644
+./etc/gpio.conf			type=file mode=0644 optional
 ./etc/group			type=file mode=0644
 ./etc/hesiod.conf		type=file mode=0644 optional
 ./etc/hosts			type=file mode=0644
@@ -89,11 +79,8 @@
 ./etc/ipf6.conf			type=file mode=0644 optional
 ./etc/ipnat.conf		type=file mode=0644 optional
 ./etc/ipsec.conf		type=file mode=0600 optional tags=nodiff
-./etc/iscsi			type=dir  mode=0755
-./etc/iscsi/auths		type=file mode=0600 tags=nodiff
-./etc/iscsi/targets		type=file mode=0644
 ./etc/ld.so.conf		type=file mode=0644 optional
-./etc/localtime			type=link mode=0755
+./etc/localtime			type=link mode=0755 optional
 ./etc/locate.conf		type=file mode=0644 optional
 ./etc/login.conf		type=file mode=0644 optional
 ./etc/mail			type=dir  mode=0755
@@ -104,11 +91,6 @@
 ./etc/man.conf			type=file mode=0644
 ./etc/master.passwd		type=file mode=0600 tags=nodiff
 ./etc/mk.conf			type=file mode=0644 optional
-./etc/moduli			type=file mode=0444
-./etc/monthly			type=file mode=0644
-./etc/monthly.conf		type=file mode=0644
-./etc/monthly.local		type=file mode=0644 optional
-./etc/mrouted.conf		type=file mode=0644
 ./etc/mtree			type=dir  mode=0755
 ./etc/mtree/special		type=file mode=0444
 ./etc/mtree/special.local	type=file mode=0644 optional
@@ -116,42 +98,17 @@
 ./etc/mygate6			type=file mode=0644 optional
 ./etc/myname			type=file mode=0644 optional
 ./etc/named.conf		type=file mode=0644 optional
-./etc/namedb			type=dir  mode=0755
-./etc/netconfig			type=file mode=0644
+./etc/namedb			type=dir  mode=0755 optional
+./etc/netconfig			type=file mode=0644 optional
 ./etc/netgroup			type=file mode=0644 optional
 ./etc/netstart.local		type=file mode=0644 optional
-./etc/networks			type=file mode=0644
-./etc/newsyslog.conf		type=file mode=0644
-./etc/nsswitch.conf		type=file mode=0644
+./etc/networks			type=file mode=0644 optional
+./etc/newsyslog.conf		type=file mode=0644 optional
+./etc/nsswitch.conf		type=file mode=0644 optional
 ./etc/ntp.conf			type=file mode=0644 optional
 ./etc/pam.conf			type=file mode=0644 optional
-./etc/pam.d			type=dir  mode=0755
-./etc/pam.d/display_manager	type=file mode=0644
-./etc/pam.d/ftpd		type=file mode=0644
-./etc/pam.d/gdm			type=file mode=0644
-./etc/pam.d/imap		type=file mode=0644
-./etc/pam.d/kde			type=file mode=0644
-./etc/pam.d/login		type=file mode=0644
-./etc/pam.d/other		type=file mode=0644
-./etc/pam.d/passwd		type=file mode=0644
-./etc/pam.d/pop3		type=file mode=0644
-./etc/pam.d/ppp			type=file mode=0644
-./etc/pam.d/rexecd		type=file mode=0644
-./etc/pam.d/rsh			type=file mode=0644
-./etc/pam.d/sshd		type=file mode=0644
-./etc/pam.d/su			type=file mode=0644
-./etc/pam.d/system		type=file mode=0644
-./etc/pam.d/telnetd		type=file mode=0644
-./etc/pam.d/xdm			type=file mode=0644
-./etc/pam.d/xserver		type=file mode=0644
 ./etc/passwd			type=file mode=0644
 ./etc/passwd.conf		type=file mode=0644 optional
-./etc/pf.conf			type=file mode=0644
-./etc/pf.os			type=file mode=0444
-./etc/phones			type=file mode=0644
-./etc/postfix			type=dir  mode=0755 optional
-./etc/postfix/main.cf		type=file mode=0644 optional
-./etc/postfix/master.cf		type=file mode=0644 optional
 ./etc/powerd			type=dir  mode=0755 optional
 ./etc/powerd/scripts		type=dir  mode=0755 optional
 ./etc/powerd/scripts/acadapter	type=file mode=0555 optional
@@ -319,32 +276,10 @@
 ./etc/shosts.equiv		type=file mode=0600 optional tags=nodiff
 ./etc/skel			type=dir  mode=0755 optional
 ./etc/spwd.db			type=file mode=0600 tags=exclude tags=nodiff
-./etc/ssh			type=dir  mode=0755 optional
-./etc/ssh/ssh_config		type=file mode=0644 optional
-./etc/ssh/ssh_host_dsa_key	type=file mode=0600 optional tags=nodiff
-./etc/ssh/ssh_host_dsa_key.pub	type=file mode=0644 optional
-./etc/ssh/ssh_host_ecdsa_key	type=file mode=0600 optional tags=nodiff
-./etc/ssh/ssh_host_ecdsa_key.pub	type=file mode=0644 optional
-./etc/ssh/ssh_host_key		type=file mode=0600 optional tags=nodiff tags=nodiff
-./etc/ssh/ssh_host_key.pub	type=file mode=0644 optional
-./etc/ssh/ssh_host_rsa_key	type=file mode=0600 optional tags=nodiff
-./etc/ssh/ssh_host_rsa_key.pub	type=file mode=0644 optional
-./etc/ssh/ssh_known_hosts	type=file mode=0644 optional
-./etc/ssh/ssh_known_hosts2	type=file mode=0644 optional
-./etc/ssh/sshd_config		type=file mode=0644 optional
-./etc/sysctl.conf		type=file mode=0644
 ./etc/syslog.conf		type=file mode=0644
 ./etc/ttyaction			type=file mode=0644 optional
 ./etc/ttys			type=file mode=0644
 ./etc/usermgmt.conf		type=file mode=0644 optional
-./etc/weekly			type=file mode=0644
-./etc/weekly.conf		type=file mode=0644
-./etc/weekly.local		type=file mode=0644 optional
-./etc/wscons.conf		type=file mode=0644
-./etc/zfs			type=dir  mode=0755
-
-./private			type=dir mode=0755 optional
-./private/tmp			type=dir mode=0111 optional ignore
 
 ./root				type=dir  mode=0755
 ./root/.cshrc			type=file mode=0644
@@ -353,18 +288,6 @@
 ./root/.profile			type=file mode=0644
 ./root/.rhosts			type=file mode=0600 optional tags=nodiff
 ./root/.shosts			type=file mode=0600 optional tags=nodiff
-./root/.ssh			type=dir  mode=0700 optional
-./root/.ssh/authorized_keys	type=file mode=0600 optional tags=nodiff
-./root/.ssh/authorized_keys2	type=file mode=0600 optional tags=nodiff
-./root/.ssh/config		type=file mode=0644 optional
-./root/.ssh/id_dsa		type=file mode=0600 optional tags=nodiff
-./root/.ssh/id_dsa.pub		type=file mode=0644 optional
-./root/.ssh/id_rsa		type=file mode=0600 optional tags=nodiff
-./root/.ssh/id_rsa.pub		type=file mode=0644 optional
-./root/.ssh/identity		type=file mode=0600 optional tags=nodiff
-./root/.ssh/identity.pub	type=file mode=0644 optional
-./root/.ssh/known_hosts		type=file mode=0644 optional
-./root/.ssh/known_hosts2	type=file mode=0644 optional
 
 ./sbin				type=dir  mode=0755 ignore
 
@@ -381,10 +304,6 @@
 ./usr/share			type=dir  mode=0755 ignore
 
 ./var				type=dir  mode=0755
-./var/account			type=dir  mode=0755
-./var/account/acct		type=file mode=0644 optional tags=exclude
-./var/at			type=dir  mode=0755 ignore
-./var/backups			type=dir  mode=0755 ignore
 ./var/chroot			type=dir  mode=0755
 ./var/chroot/ftp-proxy		type=dir  mode=0755
 ./var/chroot/named		type=dir  mode=0755
@@ -398,11 +317,6 @@
 ./var/chroot/named/var		type=dir  mode=0755
 ./var/chroot/named/var/run	type=dir  mode=0775 gname=named
 ./var/chroot/named/var/tmp	type=dir  mode=01775 gname=named
-./var/chroot/ntpd		type=dir  mode=0755
-./var/chroot/ntpd/dev		type=dir  mode=0755
-./var/chroot/ntpd/var		type=dir  mode=0755
-./var/chroot/ntpd/var/db	type=dir  mode=0775 gname=ntpd
-./var/chroot/ntpd/var/run	type=dir  mode=0775 gname=ntpd
 ./var/chroot/pflogd		type=dir  mode=0755
 ./var/chroot/rtadvd		type=dir  mode=0755
 ./var/chroot/rtadvd/etc		type=dir  mode=0755
@@ -416,13 +330,7 @@
 ./var/cron/tabs/root		type=file mode=0600 tags=nodiff
 ./var/db			type=dir  mode=0755
 ./var/log			type=dir  mode=0755
-./var/log/authlog		type=file mode=0600 optional tags=exclude
-./var/log/lastlog		type=file mode=0664 gname=utmp tags=exclude
-./var/log/lastlogx		type=file mode=0664 gname=utmp tags=exclude
-./var/log/wtmp			type=file mode=0664 gname=utmp tags=exclude
-./var/log/wtmpx			type=file mode=0664 gname=utmp tags=exclude
 ./var/mail			type=dir  mode=1777 ignore
-./var/preserve			type=dir  mode=0755 ignore
 ./var/run			type=dir  mode=0755
 ./var/run/mdnsd			type=dir  mode=0755 gname=_mdnsd uname=_mdnsd optional
 ./var/run/utmp			type=file mode=0664 gname=utmp tags=exclude
@@ -439,5 +347,3 @@
 ./var/spool/ftp/hidden		type=dir  mode=0111 ignore optional
 ./var/spool/ftp/pub		type=dir  mode=0775 ignore optional
 ./var/spool/output		type=dir  mode=0755 ignore
-./var/yp			type=dir  mode=0755
-./var/yp/Makefile		type=file mode=0644 optional

@@ -64,6 +64,8 @@
 ./boot/minix                                            minix-base
 ./boot/minix_default                                    minix-base
 ./dev                                                   minix-base
+./dev/MAKEDEV                                           minix-base
+./dev/MAKEDEV.local                                     minix-base
 ./dev/pts                                               minix-base
 ./etc                                                   minix-base
 ./etc/X11                                               minix-base      xorg
@@ -1076,8 +1078,8 @@
 ./usr/libexec/telnetd                                   minix-base
 ./usr/libexec/virecover                                 minix-base
 ./usr/log                                               minix-base
-./usr/log/messages                                      minix-base
-./usr/log/syslog                                        minix-base
+#./usr/log/messages                                      minix-base
+#./usr/log/syslog                                        minix-base
 ./usr/pkg                                               minix-base
 ./usr/pkg/etc                                           minix-base
 ./usr/pkg/etc/rc.d                                      minix-base
@@ -3967,6 +3969,8 @@
 ./var/db/xkb                                            minix-base      xorg
 ./var/heimdal                                           minix-base      crypto
 ./var/log                                               minix-base
+./var/log/messages                                      minix-base
+./var/log/syslog                                        minix-base
 ./var/mail                                              minix-base
 ./var/run                                               minix-base
 ./var/run/lwresd                                        minix-base
