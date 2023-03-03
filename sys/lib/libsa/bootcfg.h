@@ -1,4 +1,4 @@
-/*	$NetBSD: bootcfg.h,v 1.1 2014/06/28 09:16:18 rtr Exp $	*/
+/*	$NetBSD: bootcfg.h,v 1.3 2019/03/31 20:08:45 christos Exp $	*/
 
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
@@ -48,9 +48,10 @@ struct bootcfg_def {
 	int timeout;		 		/* Timeout in seconds */
 	int menuformat;				/* Letters instead of numbers */
 	int clear;				/* Clear the screen? */
-} extern bootcfg_info;
+};
+extern struct bootcfg_def bootcfg_info;
 
-void perform_bootcfg(const char *, bootcfg_command, const off_t);
+int perform_bootcfg(const char *, bootcfg_command, const off_t);
 void bootcfg_do_noop(const char *, char *);
 
 #endif /* !_BOOTCFG_H */
