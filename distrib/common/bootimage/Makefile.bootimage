@@ -191,8 +191,8 @@ FATSECTORS!=	expr ${FATMB} \* 1024 \* 1024 / 512 || true
 LABELSECTORS?=	0
 .else
 #LABELSECTORS?=	63	# historical
-#LABELSECTORS?=	32	# 16KB aligned
-LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
+LABELSECTORS?=	32	# 16KB aligned
+#LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
 .endif
 
 FSSECTORS!=	expr ${IMAGESECTORS} - ${SWAPSECTORS} - ${LABELSECTORS} \
@@ -246,13 +246,8 @@ SETS_DIR?=	${RELEASEDIR}/${RELEASEMACHINEDIR}/binary/sets
 FSTAB_IN?=	${DISTRIBDIR}/common/bootimage/fstab.in
 SPEC_IN?=	${DISTRIBDIR}/common/bootimage/spec.in
 
-.if !defined(__MINIX)
 IMGMAKEFSOPTIONS?=	-o bsize=16384,fsize=2048,density=8192
 FATMAKEFSOPTIONS?=	-o fat_type=16
-.else
-IMGMAKEFSOPTIONS?=	-t mfs
-FATMAKEFSOPTIONS?=	-o fat_type=16
-.endif # !defined(__MINIX)
 
 WORKDIR?=       work
 WORKSPEC?=      work.spec
@@ -260,6 +255,13 @@ WORKFSTAB?=	work.fstab
 WORKRCCONF?=	work.rc.conf
 WORKFS?=        work.rootfs
 TARGETFS?=      imgroot.fs
+
+.if defined(__MINIX)
+TOOL_MKFSMFS=	${TOOLDIR}/bin/${_TOOL_PREFIX}mkfs.mfs
+TOOL_TOPROTO=	${TOOLDIR}/bin/${_TOOL_PREFIX}toproto
+WORKPROTO=		work.proto
+WRKMTREE=		work.mtree
+.endif # defined(__MINIX)
 
 CLEANFILES+=	${WORKSPEC} ${WORKFSTAB} ${WORKRCCONF} ${WORKFS}
 CLEANFILES+=	${TARGETFS}
@@ -316,9 +318,16 @@ ${WORKFSTAB}:
 .  if ${SWAPSECTORS} != 0
 	${TOOL_SED} < ${FSTAB_IN} > ${WORKFSTAB}
 .  else
+.	if !defined(__MINIX)
 	${TOOL_SED}							\
 	    -e "/ROOT.b/d"						\
 	    < ${FSTAB_IN} > ${WORKFSTAB}
+.   else
+	${TOOL_SED}							\
+	    -e "s/ROOT.a/\/dev\/c0d0p0/"			\
+	    -e "/ROOT.b/d"						\
+	    < ${FSTAB_IN} > ${WORKFSTAB}
+.	endif
 .  endif
 .endif
 
@@ -408,13 +417,28 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	@echo Creating rootfs...
 	# XXX /var/spool/ftp/hidden is unreadable
 	${CHMOD} +r ${WORKDIR}/var/spool/ftp/hidden
+.if !defined(__MINIX)
 	${TOOL_MAKEFS}  -m ${FSSIZE}			\
 	    -B ${TARGET_ENDIANNESS}					\
 	    -F ${WORKSPEC} -N ${WORKDIR}/etc				\
 	    ${MAKEFS_TIMESTAMP}						\
 	    ${IMGMAKEFSOPTIONS}						\
 	    ${WORKFS} ${WORKDIR}
-.if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} == "no"
+.else
+	@echo Creating Minix rootfs...
+	@echo ${FSSIZE}
+	${RM} -f ${WRKMTREE}
+	${RM} -f ${WORKFS}
+	${TOOL_MTREE} -C -S -K device -f ${WORKSPEC} -N ${WORKDIR}/etc | \
+		grep -v '/boot/minix/\.temp' > ${WRKMTREE}
+	${TOOL_TOPROTO} -i ${WRKMTREE} -b ${WORKDIR} -o ${WORKPROTO}
+	dd if=/dev/zero bs=${FSSIZE} count=1 > ${WORKFS}
+	${TOOL_MKFSMFS} -d \
+		${WORKFS} \
+		${WORKPROTO}
+.endif #!defined(__MINIX)
+.if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} == "no" \
+		&& !defined(__MINIX)
 	${TOOL_INSTALLBOOT} -v -m ${MACHINE} ${INSTALLBOOTOPTIONS} ${WORKFS} \
 	    ${WORKDIR}/usr/mdec/${PRIMARY_BOOT} ${SECONDARY_BOOT_ARG}
 .endif

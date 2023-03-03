@@ -113,6 +113,7 @@ SUBDIR+=  gencat \
 .endif
 
 SUBDIR+= cat join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= grep
 
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR += .WAIT texinfo \
@@ -125,7 +126,7 @@ SUBDIR += .WAIT texinfo \
 		makefs .WAIT mkcsmapper mkesdb mklocale \
 		.WAIT \
 		.WAIT \
-		.WAIT \
+		.WAIT fdisk \
 		.WAIT installboot \
 		pwd_mkdb strfile zic
 .endif
@@ -189,7 +190,7 @@ SUBDIR+=	macppc-fixcoff
 SUBDIR+=	powerpc-mkbootimage
 .endif
 
-.if ${MACHINE_ARCH} == "m68k"
+.if ${MACHINE_CPU} == "m68k"
 SUBDIR+=	m68k-elf2aout
 .endif
 

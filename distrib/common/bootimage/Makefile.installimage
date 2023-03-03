@@ -30,14 +30,11 @@ check_INSTIMGBASE: .PHONY .NOTMAIN
 IMAGEMB=	${INSTIMAGEMB}
 .endif
 SWAPMB=		0			# no swap
-OMIT_SWAPIMG=	yes			# nothing to write
 
 KERN_SET?=	minix-kernel
 SETS?=		minix-base minix-comp minix-games minix-man minix-tests tests
 
 FSTAB_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/fstab.install.in
-
-USE_MBR?=	no
 
 .if ${USE_MBR} != "no"
 DISKPROTO_IN?=	${NETBSDSRCDIR}/distrib/common/bootimage/diskproto.noswap.mbr.in
@@ -50,9 +47,6 @@ IMGDIR_EXTRA=	${RELEASEDIR}/${RELEASEMACHINEDIR}	${RELEASEMACHINEDIR}
 IMGDIR_EXCLUDE= 	-s ',./installation/cdrom.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
 IMGDIR_EXCLUDE+=	-s ',./installation/installimage.*,,gp'
-.if defined(MD_IMGDIR_EXCLUDE)
-IMGDIR_EXCLUDE+=	${MD_IMGDIR_EXCLUDE}
-.endif
 
 IMGBASE=        ${INSTIMGBASE}
 

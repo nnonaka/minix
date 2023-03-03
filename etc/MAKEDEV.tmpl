@@ -501,7 +501,6 @@ setup()
 	g_gpio="%gid__gpio%"
 	g_kmem="%gid_kmem%"
 	g_ntpd="%gid_ntpd%"
-	g_nvmm="%gid_nvmm%"
 	g_operator="%gid_operator%"
 	g_tty="%gid_tty%"
 	g_wheel="%gid_wheel%"
@@ -810,7 +809,6 @@ case $i in
 %MD_DEVICES%
 
 all)
-	makedev all_md
 	makedev console
 	makedev input
 	makedev c0d0 c0d0p0 c0d0p0s0 c0d1 c0d1p0 c0d1p0s0
@@ -834,7 +832,9 @@ all)
 	makedev eepromb3s54 eepromb3s55 eepromb3s56 eepromb3s57
 	makedev fb0 fbd filter hello
 	makedev i2c-1 i2c-2 i2c-3
-	makedev klog ptmx random
+	makedev klog
+	makedev ptmx
+	makedev random
 	makedev sht21b1s40 sht21b2s40 sht21b3s40
 	makedev tsl2550b1s39 tsl2550b2s39 tsl2550b3s39
 	makedev ttyp0 ttyp1 ttyp2 ttyp3 ttyp4 ttyp5 ttyp6 ttyp7 ttyp8 ttyp9
@@ -1052,13 +1052,13 @@ tty[p-s][0-9a-f]|pty[p-s][0-9a-f])
 	minor_tty=$(($group * 16 + $pty + 128))
 	minor_pty=$(($group * 16 + $pty + 192))
 
-	mkdev tty${dev} c 9 ${minor_tty}  $g_tty 666
-	mkdev pty${dev} c 9 ${minor_pty}  $g_tty 666
+	mkdev tty${dev} c 9 ${minor_tty}  666 $g_tty
+	mkdev pty${dev} c 9 ${minor_pty}  666 $g_tty
 	;;
 
 ttyc[1-7])
 	unit=${i#ttyc}
-	mkdev ttyc$unit c %cons_chr% $unit $g_tty
+	mkdev ttyc$unit c %cons_chr% $unit 600 $g_tty
 	;;
 
 opty)
@@ -1209,8 +1209,8 @@ apm)
 	;;
 
 random|urandom)
-	mkdev random	c %rnd_chr% 0 644
-	mkdev urandom	c %rnd_chr% 0 644
+	mkdev random	c %random_chr% 0 644
+	mkdev urandom	c %random_chr% 0 644
 	;;
 
 
@@ -1227,16 +1227,10 @@ panel)
 	;;
 
 ipty)
-	mkdev ttyp0 c %pts_chr% 0 666
-	mkdev ttyp1 c %pts_chr% 1 666
-	mkdev ptyp0 c %ptc_chr% 0 666
-	mkdev ptyp1 c %ptc_chr% 1 666
 	;;
 
 ptmx)
-	makedir pts 755
-	mkdev ptmx c %ptm_chr% 0 666
-	#mkdev ptm c %ptm_chr% 1 666
+	mkdev ptmx c %ptmx_chr% 0 666
 	;;
 
 mmem[0-9]*)
