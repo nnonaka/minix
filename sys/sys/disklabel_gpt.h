@@ -1,4 +1,4 @@
-/*	$NetBSD: disklabel_gpt.h,v 1.12 2013/11/24 08:17:50 jnemeth Exp $	*/
+/*	$NetBSD: disklabel_gpt.h,v 1.13 2018/11/06 04:04:34 mrg Exp $	*/
 
 /*
  * Copyright (c) 2002 Marcel Moolenaar
