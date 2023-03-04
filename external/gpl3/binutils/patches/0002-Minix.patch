@@ -1,0 +1,11 @@
+diff -rNU3 a/bfd/config.bfd b/bfd/config.bfd
+--- a/bfd/config.bfd	2023-03-04 15:50:43.569752055 +0900
++++ b/bfd/config.bfd	2023-03-04 13:29:44.928927000 +0900
+@@ -623,6 +623,7 @@
+     ;;
+   i[3-7]86-*-minix)
+     targ_defvec=i386_elf32_minix_vec
++    targ_selvecs="iamcu_elf32_vec i386_coff_vec i386_pei_vec i386_aout_bsd_vec i386_aout_nbsd_vec"
+     ;;
+   i[3-7]86-*-netbsdelf* | i[3-7]86-*-netbsd*-gnu* | i[3-7]86-*-knetbsd*-gnu)
+     targ_defvec=i386_elf32_vec
