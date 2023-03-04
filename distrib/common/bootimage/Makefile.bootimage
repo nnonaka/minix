@@ -191,8 +191,8 @@ FATSECTORS!=	expr ${FATMB} \* 1024 \* 1024 / 512 || true
 LABELSECTORS?=	0
 .else
 #LABELSECTORS?=	63	# historical
-LABELSECTORS?=	32	# 16KB aligned
-#LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
+#LABELSECTORS?=	32	# 16KB aligned
+LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
 .endif
 
 FSSECTORS!=	expr ${IMAGESECTORS} - ${SWAPSECTORS} - ${LABELSECTORS} \
