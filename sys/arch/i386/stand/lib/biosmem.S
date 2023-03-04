@@ -1,4 +1,4 @@
-/*	$NetBSD: biosmem.S,v 1.9 2011/06/16 13:27:59 joerg Exp $	*/
+/*	$NetBSD: biosmem.S,v 1.10 2016/12/04 08:21:08 maxv Exp $	*/
 
 /*
  * Copyright (c) 1996
