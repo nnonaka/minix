@@ -418,7 +418,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	# XXX /var/spool/ftp/hidden is unreadable
 	${CHMOD} +r ${WORKDIR}/var/spool/ftp/hidden
 .if !defined(__MINIX)
-	${TOOL_MAKEFS}  -m ${FSSIZE}			\
+	${TOOL_MAKEFS} -M ${FSSIZE} -m ${FSSIZE}			\
 	    -B ${TARGET_ENDIANNESS}					\
 	    -F ${WORKSPEC} -N ${WORKDIR}/etc				\
 	    ${MAKEFS_TIMESTAMP}						\
@@ -502,6 +502,11 @@ ${WORKEFI}: ${TARGETFS}
 .for f in ${EFIBOOT}
 	${INSTALL} ${COPY} -m 0644 ${f} ${EFIWORKDIR}/EFI/boot/`basename ${f}`
 .endfor
+.if defined(__MINIX)
+	@echo copying boot.cfg... 
+	@${MKDIR} ${MKDIRPERM} ${EFIWORKDIR}/EFI/NetBSD
+	cp ${WORKDIR}/boot.cfg ${EFIWORKDIR}/EFI/NetBSD
+.endif
 	${RM} -f ${WORKEFI}
 	${TOOL_MAKEFS} -M ${EFIMB}m -m ${EFIMB}m			\
 	    -B ${TARGET_ENDIANNESS}					\
@@ -615,7 +620,6 @@ ${IMGBASE}.img:	${TARGET_BLOCKS}
 .endif
 .endif
 	mv ${WORKIMG} ${.TARGET}
-
 
 CLEANFILES+=	${IMGBASE}.img.gz ${IMGBASE}.img.gz.tmp
 
