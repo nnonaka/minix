@@ -43,6 +43,12 @@
 #define MULTIBOOT_HEADER_HAS_VBE	0x00000004
 #define MULTIBOOT_HEADER_HAS_ADDR	0x00010000
 
+#if defined(_LOCORE) || defined(__ASSEMBLY__)
+#define MULTIBOOT2_HEADER_MAGIC		0xe85250d6
+#define MULTIBOOT2_BOOTLOADER_MAGIC	0x36d76289
+#define MULTIBOOT2_ARCHITECTURE_I386	0
+#endif
+
 #if defined(__minix) && !defined(__ASSEMBLY__) && (defined(_MINIX_SYSTEM) || defined(_STANDALONE))
 
 #if !defined(_LOCORE)
@@ -233,16 +239,16 @@ struct multiboot_module {
 #if defined(__minix)
 
 #ifndef __ASSEMBLY__
-typedef struct multiboot_info multiboot_info_t;
-typedef struct multiboot_module multiboot_module_t;
-typedef struct multiboot_mmap multiboot_memory_map_t;
+//typedef struct multiboot_info multiboot_info_t;
+//typedef struct multiboot_module multiboot_module_t;
+//typedef struct multiboot_mmap multiboot_memory_map_t;
 #endif
 
 #define MULTIBOOT_MEMORY_AVAILABLE              1
 #define MULTIBOOT_MAX_MODS     20
 
-#define mod_start mmo_start
-#define mod_end mmo_end
+//#define mod_start mmo_start
+//#define mod_end mmo_end
 
 #define mmap_addr mi_mmap_addr
 #define mmap_length mi_mmap_length
