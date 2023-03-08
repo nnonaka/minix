@@ -94,7 +94,11 @@ typedef unsigned short		multiboot_uint16_t;
 typedef unsigned int		multiboot_uint32_t;
 typedef unsigned long long	multiboot_uint64_t;
 
+#if !defined(__MINIX_MULTIBOOT2)
 struct multiboot_header
+#else
+struct multiboot2_header
+#endif /*!defined(__MINIX_MULTIBOOT2) */
 {
   /* Must be MULTIBOOT_MAGIC - see above.  */
   multiboot_uint32_t magic;
@@ -198,7 +202,12 @@ struct multiboot_mmap_entry
   multiboot_uint32_t type;
   multiboot_uint32_t zero;
 };
+#if !defined(__MINIX_MULTIBOOT2)
 typedef struct multiboot_mmap_entry multiboot_memory_map_t;
+#else
+typedef struct multiboot_mmap_entry multiboot2_memory_map_t;
+#endif /*!defined(__MINIX_MULTIBOOT2) */
+
 
 struct multiboot_tag
 {
