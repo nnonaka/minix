@@ -436,5 +436,5 @@ get_cpu_ticks(unsigned int cpu, uint64_t ticks[CPUSTATES])
 
 	/* TODO: make this inter-CPU safe! */
 	for (i = 0; i < CPUSTATES; i++)
-		ticks[i] = tsc_per_state[cpu][i] / tsc_per_tick[cpu];
+		ticks[i] = tsc_per_tick[cpu] ? tsc_per_state[cpu][i] / tsc_per_tick[cpu] : 0;
 }

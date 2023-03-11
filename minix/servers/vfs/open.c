@@ -679,7 +679,8 @@ int do_close(void)
   fd = job_m_in.m_lc_vfs_close.fd;
   nblock = job_m_in.m_lc_vfs_close.nblock;
 
-  return close_fd(fp, fd, !nblock /*may_suspend*/);
+//  return close_fd(fp, fd, !nblock /*may_suspend*/);
+  return close_fd(fp, fd, 0);
 }
 
 
