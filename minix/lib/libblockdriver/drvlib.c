@@ -146,6 +146,7 @@ const struct uuid GET_linux_swap = GPT_ENT_TYPE_LINUX_SWAP;
 const struct uuid GET_linux_lvm = GPT_ENT_TYPE_LINUX_LVM;
 const struct uuid GET_apple_hfs = GPT_ENT_TYPE_APPLE_HFS;
 const struct uuid GET_apple_ufs = GPT_ENT_TYPE_APPLE_UFS;
+const struct uuid GET_minix_mfs = GPT_ENT_TYPE_MINIX_MFS;
 const struct uuid GET_bios = GPT_ENT_TYPE_BIOS;
 
 const struct gpt_part gpt_parts[] = {
@@ -172,6 +173,7 @@ const struct gpt_part gpt_parts[] = {
 	{ &GET_linux_lvm,	"Linux LVM" },
 	{ &GET_apple_hfs,	"Apple HFS" },
 	{ &GET_apple_ufs,	"Apple UFS" },
+	{ &GET_minix_mfs,	"Minix MFS" },
 	{ &GET_bios,		"BIOS Boot (GRUB)" },
 };
 
@@ -508,6 +510,8 @@ check_gpt(struct blockdriver *bdp, int device, struct biosdisk_partition *part, 
 					part[j].fstype = FS_CCD;
 				else if (guid_is_equal(u, &GET_nbsd_cgd))
 					part[j].fstype = FS_CGD;
+				else if (guid_is_equal(u, &GET_minix_mfs))
+					part[j].fstype = FS_MINIXFS3;
 				else
 					part[j].fstype = FS_OTHER;
 				for (int k = 0;
