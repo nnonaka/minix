@@ -30,6 +30,7 @@ struct kmessages kmessages;
 //phys_bytes vir2phys(void *addr) { return (phys_bytes) addr; } 
 
 /* mb_utils.c uses this; we can reach it directly */
+extern char *video_mem;
 //char *video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
 
 /* String length used for mb_itoa */
@@ -149,6 +150,8 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 		}
 	}
 	
+	video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
+
 	/* Set various bits of info for the higher-level kernel. */
 	cbi->mem_high_phys = 0;
 	cbi->user_sp = (vir_bytes) &_kern_vir_base;
