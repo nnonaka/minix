@@ -97,7 +97,7 @@ static int get_part_table(struct blockdriver *bdp, int device,
 
 static void sort(struct part_entry *table);
 
-static int biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, daddr_t size, u8_t *tmp_buf);
+static void biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, daddr_t size, u8_t *tmp_buf);
 
 
 #define BIOSDISK_PART_NAME_LEN 36
