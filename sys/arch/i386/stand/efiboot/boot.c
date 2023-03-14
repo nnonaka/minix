@@ -66,6 +66,12 @@ static const char * const names[][2] = {
 #define	DEFAULT_FS	"mfs"
 #endif
 
+#if !defined(__minix)
+#define	DEFAULT_FS	"ufs"
+#else
+#define	DEFAULT_FS	"mfs"
+#endif
+
 void	command_help(char *);
 void	command_quit(char *);
 void	command_boot(char *);
@@ -247,8 +253,8 @@ sprint_bootsel(const char *filename)
 
 	if (parsebootfile(filename, &fsname, &devname, &unit,
 			  &partition, &file) == 0) {
-		snprintf(buf, sizeof(buf), "%s:%s", snprint_bootdev(buf,
-		    sizeof(buf), devname, unit, partition), file);
+		snprintf(buf, sizeof(buf), "%s:%s, fs=%s", snprint_bootdev(buf,
+		    sizeof(buf), devname, unit, partition), file, fsname);
 		return buf;
 	}
 	return "(invalid)";
