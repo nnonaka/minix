@@ -87,9 +87,7 @@ static const struct {
 	{ GPT_ENT_TYPE_NETBSD_RAIDFRAME, "raid",
 	    "NetBSD RAIDFrame component" },
 	{ GPT_ENT_TYPE_NETBSD_SWAP, "swap", "NetBSD swap" },
-#if defined(__minix)
 	{ GPT_ENT_TYPE_MINIX_MFS, "mfs", "MINIX mfs" },
-#endif /* defined(__minix)) */
 	{ GPT_ENT_TYPE_VMWARE_VMKCORE, "vmcore", "VMware VMkernel core dump" },
 	{ GPT_ENT_TYPE_VMWARE_VMFS, "vmfs", "VMware VMFS" },
 	{ GPT_ENT_TYPE_VMWARE_RESERVED, "vmresered", "VMware reserved" },
