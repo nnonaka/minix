@@ -60,6 +60,12 @@ static const char * const names[][2] = {
 #define	EFIBOOTCFG_FILENAME	"esp:/EFI/NetBSD/boot.cfg"
 #endif
 
+#if !defined(__minix)
+#define	DEFAULT_FS	"ufs"
+#else
+#define	DEFAULT_FS	"mfs"
+#endif
+
 void	command_help(char *);
 void	command_quit(char *);
 void	command_boot(char *);
@@ -156,7 +162,7 @@ parsebootfile(const char *fname, char **fsname, char **devname, int *unit,
 
 		if (strstr(fname, "NAME=") == fname) {
 			strlcpy(savedevname, fname, devlen + 1);
-			*fsname = "ufs";
+			*fsname = DEFAULT_FS;
 			*devname = savedevname;
 			*unit = -1;
 			*partition = -1;
@@ -199,7 +205,7 @@ parsebootfile(const char *fname, char **fsname, char **devname, int *unit,
 			*fsname = (char *)nf->name;
 		else
 #endif
-		*fsname = "ufs";
+		*fsname = DEFAULT_FS;
 		*devname = savedevname;
 		*unit = u;
 		*partition = p;
@@ -241,8 +247,8 @@ sprint_bootsel(const char *filename)
 
 	if (parsebootfile(filename, &fsname, &devname, &unit,
 			  &partition, &file) == 0) {
-		snprintf(buf, sizeof(buf), "%s:%s", snprint_bootdev(buf,
-		    sizeof(buf), devname, unit, partition), file);
+		snprintf(buf, sizeof(buf), "%s:%s, fs=%s", snprint_bootdev(buf,
+		    sizeof(buf), devname, unit, partition), file, fsname);
 		return buf;
 	}
 	return "(invalid)";
@@ -309,7 +315,7 @@ boot(void)
 		default_fsname = (char *)nf->name;
 	else
 #endif
-	default_fsname = "ufs";
+	default_fsname = DEFAULT_FS;
 
 	if (!(boot_params.bp_flags & X86_BP_FLAGS_NOBOOTCONF)) {
 #ifdef EFIBOOTCFG_FILENAME
