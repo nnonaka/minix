@@ -97,7 +97,7 @@ static int get_part_table(struct blockdriver *bdp, int device,
 
 static void sort(struct part_entry *table);
 
-static int biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, daddr_t size, u8_t *tmp_buf);
+static void biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, daddr_t size, u8_t *tmp_buf);
 
 
 #define BIOSDISK_PART_NAME_LEN 36
@@ -419,9 +419,9 @@ readsects(struct blockdriver *bdp, int device, daddr_t dblk, int num, u8_t *tmp_
   r = (*bdp->bdr_transfer)(device, FALSE /*do_write*/, position, SELF,
 	&iovec1, 1, BDEV_NOFLAGS);
   if (r != CD_SECTOR_SIZE) {
-	return 0;
+	return -1;
   }
-  return 1;
+  return 0;
 }
 
 bool
@@ -453,10 +453,8 @@ check_gpt(struct blockdriver *bdp, int device, struct biosdisk_partition *part, 
 
 	/* read in gpt_hdr sector */
 	if (readsects(bdp, device, sector, 1, tmp_buf)) {
-#ifdef DISK_DEBUG
-		printf("Error reading GPT header at %"PRId64"\n", sector);
-#endif
-		return EIO;
+		panic("Error reading GPT header.");
+		return -1;
 	}
 
 	memcpy(&gpth, tmp_buf, sizeof(gpth));
@@ -529,9 +527,7 @@ check_gpt(struct blockdriver *bdp, int device, struct biosdisk_partition *part, 
 	}
 
 	if (crc != gpth.hdr_crc_table) {
-#ifdef DISK_DEBUG	
-		printf("GPT table CRC invalid\n");
-#endif
+		panic("GPT table CRC invalid\n");
 		return -1;
 	}
 
@@ -578,30 +574,32 @@ read_gpt(struct blockdriver *bdp, int device, struct biosdisk_partition *part, d
 	return 0;
 }
 
-
-static int
+/*
+ * TODO: support more than 4 gpt partition.
+ */
+static void
 biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, daddr_t size, u8_t *tmp_buf)
 {
 	struct biosdisk_partition gpt_partitions[BIOSDISKNPART];
 	
-  struct device *dv;
+    struct device *dv;
 	struct biosdisk_partition *part;
 	int i;
 
 	/* Look for netbsd partition that is the dos boot one */
 
 	if (read_gpt(bdp, device, gpt_partitions, offset, size, tmp_buf)) {
-		return false;
+		return;
 	}
 	
 	/* Find an array of devices. */
-    if ((dv = (*bdp->bdr_part)(device)) == NULL) return false;
+    if ((dv = (*bdp->bdr_part)(device)) == NULL) return;
 
-  /* Set the geometry of the partitions from the partition table. */
-  part = gpt_partitions;
-  for (i = 0; i < NR_PARTITIONS; i++, dv++) {
-	dv->dv_base = part[i].offset * SECTOR_SIZE;
-	dv->dv_size = part[i].size * SECTOR_SIZE;
-  }
-  return true;
+    /* Set the geometry of the partitions from the partition table. */
+    part = gpt_partitions;
+    for (i = 0; i < NR_PARTITIONS; i++, dv++) {
+    	dv->dv_base = part[i].offset * SECTOR_SIZE;
+		dv->dv_size = part[i].size * SECTOR_SIZE;
+		dv->fstype = part[i].fstype;
+    }
 }
