@@ -72,6 +72,12 @@ static const char * const names[][2] = {
 #define	DEFAULT_FS	"mfs"
 #endif
 
+#if !defined(__minix)
+#define	DEFAULT_FS	"ufs"
+#else
+#define	DEFAULT_FS	"mfs"
+#endif
+
 void	command_help(char *);
 void	command_quit(char *);
 void	command_boot(char *);
