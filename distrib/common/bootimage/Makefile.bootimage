@@ -508,8 +508,8 @@ ${WORKEFI}: ${TARGETFS}
 .endfor
 .if defined(__MINIX)
 	@echo copying boot.cfg... 
-	@${MKDIR} ${MKDIRPERM} ${EFIWORKDIR}/EFI/NetBSD
-	cp boot.cfg ${EFIWORKDIR}/EFI/NetBSD
+	@${MKDIR} ${MKDIRPERM} ${EFIWORKDIR}/EFI/Minix
+	cp boot.cfg ${EFIWORKDIR}/EFI/Minix
 .endif
 	${RM} -f ${WORKEFI}
 	${TOOL_MAKEFS} -M ${EFIMB}m -m ${EFIMB}m			\
