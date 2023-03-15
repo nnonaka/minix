@@ -1,4 +1,4 @@
-/*	$NetBSD: libkern.h,v 1.121 2015/08/30 07:55:45 uebayasi Exp $	*/
+/*	$NetBSD: libkern.h,v 1.130 2018/09/03 16:29:35 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -36,6 +36,7 @@
 
 #ifdef _KERNEL_OPT
 #include "opt_diagnostic.h"
+#include "opt_kasan.h"
 #endif
 
 #include <sys/types.h>
@@ -49,8 +50,8 @@
 
 LIBKERN_INLINE int imax(int, int) __unused;
 LIBKERN_INLINE int imin(int, int) __unused;
-LIBKERN_INLINE u_int max(u_int, u_int) __unused;
-LIBKERN_INLINE u_int min(u_int, u_int) __unused;
+LIBKERN_INLINE u_int uimax(u_int, u_int) __unused;
+LIBKERN_INLINE u_int uimin(u_int, u_int) __unused;
 LIBKERN_INLINE long lmax(long, long) __unused;
 LIBKERN_INLINE long lmin(long, long) __unused;
 LIBKERN_INLINE u_long ulmax(u_long, u_long) __unused;
@@ -97,12 +98,12 @@ lmin(long a, long b)
 	return (a < b ? a : b);
 }
 LIBKERN_INLINE u_int
-max(u_int a, u_int b)
+uimax(u_int a, u_int b)
 {
 	return (a > b ? a : b);
 }
 LIBKERN_INLINE u_int
-min(u_int a, u_int b)
+uimin(u_int a, u_int b)
 {
 	return (a < b ? a : b);
 }
@@ -265,8 +266,14 @@ tolower(int ch)
 #define	KASSERTMSG(e, msg, ...)	/* NOTHING */
 #define	KASSERT(e)		/* NOTHING */
 #else /* !lint */
-#define	KASSERTMSG(e, msg, ...)	((void)0)
-#define	KASSERT(e)		((void)0)
+/*
+ * Make sure the expression compiles, but don't evaluate any of it.  We
+ * use sizeof to inhibit evaluation, and cast to long so the expression
+ * can be integer- or pointer-valued without bringing in other header
+ * files.
+ */
+#define	KASSERTMSG(e, msg, ...)	((void)sizeof((long)(e)))
+#define	KASSERT(e)		((void)sizeof((long)(e)))
 #endif /* !lint */
 #else /* DIAGNOSTIC */
 #define _DIAGASSERT(a)	assert(a)
@@ -337,19 +344,26 @@ tolower(int ch)
  */
 #ifdef __COVERITY__
 #define __validate_container_of(PTR, TYPE, FIELD) 0
+#define __validate_const_container_of(PTR, TYPE, FIELD) 0
 #else
 #define __validate_container_of(PTR, TYPE, FIELD)			\
     (0 * sizeof((PTR) - &((TYPE *)(((char *)(PTR)) -			\
+    offsetof(TYPE, FIELD)))->FIELD))
+#define __validate_const_container_of(PTR, TYPE, FIELD)			\
+    (0 * sizeof((PTR) - &((const TYPE *)(((const char *)(PTR)) -	\
     offsetof(TYPE, FIELD)))->FIELD))
 #endif
 
 #define	container_of(PTR, TYPE, FIELD)					\
     ((TYPE *)(((char *)(PTR)) - offsetof(TYPE, FIELD))			\
 	+ __validate_container_of(PTR, TYPE, FIELD))
+#define	const_container_of(PTR, TYPE, FIELD)				\
+    ((const TYPE *)(((const char *)(PTR)) - offsetof(TYPE, FIELD))	\
+	+ __validate_const_container_of(PTR, TYPE, FIELD))
 
 #define	MTPRNG_RLEN		624
 struct mtprng_state {
-	unsigned int mt_idx; 
+	unsigned int mt_idx;
 	uint32_t mt_elem[MTPRNG_RLEN];
 	uint32_t mt_count;
 	uint32_t mt_sparse[3];
@@ -359,12 +373,20 @@ struct mtprng_state {
 void	*memcpy(void *, const void *, size_t);
 int	 memcmp(const void *, const void *, size_t);
 void	*memset(void *, int, size_t);
+void	*memmem(const void *, size_t, const void *, size_t);
 #if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE)
+#if defined(_KERNEL) && defined(KASAN)
+void	*kasan_memset(void *, int, size_t);
+int	 kasan_memcmp(const void *, const void *, size_t);
+void	*kasan_memcpy(void *, const void *, size_t);
+#define	memcpy(d, s, l)		kasan_memcpy(d, s, l)
+#define	memcmp(a, b, l)		kasan_memcmp(a, b, l)
+#define	memset(d, v, l)		kasan_memset(d, v, l)
+#else
 #define	memcpy(d, s, l)		__builtin_memcpy(d, s, l)
 #define	memcmp(a, b, l)		__builtin_memcmp(a, b, l)
-#endif
-#if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE)
 #define	memset(d, v, l)		__builtin_memset(d, v, l)
+#endif /* _KERNEL && KASAN */
 #endif
 
 char	*strcpy(char *, const char *);
@@ -373,9 +395,18 @@ size_t	 strlen(const char *);
 size_t	 strnlen(const char *, size_t);
 char	*strsep(char **, const char *);
 #if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE)
+#if defined(_KERNEL) && defined(KASAN)
+char	*kasan_strcpy(char *, const char *);
+int	 kasan_strcmp(const char *, const char *);
+size_t	 kasan_strlen(const char *);
+#define	strcpy(d, s)		kasan_strcpy(d, s)
+#define	strcmp(a, b)		kasan_strcmp(a, b)
+#define	strlen(a)		kasan_strlen(a)
+#else
 #define	strcpy(d, s)		__builtin_strcpy(d, s)
 #define	strcmp(a, b)		__builtin_strcmp(a, b)
 #define	strlen(a)		__builtin_strlen(a)
+#endif /* _KERNEL && KASAN */
 #endif
 
 /* Functions for which we always use built-ins. */
@@ -441,6 +472,8 @@ intmax_t strtoi(const char * __restrict, char ** __restrict, int, intmax_t,
     intmax_t, int *);
 uintmax_t strtou(const char * __restrict, char ** __restrict, int, uintmax_t,
     uintmax_t, int *);
+void	 hexdump(void (*)(const char *, ...) __printflike(1, 2),
+    const char *, const void *, size_t);
 
 int	 snprintb(char *, size_t, const char *, uint64_t);
 int	 snprintb_m(char *, size_t, const char *, uint64_t, size_t);
@@ -464,6 +497,10 @@ unsigned int	popcount64(uint64_t) __constfunc;
 
 void	*explicit_memset(void *, int, size_t);
 int	consttime_memequal(const void *, const void *, size_t);
+int	strnvisx(char *, size_t, const char *, size_t, int);
+#define VIS_OCTAL	0x01
+#define VIS_SAFE	0x20
+#define VIS_TRIM	0x40
 
 #ifdef notyet
 /*

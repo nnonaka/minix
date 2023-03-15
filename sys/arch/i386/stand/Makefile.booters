@@ -1,5 +1,7 @@
-#	$NetBSD: Makefile.booters,v 1.90 2015/03/08 19:47:17 martin Exp $
+#	$NetBSD: Makefile.booters,v 1.93 2018/07/25 23:45:32 kamil Exp $
 
+NOLIBCSANITIZER=
+NOSANITIZER=
 .include <bsd.own.mk>
 
 STRIPFLAG=
@@ -47,8 +49,7 @@ LIBKERN_ARCH=i386
 KERNMISCMAKEFLAGS="LIBKERN_ARCH=i386"
 .endif
 
-CLEANFILES+= ${STARTFILE} vers.c ${BASE}.list
-SRCS+=	vers.c
+CLEANFILES+= ${STARTFILE} ${BASE}.list
 
 ### find out what to use for libkern
 KERN_AS=	library
@@ -76,12 +77,12 @@ cleandir distclean: .WAIT cleanlibdir
 cleanlibdir:
 	-rm -rf lib
 
-LDFLAGS+=-Wl,-M -Wl,-e,start 	# -N does not work properly.
+LDFLAGS+=-Wl,-z,noseparate-code -Wl,-M -Wl,-e,start 	# -N does not work properly.
 
 LIBLIST=${LIBI386} ${LIBSA} ${LIBZ} ${LIBSA} ${LIBKERN} ${LIBI386} ${LIBSA}
 
-vers.c: ${VERSIONFILE} ${SOURCES} ${S}/conf/newvers_stand.sh
-	${HOST_SH} ${S}/conf/newvers_stand.sh ${VERSIONFILE} x86 ${NEWVERSWHAT}
+VERSIONMACHINE=x86
+.include "${S}/conf/newvers_stand.mk"
 
 CLEANFILES+= ${BASE}.sym
 ${BASE}.sym: ${STARTFILE} ${OBJS} ${LIBSA} ${LIBZ} ${LIBKERN} ${LIBI386}
@@ -112,6 +113,8 @@ ${BASE}.bin: ${STARTFILE} ${OBJS} ${LIBSA} ${LIBZ} ${LIBKERN} ${LIBI386}
 	${CC} -o ${BASE}.sym ${LDFLAGS} -Wl,-Ttext,${RELOC} \
 	    ${STARTFILE} ${OBJS} ${LIBLIST} > ${BASE}.list
 	${OBJCOPY} -O binary ${BASE}.sym ${BASE}.bin
+
+CWARNFLAGS.gcc+=	${GCC_NO_ADDR_OF_PACKED_MEMBER}
 
 .include <bsd.prog.mk>
 KLINK_MACHINE=	i386

@@ -32,7 +32,7 @@ char *video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
 /* Kernel may use memory */
 int kernel_may_alloc = 1;
 
-static int mb_set_param(char *bigbuf, char *name, char *value, kinfo_t *cbi) 
+int mb_set_param(char *bigbuf, char *name, char *value, kinfo_t *cbi) 
 {
 	char *p = bigbuf;
 	char *bufend = bigbuf + MULTIBOOT_PARAM_BUF_SIZE;

@@ -30,6 +30,7 @@
 struct device {
 	u64_t dv_base;
 	u64_t dv_size;
+	int     fstype;
 };
 
 /* Generic receive function for all drivers. */

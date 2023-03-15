@@ -1,4 +1,4 @@
-/* $NetBSD: loadfile.c,v 1.30 2008/05/20 16:04:08 ad Exp $ */
+/* $NetBSD: loadfile.c,v 1.32 2019/04/05 20:09:29 christos Exp $ */
 
 /*-
  * Copyright (c) 1997, 2008 The NetBSD Foundation, Inc.
