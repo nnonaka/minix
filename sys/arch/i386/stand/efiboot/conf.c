@@ -81,9 +81,7 @@ struct fs_ops file_system[] = {
 #ifdef SUPPORT_EXT2FS
 	FS_OPS(null),
 #endif
-#ifdef SUPPORT_MINIXFS3
 	FS_OPS(null),
-#endif
 #ifdef SUPPORT_DOSFS
 	FS_OPS(null),
 #endif
@@ -99,9 +97,7 @@ struct fs_ops file_system_disk[] = {
 #ifdef SUPPORT_EXT2FS
 	FS_OPS(ext2fs),
 #endif
-#ifdef SUPPORT_MINIXFS3
 	FS_OPS(minixfs3),
-#endif
 #ifdef SUPPORT_DOSFS
 	FS_OPS(dosfs),
 #endif

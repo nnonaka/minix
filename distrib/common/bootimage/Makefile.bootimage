@@ -421,7 +421,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	@echo Creating rootfs...
 	# XXX /var/spool/ftp/hidden is unreadable
 	${CHMOD} +r ${WORKDIR}/var/spool/ftp/hidden
-.if !defined(__MINIX)
+.if ${GPTFS} != "mfs"
 	${TOOL_MAKEFS} -M ${FSSIZE} -m ${FSSIZE}			\
 	    -B ${TARGET_ENDIANNESS}					\
 	    -F ${WORKSPEC} -N ${WORKDIR}/etc				\
@@ -429,7 +429,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	    ${IMGMAKEFSOPTIONS}						\
 	    ${WORKFS} ${WORKDIR}
 .else
-	@echo Creating Minix rootfs...
+	@echo Creating Minix mfs rootfs...
 	@echo ${FSSIZE}
 	${RM} -f ${WRKMTREE}
 	${RM} -f ${WORKFS}
