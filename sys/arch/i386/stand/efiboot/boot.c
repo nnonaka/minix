@@ -57,7 +57,7 @@ static const char * const names[][2] = {
 #define DEFFILENAME	names[0][0]
 
 #ifndef	EFIBOOTCFG_FILENAME
-#define	EFIBOOTCFG_FILENAME	"esp:/EFI/NetBSD/boot.cfg"
+#define	EFIBOOTCFG_FILENAME	"esp:/EFI/Minix/boot.cfg"
 #endif
 
 #if !defined(__minix)
@@ -671,7 +671,7 @@ command_version(char *arg)
 	}
 
 	printf("\n"
-	    ">> %s, Revision %s (from NetBSD %s)\n"
+	    ">> %s, Revision %s (from Minix %s)\n"
 	    ">> Memory: %d/%d k\n",
 	    bootprog_name, bootprog_rev, bootprog_kernrev,
 	    getbasemem(), getextmem());
