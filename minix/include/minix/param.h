@@ -10,8 +10,9 @@
 
 #ifdef _MINIX_SYSTEM
 
+#if 0
 /* Copied from multiboot.h */
-struct my_multiboot_info {
+struct multiboot1_info {
 	uint32_t	mi_flags;
 
 	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_MEMORY. */
@@ -88,6 +89,7 @@ struct my_multiboot_info {
 	};
 
 };
+#endif
 
 struct my_multiboot_mmap {
 	uint32_t	mm_size;
@@ -106,7 +108,7 @@ struct my_multiboot_module {
 #define MULTIBOOT_MAX_MODS     20
 #define MULTIBOOT_PARAM_BUF_SIZE 1024
 
-typedef struct my_multiboot_info multiboot_info_t;
+//typedef struct multiboot1_info multiboot_info_t;
 typedef struct my_multiboot_module multiboot_module_t;
 typedef struct my_multiboot_mmap multiboot_memory_map_t;
 
@@ -114,7 +116,8 @@ typedef struct my_multiboot_mmap multiboot_memory_map_t;
 #define MAXMEMMAP 40
 typedef struct kinfo {
         /* Straight multiboot-provided info */
-        multiboot_info_t        mbi;
+        //multiboot_info_t        mbi1;
+        uint32_t	            module_count;
         multiboot_module_t      module_list[MULTIBOOT_MAX_MODS];
         multiboot_memory_map_t  memmap[MAXMEMMAP]; /* free mem list */
         phys_bytes              mem_high_phys;
