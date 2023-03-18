@@ -72,15 +72,24 @@ do_tag_cmdline(kinfo_t *cbi, struct multiboot_tag_string *tag_cmdline)
 static void
 do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_framebuffer)
 {
+    switch (tag_framebuffer->common.framebuffer_type) {
+    case MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT:
+    	video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
+        break;
+    case MULTIBOOT_FRAMEBUFFER_TYPE_RGB:
+    case MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED:
+    default:
+        panic("Not supported famebuffer type.");
+    }
 }
 
 static void
 do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
 {
-	int k = cbi->mbi.mi_mods_count;
+	int k = cbi->module_count;
 	
 	assert(k < MULTIBOOT_MAX_MODS);
-	cbi->mbi.mi_mods_count = k++;
+	cbi->module_count = k++;
 	cbi->module_list[k].mod_start = tag_module->mod_start;
 	cbi->module_list[k].mod_end = tag_module->mod_end;
 }
@@ -106,23 +115,21 @@ do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 static void
 do_tag_basic_meminfo(kinfo_t *cbi, struct multiboot_tag_basic_meminfo * tag_meminfo)
 {
-	cbi->mbi.mi_mem_lower = tag_meminfo->mem_lower;
-	cbi->mbi.mi_mem_upper = tag_meminfo->mem_upper;
-	add_memmap(cbi, 0, cbi->mbi.mi_mem_lower*1024);
-	add_memmap(cbi, 0x100000, cbi->mbi.mi_mem_upper*1024);
+	add_memmap(cbi, 0, tag_meminfo->mem_lower*1024);
+	add_memmap(cbi, 0x100000, tag_meminfo->mem_upper*1024);
 }
 
 void get_parameters2(u32_t ebx, kinfo_t *cbi) 
 {
 	struct multiboot_header_tag *tag;
 	multiboot_uint32_t size;
-	multiboot_info_t *mbi = &cbi->mbi;
 	int m, k;
 	extern char _kern_phys_base, _kern_vir_base, _kern_size,
 		_kern_unpaged_start, _kern_unpaged_end;
 	phys_bytes kernbase = (phys_bytes) &_kern_phys_base,
 		kernsize = (phys_bytes) &_kern_size;
 	
+	cbi->module_count = 0;
 	size = *(multiboot_uint32_t *)ebx;
 	for (tag = (struct multiboot_header_tag *) (ebx + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -150,8 +157,6 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 		}
 	}
 	
-	video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
-
 	/* Set various bits of info for the higher-level kernel. */
 	cbi->mem_high_phys = 0;
 	cbi->user_sp = (vir_bytes) &_kern_vir_base;
@@ -165,8 +170,8 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	cbi->do_serial_debug = 0;
 	cbi->serial_debug_baud = 115200;
 
-        /* let higher levels know what we are booting on */
-        mb_set_param(cbi->param_buf, ARCHVARNAME, (char *)get_board_arch_name(BOARD_ID_INTEL), cbi);
+    /* let higher levels know what we are booting on */
+    mb_set_param(cbi->param_buf, ARCHVARNAME, (char *)get_board_arch_name(BOARD_ID_INTEL), cbi);
 	mb_set_param(cbi->param_buf, BOARDVARNAME,(char *)get_board_name(BOARD_ID_INTEL) , cbi);
 
 	/* move user stack/data down to leave a gap to catch kernel
@@ -184,9 +189,8 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 
 	assert(!(cbi->bootstrap_start % I386_PAGE_SIZE));
 	cbi->bootstrap_len = rounddown(cbi->bootstrap_len, I386_PAGE_SIZE);
-	assert(mbi->mi_flags & MULTIBOOT_INFO_HAS_MODS);
-	assert(mbi->mi_mods_count < MULTIBOOT_MAX_MODS);
-	assert(mbi->mi_mods_count > 0);
+	assert(cbi->module_count < MULTIBOOT_MAX_MODS);
+	assert(cbi->module_count > 0);
 	
 	memset(cbi->memmap, 0, sizeof(cbi->memmap));
 
@@ -194,11 +198,11 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	 * with each other. Pretend the kernel is an extra module for a
 	 * second.
 	 */
-	k = mbi->mi_mods_count;
+	k = cbi->module_count;
 	assert(k < MULTIBOOT_MAX_MODS);
 	cbi->module_list[k].mod_start = kernbase;
 	cbi->module_list[k].mod_end = kernbase + kernsize;
-	cbi->mods_with_kernel = mbi->mi_mods_count+1;
+	cbi->mods_with_kernel = cbi->module_count+1;
 	cbi->kern_mod = k;
 
 	for(m = 0; m < cbi->mods_with_kernel; m++) {
@@ -217,7 +221,7 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	}
 }
 
-kinfo_t *pre_init2(u32_t magic, u32_t ebx)
+kinfo_t *pre2_init(u32_t magic, u32_t ebx)
 {
 	assert(magic == MULTIBOOT2_BOOTLOADER_MAGIC);
 

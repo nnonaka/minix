@@ -1364,10 +1364,23 @@ exec_multiboot2(struct multiboot_package *mbp)
 
 	BI_ALLOC(BTINFO_MAX);
 
+#ifdef EFIBOOT
+    if (mpp->mpp_console != NULL) {
+		int flags = mpp->mpp_console->console_flags;
+		if ((flags & MULTIBOOT_CONSOLE_FLAGS_CONSOLE_REQUIRED) &&
+            (flags & MULTIBOOT_CONSOLE_FLAGS_EGA_TEXT_SUPPORTED))
+        {
+            /* set to Text mode */
+            mpp->mpp_framebuffer = NULL;
+            cninit();
+	    }
+    }
+#else
 	/* set new video mode if text mode was not requested */
 	if (mpp->mpp_framebuffer == NULL ||
 	    mpp->mpp_framebuffer->depth != 0)
 	vbe_commit();  
+#endif
 
 	len = 2 * sizeof(multiboot_uint32_t);
 	for (i = 0; i < sizeof(tags) / sizeof(*tags); i++) {
