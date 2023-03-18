@@ -94,7 +94,8 @@ int overlaps(multiboot_module_t *mod, int n, int cmp_mod)
 void get_parameters(u32_t ebx, kinfo_t *cbi) 
 {
 	multiboot_memory_map_t *mmap;
-	multiboot_info_t *mbi = &cbi->mbi;
+	multiboot_info_t        mbi1;
+	multiboot_info_t *mbi = &mbi1;
 	int var_i,value_i, m, k;
 	char *p;
 	extern char _kern_phys_base, _kern_vir_base, _kern_size,
@@ -108,6 +109,7 @@ void get_parameters(u32_t ebx, kinfo_t *cbi)
 	memcpy((void *) mbi, (void *) ebx, sizeof(*mbi));
 
 	/* Set various bits of info for the higher-level kernel. */
+	cbi->module_count = mbi->mi_mods_count;
 	cbi->mem_high_phys = 0;
 	cbi->user_sp = (vir_bytes) &_kern_vir_base;
 	cbi->vir_kern_start = (vir_bytes) &_kern_vir_base;
@@ -191,11 +193,11 @@ void get_parameters(u32_t ebx, kinfo_t *cbi)
 	 * with each other. Pretend the kernel is an extra module for a
 	 * second.
 	 */
-	k = mbi->mi_mods_count;
+	k = cbi->module_count;
 	assert(k < MULTIBOOT_MAX_MODS);
 	cbi->module_list[k].mod_start = kernbase;
 	cbi->module_list[k].mod_end = kernbase + kernsize;
-	cbi->mods_with_kernel = mbi->mi_mods_count+1;
+	cbi->mods_with_kernel = cbi->module_count+1;
 	cbi->kern_mod = k;
 
 	for(m = 0; m < cbi->mods_with_kernel; m++) {

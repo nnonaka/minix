@@ -76,10 +76,11 @@ _C_LABEL(Multiboot2_Header):
 		+ (Multiboot2_Header_end - Multiboot2_Header))
 
 	.long	1	/* MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST */
-	.long	16	/* sizeof(multiboot_header_tag_information_request) */
+	.long	20	/* sizeof(multiboot_header_tag_information_request) */
 			/* + sizeof(uint32_t) * requests */
 	.long	4	/* MULTIBOOT_TAG_TYPE_BASIC_MEMINFO */
 	.long	6	/* MULTIBOOT_TAG_TYPE_MMAP */
+	.long	8	/* MULTIBOOT_TAG_TYPE_FRAMEBUFFER */
 
 	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
 	.long	12	/* sizeof(struct multiboot_tag_efi32) */
@@ -134,7 +135,7 @@ hang:
 multiboot2_loader:
 	push    %ebx	/* multiboot2 information struct */
 	push	%eax	/* multiboot2 magic number */
-	call    _C_LABEL(pre_init2)
+	call    _C_LABEL(pre2_init)
 	jmp hang
 
 .data

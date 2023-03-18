@@ -48,7 +48,7 @@ CPPFLAGS.subr_prf.c+= -DLIBSA_PRINTF_LONGLONG_SUPPORT -DLIBSA_PRINTF_WIDTH_SUPPO
 # some object files we give a symbol prefix (or namespace) of __k_unpaged_
 # that must live in their own unique namespace.
 #
-.for unpaged_obj in head.o pre_init.o pre_init2.o direct_tty_utils.o \
+.for unpaged_obj in head.o pre_init.o pre2_init.o direct_tty_utils.o \
 	pg_utils.o klib.o utility.o arch_reset.o \
 	io_inb.o io_outb.o \
 	${MINLIB_OBJS_UNPAGED} ${MINC_OBJS_UNPAGED} ${SYS_OBJS_UNPAGED}
