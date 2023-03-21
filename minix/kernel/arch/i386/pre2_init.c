@@ -20,18 +20,14 @@
 #endif
 
 extern int mb_set_param(char *bigbuf, char *name, char *value, kinfo_t *cbi);
-extern int overlaps(multiboot_module_t *mod, int n, int cmp_mod);
+extern int overlaps(kinfo_module_t *mod, int n, int cmp_mod);
 
 /* to-be-built kinfo struct, diagnostics buffer */
-kinfo_t kinfo;
-struct kmessages kmessages;
+extern kinfo_t kinfo;
+extern struct kmessages kmessages;
 
 /* pg_utils.c uses this; in this phase, there is a 1:1 mapping. */
 //phys_bytes vir2phys(void *addr) { return (phys_bytes) addr; } 
-
-/* mb_utils.c uses this; we can reach it directly */
-extern char *video_mem;
-//char *video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
 
 /* String length used for mb_itoa */
 #define ITOA_BUFFER_SIZE 20
@@ -70,17 +66,33 @@ do_tag_cmdline(kinfo_t *cbi, struct multiboot_tag_string *tag_cmdline)
 }
 
 static void
-do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_framebuffer)
+do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_fb)
 {
-    switch (tag_framebuffer->common.framebuffer_type) {
-    case MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT:
-    	video_mem = (char *) MULTIBOOT_VIDEO_BUFFER;
-        break;
-    case MULTIBOOT_FRAMEBUFFER_TYPE_RGB:
-    case MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED:
-    default:
-        panic("Not supported famebuffer type.");
-    }
+	cbi->fb.framebuffer_addr = tag_fb->common.framebuffer_addr;
+	cbi->fb.framebuffer_pitch = tag_fb->common.framebuffer_pitch;
+	cbi->fb.framebuffer_width = tag_fb->common.framebuffer_width;
+	cbi->fb.framebuffer_height = tag_fb->common.framebuffer_height;
+	cbi->fb.framebuffer_bpp = tag_fb->common.framebuffer_bpp;
+	cbi->fb.framebuffer_type = tag_fb->common.framebuffer_type;
+	if (tag_fb->common.framebuffer_type == MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED) {
+		cbi->fb.framebuffer_palette_addr = 
+			(uint32_t)tag_fb->framebuffer_palette;
+		cbi->fb.framebuffer_palette_num_colors = 
+			tag_fb->framebuffer_palette_num_colors;
+	} else if (tag_fb->common.framebuffer_type == MULTIBOOT_FRAMEBUFFER_TYPE_RGB) {
+		cbi->fb.framebuffer_red_field_position =
+			tag_fb->framebuffer_red_field_position;
+		cbi->fb.framebuffer_red_mask_size =
+			tag_fb->framebuffer_red_mask_size;
+		cbi->fb.framebuffer_green_field_position =
+			tag_fb->framebuffer_green_field_position;
+		cbi->fb.framebuffer_green_mask_size =
+			tag_fb->framebuffer_green_mask_size;
+		cbi->fb.framebuffer_blue_field_position =
+			tag_fb->framebuffer_blue_field_position;
+		cbi->fb.framebuffer_blue_mask_size =
+			tag_fb->framebuffer_red_field_position;
+	}
 }
 
 static void
@@ -129,7 +141,10 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	phys_bytes kernbase = (phys_bytes) &_kern_phys_base,
 		kernsize = (phys_bytes) &_kern_size;
 	
+	cbi->mb_version = 2;
+	
 	cbi->module_count = 0;
+	memset((void *)&cbi->fb, 0, sizeof(cbi->fb));
 	size = *(multiboot_uint32_t *)ebx;
 	for (tag = (struct multiboot_header_tag *) (ebx + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -153,7 +168,12 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 		case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
 			do_tag_framebuffer(cbi, (struct multiboot_tag_framebuffer *)tag);
 			break;
-			
+		case MULTIBOOT_TAG_TYPE_SMBIOS:
+			// TODO
+			break;
+		case MULTIBOOT_TAG_TYPE_ACPI_NEW:
+			// TODO
+			break;
 		}
 	}
 	

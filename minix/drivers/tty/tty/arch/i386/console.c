@@ -914,6 +914,7 @@ void scr_init(tty_t *tp)
   int s;
   static int vdu_initialized = 0;
   static unsigned page_size;
+  struct kinfo kinfo;		/* kernel information */
 
   /* Associate console and TTY. */
   line = tp - &tty_table[0];
@@ -931,6 +932,12 @@ void scr_init(tty_t *tp)
   /* Get the BIOS parameters that describe the VDU. */
   if (! vdu_initialized++) {
 
+    if (OK != (s=sys_getkinfo(&kinfo))) {
+        panic("Couldn't get kernel information: %d", s);
+    }
+
+	if (kinfo.mb_version == 1) {
+
 	/* FIXME: How about error checking? What to do on failure??? */
   	s=sys_readbios(VDU_SCREEN_COLS_ADDR, &bios_columns,
 		VDU_SCREEN_COLS_SIZE);
@@ -940,6 +947,9 @@ void scr_init(tty_t *tp)
 		VDU_SCREEN_ROWS_SIZE);
   	s=sys_readbios(VDU_FONTLINES_ADDR, &bios_fontlines,
 		VDU_FONTLINES_SIZE);
+	} else {
+		// TODO
+	}
 
   	vid_port = bios_crtbase;
   	scr_width = bios_columns;
