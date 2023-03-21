@@ -238,41 +238,40 @@ struct multiboot_module {
 
 #if defined(__minix)
 
-#ifndef __ASSEMBLY__
-//typedef struct multiboot_info multiboot_info_t;
-//typedef struct multiboot_module multiboot_module_t;
-//typedef struct multiboot_mmap multiboot_memory_map_t;
-#endif
-
-#define MULTIBOOT_MEMORY_AVAILABLE              1
-#define MULTIBOOT_MAX_MODS     20
+//#define MULTIBOOT_MEMORY_AVAILABLE              1
+//#define MULTIBOOT_MAX_MODS     20
 
 //#define mod_start mmo_start
 //#define mod_end mmo_end
 
-#define mmap_addr mi_mmap_addr
-#define mmap_length mi_mmap_length
+//#define mmap_addr mi_mmap_addr
+//#define mmap_length mi_mmap_length
 
-#define MULTIBOOT_VIDEO_MODE 0x00000004
-#define MULTIBOOT_VIDEO_MODE_EGA 1
-#define MULTIBOOT_VIDEO_BUFFER 0xB8000
+//#define MULTIBOOT_VIDEO_MODE 0x00000004
+//#define MULTIBOOT_VIDEO_MODE_EGA 1
+//#define MULTIBOOT_VIDEO_BUFFER 0xB8000
 
-#define MULTIBOOT_CONSOLE_LINES 25
-#define MULTIBOOT_CONSOLE_COLS 80
+//#define MULTIBOOT_CONSOLE_LINES 25
+//#define MULTIBOOT_CONSOLE_COLS 80
 
-#define MULTIBOOT_PARAM_BUF_SIZE 1024
+//#define MULTIBOOT_PARAM_BUF_SIZE 1024
 #endif /* defined(__minix) */
 
 /* --------------------------------------------------------------------- */
 
 /*
- * Prototypes for public functions defined in multiboot.c.
+ * Prototypes for public functions defined in multiboot.c and multiboot2.c
  */
 #if !defined(_LOCORE) && defined(_KERNEL)
-void		multiboot_pre_reloc(struct multiboot_info *);
-void		multiboot_post_reloc(void);
-void		multiboot_print_info(void);
-bool		multiboot_ksyms_addsyms_elf(void);
+void		multiboot1_pre_reloc(struct multiboot_info *);
+void		multiboot1_post_reloc(void);
+void		multiboot1_print_info(void);
+bool		multiboot1_ksyms_addsyms_elf(void);
+
+void		multiboot2_pre_reloc(struct multiboot_info *);
+void		multiboot2_post_reloc(void);
+void		multiboot2_print_info(void);
+bool		multiboot2_ksyms_addsyms_elf(void);
 #endif /* !defined(_LOCORE) */
 
 /* --------------------------------------------------------------------- */

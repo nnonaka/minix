@@ -182,7 +182,7 @@ void kmain(kinfo_t *local_cbi)
 
 	if(i >= NR_TASKS) {
 		/* Remember this so it can be passed to VM */
-		multiboot_module_t *mb_mod = &kinfo.module_list[i - NR_TASKS];
+		kinfo_module_t *mb_mod = &kinfo.module_list[i - NR_TASKS];
 		ip->start_addr = mb_mod->mod_start;
 		ip->len = mb_mod->mod_end - mb_mod->mod_start;
 	}

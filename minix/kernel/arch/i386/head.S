@@ -42,7 +42,7 @@ MINIX:
 
 .balign 8
 
-#define MULTIBOOT_FLAGS (MULTIBOOT_HEADER_WANT_MEMORY | MULTIBOOT_HEADER_MODS_ALIGNED)
+#define MULTIBOOT_FLAGS (MULTIBOOT_HEADER_WANT_MEMORY | MULTIBOOT_HEADER_MODS_ALIGNED | MULTIBOOT_HEADER_HAS_VBE)
 
 _C_LABEL(Multiboot_Header):
 multiboot_magic:
@@ -76,11 +76,13 @@ _C_LABEL(Multiboot2_Header):
 		+ (Multiboot2_Header_end - Multiboot2_Header))
 
 	.long	1	/* MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST */
-	.long	20	/* sizeof(multiboot_header_tag_information_request) */
+	.long	28	/* sizeof(multiboot_header_tag_information_request) */
 			/* + sizeof(uint32_t) * requests */
 	.long	4	/* MULTIBOOT_TAG_TYPE_BASIC_MEMINFO */
 	.long	6	/* MULTIBOOT_TAG_TYPE_MMAP */
 	.long	8	/* MULTIBOOT_TAG_TYPE_FRAMEBUFFER */
+	.long	13	/* MULTIBOOT_TAG_TYPE_SMBIOS */
+	.long	15	/* MULTIBOOT_TAG_TYPE_ACPI_NEW */
 
 	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
 	.long	12	/* sizeof(struct multiboot_tag_efi32) */
