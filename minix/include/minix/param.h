@@ -37,7 +37,6 @@ struct kinfo_framebuffer {
 		};
 	};
 };
-#endif
 
 struct kinfo_mmap {
 	uint32_t	mm_size;
