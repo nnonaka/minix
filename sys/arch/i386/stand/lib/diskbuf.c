@@ -50,7 +50,7 @@ alloc_diskbuf(const void *user)
 	diskbuf_user = user;
 	if (!diskbufp) {
 		diskbufp = alloc(DISKBUFSIZE);
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 		if (((uintptr_t)diskbufp & 0xffff) + DISKBUFSIZE > 0x10000) {
 			printf("diskbufp %" PRIxPTR "\n", (uintptr_t)diskbufp);
 			panic("diskbuf crosses 64k boundary");

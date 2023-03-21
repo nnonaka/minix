@@ -236,26 +236,6 @@ struct multiboot_module {
 
 #endif /* defined(__minix) && !defined(__ASSEMBLY__) && (defined(_MINIX_SYSTEM) || defined(_STANDALONE))*/
 
-#if defined(__minix)
-
-//#define MULTIBOOT_MEMORY_AVAILABLE              1
-//#define MULTIBOOT_MAX_MODS     20
-
-//#define mod_start mmo_start
-//#define mod_end mmo_end
-
-//#define mmap_addr mi_mmap_addr
-//#define mmap_length mi_mmap_length
-
-//#define MULTIBOOT_VIDEO_MODE 0x00000004
-//#define MULTIBOOT_VIDEO_MODE_EGA 1
-//#define MULTIBOOT_VIDEO_BUFFER 0xB8000
-
-//#define MULTIBOOT_CONSOLE_LINES 25
-//#define MULTIBOOT_CONSOLE_COLS 80
-
-//#define MULTIBOOT_PARAM_BUF_SIZE 1024
-#endif /* defined(__minix) */
 
 /* --------------------------------------------------------------------- */
 

@@ -46,7 +46,7 @@
 #include "bootinfo.h"
 #include "bootmod.h"
 #include "vbe.h"
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 #include "efiboot.h"
 #endif
 
@@ -56,7 +56,7 @@ extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
 extern const uint8_t rasops_cmap[];
 extern struct btinfo_framebuffer btinfo_framebuffer;
 extern struct btinfo_modulelist *btinfo_modulelist;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 extern struct btinfo_efimemmap *btinfo_efimemmap;
 #else
 extern struct btinfo_memmap *btinfo_memmap;
@@ -181,8 +181,8 @@ multiboot2_info_dump(uint32_t magic, char *mbi)
 	}
 
 	total_size = *(uint32_t *)mbi;
-	reserved = *(uint32_t *)mbi + 1;
-	mbt = (struct multiboot_tag *)(uint32_t *)mbi + 2;
+	reserved = *((uint32_t *)mbi + 1);
+	mbt = (struct multiboot_tag *)((uint32_t *)mbi + 2);
 	actual_size = (char *)mbt - mbi;
 	printf("mbi.total_size = %d\n", total_size);
 	printf("mbi.reserved = %d\n", reserved);
@@ -342,7 +342,7 @@ multiboot2_info_dump(uint32_t magic, char *mbi)
 		    total_size, actual_size);
 
 out:
-	printf("=== multiboot2 info dump start  ===\n");
+	printf("=== multiboot2 info dump end  ===\n");
 	return;
 }
 
@@ -586,7 +586,7 @@ mbi_mmap(struct multiboot_package *mbp, void *buf)
 	struct bi_memmap_entry *memmap;
 	size_t num;
 
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 	bi_getmemmap();
 
 	if (btinfo_memmap == NULL)
@@ -638,7 +638,7 @@ mbi_mmap(struct multiboot_package *mbp, void *buf)
 			mbte[i].zero = 0;
 		}
 	}
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	dealloc(memmap, num * sizeof(memmap));
 #endif
 out:
@@ -650,7 +650,7 @@ mbi_vbe(struct multiboot_package *mbp, void *buf)
 {
 	size_t len = 0;
 
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 	struct multiboot_tag_vbe *mbt = buf;
 
 	len = sizeof(*mbt);
@@ -677,7 +677,7 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 	struct multiboot_tag_framebuffer *mbt = buf;
 	struct btinfo_framebuffer *fb = &btinfo_framebuffer;
 
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 	struct modeinfoblock mi;
 
 	if (fb->physaddr != 0) {
@@ -718,7 +718,7 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 			mbt->common.framebuffer_bpp = fb->depth;
 			mbt->common.framebuffer_type =
 			    MULTIBOOT_FRAMEBUFFER_TYPE_RGB;
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 			if (mi.MemoryModel == 0x04)
 				mbt->common.framebuffer_type =
 				    MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED;
@@ -726,7 +726,7 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 		}
 			
 		switch (mbt->common.framebuffer_type) {
-#ifndef EFIBOOT
+#if !defined(EFIBOOT)
 		case MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED: 
 			mbt->framebuffer_palette_num_colors = 256;
 
@@ -763,7 +763,7 @@ mbi_acpi_old(struct multiboot_package *mbp, void *buf)
 	struct multiboot_tag_old_acpi *mbt = buf;
 	ACPI_PHYSICAL_ADDRESS rsdp_phys = -1;
 	ACPI_RSDP_COMMON rsdp;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	const EFI_GUID acpi_table_guid = ACPI_TABLE_GUID;
 	int i;
 
@@ -809,7 +809,7 @@ mbi_acpi_new(struct multiboot_package *mbp, void *buf)
 	struct multiboot_tag_new_acpi *mbt = buf;
 	ACPI_PHYSICAL_ADDRESS rsdp_phys = -1;
 	ACPI_TABLE_RSDP rsdp;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	const EFI_GUID acpi_20_table_guid = ACPI_20_TABLE_GUID;
 	int i;
 
@@ -887,7 +887,7 @@ mbi_smbios(struct multiboot_package *mbp, void *buf)
 	size_t smbios_len;
 	int major;
 	int minor;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	const EFI_GUID smbios3_guid = SMBIOS3_TABLE_GUID;
 	const EFI_GUID smbios21_guid = SMBIOS_TABLE_GUID;
 	int i;
@@ -1080,7 +1080,7 @@ mbi_load_base_addr(struct multiboot_package *mbp, void *buf)
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
 }
 
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 /* Set if EFI ExitBootServices was not called */
 static size_t
 mbi_efi_bs(struct multiboot_package *mbp, void *buf)
@@ -1282,7 +1282,7 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 	case MULTIBOOT_TAG_TYPE_NETWORK:	
 		len = mbi_network(mbp, bp);
 		break;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	case MULTIBOOT_TAG_TYPE_EFI_MMAP:
 		len = mbi_efi_mmap(mbp, bp);
 		break;
@@ -1341,7 +1341,7 @@ exec_multiboot2(struct multiboot_package *mbp)
 		MULTIBOOT_TAG_TYPE_ACPI_NEW,
 		MULTIBOOT_TAG_TYPE_NETWORK,
 		MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR,
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 		MULTIBOOT_TAG_TYPE_EFI_BS,
 #ifndef __LP64__
 		MULTIBOOT_TAG_TYPE_EFI32,
@@ -1364,7 +1364,7 @@ exec_multiboot2(struct multiboot_package *mbp)
 
 	BI_ALLOC(BTINFO_MAX);
 
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
     if (mpp->mpp_console != NULL) {
 		int flags = mpp->mpp_console->console_flags;
 		if ((flags & MULTIBOOT_CONSOLE_FLAGS_CONSOLE_REQUIRED) &&
@@ -1372,7 +1372,6 @@ exec_multiboot2(struct multiboot_package *mbp)
         {
             /* set to Text mode */
             mpp->mpp_framebuffer = NULL;
-            cninit();
 	    }
     }
 #else
@@ -1435,7 +1434,7 @@ exec_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 #ifdef __LP64__
 	if (mpp->mpp_entry_elf64)
 		entry = mpp->mpp_entry_elf64->entry_addr
@@ -1578,7 +1577,7 @@ probe_multiboot2(const char *path)
 		case MULTIBOOT_HEADER_TAG_MODULE_ALIGN:
 			mbp->mbp_priv->mpp_module_align = (void *)mbt;
 			break;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 		case MULTIBOOT_HEADER_TAG_EFI_BS:
 			mbp->mbp_priv->mpp_efi_bs = (void *)mbt;
 			break;
@@ -1625,7 +1624,7 @@ probe_multiboot2(const char *path)
 		goto out;
 	}
 
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	/*
 	 * We do not fully support the relocatable header, but
 	 * at least we honour the alignment request. Xen requires

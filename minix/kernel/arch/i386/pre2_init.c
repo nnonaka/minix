@@ -248,6 +248,7 @@ kinfo_t *pre2_init(u32_t magic, u32_t ebx)
 	/* Kernel may use memory */
 	kernel_may_alloc = 1;
 
+	direct_print("pre2_init\n");
 	/* Get our own copy boot params pointed to by ebx.
 	 * Here we find out whether we should do serial output.
 	 */
