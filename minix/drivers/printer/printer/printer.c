@@ -267,10 +267,12 @@ static int do_probe(void)
 {
 /* See if there is a printer at all. */
 
+#if 0
   /* Get the base port for first printer. */
   if(sys_readbios(LPT1_IO_PORT_ADDR, &port_base, LPT1_IO_PORT_SIZE) != OK) {
 	panic("do_probe: sys_readbios failed");
   }
+#endif
 
   /* If the port is zero, the parallel port is not available at all. */
   return (port_base != 0);

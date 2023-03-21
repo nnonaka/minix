@@ -1,6 +1,4 @@
 
-#include <minix/type.h>
-#include <minix/param.h>
 #include <minix/minlib.h>
 #include <minix/cpufeature.h>
 #include <machine/partition.h>
@@ -8,6 +6,11 @@
 #include "direct_utils.h"
 #include "serial.h"
 #include "glo.h"
+
+#define MULTIBOOT_VIDEO_BUFFER		0xB8000
+
+#define MULTIBOOT_CONSOLE_LINES		25
+#define MULTIBOOT_CONSOLE_COLS		80
 
 /* Give non-zero values to avoid them in BSS */
 static int print_line = 1, print_col = 1;
@@ -22,7 +25,7 @@ static char *video_mem;
 
 void direct_put_char(char c, int line, int col) 
 {
-	video_mem = (char *)(kinfo.fb.framebuffer_addr);
+	video_mem = (char *)MULTIBOOT_VIDEO_BUFFER;
 	int offset = VIDOFFSET(line, col);
 	video_mem[offset] = c;
 	video_mem[offset+1] = 0x07;	/* grey-on-black */

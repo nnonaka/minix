@@ -247,8 +247,8 @@ sprint_bootsel(const char *filename)
 
 	if (parsebootfile(filename, &fsname, &devname, &unit,
 			  &partition, &file) == 0) {
-		snprintf(buf, sizeof(buf), "%s:%s, fs=%s", snprint_bootdev(buf,
-		    sizeof(buf), devname, unit, partition), file, fsname);
+		snprintf(buf, sizeof(buf), "%s:%s", snprint_bootdev(buf,
+		    sizeof(buf), devname, unit, partition), file);
 		return buf;
 	}
 	return "(invalid)";

@@ -948,6 +948,10 @@ void scr_init(tty_t *tp)
   	s=sys_readbios(VDU_FONTLINES_ADDR, &bios_fontlines,
 		VDU_FONTLINES_SIZE);
 	} else {
+		bios_columns = kinfo.fb.framebuffer_width;
+		bios_rows = kinfo.fb.framebuffer_height - 1;
+		bios_fontlines = 14;
+		bios_crtbase = C_6845;
 		// TODO
 	}
 

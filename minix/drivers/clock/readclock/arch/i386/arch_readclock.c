@@ -103,6 +103,7 @@ arch_init(void)
 	int s;
 	unsigned char mach_id, cmos_state;
 
+#if 0
 	if ((s = sys_readbios(MACH_ID_ADDR, &mach_id, sizeof(mach_id))) != OK) {
 		log_warn(&log, "sys_readbios failed: %d.\n", s);
 
@@ -115,6 +116,7 @@ arch_init(void)
 
 		return -1;
 	}
+#endif
 
 	cmos_state = read_register(CMOS_STATUS);
 

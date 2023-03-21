@@ -58,11 +58,11 @@ multiboot_checksum:
 	.long 0
 /* Video mode */
 multiboot_mode_type:
-	.long MULTIBOOT_VIDEO_MODE_EGA
+	.long 1 /* MULTIBOOT_VIDEO_MODE_EGA */
 multiboot_width:
-	.long MULTIBOOT_CONSOLE_COLS
+	.long 80 /* MULTIBOOT_CONSOLE_COLS */
 multiboot_height:
-	.long MULTIBOOT_CONSOLE_LINES
+	.long 25 /* MULTIBOOT_CONSOLE_LINES */
 multiboot_depth:
 	.long 0
 	
@@ -76,13 +76,12 @@ _C_LABEL(Multiboot2_Header):
 		+ (Multiboot2_Header_end - Multiboot2_Header))
 
 	.long	1	/* MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST */
-	.long	28	/* sizeof(multiboot_header_tag_information_request) */
+	.long	24	/* sizeof(multiboot_header_tag_information_request) */
 			/* + sizeof(uint32_t) * requests */
+	.long	1	/* MULTIBOOT_TAG_TYPE_CMDLINE */
+	.long	3	/* MULTIBOOT_TAG_TYPE_MODULE */
 	.long	4	/* MULTIBOOT_TAG_TYPE_BASIC_MEMINFO */
-	.long	6	/* MULTIBOOT_TAG_TYPE_MMAP */
 	.long	8	/* MULTIBOOT_TAG_TYPE_FRAMEBUFFER */
-	.long	13	/* MULTIBOOT_TAG_TYPE_SMBIOS */
-	.long	15	/* MULTIBOOT_TAG_TYPE_ACPI_NEW */
 
 	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
 	.long	12	/* sizeof(struct multiboot_tag_efi32) */
