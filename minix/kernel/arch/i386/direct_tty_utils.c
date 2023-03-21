@@ -1,4 +1,6 @@
 
+#include <minix/type.h>
+#include <minix/param.h>
 #include <minix/minlib.h>
 #include <minix/cpufeature.h>
 #include <machine/partition.h>
@@ -12,12 +14,15 @@ static int print_line = 1, print_col = 1;
 
 #include <sys/video.h>
 
-extern char *video_mem;
+extern kinfo_t kinfo;
+static char *video_mem;
+
 #define VIDOFFSET(line, col) ((line) * MULTIBOOT_CONSOLE_COLS * 2 + (col) * 2)
 #define VIDSIZE VIDOFFSET(MULTIBOOT_CONSOLE_LINES-1,MULTIBOOT_CONSOLE_COLS-1)
 
 void direct_put_char(char c, int line, int col) 
 {
+	video_mem = (char *)(kinfo.fb.framebuffer_addr);
 	int offset = VIDOFFSET(line, col);
 	video_mem[offset] = c;
 	video_mem[offset+1] = 0x07;	/* grey-on-black */
@@ -25,6 +30,7 @@ void direct_put_char(char c, int line, int col)
 
 static char direct_get_char(int line, int col) 
 {
+	video_mem = (char *)(kinfo.fb.framebuffer_addr);
 	return video_mem[VIDOFFSET(line, col)];
 }
 

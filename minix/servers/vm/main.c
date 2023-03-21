@@ -431,7 +431,7 @@ void init_vm(void)
 	static struct memory mem_chunks[NR_MEMS];
 	struct boot_image *ip;
 	extern void __minix_init(void);
-	multiboot_module_t *mod;
+	kinfo_module_t *mod;
 	vir_bytes kern_dyn, kern_static;
 
 #if SANITYCHECKS

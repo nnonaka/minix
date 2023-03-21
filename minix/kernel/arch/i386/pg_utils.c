@@ -138,7 +138,7 @@ u32_t *alloc_pagetable(phys_bytes *ph)
 phys_bytes pg_alloc_page(kinfo_t *cbi)
 {
 	int m;
-	multiboot_memory_map_t *mmap;
+	kinfo_memory_map_t *mmap;
 
 	assert(kernel_may_alloc);
 
