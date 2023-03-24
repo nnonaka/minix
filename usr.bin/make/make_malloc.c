@@ -1,6 +1,6 @@
-/*	$NetBSD: make_malloc.c,v 1.25 2021/01/19 20:51:46 rillig Exp $	*/
+/*	$NetBSD: make_malloc.c,v 1.10 2012/06/20 17:46:28 sjg Exp $	*/
 
-/*
+/*-
  * Copyright (c) 2009 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
@@ -26,23 +26,36 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef MAKE_NATIVE
+#include <sys/cdefs.h>
+__RCSID("$NetBSD: make_malloc.c,v 1.10 2012/06/20 17:46:28 sjg Exp $");
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 
 #include "make.h"
 
-MAKE_RCSID("$NetBSD: make_malloc.c,v 1.25 2021/01/19 20:51:46 rillig Exp $");
-
 #ifndef USE_EMALLOC
+static void enomem(void) MAKE_ATTR_DEAD;
 
-/* die when out of memory. */
-static MAKE_ATTR_DEAD void
+/*
+ * enomem --
+ *	die when out of memory.
+ */
+static void
 enomem(void)
 {
 	(void)fprintf(stderr, "%s: %s.\n", progname, strerror(ENOMEM));
 	exit(2);
 }
 
-/* malloc, but die on error. */
+/*
+ * bmake_malloc --
+ *	malloc, but die on error.
+ */
 void *
 bmake_malloc(size_t len)
 {
@@ -50,10 +63,13 @@ bmake_malloc(size_t len)
 
 	if ((p = malloc(len)) == NULL)
 		enomem();
-	return p;
+	return(p);
 }
 
-/* strdup, but die on error. */
+/*
+ * bmake_strdup --
+ *	strdup, but die on error.
+ */
 char *
 bmake_strdup(const char *str)
 {
@@ -61,33 +77,43 @@ bmake_strdup(const char *str)
 	char *p;
 
 	len = strlen(str) + 1;
-	p = bmake_malloc(len);
+	if ((p = malloc(len)) == NULL)
+		enomem();
 	return memcpy(p, str, len);
 }
 
-/* Allocate a string starting from str with exactly len characters. */
+/*
+ * bmake_strndup --
+ *	strndup, but die on error.
+ */
 char *
-bmake_strldup(const char *str, size_t len)
+bmake_strndup(const char *str, size_t max_len)
 {
-	char *p = bmake_malloc(len + 1);
+	size_t len;
+	char *p;
+
+	if (str == NULL)
+		return NULL;
+
+	len = strlen(str);
+	if (len > max_len)
+		len = max_len;
+	p = bmake_malloc(len + 1);
 	memcpy(p, str, len);
 	p[len] = '\0';
-	return p;
+
+	return(p);
 }
 
-/* realloc, but die on error. */
+/*
+ * bmake_realloc --
+ *	realloc, but die on error.
+ */
 void *
 bmake_realloc(void *ptr, size_t size)
 {
 	if ((ptr = realloc(ptr, size)) == NULL)
 		enomem();
-	return ptr;
+	return(ptr);
 }
 #endif
-
-/* Allocate a string from start up to but excluding end. */
-char *
-bmake_strsedup(const char *start, const char *end)
-{
-	return bmake_strldup(start, (size_t)(end - start));
-}
