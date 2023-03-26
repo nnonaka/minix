@@ -602,5 +602,4 @@ biosdisk_readpartition(struct blockdriver *bdp, int device, daddr_t offset, dadd
 		dv->dv_size = part[i].size * SECTOR_SIZE;
 		dv->fstype = part[i].fstype;
     }
-
 }

@@ -5,11 +5,6 @@ NOSANITIZER=
 NOPIE=
 NOMAN=
 
-NOLIBCSANITIZER=
-NOSANITIZER=
-NOPIE=
-NOMAN=
-
 .include <bsd.own.mk>
 
 BINDIR=	/usr/mdec
