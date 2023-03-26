@@ -444,13 +444,17 @@ static void
 e1000_set_hwaddr(const netdriver_addr_t * hwaddr)
 {
 	e1000_t *e;
+	uint32_t addr_l, addr_h;
+	const uint8_t *p = hwaddr->na_addr;
 
 	e = &e1000_state;
 
-	e1000_reg_write(e, E1000_REG_RAL,
-	    *(const u32_t *)(&hwaddr->na_addr[0]));
-	e1000_reg_write(e, E1000_REG_RAH,
-	    *(const u16_t *)(&hwaddr->na_addr[4]));
+	//addr_l = *(const u32_t *)(&hwaddr->na_addr[0]);
+	addr_l = p[0] + (p[1]<<8) + (p[2]<<16) + (p[3] <<24);
+	//addr_h = *(const u16_t *)(&hwaddr->na_addr[4]);
+	addr_h = p[4] + (p[5]<<8);
+	e1000_reg_write(e, E1000_REG_RAL, addr_l);
+	e1000_reg_write(e, E1000_REG_RAH, addr_h);
 	e1000_reg_set(e, E1000_REG_RAH, E1000_REG_RAH_AV);
 }
 

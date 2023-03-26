@@ -157,11 +157,13 @@ virtio_net_config(netdriver_addr_t * addr)
 		dput(("No status"));
 	}
 
-	if (virtio_host_supports(net_dev, VIRTIO_NET_F_CTRL_VQ))
+	if (virtio_host_supports(net_dev, VIRTIO_NET_F_CTRL_VQ)) {
 		dput(("Host supports control channel"));
-
-	if (virtio_host_supports(net_dev, VIRTIO_NET_F_CTRL_RX))
+	}
+	
+	if (virtio_host_supports(net_dev, VIRTIO_NET_F_CTRL_RX)) {
 		dput(("Host supports control channel for RX"));
+	}
 }
 
 static int
@@ -240,8 +242,9 @@ virtio_net_refill_rx_queue(void)
 		in_rx++;
 	}
 
-	if (in_rx == 0 && STAILQ_EMPTY(&free_list))
+	if (in_rx == 0 && STAILQ_EMPTY(&free_list)) {
 		dput(("warning: rx queue underflow!"));
+	}
 }
 
 static void
@@ -288,8 +291,9 @@ virtio_net_intr(unsigned int __unused mask)
 	if (virtio_had_irq(net_dev)) {
 		virtio_net_check_queues();
 	} else {
-		if (!spurious_interrupt)
+		if (!spurious_interrupt) {
 			dput(("Spurious interrupt"));
+		}
 
 		spurious_interrupt = 1;
 	}

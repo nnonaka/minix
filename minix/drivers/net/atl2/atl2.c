@@ -598,13 +598,14 @@ atl2_tx_advance(void)
 		state.txs_tail = (state.txs_tail + 1) % ATL2_TXS_COUNT;
 		state.txs_num--;
 
-		if (stat & ATL2_TXS_SUCCESS)
+		if (stat & ATL2_TXS_SUCCESS) {
 			ATL2_DEBUG(("%s: successfully sent packet\n",
 			    netdriver_name()));
-		else
+		}
+		else {
 			ATL2_DEBUG(("%s: failed to send packet\n",
 			    netdriver_name()));
-
+		}
 		/* Update statistics. */
 		atl2_tx_stat(stat);
 
