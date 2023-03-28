@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.58 2015/06/17 17:43:23 christos Exp $
+#	$NetBSD: Makefile,v 1.61 2019/02/04 03:58:41 mrg Exp $
 #	@(#)Makefile	5.2 (Berkeley) 12/28/90
 
 PROG=	make
@@ -13,8 +13,7 @@ SRCS+=	lstAppend.c lstAtEnd.c lstAtFront.c lstClose.c lstConcat.c \
 	lstMember.c lstNext.c lstOpen.c lstRemove.c lstReplace.c lstSucc.c
 SRCS += lstPrev.c
 
-# let people experiment for a bit
-USE_META ?= no
+USE_META ?= yes
 .if ${USE_META:tl} != "no"
 SRCS+=	meta.c
 CPPFLAGS+= -DUSE_META
@@ -24,14 +23,8 @@ COPTS.meta.c += -DHAVE_FILEMON_H -I${FILEMON_H:H}
 .endif
 .endif
 
-.if defined(__MINIX)
-CPPFLAGS+= -DMAKE_MACHINE=\"${MACHINE}\" -DMAKE_MACHINE_ARCH=\"${MACHINE_ARCH}\"
-.endif #defined(__MINIX)
-
 .PATH:	${.CURDIR}/lst.lib
-.if !defined(__MINIX)
-SUBDIR=	PSD.doc
-.endif #!defined(__MINIX)
+SUBDIR.roff+=	PSD.doc
 .if make(obj) || make(clean)
 SUBDIR+= unit-tests
 .endif
@@ -51,6 +44,10 @@ COPTS.var.c += -Wno-format-nonliteral
 CPPFLAGS+= -DUSE_EMALLOC
 LDADD+=-lutil
 DPADD+=${LIBUTIL}
+.endif
+
+.if defined(HAVE_GCC) && ${HAVE_GCC} == 7 && ${ACTIVE_CC} == "gcc"
+COPTS.arch.c += -Wno-error=format-truncation
 .endif
 
 # A simple unit-test driver to help catch regressions
