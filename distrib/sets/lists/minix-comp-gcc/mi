@@ -8,7 +8,6 @@
 .                                                       minix-comp
 ./etc                                                   minix-comp
 ./etc/mtree                                             minix-comp
-./etc/mtree/set.minix-comp                              minix-comp
 ./usr                                                   minix-comp
 ./usr/bin/addr2line                                     minix-comp      binutils
 ./usr/bin/ar                                            minix-comp      binutils
@@ -488,6 +487,7 @@
 ./usr/include/g++/bits/streambuf_iterator.h             minix-comp      libstdcxx
 ./usr/include/g++/bits/stringfwd.h                      minix-comp      libstdcxx
 ./usr/include/g++/bits/time_members.h                   minix-comp      libstdcxx
+./usr/include/g++/tr1_impl                              minix-comp      libstdcxx
 ./usr/include/g++/bits/unique_ptr.h                     minix-comp      libstdcxx
 ./usr/include/g++/bits/unordered_map.h                  minix-comp      libstdcxx
 ./usr/include/g++/bits/unordered_set.h                  minix-comp      libstdcxx
@@ -1058,7 +1058,7 @@
 ./usr/include/g++/tr1/utility                           minix-comp      libstdcxx
 ./usr/include/g++/tr1/wchar.h                           minix-comp      libstdcxx
 ./usr/include/g++/tr1/wctype.h                          minix-comp      libstdcxx
-./usr/include/g++/tr1_impl                              minix-comp      libstdcxx,obsolete
+#./usr/include/g++/tr1_impl                              minix-comp      libstdcxx,obsolete
 ./usr/include/g++/tr1_impl/array                        minix-comp      libstdcxx,obsolete
 ./usr/include/g++/tr1_impl/boost_sp_counted_base.h      minix-comp      libstdcxx,obsolete
 ./usr/include/g++/tr1_impl/cctype                       minix-comp      libstdcxx,obsolete
@@ -1700,7 +1700,7 @@
 ./usr/include/sys/param.h                               minix-comp
 ./usr/include/sys/pcu.h                                 minix-comp
 ./usr/include/sys/pipe.h                                minix-comp
-./usr/include/sys/pmc.h                                 minix-comp      obsolete
+./usr/include/sys/pmc.h                                 minix-comp
 #./usr/include/sys/pmf.h                                 minix-comp
 ./usr/include/sys/poll.h                                minix-comp
 ./usr/include/sys/pool.h                                minix-comp
@@ -1786,10 +1786,10 @@
 ./usr/include/sys/un.h                                  minix-comp
 ./usr/include/sys/unistd.h                              minix-comp
 ./usr/include/sys/unpcb.h                               minix-comp
-./usr/include/sys/user.h                                minix-comp      obsolete
+./usr/include/sys/user.h                                minix-comp
 ./usr/include/sys/utsname.h                             minix-comp
 ./usr/include/sys/uuid.h                                minix-comp
-./usr/include/sys/vadvise.h                             minix-comp      obsolete
+./usr/include/sys/vadvise.h                             minix-comp
 ./usr/include/sys/verified_exec.h                       minix-comp
 ./usr/include/sys/video.h                               minix-comp
 ./usr/include/sys/videoio.h                             minix-comp
@@ -2191,4 +2191,4 @@
 ./var                                                   minix-comp
 ./var/db                                                minix-comp
 ./var/db/obsolete                                       minix-comp
-./var/db/obsolete/minix-comp                            minix-comp
+./var/db/obsolete/minix-comp-gcc                        minix-comp

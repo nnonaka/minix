@@ -159,7 +159,7 @@
 ./usr/man/man1/isodir.1                                 minix-man
 ./usr/man/man1/isoinfo.1                                minix-man
 ./usr/man/man1/isoread.1                                minix-man
-./usr/man/man1/jobs.1                                   minix-man       obsolete
+./usr/man/man1/jobs.1                                   minix-man       
 ./usr/man/man1/join.1                                   minix-man
 ./usr/man/man1/jot.1                                    minix-man
 ./usr/man/man1/kill.1                                   minix-man
