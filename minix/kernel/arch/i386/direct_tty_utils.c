@@ -33,7 +33,8 @@ void direct_put_char(char c, int line, int col)
 
 static char direct_get_char(int line, int col) 
 {
-	video_mem = (char *)(kinfo.fb.framebuffer_addr);
+	video_mem = (char *)MULTIBOOT_VIDEO_BUFFER;
+	//video_mem = (char *)(kinfo.fb.framebuffer_addr);
 	return video_mem[VIDOFFSET(line, col)];
 }
 
