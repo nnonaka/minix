@@ -180,6 +180,7 @@ multiboot2_info_dump(uint32_t magic, char *mbi)
 		goto out;
 	}
 
+	printf("mbi address = %p \n", mbi);
 	total_size = *(uint32_t *)mbi;
 	reserved = *((uint32_t *)mbi + 1);
 	mbt = (struct multiboot_tag *)((uint32_t *)mbi + 2);
@@ -1320,6 +1321,24 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 	return ret;
 }
 
+#if defined(EFIBOOT)
+static void *
+alloc_mbi(uint32_t size)
+{
+	EFI_STATUS efi_status;
+	INTN NumPages = -1;
+	EFI_PHYSICAL_ADDRESS Addr = 0x20000;
+	
+	NumPages = (roundup(size, 4096)) / 4096;
+	efi_status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
+		EfiLoaderData, NumPages, &Addr);
+	if (efi_status != EFI_SUCCESS) {
+		return NULL;
+	}
+	return (void *)Addr;
+}
+#endif
+
 static int
 exec_multiboot2(struct multiboot_package *mbp)
 {
@@ -1364,22 +1383,10 @@ exec_multiboot2(struct multiboot_package *mbp)
 
 	BI_ALLOC(BTINFO_MAX);
 
-#if defined(EFIBOOT)
-    if (mpp->mpp_console != NULL) {
-		int flags = mpp->mpp_console->console_flags;
-		if ((flags & MULTIBOOT_CONSOLE_FLAGS_CONSOLE_REQUIRED) &&
-            (flags & MULTIBOOT_CONSOLE_FLAGS_EGA_TEXT_SUPPORTED))
-        {
-            /* set to Text mode */
-            mpp->mpp_framebuffer = NULL;
-	    }
-    }
-#else
 	/* set new video mode if text mode was not requested */
 	if (mpp->mpp_framebuffer == NULL ||
 	    mpp->mpp_framebuffer->depth != 0)
 	vbe_commit();  
-#endif
 
 	len = 2 * sizeof(multiboot_uint32_t);
 	for (i = 0; i < sizeof(tags) / sizeof(*tags); i++) {
@@ -1388,7 +1395,15 @@ exec_multiboot2(struct multiboot_package *mbp)
 	}
 
 	mpp->mpp_mbi_len = len + MULTIBOOT_TAG_ALIGN;
+#if defined(EFIBOOT)
+	mpp->mpp_mbi = alloc_mbi(mpp->mpp_mbi_len);
+#else
 	mpp->mpp_mbi = alloc(mpp->mpp_mbi_len);
+#endif
+	if (mpp->mpp_mbi == NULL) {
+		printf("Failed to allocate mbi\n");
+		return -1;
+	}
 	mbi = (char *)roundup((vaddr_t)mpp->mpp_mbi, MULTIBOOT_TAG_ALIGN);
 
 	alen = 2 * sizeof(multiboot_uint32_t);

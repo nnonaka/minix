@@ -63,17 +63,11 @@
  *
  *	@(#)com.c	7.5 (Berkeley) 5/16/91
  */
-
-//#include <sys/types.h>
-//#include <lib/libsa/stand.h>
-//#include <machine/pio.h>
-//#include <dev/ic/comreg.h>
-//#include "comio_direct.h"
-//#include "libi386.h"
+ 
+#define UNPAGED 1	/* for proper kmain() prototype */
 
 #include <minix/minlib.h>
 #include <minix/cpufeature.h>
-//#include <machine/partition.h>
 #include "string.h"
 #include "direct_utils.h"
 #include "serial.h"
@@ -88,15 +82,11 @@ static int serbuf_read = 0;
 static int serbuf_write = 0;
 static int stopped = 0;
 
+#define	ISSET(t,f)	((t) & (f))
+
 #define	divrnd(n, q)	(((n)*2/(q)+1)/2)	/* divide and round off */
 #define RATE_9600 divrnd((COM_FREQ / 16), 9600)
 
-#define	ISSET(x, y)	((x) & (y))
-
-void direct_cls(void);
-void direct_print(const char*);
-void direct_print_char(char);
-int direct_read_char(unsigned char*);
 
 
 int cominit_d(int, int);
@@ -113,7 +103,7 @@ direct_com_init()
 void direct_com_print(const char *str)
 {
 	while (*str) {
-		direct_print_char(*str);
+		direct_com_print_char(*str);
 		str++;
 	}
 }
@@ -121,6 +111,7 @@ void direct_com_print(const char *str)
 void direct_com_print_char(char c)
 {
 	computc_d(c, COM1_BASE);
+	//ser_putc(c);
 }
 
 int direct_com_read_char(unsigned char *ch)
@@ -131,6 +122,7 @@ int direct_com_read_char(unsigned char *ch)
 	*ch = c;
 	return 1;
 }
+
 
 /*
  * calculate divisor for a given speed

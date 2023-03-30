@@ -85,7 +85,7 @@ _C_LABEL(Multiboot2_Header):
 
 	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
 	.long	12	/* sizeof(struct multiboot_tag_efi32) */
-	.long	multiboot2_loader
+	.long	multiboot_init
 	.long   0	/* pad for 8 bytes alignment */
 
 	.long	4	/* MULTIBOOT_HEADER_TAG_CONSOLE_FLAGS */
@@ -129,14 +129,26 @@ multiboot1_loader:
         call    _C_LABEL(kmain)
 
 	/* not reached */
-hang:
-	hlt
 	jmp hang
 	
 multiboot2_loader:
 	push    %ebx	/* multiboot2 information struct */
 	push	%eax	/* multiboot2 magic number */
 	call    _C_LABEL(pre2_init)
+	
+	/* Kernel is mapped high now and ready to go, with
+	 * the boot info pointer returnd in %eax. Set the
+	 * highly mapped stack, initialize it, push the boot
+	 * info pointer and jump to the highly mapped kernel.
+	 */
+	mov	$k_initial_stktop, %esp
+	push	$0	/* Terminate stack */
+	push	%eax
+        call    _C_LABEL(kmain)
+
+	/* not reached */
+hang:
+	hlt
 	jmp hang
 
 .data

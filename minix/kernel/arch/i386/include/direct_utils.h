@@ -8,4 +8,11 @@ void direct_print(const char*);
 void direct_print_char(char);
 int direct_read_char(unsigned char*);
 
+void direct_com_init(void);
+void direct_com_print(const char*);
+void direct_com_print_char(char);
+int direct_com_read_char(unsigned char*);
+
+extern	int	no_bios;
+
 #endif

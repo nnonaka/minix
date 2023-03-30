@@ -26,6 +26,9 @@ extern int overlaps(kinfo_module_t *mod, int n, int cmp_mod);
 extern kinfo_t kinfo;
 extern struct kmessages kmessages;
 
+extern char _kern_phys_base, _kern_vir_base, _kern_size,
+	_kern_unpaged_start, _kern_unpaged_end;
+
 /* pg_utils.c uses this; in this phase, there is a 1:1 mapping. */
 //phys_bytes vir2phys(void *addr) { return (phys_bytes) addr; } 
 
@@ -112,7 +115,6 @@ do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 	struct multiboot_mmap_entry	*mmap;
 	uint32_t base_addr, length;
 	
-	cbi->mmap_size = 0;
 	for (mmap = tag_mmap->entries;
 			(caddr_t)mmap < (caddr_t)tag_mmap + tag_mmap->size;
 			mmap = (struct multiboot_mmap_entry *) 
@@ -133,51 +135,19 @@ do_tag_basic_meminfo(kinfo_t *cbi, struct multiboot_tag_basic_meminfo * tag_memi
 
 void get_parameters2(u32_t ebx, kinfo_t *cbi) 
 {
-	struct multiboot_header_tag *tag;
+	struct multiboot_tag *tag, *tag_end;
 	multiboot_uint32_t size;
 	int m, k;
-	extern char _kern_phys_base, _kern_vir_base, _kern_size,
-		_kern_unpaged_start, _kern_unpaged_end;
 	phys_bytes kernbase = (phys_bytes) &_kern_phys_base,
-		kernsize = (phys_bytes) &_kern_size;
+	kernsize = (phys_bytes) &_kern_size;
 	
+	memset(cbi, 0, sizeof(kinfo_t));
+	
+	direct_com_print("get_parameters2\n");
+	/* Set various bits of info for the higher-level kernel. */
 	cbi->mb_version = 2;
 	
 	cbi->module_count = 0;
-	memset((void *)&cbi->fb, 0, sizeof(cbi->fb));
-	size = *(multiboot_uint32_t *)ebx;
-	for (tag = (struct multiboot_header_tag *) (ebx + 8);
-		tag->type != MULTIBOOT_TAG_TYPE_END;
-		tag = (struct multiboot_header_tag *) ((multiboot_uint8_t *) tag
-			+ ((tag->size + 7) & ~7)))
-	{
-	switch (tag->type)
-		{
-		case MULTIBOOT_TAG_TYPE_CMDLINE:
-			do_tag_cmdline(cbi, (struct multiboot_tag_string *)tag);
-			break;
-		case MULTIBOOT_TAG_TYPE_MODULE:
-			do_tag_module(cbi, (struct multiboot_tag_module *)tag);
-			break;
-		case MULTIBOOT_TAG_TYPE_MMAP:
-			do_tag_mmap(cbi, (struct multiboot_tag_mmap *)tag);
-			break;
-		case MULTIBOOT_TAG_TYPE_BASIC_MEMINFO:
-			do_tag_basic_meminfo(cbi, (struct multiboot_tag_basic_meminfo *)tag);
-			break;
-		case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
-			do_tag_framebuffer(cbi, (struct multiboot_tag_framebuffer *)tag);
-			break;
-		case MULTIBOOT_TAG_TYPE_SMBIOS:
-			// TODO
-			break;
-		case MULTIBOOT_TAG_TYPE_ACPI_NEW:
-			// TODO
-			break;
-		}
-	}
-	
-	/* Set various bits of info for the higher-level kernel. */
 	cbi->mem_high_phys = 0;
 	cbi->user_sp = (vir_bytes) &_kern_vir_base;
 	cbi->vir_kern_start = (vir_bytes) &_kern_vir_base;
@@ -190,6 +160,35 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	cbi->do_serial_debug = 0;
 	cbi->serial_debug_baud = 115200;
 
+	size = *(multiboot_uint32_t *)ebx;
+	tag = (struct multiboot_tag *) (ebx + 8);
+	tag_end = (struct multiboot_tag *) (ebx + size);
+	while (tag < tag_end) {
+		if (tag->type == MULTIBOOT_TAG_TYPE_CMDLINE) {
+			//reset();
+			do_tag_cmdline(cbi, (struct multiboot_tag_string *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+			//reset();
+			do_tag_module(cbi, (struct multiboot_tag_module *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {
+			//reset();
+			do_tag_mmap(cbi, (struct multiboot_tag_mmap *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_BASIC_MEMINFO) {
+			//reset();
+			do_tag_basic_meminfo(cbi, (struct multiboot_tag_basic_meminfo *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_FRAMEBUFFER) {
+			//reset();
+			do_tag_framebuffer(cbi, (struct multiboot_tag_framebuffer *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_END) {
+			break;
+		} else {
+			/* not supported */
+			//reset();
+		}
+		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
+			+ ((tag->size + 7) & ~7));
+	}
+	
     /* let higher levels know what we are booting on */
     mb_set_param(cbi->param_buf, ARCHVARNAME, (char *)get_board_arch_name(BOARD_ID_INTEL), cbi);
 	mb_set_param(cbi->param_buf, BOARDVARNAME,(char *)get_board_name(BOARD_ID_INTEL) , cbi);
@@ -212,7 +211,6 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	assert(cbi->module_count < MULTIBOOT_MAX_MODS);
 	assert(cbi->module_count > 0);
 	
-	memset(cbi->memmap, 0, sizeof(cbi->memmap));
 
 	/* Sanity check: the kernel nor any of the modules may overlap
 	 * with each other. Pretend the kernel is an extra module for a
@@ -248,7 +246,6 @@ kinfo_t *pre2_init(u32_t magic, u32_t ebx)
 	/* Kernel may use memory */
 	kernel_may_alloc = 1;
 
-	direct_print("pre2_init\n");
 	/* Get our own copy boot params pointed to by ebx.
 	 * Here we find out whether we should do serial output.
 	 */
