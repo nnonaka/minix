@@ -213,7 +213,7 @@ update_mp(struct mount *mp, struct msdosfs_args *argp)
 			error = msdosfs_root(mp, LK_EXCLUSIVE, &rtvp);
 			if (error != 0)
 				return error;
-			pmp->pm_flags |= findwin95(VTODE(rtvp))
+			pmp->pm_flags |= msdosfs_findwin95(VTODE(rtvp))
 				? MSDOSFSMNT_LONGNAME
 					: MSDOSFSMNT_SHORTNAME;
 			vput(rtvp);
@@ -472,7 +472,10 @@ msdosfs_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l, struct msd
 	u_long fatbytes, fatblocksecs;
 
 	/* Flush out any old buffers remaining from a previous use. */
-	if ((error = vinvalbuf(devvp, V_SAVE, l->l_cred, l, 0, 0)) != 0)
+	vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
+	error = vinvalbuf(devvp, V_SAVE, l->l_cred, l, 0, 0);
+	VOP_UNLOCK(devvp);
+	if (error)
 		return (error);
 
 	ronly = (mp->mnt_flag & MNT_RDONLY) != 0;
@@ -849,7 +852,7 @@ msdosfs_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l, struct msd
 	/*
 	 * Have the inuse map filled in.
 	 */
-	if ((error = fillinusemap(pmp)) != 0) {
+	if ((error = msdosfs_fillinusemap(pmp)) != 0) {
 		DPRINTF("fillinusemap %d", error);
 		goto error_exit;
 	}
@@ -969,7 +972,8 @@ msdosfs_root(struct mount *mp, int lktype, struct vnode **vpp)
 #ifdef MSDOSFS_DEBUG
 	printf("msdosfs_root(); mp %p, pmp %p\n", mp, pmp);
 #endif
-	if ((error = deget(pmp, MSDOSFSROOT, MSDOSFSROOT_OFS, vpp)) != 0)
+	if ((error = msdosfs_deget(pmp, MSDOSFSROOT, MSDOSFSROOT_OFS,
+	    vpp)) != 0)
 		return error;
 	error = vn_lock(*vpp, lktype);
 	if (error) {
@@ -1095,7 +1099,7 @@ msdosfs_fhtovp(struct mount *mp, struct fid *fhp, int lktype, struct vnode **vpp
 		*vpp = NULLVP;
 		return error;
 	}
-	error = deget(pmp, defh.defid_dirclust, defh.defid_dirofs, vpp);
+	error = msdosfs_deget(pmp, defh.defid_dirclust, defh.defid_dirofs, vpp);
 	if (error) {
 		DPRINTF("deget %d", error);
 		*vpp = NULLVP;

@@ -274,7 +274,7 @@ void idt_reload(void)
 	x86_lidt(&idt_desc);
 }
 
-multiboot_module_t *bootmod(int pnr)
+kinfo_module_t *bootmod(int pnr)
 {
 	int i;
 
@@ -289,7 +289,7 @@ multiboot_module_t *bootmod(int pnr)
 		p = i - NR_TASKS;
 		if(image[i].proc_nr == pnr) {
 			assert(p < MULTIBOOT_MAX_MODS);
-			assert(p < kinfo.mbi.mi_mods_count);
+			assert(p < kinfo.module_count);
 			return &kinfo.module_list[p];
 		}
 	}
@@ -391,7 +391,7 @@ static int libexec_pg_alloc(struct exec_info *execi, vir_bytes vaddr, size_t len
 
 void arch_boot_proc(struct boot_image *ip, struct proc *rp)
 {
-	multiboot_module_t *mod;
+	kinfo_module_t *mod;
 	struct ps_strings *psp;
 	char *sp;
 

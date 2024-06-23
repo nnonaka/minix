@@ -9,6 +9,8 @@
 
 #include "kernel/system.h"
 
+extern	int	no_bios;
+
 /*===========================================================================*
  *				do_readbios				     *
  *===========================================================================*/
@@ -17,6 +19,8 @@ int do_readbios(struct proc * caller, message * m_ptr)
   struct vir_addr src, dst;
   size_t len = m_ptr->m_lsys_krn_readbios.size;
   vir_bytes limit;
+
+	if (no_bios) return EINVAL;
 
   src.offset = m_ptr->m_lsys_krn_readbios.addr;
   dst.offset = m_ptr->m_lsys_krn_readbios.buf;

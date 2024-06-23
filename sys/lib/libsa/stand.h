@@ -64,6 +64,7 @@
 #ifndef _LIBSA_STAND_H_
 #define	_LIBSA_STAND_H_
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/cdefs.h>
 #include <sys/stat.h>
@@ -276,7 +277,6 @@ void	*alloc(size_t) __compactcall;
 void	dealloc(void *, size_t) __compactcall;
 struct	disklabel;
 char	*getdisklabel(const char *, struct disklabel *);
-int	dkcksum(const struct disklabel *);
 
 void	printf(const char *, ...)
     __attribute__((__format__(__printf__, 1, 2)));
@@ -353,5 +353,27 @@ void	bcopy(const void *, void *, size_t);
 void	bzero(void *, size_t);
 
 int	atoi(const char *);
+
+#if !defined(SA_HARDCODED_SECSIZE)
+#define	GETSECSIZE(f)	getsecsize(f)
+static inline u_int
+getsecsize(struct open_file *f)
+{
+	int rc;
+	u_int secsize = 0;
+
+	rc = DEV_IOCTL(f->f_dev)(f, SAIOSECSIZE, &secsize);
+	if (rc != 0 || secsize == 0)
+		secsize = DEV_BSIZE;
+
+	return secsize;
+}
+#else
+/*
+ * For some archs, divdi3 and friends are required to support variable
+ * sector sizes. Shave them off by making secsize compile-time constant.
+ */
+#define	GETSECSIZE(f)	DEV_BSIZE
+#endif
 
 #endif /* _LIBSA_STAND_H_ */

@@ -674,10 +674,11 @@ int do_lseek(void)
 int do_close(void)
 {
 /* Perform the close(fd) or closenb(fd) system call. */
-  int fd, nblock;
+  int fd;
+//  int nblock;
 
   fd = job_m_in.m_lc_vfs_close.fd;
-  nblock = job_m_in.m_lc_vfs_close.nblock;
+//  nblock = job_m_in.m_lc_vfs_close.nblock;
 
 //  return close_fd(fp, fd, !nblock /*may_suspend*/);
   return close_fd(fp, fd, 0);

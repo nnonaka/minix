@@ -11,10 +11,16 @@ BRANDING?=	\
 	--with-bugurl="http://www.NetBSD.org/support/send-pr.html" \
 	--with-lib-path="=/usr/lib" --with-sysroot
 
-CONFIGURE_ARGS=	--target=${MACHINE_GNU_PLATFORM} --disable-nls \
+BASE_CONFIGURE_ARGS= \
+	--target=${MACHINE_GNU_PLATFORM} \
+	--enable-initfini-array=yes \
+	--enable-default-execstack=no \
+	${BRANDING}
+
+CONFIGURE_ARGS= --disable-nls \
 		--program-transform-name="s,^,${MACHINE_GNU_PLATFORM}-," \
-		--disable-werror --disable-initfini-array \
-		${BRANDING}
+		--disable-werror \
+		${BASE_CONFIGURE_ARGS}
 
 .if defined(__MINIX) && ! exists(${GNUHOSTDIST}/gas/m68k-parse.c)
 # MINIX: LSC: Make sure we trigger the fetch rule
@@ -40,10 +46,31 @@ ALL_TARGET+=	all-gprof
 INSTALL_TARGET+=install-gprof
 .endif
 
+.if defined(__MINIX) && ${HAVE_GOLD:Uyes} != "no"
+ALL_TARGET+=	all-gold
+INSTALL_TARGET+=install-gold
+
+CONFIGURE_ARGS+=	\
+	--enable-lto \
+	--enable-plugins
+# LSC: Here we use the MK variable, as we have to select the right default
+#      linker. Problem is, when Gold is not seen, USE_BITCODE is forced to
+#      "no".
+.if ${MKBITCODE:Uno} == "yes"
+CONFIGURE_ARGS+= \
+	--enable-ld=yes \
+	--enable-gold=default
+.else
+CONFIGURE_ARGS+= \
+	--enable-ld=default \
+	--enable-gold=yes
+.endif # ${MKBITCODE:Uno} == "yes"
+.endif # defined(__MINIX)
 .include "${.CURDIR}/../Makefile.gnuhost"
 
 CCADDFLAGS=	-I${GNUHOSTDIST}/include  -I${DESTDIR}/usr/include
 CCADDFLAGS+=	-B${DESTDIR}/usr/lib/
+CCADDFLAGS+=	${HOST_CPPFLAGS}
 LDADDFLAGS=	-L${DESTDIR}/lib -L${DESTDIR}/usr/lib
 
 # Force avoiding possibly non-executable install-sh.
@@ -75,9 +102,7 @@ native-binutils: .native/.configure_done
 			${HOST_SH} ${GNUHOSTDIST}/configure \
 			--build=`${GNUHOSTDIST}/config.guess` \
 			--host=${MACHINE_GNU_PLATFORM} \
-			--target=${MACHINE_GNU_PLATFORM} \
-			--disable-initfini-array \
-			${BRANDING} \
+			${BASE_CONFIGURE_ARGS} \
 		)
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
 		(cd .native && ${MAKE} configure-host)

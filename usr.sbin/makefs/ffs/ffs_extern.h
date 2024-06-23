@@ -46,7 +46,7 @@ struct indir {
 
 	/* ffs.c */
 void panic(const char *, ...)
-    __attribute__((__noreturn__,__format__(__printf__,1,2)));  
+    __attribute__((__noreturn__,__format__(__printf__,1,2)));
 
 	/* ffs_alloc.c */
 int ffs_alloc(struct inode *, daddr_t, daddr_t, int, daddr_t *);
@@ -66,7 +66,7 @@ void ffs_csum_swap(struct csum *, struct csum *, int);
 void ffs_cg_swap(struct cg *, struct cg *, struct fs *);
 
 	/* ffs_subr.c */
-void ffs_fragacct(struct fs *, int, int32_t[], int, int);
+void ffs_fragacct(struct fs *, int, uint32_t[], int, int);
 int ffs_isblock(struct fs *, u_char *, int32_t);
 int ffs_isfreeblock(struct fs *, u_char *, int32_t);
 void ffs_clrblock(struct fs *, u_char *, int32_t);

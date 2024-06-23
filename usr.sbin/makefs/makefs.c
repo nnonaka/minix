@@ -129,7 +129,7 @@ main(int argc, char *argv[])
 		err(1, "Unable to get system time");
 
 
-	while ((ch = getopt(argc, argv, "B:b:d:f:F:M:m:N:O:o:rs:S:t:T:xZ")) != -1) {
+	while ((ch = getopt(argc, argv, "B:b:d:f:F:LM:m:N:O:o:rs:S:t:T:xZ")) != -1) {
 		switch (ch) {
 
 		case 'B':
@@ -187,6 +187,10 @@ main(int argc, char *argv[])
 			specfile = optarg;
 			break;
 
+		case 'L':
+			fsoptions.follow = true;
+			break;
+
 		case 'M':
 			fsoptions.minsize =
 			    strsuftoll("minimum size", optarg, 1LL, LLONG_MAX);
@@ -205,10 +209,10 @@ main(int argc, char *argv[])
 			break;
 
 		case 'O':
-			fsoptions.offset = 
+			fsoptions.offset =
 			    strsuftoll("offset", optarg, 0LL, LLONG_MAX);
 			break;
-			
+
 		case 'o':
 		{
 			char *p;
@@ -286,7 +290,8 @@ main(int argc, char *argv[])
 
 				/* walk the tree */
 	TIMER_START(start);
-	root = walk_dir(argv[1], ".", NULL, NULL, fsoptions.replace);
+	root = walk_dir(argv[1], ".", NULL, NULL, fsoptions.replace,
+	    fsoptions.follow);
 	TIMER_RESULTS(start, "walk_dir");
 
 	/* append extra directory */
@@ -297,7 +302,8 @@ main(int argc, char *argv[])
 		if (!S_ISDIR(sb.st_mode))
 			errx(1, "%s: not a directory", argv[i]);
 		TIMER_START(start);
-		root = walk_dir(argv[i], ".", NULL, root, fsoptions.replace);
+		root = walk_dir(argv[i], ".", NULL, root, fsoptions.replace,
+		    fsoptions.follow);
 		TIMER_RESULTS(start, "walk_dir2");
 	}
 
@@ -405,7 +411,7 @@ static fstype_t *
 get_fstype(const char *type)
 {
 	int i;
-	
+
 	for (i = 0; fstypes[i].type != NULL; i++)
 		if (strcmp(fstypes[i].type, type) == 0)
 			return (&fstypes[i]);
@@ -445,7 +451,7 @@ get_tstamp(const char *b, struct stat *st)
 	}
 
 	st->st_ino = 1;
-#if HAVE_STRUCT_STAT_BIRTHTIME 
+#if HAVE_STRUCT_STAT_BIRTHTIME
 	st->st_birthtime =
 #endif
 	st->st_mtime = st->st_ctime = st->st_atime = when;

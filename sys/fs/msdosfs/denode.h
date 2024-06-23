@@ -147,7 +147,14 @@ struct fatcache {
 		(dep)->de_fc[FC_NEXTTOLASTFC].fc_frcn = (dep)->de_fc[FC_LASTFC].fc_frcn; \
 		(dep)->de_fc[FC_NEXTTOLASTFC].fc_fsrcn = (dep)->de_fc[FC_LASTFC].fc_fsrcn; \
 	} while (0)
-	 
+
+/*
+ * Auxiliary results from an msdosfs_lookup operation
+ */
+struct msdosfs_lookup_results {
+	u_long mlr_fndoffset;	/* offset of found dir entry */
+	int mlr_fndcnt;		/* number of slots before de_fndoffset */
+};
 
 /*
  * This is the in memory variant of a dos directory entry.  It is usually
@@ -168,8 +175,7 @@ struct denode {
 #define de_dirclust de_key.dk_dirclust
 #define de_diroffset de_key.dk_diroffset
 #define de_dirgen de_key.dk_dirgen
-	u_long de_fndoffset;	/* offset of found dir entry */
-	int de_fndcnt;		/* number of slots before de_fndoffset */
+	struct msdosfs_lookup_results de_crap;	/* results from lookup */
 	long de_refcnt;		/* reference count */
 	struct msdosfsmount *de_pmp;	/* addr of our mount struct */
 	struct lockf *de_lockf;	/* byte level lock list */
@@ -279,19 +285,12 @@ int	msdosfs_getattr		(void *);
 int	msdosfs_setattr		(void *);
 int	msdosfs_read		(void *);
 int	msdosfs_write		(void *);
-#define	msdosfs_lease_check	genfs_lease_check
-#define	msdosfs_ioctl		genfs_enoioctl
-#define	msdosfs_poll		genfs_poll
-#define	msdosfs_revoke		genfs_revoke
-#define	msdosfs_mmap		genfs_mmap
 int	msdosfs_fsync		(void *);
-#define	msdosfs_seek		genfs_seek
 int	msdosfs_remove		(void *);
 int	msdosfs_rename		(void *);
 int	msdosfs_mkdir		(void *);
 int	msdosfs_rmdir		(void *);
 int	msdosfs_readdir		(void *);
-#define	msdosfs_abortop		genfs_abortop
 int	msdosfs_inactive	(void *);
 int	msdosfs_reclaim		(void *);
 int	msdosfs_bmap		(void *);
@@ -306,33 +305,36 @@ int	msdosfs_pathconf	(void *);
 struct componentname;
 struct direntry;
 struct kauth_cred;
-int msdosfs_update(struct vnode *, const struct timespec *,
+int	msdosfs_update(struct vnode *, const struct timespec *,
 	    const struct timespec *, int);
-int createde(struct denode *, struct denode *,
+int	msdosfs_createde(struct denode *, struct denode *,
+		const struct msdosfs_lookup_results *,
 		struct denode **, struct componentname *);
-int deextend(struct denode *, u_long, struct kauth_cred *);
+int	msdosfs_deextend(struct denode *, u_long, struct kauth_cred *);
 #ifdef MAKEFS
-int deget(struct msdosfsmount *, u_long, u_long, struct denode **);
+int	msdosfs_deget(struct msdosfsmount *, u_long, u_long, struct denode **);
 #else
-int deget(struct msdosfsmount *, u_long, u_long, struct vnode **);
+int	msdosfs_deget(struct msdosfsmount *, u_long, u_long, struct vnode **);
 #endif
-int detrunc(struct denode *, u_long, int, struct kauth_cred *);
-int deupdat(struct denode *, int);
-int doscheckpath(struct denode *, struct denode *);
-int dosdirempty(struct denode *);
-int readde(struct denode *, struct buf **, struct direntry **);
-int readep(struct msdosfsmount *, u_long, u_long,
+int	msdosfs_detrunc(struct denode *, u_long, int, struct kauth_cred *);
+int	msdosfs_deupdat(struct denode *, int);
+int	msdosfs_dosdirempty(struct denode *);
+int	msdosfs_readde(struct denode *, struct buf **, struct direntry **);
+int	msdosfs_readep(struct msdosfsmount *, u_long, u_long,
 		struct buf **, struct direntry **);
-int removede(struct denode *, struct denode *);
-int uniqdosname(struct denode *, struct componentname *, u_char *);
-int findwin95(struct denode *);
-int msdosfs_gop_alloc(struct vnode *, off_t, off_t, int, struct kauth_cred *);
-void msdosfs_gop_markupdate(struct vnode *, int);
-void msdosfs_detimes(struct denode *, const struct timespec *,
-    const struct timespec *, const struct timespec *, int);
-int msdosfs_fh_enter(struct msdosfsmount *, uint32_t, uint32_t, uint32_t *);
-int msdosfs_fh_remove(struct msdosfsmount *, uint32_t, uint32_t);
-int msdosfs_fh_lookup(struct msdosfsmount *, uint32_t, uint32_t, uint32_t *);
-void msdosfs_fh_destroy(struct msdosfsmount *);
+int	msdosfs_removede(struct denode *, struct denode *,
+		const struct msdosfs_lookup_results *);
+int	msdosfs_uniqdosname(struct denode *, struct componentname *, u_char *);
+int	msdosfs_findwin95(struct denode *);
+int	msdosfs_gop_alloc(struct vnode *, off_t, off_t, int,
+	    struct kauth_cred *);
+void	msdosfs_gop_markupdate(struct vnode *, int);
+void	msdosfs_detimes(struct denode *, const struct timespec *,
+	    const struct timespec *, const struct timespec *, int);
+int	msdosfs_fh_enter(struct msdosfsmount *, uint32_t, uint32_t, uint32_t *);
+int	msdosfs_fh_remove(struct msdosfsmount *, uint32_t, uint32_t);
+int	msdosfs_fh_lookup(struct msdosfsmount *, uint32_t, uint32_t,
+	    uint32_t *);
+void	msdosfs_fh_destroy(struct msdosfsmount *);
 #endif	/* _KERNEL || MAKEFS */
 #endif /* _MSDOSFS_DENODE_H_ */

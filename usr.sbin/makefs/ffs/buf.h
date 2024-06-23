@@ -49,6 +49,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <err.h>
+#include "namespace.h"
 
 struct componentname {
 	char *cn_nameptr;

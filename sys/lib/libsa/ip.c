@@ -59,7 +59,7 @@
 #include "net.h"
 
 /*
- * sends an IP packet, if it's alredy constructed
+ * sends an IP packet, if it's already constructed
 */
 static ssize_t
 _sendip(struct iodesc *d, struct ip *ip, size_t len)

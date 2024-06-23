@@ -161,9 +161,9 @@ void kmain(kinfo_t *local_cbi)
   proc_init();
   IPCF_POOL_INIT();
 
-   if(NR_BOOT_MODULES != kinfo.mbi.mi_mods_count)
+   if(NR_BOOT_MODULES != kinfo.module_count)
    	panic("expecting %d boot processes/modules, found %d",
-		NR_BOOT_MODULES, kinfo.mbi.mi_mods_count);
+		NR_BOOT_MODULES, kinfo.module_count);
 
   /* Set up proc table entries for processes in boot image. */
   for (i=0; i < NR_BOOT_PROCS; ++i) {
@@ -182,7 +182,7 @@ void kmain(kinfo_t *local_cbi)
 
 	if(i >= NR_TASKS) {
 		/* Remember this so it can be passed to VM */
-		multiboot_module_t *mb_mod = &kinfo.module_list[i - NR_TASKS];
+		kinfo_module_t *mb_mod = &kinfo.module_list[i - NR_TASKS];
 		ip->start_addr = mb_mod->mod_start;
 		ip->len = mb_mod->mod_end - mb_mod->mod_start;
 	}

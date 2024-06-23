@@ -499,7 +499,11 @@ OBSOLETE.dir=		${.OBJDIR}/obsolete.dir
 .if !defined(__MINIX)
 OBSOLETE.files=		base comp etc games man misc rescue text
 .else
+.if ${MKLLVM} != "no"
 OBSOLETE.files=		minix-base minix-comp minix-games minix-kernel minix-man
+.else
+OBSOLETE.files=		minix-base minix-comp-gcc minix-games minix-kernel minix-man
+.endif
 .endif # !defined(__MINIX)
 .if ${MKDEBUG} != "no"
 OBSOLETE.files+=	minix-debug

@@ -10,7 +10,7 @@
 #include <minix/log.h>
 #include <minix/sysutil.h>
 
-static struct log log =
+static struct log log1 =
 { .name = "libacpi", .log_level = LEVEL_TRACE, .log_func = default_log };
 
 static endpoint_t acpi_ep = NONE;
@@ -38,7 +38,7 @@ acpi_get_irq(unsigned bus, unsigned dev, unsigned pin)
 			panic("libacpi: ds_retrieve_label_endpt failed for 'acpi': %d", err);
 		}
 		else {
-			log_info(&log, "resolved acpi to endpoint: %d\n", acpi_ep);
+			log_info(&log1, "resolved acpi to endpoint: %d\n", acpi_ep);
 		}
 	}
 

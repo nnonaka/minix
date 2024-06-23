@@ -42,7 +42,7 @@ MINIX:
 
 .balign 8
 
-#define MULTIBOOT_FLAGS (MULTIBOOT_HEADER_WANT_MEMORY | MULTIBOOT_HEADER_MODS_ALIGNED)
+#define MULTIBOOT_FLAGS (MULTIBOOT_HEADER_WANT_MEMORY | MULTIBOOT_HEADER_MODS_ALIGNED | MULTIBOOT_HEADER_HAS_VBE)
 
 _C_LABEL(Multiboot_Header):
 multiboot_magic:
@@ -58,11 +58,11 @@ multiboot_checksum:
 	.long 0
 /* Video mode */
 multiboot_mode_type:
-	.long MULTIBOOT_VIDEO_MODE_EGA
+	.long 1 /* MULTIBOOT_VIDEO_MODE_EGA */
 multiboot_width:
-	.long MULTIBOOT_CONSOLE_COLS
+	.long 80 /* MULTIBOOT_CONSOLE_COLS */
 multiboot_height:
-	.long MULTIBOOT_CONSOLE_LINES
+	.long 25 /* MULTIBOOT_CONSOLE_LINES */
 multiboot_depth:
 	.long 0
 	
@@ -76,21 +76,22 @@ _C_LABEL(Multiboot2_Header):
 		+ (Multiboot2_Header_end - Multiboot2_Header))
 
 	.long	1	/* MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST */
-	.long	16	/* sizeof(multiboot_header_tag_information_request) */
+	.long	32	/* sizeof(multiboot_header_tag_information_request) */
 			/* + sizeof(uint32_t) * requests */
+	.long	1	/* MULTIBOOT_TAG_TYPE_CMDLINE */
+	.long	3	/* MULTIBOOT_TAG_TYPE_MODULE */
 	.long	4	/* MULTIBOOT_TAG_TYPE_BASIC_MEMINFO */
 	.long	6	/* MULTIBOOT_TAG_TYPE_MMAP */
+	.long	8	/* MULTIBOOT_TAG_TYPE_FRAMEBUFFER */
+	.long	17	/* MULTIBOOT_TAG_TYPE_EFI_MMAP */
 
 	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
 	.long	12	/* sizeof(struct multiboot_tag_efi32) */
-	.long	multiboot2_loader
+	.long	multiboot_init
 	.long   0	/* pad for 8 bytes alignment */
 
-	.long	4	/* MULTIBOOT_HEADER_TAG_CONSOLE_FLAGS */
-	.long	12	/* sizeof(struct multiboot_header_tag_console_flags) */
-	.long	3	/* MULTIBOOT_CONSOLE_FLAGS_CONSOLE_REQUIRED || */
-				/*  MULTIBOOT_CONSOLE_FLAGS_EGA_TEXT_SUPPORTED */
-	.long   0	/* pad for 8 bytes alignment */
+	/* UEFI don't support EGA console */
+	/* So dont't put 'MULTIBOOT_HEADER_TAG_CONSOLE_FLAGS' here */
 	
 	.long	0	/* MULTIBOOT_HEADER_TAG_END */
 	.long	8	/* sizeof(struct multiboot_tag) */
@@ -127,14 +128,26 @@ multiboot1_loader:
         call    _C_LABEL(kmain)
 
 	/* not reached */
-hang:
-	hlt
 	jmp hang
 	
 multiboot2_loader:
 	push    %ebx	/* multiboot2 information struct */
 	push	%eax	/* multiboot2 magic number */
-	call    _C_LABEL(pre_init2)
+	call    _C_LABEL(pre2_init)
+	
+	/* Kernel is mapped high now and ready to go, with
+	 * the boot info pointer returnd in %eax. Set the
+	 * highly mapped stack, initialize it, push the boot
+	 * info pointer and jump to the highly mapped kernel.
+	 */
+	mov	$k_initial_stktop, %esp
+	push	$0	/* Terminate stack */
+	push	%eax
+        call    _C_LABEL(kmain)
+
+	/* not reached */
+hang:
+	hlt
 	jmp hang
 
 .data

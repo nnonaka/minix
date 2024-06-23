@@ -48,7 +48,7 @@ SRCS+=	bcopy.c bzero.c	# Remove me eventually.
 .endif # !defined(__MINIX)
 
 # io routines
-SRCS+=	closeall.c dev.c disklabel.c dkcksum.c ioctl.c nullfs.c stat.c fstat.c
+SRCS+=	closeall.c dev.c disklabel.c ioctl.c nullfs.c stat.c fstat.c
 SRCS+=	close.c lseek.c open.c read.c write.c
 .if (${SA_USE_CREAD} == "yes")
 CPPFLAGS+= -D__INTERNAL_LIBSA_CREAD
@@ -86,7 +86,7 @@ CPPFLAGS+=	-DLIBSA_BIENDIAN_SUPPORT
 SRCS+=		byteorder.c
 .endif
 
-SRCS+=	ffsv1.c ffsv2.c
+SRCS+=	ffsv1.c ffsv2.c ffs_bswap.c
 SRCS+=	lfsv1.c lfsv2.c
 SRCS+=	cd9660.c
 SRCS+=	ustarfs.c
@@ -96,16 +96,6 @@ SRCS+=	minixfs3.c
 SRCS+=	fnmatch.c
 # for historic compatibility ufs == ffsv1
 SRCS+=	ufs.c
-
-.if defined(__MINIX)
-# NetBSD has it in libkern, MINIX lacks it
-SRCS+=	xlat_mbr_fstype.c
-.PATH.c: ${NETBSDSRCDIR}/sys/lib/libkern
-
-# NetBSD has it in libkern, MINIX has it in libc but not libminc...
-SRCS+=	md5c.c
-.PATH.c: ${NETBSDSRCDIR}/common/lib/libc/md
-.endif # defined(__MINIX)
 
 .include <bsd.lib.mk>
 

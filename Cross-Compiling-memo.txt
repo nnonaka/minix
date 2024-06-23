@@ -9,6 +9,7 @@ Cross-compiling memo
     $ sh build.sh -U -u -mi386 -O ../build tools
     $ sh build.sh -U -u -mi386 -O ../build distribution
     $ sh build.sh -U -u -mi386 -O ../build release
+    $ sh build.sh -U -u -mi386 -O ../build live-image
     $ sh build.sh -U -u -mi386 -O ../build install-image (not working)
     
     
@@ -22,6 +23,9 @@ Cross-compiling memo
                    install from an UNPRIVED build with proper file permissions.
     -u             Set MKUPDATE=yes; do not run "make cleandir" first.
                    Without this, everything is rebuilt, including the tools.
+    
+    To use gcc: -V MKLLVM=no -V MKGCCCMDS=yes
+    
   *texinfo
   
     You might run gnu/dist/fetch.sh manually.

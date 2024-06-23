@@ -10,59 +10,9 @@
 
 #ifdef _MINIX_SYSTEM
 
-/* Copied from multiboot.h */
-struct my_multiboot_info {
-	uint32_t	mi_flags;
+/* Multiboot derived Informations */
 
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_MEMORY. */
-	uint32_t	mi_mem_lower;
-	uint32_t	mi_mem_upper;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_BOOT_DEVICE. */
-	uint8_t		mi_boot_device_part3;
-	uint8_t		mi_boot_device_part2;
-	uint8_t		mi_boot_device_part1;
-	uint8_t		mi_boot_device_drive;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_CMDLINE. */
-	char *		mi_cmdline;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_MODS. */
-	uint32_t	mi_mods_count;
-	vaddr_t		mi_mods_addr;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_{AOUT,ELF}_SYMS. */
-	uint32_t	mi_elfshdr_num;
-	uint32_t	mi_elfshdr_size;
-	vaddr_t		mi_elfshdr_addr;
-	uint32_t	mi_elfshdr_shndx;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_MMAP. */
-	uint32_t	mi_mmap_length;
-	vaddr_t		mi_mmap_addr;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_DRIVES. */
-	uint32_t	mi_drives_length;
-	vaddr_t		mi_drives_addr;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_CONFIG_TABLE. */
-	void *		unused_mi_config_table;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_LOADER_NAME. */
-	char *		mi_loader_name;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_APM. */
-	void *		unused_mi_apm_table;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_VBE. */
-	void *		unused_mi_vbe_control_info;
-	void *		unused_mi_vbe_mode_info;
-	uint16_t	unused_mi_vbe_mode;
-	uint16_t	unused_mi_vbe_interface_seg;
-	uint16_t	unused_mi_vbe_interface_off;
-	uint16_t	unused_mi_vbe_interface_len;
-
-	/* Valid if mi_flags sets MULTIBOOT_INFO_HAS_FRAMEBUFFER. */
+struct kinfo_framebuffer {
 	uint64_t	framebuffer_addr;
 	uint32_t	framebuffer_pitch;
 	uint32_t	framebuffer_width;
@@ -86,37 +36,46 @@ struct my_multiboot_info {
 			uint8_t framebuffer_blue_mask_size;
 		};
 	};
-
 };
 
-struct my_multiboot_mmap {
+struct kinfo_mmap {
 	uint32_t	mm_size;
 	uint64_t	mm_base_addr;
 	uint64_t	mm_length;
 	uint32_t	mm_type;
 };
 
-struct my_multiboot_module {
+struct kinfo_module {
 	uint32_t	mod_start;
 	uint32_t	mod_end;
 	char *		mod_string;
-	uint32_t	mod_reserved;
 };
 
-#define MULTIBOOT_MAX_MODS     20
-#define MULTIBOOT_PARAM_BUF_SIZE 1024
+//#define MULTIBOOT_VIDEO_MODE		0x00000004
+//#define MULTIBOOT_VIDEO_MODE_EGA	1
+#define MULTIBOOT_VIDEO_BUFFER		0xB8000
 
-typedef struct my_multiboot_info multiboot_info_t;
-typedef struct my_multiboot_module multiboot_module_t;
-typedef struct my_multiboot_mmap multiboot_memory_map_t;
+//#define MULTIBOOT_CONSOLE_LINES		25
+//#define MULTIBOOT_CONSOLE_COLS		80
+
+#define MULTIBOOT_MEMORY_AVAILABLE	1
+#define MULTIBOOT_MAX_MODS			20
+#define MULTIBOOT_PARAM_BUF_SIZE	1024
+
+//typedef struct multiboot1_info multiboot_info_t;
+typedef struct kinfo_module kinfo_module_t;
+typedef struct kinfo_mmap kinfo_memory_map_t;
 
 /* This is used to obtain system information through SYS_GETINFO. */
 #define MAXMEMMAP 40
 typedef struct kinfo {
         /* Straight multiboot-provided info */
-        multiboot_info_t        mbi;
-        multiboot_module_t      module_list[MULTIBOOT_MAX_MODS];
-        multiboot_memory_map_t  memmap[MAXMEMMAP]; /* free mem list */
+        //multiboot_info_t        mbi1;
+        int						mb_version;
+        struct kinfo_framebuffer	fb;
+        uint32_t	            module_count;
+        kinfo_module_t      	module_list[MULTIBOOT_MAX_MODS];
+        kinfo_memory_map_t  	memmap[MAXMEMMAP]; /* free mem list */
         phys_bytes              mem_high_phys;
         int                     mmap_size;
 
