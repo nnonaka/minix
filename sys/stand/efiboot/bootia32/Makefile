@@ -12,16 +12,11 @@ KLINK_MACHINE=	i386
 
 EFIBOOT_ACPI=	yes
 EFIBOOT_FDT=	yes
-#EFIBOOT_MULTIBOOT2=	yes
+EFIBOOT_MULTIBOOT2=	yes
 
 EXTRA_SOURCES=	efibootia32.c
 EXTRA_SOURCES+=	startprog32.S
 EXTRA_SOURCES+=	multiboot32.S
-
-# copied from /sys/arch/i386/stand/lib
-#EXTRA_SOURCES+=	pread.c
-#EXTRA_SOURCES+=	pvcopy.S
-
 
 #CFLAGS+=	-m32 -DACPI_32BIT_PHYSICAL_ADDRESS
 #AFLAGS+=	-m32

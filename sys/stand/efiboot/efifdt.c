@@ -222,7 +222,7 @@ efi_fdt_show(void)
 	printf("]\n");
 }
 
-static int
+int
 efi_fdt_chosen(void)
 {
 	int chosen;
@@ -236,6 +236,96 @@ efi_fdt_chosen(void)
 		panic("FDT: Failed to create " FDT_CHOSEN_NODE_PATH " node");
 
 	return chosen;
+}
+
+const void *
+efi_fdt_get_prop(int off, const char *prop, int *plen)
+{
+	return fdt_getprop(fdt_data, off, prop, plen);
+}
+
+const char *
+efi_fdt_get_string(int off, const char *prop)
+{
+	if (strcmp(prop, "name") == 0)
+		return fdt_get_name(fdt_data, off, NULL);
+	else
+		return fdt_getprop(fdt_data, off, prop, NULL);
+}
+
+static int
+efi_of_getproplen(int off, const char *prop)
+{
+	const char *name;
+	const void *val;
+	int len;
+
+	if (strcmp(prop, "name") == 0) {
+		val = fdt_get_name(fdt_data, off, &len);
+		if (val) {
+			const char *p = strchr(val, '@');
+			if (p) {
+				len = (uintptr_t)p - (uintptr_t)val + 1;
+			} else {
+				len += 1;
+			}
+		}
+	} else {
+		off = fdt_first_property_offset(fdt_data, off);
+		if (off < 0) {
+			return -1;
+		}
+		while (off >= 0) {
+			val = fdt_getprop_by_offset(fdt_data, off, &name, &len);
+			if (val == NULL) {
+				return -1;
+			}
+			if (strcmp(name, prop) == 0) {
+				break;
+			}
+			off = fdt_next_property_offset(fdt_data, off);
+			if (off < 0) {
+				return -1;
+			}
+		}
+	}
+	if (val == NULL) {
+		return -1;
+	}
+
+	return len;
+}
+
+const char *
+efi_fdt_get_string_index(int off, const char *prop, u_int index)
+{
+	const char *names;
+	int len;
+
+	if ((len = efi_of_getproplen(off, prop)) < 0)
+		return NULL;
+
+	names = efi_fdt_get_string(off, prop);
+
+	return strlist_string(names, len, index);
+}
+
+int
+efi_fdt_get_index(int off, const char *prop, const char *name, u_int *idx)
+{
+	const char *p;
+	int len, index;
+
+	p = efi_fdt_get_prop(off, prop, &len);
+	if (p == NULL || len <= 0)
+		return -1;
+
+	index = strlist_index(p, len, name);
+	if (index == -1)
+		return -1;
+
+	*idx = index;
+	return 0;
 }
 
 void

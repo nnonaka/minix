@@ -47,4 +47,10 @@ void efi_fdt_module(const char *, u_long, u_long);
 void efi_fdt_userconf(void);
 void efi_fdt_init(u_long, u_long);
 void efi_fdt_fini(void);
+int efi_fdt_chosen(void);
 void efi_fdt_system_table(void);
+const void *efi_fdt_get_prop(int, const char *, int *);
+const char *efi_fdt_get_string(int, const char *);
+const char *efi_fdt_get_string_index(int, const char *, u_int);
+int efi_fdt_get_index(int, const char *, const char *, u_int *);
+
