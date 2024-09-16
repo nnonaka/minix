@@ -58,20 +58,20 @@ SRCS+=	bswap64.c
 SRCS+=	md4c.c md5c.c rmd160.c sha1.c sha2.c sha3.c keccak.c murmurhash.c
 #SRCS+=	pmatch.c mcount.c crc32.c
 SRCS+=	crc32.c
-#SRCS+=	strlist.c
+SRCS+=	strlist.c
 
 #SRCS+=	ppath_kmem_alloc.c
 
-#SRCS+=	copystr.c
+SRCS+=	copystr.c
 SRCS+=	strsep.c strstr.c
 SRCS+=	strlcpy.c strlcat.c
 
 #SRCS+=	imax.c imin.c lmax.c lmin.c uimax.c uimin.c ulmax.c ulmin.c
-#SRCS+=	memmove.c
+SRCS+=	memmove.c
 SRCS+=	strchr.c strrchr.c
 SRCS+=	memcmp.c memmem.c
 
-#SRCS+=	memcpy.c
+SRCS+=	memcpy.c
 .if empty(SRCS:Mmemset2.*)
 SRCS+=	memset.c
 .endif
@@ -85,7 +85,7 @@ SRCS+=	strtoul.c strtoll.c strtoull.c strtoimax.c strtoumax.c
 #SRCS+=	random.c
 #SRCS+=	rngtest.c
 
-#SRCS+=	memchr.c
+SRCS+=	memchr.c
 SRCS+=	strcat.c strcmp.c strcpy.c strcspn.c strlen.c strnlen.c
 SRCS+=	strncat.c strncmp.c strncpy.c strpbrk.c strspn.c
 SRCS+=	strcasecmp.c strncasecmp.c

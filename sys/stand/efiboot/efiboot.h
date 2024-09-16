@@ -121,6 +121,7 @@ void efi_gop_setmode(UINT32);
 
 /* exec.c */
 int load_file(const char *, u_long, bool, EFI_PHYSICAL_ADDRESS *, u_long *);
+void generate_efirng(void);
 int exec_netbsd(const char *, const char *);
 
 /* panic.c */

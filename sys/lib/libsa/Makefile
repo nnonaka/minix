@@ -43,9 +43,7 @@ SRCS+=	bootcfg.c
 .if ${MACHINE_ARCH} != "i386" && ${MACHINE_ARCH} != "x86_64"
 SRCS+=	memcmp.c memcpy.c memmove.c memset.c strchr.c
 .endif
-.if !defined(__MINIX)
 SRCS+=	bcopy.c bzero.c	# Remove me eventually.
-.endif # !defined(__MINIX)
 
 # io routines
 SRCS+=	closeall.c dev.c disklabel.c ioctl.c nullfs.c stat.c fstat.c

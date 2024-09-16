@@ -35,22 +35,8 @@ void multiboot(physaddr_t, physaddr_t, physaddr_t, uint32_t);
 int exec_multiboot(const char *, const char *);
 
 /* multiboot */
-struct multiboot_package;
-struct multiboot_package_priv;
 
-struct multiboot_package {
-	int			 mbp_version;
-	struct multiboot_header	*mbp_header;
-	const char		*mbp_file;
-	char			*mbp_args;
-	u_long			 mbp_basemem;
-	u_long			 mbp_extmem;
-	u_long			 mbp_loadaddr;
-	u_long			*mbp_marks;
-	struct multiboot_package_priv*mbp_priv;
-};
-
-struct multiboot_package *probe_multiboot2(const char *);
+void *probe_multiboot2(const char *);
 
 void efi_dcache_flush(u_long, u_long);
 void efi_boot_kernel(u_long[]);

@@ -38,11 +38,12 @@
 #include <i386/multiboot2.h>
 
 extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
-
+extern char twiddle_toggle;
+extern u_long load_offset;
 
 static bool efi_exited = false;
 
-struct multiboot_package_priv {
+typedef struct multiboot_package_priv {
 	struct multiboot_tag 			       *mpp_mbi;
 	size_t						mpp_mbi_len;
 	struct multiboot_header_tag_information_request*mpp_info_req;
@@ -55,7 +56,19 @@ struct multiboot_package_priv {
 	struct multiboot_header_tag_entry_address	*mpp_entry_elf32;
 	struct multiboot_header_tag_entry_address	*mpp_entry_elf64;
 	struct multiboot_header_tag_relocatable		*mpp_relocatable;
-};
+} mpp_t;
+
+typedef struct multiboot_package {
+	int			 mbp_version;
+	struct multiboot_header	*mbp_header;
+	const char		*mbp_file;
+	char			*mbp_args;
+	u_long			 mbp_basemem;
+	u_long			 mbp_extmem;
+	u_long			 mbp_loadaddr;
+	u_long			*mbp_marks;
+	mpp_t			*mbp_priv;
+} mbp_t;
 
 static
 EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *
@@ -911,7 +924,7 @@ mbi_efi_mmap(struct multiboot_package *mbp, void *buf)
 	struct multiboot_tag_efi_mmap *mbt = buf;
 
 	UINTN nentries = 0, mapkey, descsize;
-	EFI_MEMORY_DESCRIPTOR *md, *memmap;
+	EFI_MEMORY_DESCRIPTOR *memmap;
 	UINT32 descver;
 
 	memmap = LibMemoryMap(&nentries, &mapkey, &descsize, &descver);
@@ -1229,18 +1242,9 @@ exec_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
-#ifdef __LP64__
-	if (mpp->mpp_entry_elf64)
-		entry = mpp->mpp_entry_elf64->entry_addr
-		      + efi_loadaddr;
-#else
-	if (mpp->mpp_entry_elf32)
-		entry = mpp->mpp_entry_elf32->entry_addr
-		      + efi_loadaddr;
-#endif /* __LP64__ */
 
 	/* Does not return */
-	multiboot(entry, vtophys(mbi),
+	multiboot(entry, (physaddr_t)mbi,
 	    x86_trunc_page(mbp->mbp_basemem * 1024),
 	    MULTIBOOT2_BOOTLOADER_MAGIC);
 fail:
@@ -1281,7 +1285,7 @@ out:
 #define NEXT_HEADER(mbt) ((struct multiboot_header_tag *) \
    ((char *)mbt + roundup(mbt->size, MULTIBOOT_HEADER_ALIGN)))
 
-struct multiboot_package *
+void *
 probe_multiboot2(const char *path)
 {
 	int fd = -1;
@@ -1320,9 +1324,6 @@ probe_multiboot2(const char *path)
 		mbp->mbp_header		= alloc(mbh_len);
 		mbp->mbp_priv		= alloc(sizeof(*mbp->mbp_priv));
 		memset(mbp->mbp_priv, 0, sizeof (*mbp->mbp_priv));
-		mbp->mbp_probe		= *probe_multiboot2;
-		mbp->mbp_exec		= *exec_multiboot2;
-		mbp->mbp_cleanup	= *cleanup_multiboot2;
 
 		break;
 	}
@@ -1431,10 +1432,6 @@ probe_multiboot2(const char *path)
 	 * at least we honour the alignment request. Xen requires
 	 * that to boot.
 	 */
-	struct multiboot_header_tag_relocatable *reloc = 
-	    mbp->mbp_priv->mpp_relocatable;
-	if (reloc)
-		efi_loadaddr = roundup(efi_loadaddr, reloc->align);
 
 	if (is_header_required((void *)mbp->mbp_priv->mpp_relocatable)) {
 		printf("Unsupported multiboot relocatable header\n");
@@ -1518,7 +1515,7 @@ exec_multiboot(const char *fname, const char *args)
 	mbp->mbp_marks = marks;
 
 	/* Only returns on error */
-	(void)mbp->mbp_exec(mbp);
+	(void)exec_multiboot2(mbp);
 	
 	/* This should not happen.. */
 	printf("boot returned\n");
