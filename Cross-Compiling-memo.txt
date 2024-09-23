@@ -1,6 +1,10 @@
 Cross-compiling memo
 
-  Cross-building for x86
+  Dependency
+  
+    # apt install build-essential curl git zlibc zlib1g zlib1g-dev
+
+  (old way) Cross-building for x86
 
     $ bash ./releasetools/x86_hdimage.sh 
 
@@ -10,11 +14,12 @@ Cross-compiling memo
     $ sh build.sh -U -u -mi386 -O ../build distribution
     $ sh build.sh -U -u -mi386 -O ../build release
     $ sh build.sh -U -u -mi386 -O ../build live-image
-    $ sh build.sh -U -u -mi386 -O ../build install-image (not working)
     
     
     build.sh options
     
+    -j njob        Run up to njob jobs in parallel; see make(1) -j.
+
     -m mach        Set MACHINE to mach.  Some mach values are actually
                    aliases that set MACHINE/MACHINE_ARCH pairs.
                    (ex. i386 or amd64)
@@ -23,9 +28,6 @@ Cross-compiling memo
                    install from an UNPRIVED build with proper file permissions.
     -u             Set MKUPDATE=yes; do not run "make cleandir" first.
                    Without this, everything is rebuilt, including the tools.
-    
-    To use gcc: -V MKLLVM=no -V MKGCCCMDS=yes
-    
   *texinfo
   
     You might run gnu/dist/fetch.sh manually.

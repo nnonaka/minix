@@ -141,7 +141,7 @@ puffs_kernerr_abort(struct puffs_usermount *pu, uint8_t type,
 {
 
 #if !defined(__minix)
-	warnx("abort: type %d, error %d, cookie %p (%s)",
+	warnx("%s: type %d, error %d, cookie %p (%s)", __func__,
 #else
 	lpuffs_debug("abort: type %d, error %d, cookie %p (%s)\n",
 #endif /* !defined(__minix) */
@@ -155,7 +155,7 @@ puffs_kernerr_log(struct puffs_usermount *pu, uint8_t type,
 	int error, const char *str, puffs_cookie_t cookie)
 {
 
-	syslog(LOG_WARNING, "kernel: type %d, error %d, cookie %p (%s)",
+	syslog(LOG_WARNING, "%s: type %d, error %d, cookie %p (%s)", __func__,
 	    type, error, cookie, str);
 }
 
@@ -606,19 +606,20 @@ do {									\
 		dirlen = strlen(dir);
 		if (strncmp(dir, rp, rplen) != 0 ||
 		    strspn(dir + rplen, "/") != dirlen - rplen) {
-			warnx("puffs_mount: \"%s\" is a relative path.", dir);
-			warnx("puffs_mount: using \"%s\" instead.", rp);
+			warnx("%s: `%s' is a %s path.", __func__, dir,
+			    dir[0] != '/' ? "relative" : "non canonical");
+			warnx("%s: using `%s' instead.", __func__, rp);
 		}
 
 		fd = open(_PATH_PUFFS, O_RDWR);
 		if (fd == -1) {
-			warnx("puffs_mount: cannot open %s", _PATH_PUFFS);
+			warnx("%s: cannot open `%s'", __func__, _PATH_PUFFS);
 			rv = -1;
 			goto out;
 		}
 		if (fd <= 2)
-			warnx("puffs_mount: device fd %d (<= 2), sure this is "
-			    "what you want?", fd);
+			warnx("%s: device fd %d (<= 2), sure this is "
+			    "what you want?", __func__, fd);
 
 		pu->pu_kargp->pa_fd = pu->pu_fd = fd;
 		if ((rv = mount(MOUNT_PUFFS, rp, mntflags,
@@ -807,7 +808,7 @@ puffs_exit(struct puffs_usermount *pu, int unused /* strict compat */)
 }
 
 #if !defined(__minix)
-/* no sigset_t static intializer */
+/* no sigset_t static initializer */
 static int sigs[NSIG] = { 0, };
 static int sigcatch = 0;
 
@@ -916,14 +917,14 @@ puffs__theloop(struct puffs_cc *pcc)
 			if (FIO_EN_WRITE(fio)) {
 				EV_SET(&pu->pu_evs[nchanges], fio->io_fd,
 				    EVFILT_WRITE, EV_ENABLE, 0, 0,
-				    (uintptr_t)fio);
+				    (intptr_t)fio);
 				fio->stat |= FIO_WR;
 				nchanges++;
 			}
 			if (FIO_RM_WRITE(fio)) {
 				EV_SET(&pu->pu_evs[nchanges], fio->io_fd,
 				    EVFILT_WRITE, EV_DISABLE, 0, 0,
-				    (uintptr_t)fio);
+				    (intptr_t)fio);
 				fio->stat &= ~FIO_WR;
 				nchanges++;
 			}
@@ -973,21 +974,23 @@ puffs__theloop(struct puffs_cc *pcc)
 			}
 
 			what = 0;
-			if (curev->filter == EVFILT_READ) {
+			switch (curev->filter) {
+			case EVFILT_READ:
 				puffs__framev_input(pu, pfctrl, fio);
 				what |= PUFFS_FBIO_READ;
-			}
-
-			else if (curev->filter == EVFILT_WRITE) {
+				break;
+			case EVFILT_WRITE:
 				puffs__framev_output(pu, pfctrl, fio);
 				what |= PUFFS_FBIO_WRITE;
-			}
-
-			else if (__predict_false(curev->filter==EVFILT_SIGNAL)){
+				break;
+			case EVFILT_SIGNAL:
 				if ((pu->pu_state & PU_DONEXIT) == 0) {
 					PU_SETSFLAG(pu, PU_DONEXIT);
 					puffs_exit(pu, 0);
 				}
+				break;
+			default:
+				warn("unhandled filter %d", curev->filter);
 			}
 			if (what)
 				puffs__framev_notify(fio, what);
@@ -1050,7 +1053,7 @@ puffs_mainloop(struct puffs_usermount *pu)
 
 	LIST_FOREACH(fio, &pu->pu_ios, fio_entries) {
 		EV_SET(curev, fio->io_fd, EVFILT_READ, EV_ADD,
-		    0, 0, (uintptr_t)fio);
+		    0, 0, (intptr_t)fio);
 		curev++;
 		EV_SET(curev, fio->io_fd, EVFILT_WRITE, EV_ADD | EV_DISABLE,
 		    0, 0, (uintptr_t)fio);

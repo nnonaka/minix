@@ -193,27 +193,12 @@ typedef	__gid_t		gid_t;		/* group id */
 #endif
 
 typedef	uint32_t	id_t;		/* group id, process id or user id */
-#ifdef __ino_t
-/*
- * Some first stage bootloaders may want to avoid 64bit math, especially
- * when the firmware can only access small disks/partitions anyway.
- * Example: hppa/stand/xxboot
- */
-typedef	__ino_t		ino_t;
-#undef __ino_t
-#else
 typedef	uint64_t	ino_t;		/* inode number */
-#endif
 typedef	long		key_t;		/* IPC key (for Sys V IPC) */
 
 #ifndef	mode_t
 typedef	__mode_t	mode_t;		/* permissions */
 #define	mode_t		__mode_t
-#endif
-
-#ifndef	accmode_t
-typedef	__accmode_t	accmode_t;	/* access permissions */
-#define	accmode_t	__accmode_t
 #endif
 
 typedef	uint32_t	nlink_t;	/* link count */

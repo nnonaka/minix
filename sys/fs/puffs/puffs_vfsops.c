@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_vfsops.c,v 1.117 2015/02/16 10:49:39 martin Exp $	*/
+/*	$NetBSD: puffs_vfsops.c,v 1.121 2018/05/28 21:04:37 chs Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_vfsops.c,v 1.117 2015/02/16 10:49:39 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_vfsops.c,v 1.121 2018/05/28 21:04:37 chs Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -76,6 +76,7 @@ static const struct genfs_ops puffs_genfsops = {
 #if 0
 	.gop_alloc, should ask userspace
 #endif
+	.gop_putrange = genfs_gop_putrange,
 };
 
 /*
@@ -269,8 +270,22 @@ puffs_vfsop_mount(struct mount *mp, const char *path, void *data,
 
 	/* XXX: check parameters */
 	pmp->pmp_root_cookie = args->pa_root_cookie;
+	switch (args->pa_root_vtype) {
+	case VNON: case VREG: case VDIR: case VBLK:
+	case VCHR: case VLNK: case VSOCK: case VFIFO:
+		break;
+	default:
+		error = EINVAL;
+		goto out;
+	}
 	pmp->pmp_root_vtype = args->pa_root_vtype;
+
+	if (args->pa_root_vsize < 0) {
+		error = EINVAL;
+		goto out;
+	}
 	pmp->pmp_root_vsize = args->pa_root_vsize;
+
 	pmp->pmp_root_rdev = args->pa_root_rdev;
 	pmp->pmp_docompat = args->pa_time32;
 
@@ -497,6 +512,9 @@ puffs_vfsop_statvfs(struct mount *mp, struct statvfs *sbp)
 static bool
 pageflush_selector(void *cl, struct vnode *vp)
 {
+
+	KASSERT(mutex_owned(vp->v_interlock));
+
 	return vp->v_type == VREG &&
 	    !(LIST_EMPTY(&vp->v_dirtyblkhd) && UVM_OBJ_IS_CLEAN(&vp->v_uobj));
 }
@@ -857,7 +875,7 @@ struct vfsops puffs_vfsops = {
 	.vfs_done = puffs_vfsop_done,
 	.vfs_snapshot = puffs_vfsop_snapshot,
 	.vfs_extattrctl = puffs_vfsop_extattrctl,
-	.vfs_suspendctl = (void *)eopnotsupp,
+	.vfs_suspendctl = genfs_suspendctl,
 	.vfs_renamelock_enter = genfs_renamelock_enter,
 	.vfs_renamelock_exit = genfs_renamelock_exit,
 	.vfs_fsync = (void *)eopnotsupp,

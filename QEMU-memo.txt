@@ -1,0 +1,7 @@
+QEMU memo
+
+  Dependency
+  
+# apt install qemu qemu-kvm ovmf bridge-utils
+# apt install libvirt-daemon libvirt-clients virt-manager
+

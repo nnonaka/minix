@@ -122,7 +122,7 @@ load_file(const char *path, u_long extra, bool quiet_errors,
 	return 0;
 }
 
-static void
+void
 generate_efirng(void)
 {
 	EFI_PHYSICAL_ADDRESS addr;

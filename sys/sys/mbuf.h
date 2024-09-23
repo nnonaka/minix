@@ -1,6 +1,6 @@
 /*	$NetBSD: mbuf.h,v 1.158 2015/06/04 09:19:59 ozaki-r Exp $	*/
 
-/*-
+/*
  * Copyright (c) 1996, 1997, 1999, 2001, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *

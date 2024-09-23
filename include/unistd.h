@@ -218,7 +218,10 @@ int	 fsync(int);
 #if (_POSIX_C_SOURCE - 0) >= 199506L || (_XOPEN_SOURCE - 0) >= 500 || \
     defined(_REENTRANT) || defined(_NETBSD_SOURCE)
 int	 ttyname_r(int, char *, size_t);
+#ifndef __PTHREAD_ATFORK_DECLARED
+#define __PTHREAD_ATFORK_DECLARED
 int	 pthread_atfork(void (*)(void), void (*)(void), void (*)(void));
+#endif
 #endif
 
 /*
@@ -246,9 +249,9 @@ pid_t	 getsid(pid_t);
  */
 #if (defined(_XOPEN_SOURCE) && defined(_XOPEN_SOURCE_EXTENDED)) || \
     (_XOPEN_SOURCE - 0) >= 500 || defined(_NETBSD_SOURCE)
-#ifndef	intptr_t
-typedef	__intptr_t	intptr_t;
-#define	intptr_t	__intptr_t
+#ifndef _BSD_INTPTR_T_
+typedef __intptr_t      intptr_t;
+#define _BSD_INTPTR_T_
 #endif
 
 #define F_ULOCK		0
@@ -277,9 +280,6 @@ int	 lchown(const char *, uid_t, gid_t) __RENAME(__posix_lchown);
 int	 lchown(const char *, uid_t, gid_t);
 #endif
 int	 lockf(int, int, off_t);
-#if __SSP_FORTIFY_LEVEL == 0
-ssize_t	 readlink(const char * __restrict, char * __restrict, size_t);
-#endif
 void	*sbrk(intptr_t);
 /* XXX prototype wrong! */
 int	 setpgrp(pid_t, pid_t);			/* obsoleted by setpgid() */
@@ -368,7 +368,6 @@ char	*getpassfd(const char *, char *, size_t, int *, int, int);
 
 char	*getpass_r(const char *, char *, size_t);
 int	 getpeereid(int, uid_t *, gid_t *);
-int	 getsubopt(char **, char * const *, char **);
 __aconst char *getusershell(void);
 int	 initgroups(const char *, gid_t);
 int	 iruserok(uint32_t, int, const char *, const char *);
@@ -377,7 +376,7 @@ int	 mkstemps(char *, int);
 int	 nfssvc(int, void *);
 int	 pipe2(int *, int);
 #if !defined(__minix)
-int	 profil(char *, size_t, u_long, u_int);
+int	 profil(char *, size_t, unsigned long, unsigned int);
 #endif /* !defined(__minix) */
 #ifndef __PSIGNAL_DECLARED
 #define __PSIGNAL_DECLARED

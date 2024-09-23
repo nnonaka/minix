@@ -1,4 +1,4 @@
-/*	$NetBSD: ucontext.h,v 1.7 2011/11/05 09:27:06 joerg Exp $	*/
+/*	$NetBSD: ucontext.h,v 1.11 2018/02/04 01:13:45 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -38,7 +38,14 @@
 __BEGIN_DECLS
 int	getcontext(ucontext_t *) __returns_twice;
 int	setcontext(const ucontext_t *);
+
+#pragma GCC diagnostic push
+#ifndef  __cplusplus
+#pragma GCC diagnostic ignored "-Wstrict-prototypes"
+#endif
 void	makecontext(ucontext_t *, void (*)(), int, ...);
+#pragma GCC diagnostic pop
+
 int	swapcontext(ucontext_t * __restrict, const ucontext_t * __restrict);
 __END_DECLS
 

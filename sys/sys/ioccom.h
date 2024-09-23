@@ -90,8 +90,8 @@
 
 #define IOCSNPRINTF(buf, len, cmd) \
     snprintf((buf), (len), "_IO%s%s('%c', %hhu)", \
-	(((cmd) >> 30) & 1) ? "W" : "", \
-	(((cmd) >> 30) & 2) ? "R" : "", \
+	(((cmd) >> 30) & 1) ? "R" : "", \
+	(((cmd) >> 30) & 2) ? "W" : "", \
 	(char)IOCGROUP(cmd), (unsigned char)(cmd))
 		
 #if defined(__minix)

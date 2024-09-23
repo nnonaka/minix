@@ -1,11 +1,11 @@
-#	$NetBSD: Makefile.inc,v 1.21 2014/10/08 05:44:03 msaitoh Exp $
+#	$NetBSD: Makefile.inc,v 1.23 2019/04/04 19:42:39 christos Exp $
 
 .PATH: ${.CURDIR}/time
 
 SRCS+=	asctime.c difftime.c localtime.c getdate.c strftime.c strptime.c
 MAN+=	ctime.3 getdate.3 offtime.3 strftime.3 strptime.3		\
 	time2posix.3 tzfile.5 tzset.3
-CPPFLAGS+=-DALL_STATE -DUSG_COMPAT
+CPPFLAGS+=-DUSG_COMPAT
 
 MLINKS+=ctime.3 ctime_r.3	\
 	ctime.3 asctime.3	\
@@ -29,6 +29,7 @@ MLINKS+=ctime.3 ctime_r.3	\
 	time2posix.3 posix2time_z.3 \
 	time2posix.3 time2posix_z.3 \
 	tzset.3 tzgetname.3	\
+	tzset.3 tzgetgmtoff.3	\
 	tzset.3 daylight.3	\
 	tzset.3 tzalloc.3	\
 	tzset.3 tzfree.3	\

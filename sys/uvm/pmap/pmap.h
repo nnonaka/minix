@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.h,v 1.5 2015/06/11 05:27:07 matt Exp $	*/
+/*	$NetBSD: pmap.h,v 1.12 2019/06/01 12:42:28 maxv Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -71,8 +71,8 @@
  *	@(#)pmap.h	8.1 (Berkeley) 6/10/93
  */
 
-#ifndef	_COMMON_PMAP_H_
-#define	_COMMON_PMAP_H_
+#ifndef	_UVM_PMAP_PMAP_H_
+#define	_UVM_PMAP_PMAP_H_
 
 #include <uvm/uvm_stat.h>
 #ifdef UVMHIST
@@ -130,10 +130,13 @@ struct pmap {
 	pmap_segtab_t *		pm_segtab;	/* pointers to pages of PTEs */
 	u_int			pm_count;	/* pmap reference count */
 	u_int			pm_flags;
-#define	PMAP_DEFERRED_ACTIVATE	0x0001
+#define	PMAP_DEFERRED_ACTIVATE	__BIT(0)
 	struct pmap_statistics	pm_stats;	/* pmap statistics */
 	vaddr_t			pm_minaddr;
 	vaddr_t			pm_maxaddr;
+#ifdef __HAVE_PMAP_MD
+	struct pmap_md		pm_md;
+#endif
 	struct pmap_asid_info	pm_pai[1];
 };
 
@@ -152,15 +155,28 @@ struct pmap_limits {
 	vaddr_t virtual_end;
 };
 
-/* 
+/*
+ * Initialize the kernel pmap.
+ */
+#ifdef MULTIPROCESSOR
+#define PMAP_SIZE	offsetof(struct pmap, pm_pai[PMAP_TLB_MAX])
+#else
+#define PMAP_SIZE	sizeof(struct pmap)
+#endif
+
+/*
  * The pools from which pmap structures and sub-structures are allocated.
  */
-extern struct pool pmap_pmap_pool; 
+extern struct pool pmap_pmap_pool;
 extern struct pool pmap_pv_pool;
 extern struct pool_allocator pmap_pv_page_allocator;
 
 extern struct pmap_kernel kernel_pmap_store;
 extern struct pmap_limits pmap_limits;
+
+extern u_int pmap_page_colormask;
+
+extern pmap_segtab_t pmap_kern_segtab;
 
 #define	pmap_wired_count(pmap) 	((pmap)->pm_stats.wired_count)
 #define pmap_resident_count(pmap) ((pmap)->pm_stats.resident_count)
@@ -173,12 +189,17 @@ void	pmap_set_modified(paddr_t);
 bool	pmap_page_clear_attributes(struct vm_page_md *, u_int);
 void	pmap_page_set_attributes(struct vm_page_md *, u_int);
 void	pmap_pvlist_lock_init(size_t);
+#ifdef PMAP_VIRTUAL_CACHE_ALIASES
+void	pmap_page_cache(struct vm_page *, bool cached);
+#endif
+
 
 #define	PMAP_WB		0
 #define	PMAP_WBINV	1
 #define	PMAP_INV	2
 
-uint16_t pmap_pvlist_lock(struct vm_page_md *, bool);
+//uint16_t pmap_pvlist_lock(struct vm_page_md *, bool);
+kmutex_t *pmap_pvlist_lock_addr(struct vm_page_md *);
 
 #define	PMAP_STEAL_MEMORY	/* enable pmap_steal_memory() */
 #define	PMAP_GROWKERNEL		/* enable pmap_growkernel() */
@@ -193,5 +214,11 @@ struct vm_page *pmap_md_alloc_poolpage(int);
 #define	PMAP_MAP_POOLPAGE(pa)		pmap_map_poolpage(pa)
 #define	PMAP_UNMAP_POOLPAGE(va)		pmap_unmap_poolpage(va)
 
+#define PMAP_COUNT(name)	(pmap_evcnt_##name.ev_count++ + 0)
+#define PMAP_COUNTER(name, desc) \
+struct evcnt pmap_evcnt_##name = \
+	EVCNT_INITIALIZER(EVCNT_TYPE_MISC, NULL, "pmap", desc); \
+EVCNT_ATTACH_STATIC(pmap_evcnt_##name)
+
 #endif	/* _KERNEL */
-#endif	/* _COMMON_PMAP_H_ */
+#endif	/* _UVM_PMAP_PMAP_H_ */

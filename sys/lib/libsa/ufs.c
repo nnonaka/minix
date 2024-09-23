@@ -100,8 +100,6 @@
 #endif
 
 #ifdef LIBSA_LFS
-/* Do not (yet) support FFS_EI on LFS. */
-#undef LIBSA_FFS_EI
 /*
  * In-core LFS superblock - just the on-disk one.
  */
@@ -124,13 +122,14 @@ struct salfs {
 typedef struct salfs FS;
 #define fs_magic	lfs_dlfs_u.u_32.dlfs_magic
 #define fs_maxsymlinklen lfs_dlfs_u.u_32.dlfs_maxsymlinklen
-#define lfs_version	lfs_dlfs_u.u_32.dlfs_version
 
+#define FS_MAGIC	LFS_MAGIC
 #define SBLOCKSIZE	LFS_SBPAD
 #define SBLOCKOFFSET	LFS_LABELPAD
 #else
 /* NB ufs2 doesn't use the common superblock code... */
 typedef struct fs FS;
+#define FS_MAGIC	FS_UFS1_MAGIC
 #define SBLOCKOFFSET	SBLOCK_UFS1
 #endif
 
@@ -165,12 +164,6 @@ typedef uint32_t	ino32_t;
 #ifndef ufs_lblkno
 #define ufs_lblkno ffs_lblkno
 #endif
-#ifndef ufs_dinode_swap
-#define ufs_dinode_swap ffs_dinode1_swap
-#endif
-#ifndef ufs_indp_swap
-#define ufs_indp_swap bswap32
-#endif
 
 /*
  * To avoid having a lot of filesystem-block sized buffers lurking (which
@@ -198,9 +191,6 @@ struct file {
 	char		*f_buf;		/* buffer for data block */
 	size_t		f_buf_size;	/* size of data block */
 	daddr_t		f_buf_blkno;	/* block number of data block */
-#if defined(LIBSA_FFS_EI)
-	bool		f_swapped;	/* FFS is other endian */
-#endif
 };
 
 static int read_inode(ino32_t, struct open_file *);
@@ -210,98 +200,9 @@ static int search_directory(const char *, int, struct open_file *, ino32_t *);
 #ifdef LIBSA_FFSv1
 static void ffs_oldfscompat(FS *);
 #endif
-
-#ifdef LIBSA_FFSv1
-static __inline__ bool
-ffs_is_magic(FS *fs)
-{
-	return fs->fs_magic == FS_UFS1_MAGIC;
-}
-
-#ifdef LIBSA_FFS_EI
-static __inline__ bool
-ffs_is_magic_swapped(FS *fs)
-{
-	return fs->fs_magic == bswap32(FS_UFS1_MAGIC);
-}
-#endif
-
-#endif
-
 #ifdef LIBSA_FFSv2
-static __inline__ bool
-ffs_is_magic(FS *fs)
-{
-	return fs->fs_magic == FS_UFS2_MAGIC || fs->fs_magic == FS_UFS2EA_MAGIC;
-}
-
-#ifdef LIBSA_FFS_EI
-static __inline__ bool
-ffs_is_magic_swapped(FS *fs)
-{
-	return fs->fs_magic == bswap32(FS_UFS2_MAGIC) ||
-		fs->fs_magic == bswap32(FS_UFS2EA_MAGIC);
-}
+static int ffs_find_superblock(struct open_file *, FS *);
 #endif
-
-#endif
-
-#ifdef LIBSA_LFS
-static __inline__ bool
-ffs_is_magic(FS *fs)
-{
-	return fs->fs_magic == LFS_MAGIC;
-}
-
-#ifdef LIBSA_FFS_EI
-static __inline__ bool
-ffs_is_magic_swapped(FS *fs)
-{
-	return fs->fs_magic == bswap32(LFS_MAGIC);
-}
-#endif
-
-#endif
-
-static __inline__ void
-ffs_fix_magic_swapped(struct file *fp, FS *fs)
-{
-#ifdef LIBSA_FFS_EI
-	fp->f_swapped = ffs_is_magic_swapped(fs);
-	if (fp->f_swapped)
-{
-		ffs_sb_swap(fs, fs);
-}
-#endif
-}
-
-#ifdef LIBSA_FFS_EI
-static __inline__ bool
-ffs_swapped(struct file *fp)
-{
-	return fp->f_swapped;
-}
-#endif
-
-static __inline__ uint16_t
-ffs_get_reclen(struct file *fp, struct direct *dp)
-{
-#ifdef LIBSA_FFS_EI
-	if (ffs_swapped(fp))
-		return bswap16(dp->d_reclen);
-#endif
-	return dp->d_reclen;
-}
-
-static __inline__ uint32_t
-ffs_get_ino(struct file *fp, struct direct *dp)
-{
-#ifdef LIBSA_FFS_EI
-	if (ffs_swapped(fp))
-		return bswap32(dp->d_ino);
-#endif
-	return dp->d_ino;
-}
 
 
 #ifdef LIBSA_LFS
@@ -392,10 +293,6 @@ read_inode(ino32_t inumber, struct open_file *f)
 	fp->f_di = *dip;
 #else
 	fp->f_di = ((struct ufs_dinode *)buf)[ino_to_fsbo(fs, inumber)];
-#ifdef LIBSA_FFS_EI
-	if (ffs_swapped(fp))
-		ufs_dinode_swap(&fp->f_di, &fp->f_di);
-#endif
 #endif
 
 	/*
@@ -492,30 +389,15 @@ block_map(struct open_file *f, indp_t file_block, indp_t *disk_block_p)
 			return rc;
 		if (rsize != (size_t)fs->fs_bsize)
 			return EIO;
-#ifdef LIBSA_FFS_EI
-		if (ffs_swapped(fp))
-			ind_block_num = ufs_indp_swap(buf[file_block >> level]);
-		else
-#endif
-			ind_block_num = buf[file_block >> level];
+		ind_block_num = buf[file_block >> level];
 		if (level == 0)
 			break;
 		file_block &= (1 << level) - 1;
 	}
 
 	/* Save the part of the block that contains this sector */
-#if defined(LIBSA_FFS_EI)
-	if (ffs_swapped(fp)) {
-		size_t i;
-
-		for (i = 0; i < IND_CACHE_SZ; i++) {
-			fp->f_ind_cache[i] = ufs_indp_swap(
-			    buf[(file_block & ~IND_CACHE_MASK) + i]);
-		}
-	} else
-#endif
-		memcpy(fp->f_ind_cache, &buf[file_block & ~IND_CACHE_MASK],
-		    IND_CACHE_SZ * sizeof fp->f_ind_cache[0]);
+	memcpy(fp->f_ind_cache, &buf[file_block & ~IND_CACHE_MASK],
+	    IND_CACHE_SZ * sizeof fp->f_ind_cache[0]);
 	fp->f_ind_cache_block = ind_cache;
 
 	*disk_block_p = ind_block_num;
@@ -607,11 +489,10 @@ search_directory(const char *name, int length, struct open_file *f,
 
 		dp = (struct direct *)buf;
 		edp = (struct direct *)(buf + buf_size);
-		for (; dp < edp;
-		     dp = (void *)((char *)dp + ffs_get_reclen(fp, dp))) {
-			if (ffs_get_reclen(fp, dp) <= 0)
+		for (;dp < edp; dp = (void *)((char *)dp + dp->d_reclen)) {
+			if (dp->d_reclen <= 0)
 				break;
-			if (ffs_get_ino(fp, dp) == (ino32_t)0)
+			if (dp->d_ino == (ino32_t)0)
 				continue;
 #if BYTE_ORDER == LITTLE_ENDIAN
 			if (fp->f_fs->fs_maxsymlinklen <= 0)
@@ -622,7 +503,7 @@ search_directory(const char *name, int length, struct open_file *f,
 			if (namlen == length &&
 			    !memcmp(name, dp->d_name, length)) {
 				/* found entry */
-				*inumber_p = ffs_get_ino(fp, dp);
+				*inumber_p = dp->d_ino;
 				return 0;
 			}
 		}
@@ -631,52 +512,32 @@ search_directory(const char *name, int length, struct open_file *f,
 	return ENOENT;
 }
 
-static __inline__ int
+#ifdef LIBSA_FFSv2
+
+daddr_t sblock_try[] = SBLOCKSEARCH;
+
+static int
 ffs_find_superblock(struct open_file *f, FS *fs)
 {
-	struct file *fp = (struct file *)f->f_fsdata;
-	int rc;
+	int i, rc;
 	size_t buf_size;
-#ifdef LIBSA_FFSv2
-	static daddr_t sblock_try[] = SBLOCKSEARCH;
-	int i;
-#endif
 
-#ifdef LIBSA_FFSv2
 	for (i = 0; sblock_try[i] != -1; i++) {
 		rc = DEV_STRATEGY(f->f_dev)(f->f_devdata, F_READ,
-		    sblock_try[i] / GETSECSIZE(f), SBLOCKSIZE, fs, &buf_size);
-		if (rc)
+		    sblock_try[i] / DEV_BSIZE, SBLOCKSIZE, fs, &buf_size);
+		if (rc != 0 || buf_size != SBLOCKSIZE)
 			return rc;
-		if (buf_size != SBLOCKSIZE)
-			return EINVAL;
-		ffs_fix_magic_swapped(fp, fs);
 		if (fs->fs_sblockloc != sblock_try[i])
 			/* an alternate superblock - try again */
 			continue;
-		if (ffs_is_magic(fs))
+		if (fs->fs_magic == FS_UFS2_MAGIC) {
 			return 0;
+		}
 	}
 	return EINVAL;
-#else /* LIBSA_FFSv2 */
-	rc = DEV_STRATEGY(f->f_dev)(f->f_devdata, F_READ,
-		SBLOCKOFFSET / GETSECSIZE(f), SBLOCKSIZE, fs, &buf_size);
-	if (rc)
-		return rc;
-	if (buf_size != SBLOCKSIZE)
-		return EINVAL;
-	ffs_fix_magic_swapped(fp, fs);
-
-#ifdef LIBSA_LFS
-	if (fs->lfs_version != REQUIRED_LFS_VERSION)
-		return EINVAL;
-#endif
-	if (!ffs_is_magic(fs))
-		return EINVAL;
-
-	return 0;
-#endif /* !LIBSA_FFSv2 */
 }
+
+#endif
 
 /*
  * Open a file.
@@ -709,10 +570,26 @@ ufs_open(const char *path, struct open_file *f)
 	fp->f_fs = fs;
 	twiddle();
 
+#ifdef LIBSA_FFSv2
 	rc = ffs_find_superblock(f, fs);
 	if (rc)
 		goto out;
-
+#else
+	{
+		size_t buf_size;
+		rc = DEV_STRATEGY(f->f_dev)(f->f_devdata, F_READ,
+			SBLOCKOFFSET / DEV_BSIZE, SBLOCKSIZE, fs, &buf_size);
+		if (rc)
+			goto out;
+		if (buf_size != SBLOCKSIZE ||
+#ifdef LIBSA_FFS
+		    fs->lfs_version != REQUIRED_LFS_VERSION ||
+#endif
+		    fs->fs_magic != FS_MAGIC) {
+			rc = EINVAL;
+			goto out;
+		}
+	}
 #if defined(LIBSA_LFS) && REQUIRED_LFS_VERSION == 2
 	/*
 	 * XXX	We should check the second superblock and use the eldest
@@ -726,6 +603,8 @@ ufs_open(const char *path, struct open_file *f)
 	fs->lfs_dobyteswap = 0;
 	fs->lfs_hasolddirfmt = (fs->fs_maxsymlinklen <= 0);
 #endif
+#endif
+
 #ifdef LIBSA_FFSv1
 	ffs_oldfscompat(fs);
 #endif
@@ -746,7 +625,7 @@ ufs_open(const char *path, struct open_file *f)
 		/*
 		 * We note that the number of indirect blocks is always
 		 * a power of 2.  This lets us use shifts and masks instead
-		 * of divide and remainder and avoids pulling in the
+		 * of divide and remainder and avoinds pulling in the
 		 * 64bit division routine into the boot code.
 		 */
 		mult = UFS_NINDIR(fs);
@@ -894,11 +773,9 @@ ufs_open(const char *path, struct open_file *f)
 out:
 	if (rc)
 		ufs_close(f);
+#ifdef FSMOD		/* Only defined for lfs */
 	else
-#ifdef FSMOD
 		fsmod = FSMOD;
-#else
-		fsmod = NULL;
 #endif
 	return rc;
 }
@@ -1048,10 +925,9 @@ ufs_ls(struct open_file *f, const char *pattern)
 		dp = (struct direct *)buf;
 		edp = (struct direct *)(buf + buf_size);
 
-		for (; dp < edp;
-		     dp = (void *)((char *)dp + ffs_get_reclen(fp, dp))) {
+		for (; dp < edp; dp = (void *)((char *)dp + dp->d_reclen)) {
 			const char *t;
-			if (ffs_get_ino(fp, dp) == 0)
+			if (dp->d_ino ==  0)
 				continue;
 
 			if (dp->d_type >= NELEM(typestr) ||
@@ -1070,7 +946,7 @@ ufs_ls(struct open_file *f, const char *pattern)
 				goto out;
 			}
 			lsadd(&names, pattern, dp->d_name, strlen(dp->d_name),
-			    ffs_get_ino(fp, dp), t);
+			    dp->d_ino, t);
 		}
 		fp->f_seekp += buf_size;
 	}

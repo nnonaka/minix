@@ -11,65 +11,9 @@
 #include <limits.h>
 #include <sys/signal.h>
 
-typedef int mthread_thread_t;
-typedef int mthread_once_t;
-typedef int mthread_key_t;
-typedef void * mthread_condattr_t;
-typedef void * mthread_mutexattr_t;
+#include <minix/mthread_types.h>
 
-struct __mthread_tcb;
-typedef struct {
-  struct __mthread_tcb *mq_head;
-  struct __mthread_tcb *mq_tail;
-} mthread_queue_t;
 
-struct __mthread_mutex {
-  mthread_queue_t mm_queue;	/* Queue of threads blocked on this mutex */
-  mthread_thread_t mm_owner;	/* Thread ID that currently owns mutex */
-#ifdef MTHREAD_STRICT
-  struct __mthread_mutex *mm_prev;
-  struct __mthread_mutex *mm_next;
-#endif
-  unsigned int mm_magic;
-};
-typedef struct __mthread_mutex *mthread_mutex_t;
-
-struct __mthread_cond {
-  struct __mthread_mutex *mc_mutex;	/* Associate mutex with condition */
-#ifdef MTHREAD_STRICT
-  struct __mthread_cond *mc_prev;
-  struct __mthread_cond *mc_next;
-#endif
-  unsigned int mc_magic;
-};
-typedef struct __mthread_cond *mthread_cond_t;
-
-struct __mthread_attr {
-  size_t ma_stacksize;
-  char *ma_stackaddr;
-  int ma_detachstate;
-  struct __mthread_attr *ma_prev;
-  struct __mthread_attr *ma_next;
-}; 
-typedef struct __mthread_attr *mthread_attr_t;
-
-typedef struct {
-  mthread_mutex_t mutex;
-  mthread_cond_t cond;
-} mthread_event_t;
-
-typedef struct {
-  unsigned int readers;
-  mthread_thread_t writer;
-  mthread_mutex_t queue;
-  mthread_event_t drain;
-} mthread_rwlock_t; 
-
-#define MTHREAD_CREATE_JOINABLE 001
-#define MTHREAD_CREATE_DETACHED 002
-#define MTHREAD_ONCE_INIT 0
-#define MTHREAD_STACK_MIN MINSIGSTKSZ
-#define MTHREAD_KEYS_MAX 128
 
 __BEGIN_DECLS
 /* allocate.c */
@@ -144,23 +88,6 @@ void mthread_yield_all(void);
 __END_DECLS
 
 #if defined(_MTHREADIFY_PTHREADS)
-typedef mthread_thread_t pthread_t;
-typedef mthread_once_t pthread_once_t;
-typedef mthread_key_t pthread_key_t;
-typedef mthread_cond_t pthread_cond_t;
-typedef mthread_mutex_t pthread_mutex_t;
-typedef mthread_condattr_t pthread_condattr_t;
-typedef mthread_mutexattr_t pthread_mutexattr_t;
-typedef mthread_attr_t pthread_attr_t;
-typedef mthread_event_t pthread_event_t;
-typedef mthread_rwlock_t pthread_rwlock_t;
-
-/* LSC: No equivalent, so void* for now. */
-typedef void *pthread_rwlockattr_t;
-
-#define PTHREAD_ONCE_INIT 0
-#define PTHREAD_MUTEX_INITIALIZER ((pthread_mutex_t) -1)
-#define PTHREAD_COND_INITIALIZER ((pthread_cond_t) -1)
 
 __BEGIN_DECLS
 /* allocate.c */
@@ -217,10 +144,17 @@ int pthread_event_fire_all(pthread_event_t *event);
 /* rwlock.c */
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
 int pthread_rwlock_init(pthread_rwlock_t *rwlock,
-	pthread_rwlockattr_t *UNUSED(attr));
+	pthread_rwlockattr_t *attr);
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
 int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
 int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
+
+/* pthread_compat.c */
+int pthread_spin_destroy(pthread_spinlock_t *lock);
+int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
+int pthread_spin_lock(pthread_spinlock_t *lock);
+int pthread_spin_trylock(pthread_spinlock_t *lock);
+int pthread_spin_unlock(pthread_spinlock_t *lock);
 
 /* schedule.c */
 int pthread_yield(void);

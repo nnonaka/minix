@@ -425,9 +425,9 @@ enum {
 	int fsname##_node_open2(struct puffs_usermount *,		\
 	    puffs_cookie_t, int, const struct puffs_cred *, int *);	\
 	int fsname##_node_fallocate(struct puffs_usermount *,		\
-	    puffs_cookie_t, int, off_t, off_t);				\
+	    puffs_cookie_t, off_t, off_t);				\
 	int fsname##_node_fdiscard(struct puffs_usermount *,		\
-	    puffs_cookie_t, int, off_t, off_t);
+	    puffs_cookie_t, off_t, off_t);
 
 
 #define PUFFSOP_INIT(ops)						\

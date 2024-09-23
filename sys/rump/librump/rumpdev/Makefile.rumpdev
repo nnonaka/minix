@@ -1,0 +1,24 @@
+#	$NetBSD: Makefile.rumpdev,v 1.13 2019/05/13 17:49:05 bad Exp $
+#
+
+LIB=	rumpdev
+COMMENT=Rump kernel device faction
+
+.PATH:	${RUMPTOP}/librump/rumpdev				\
+	${RUMPTOP}/../kern					\
+	${RUMPTOP}/../dev
+
+SRCS=	rump_dev.c
+
+# sys/kern
+SRCS+=	kern_pmf.c
+
+# sys/dev
+SRCS+=	dev_verbose.c
+
+CPPFLAGS+=	-I${RUMPTOP}/librump/rumpkern
+
+.include "${RUMPTOP}/Makefile.rump"
+
+.include <bsd.lib.mk>
+.include <bsd.klinks.mk>

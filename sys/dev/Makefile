@@ -3,7 +3,7 @@
 #__MINIX: a lot not imported
 SUBDIR=	\
 	i2c \
-	pci \
+	pci putter \
 	
 
 .include <bsd.own.mk>

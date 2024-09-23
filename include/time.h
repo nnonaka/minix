@@ -1,4 +1,4 @@
-/*	$NetBSD: time.h,v 1.44 2014/10/07 21:50:36 christos Exp $	*/
+/*	$NetBSD: time.h,v 1.47 2016/10/04 09:41:41 kamil Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -137,9 +137,12 @@ struct tm *getdate(const char *);
 extern int getdate_err;
 #endif
 
+/* ISO/IEC 9899:201x 7.27.1/3 Components of time */
+#include <sys/timespec.h>
+
 #if (_POSIX_C_SOURCE - 0) >= 199309L || (_XOPEN_SOURCE - 0) >= 500 || \
     defined(_NETBSD_SOURCE)
-#include <sys/time.h>		/* XXX for struct timespec */
+#include <sys/time.h>
 struct sigevent;
 struct itimerspec;
 int clock_nanosleep(clockid_t, int, const struct timespec *, struct timespec *);
@@ -156,6 +159,12 @@ int timer_gettime(timer_t, struct itimerspec *) __RENAME(__timer_gettime50);
 int timer_settime(timer_t, int, const struct itimerspec * __restrict, 
     struct itimerspec * __restrict) __RENAME(__timer_settime50);
 #endif
+#ifdef _NETBSD_SOURCE
+#include <sys/idtype.h>
+int clock_getcpuclockid2(idtype_t, id_t, clockid_t *);
+#endif
+int clock_getcpuclockid(pid_t, clockid_t *);
+
 int timer_create(clockid_t, struct sigevent * __restrict,
     timer_t * __restrict);
 int timer_delete(timer_t);
@@ -211,6 +220,7 @@ time_t posix2time_z(timezone_t __restrict, time_t) __RENAME(__posix2time_z50);
 timezone_t tzalloc(const char *) __RENAME(__tzalloc50);
 void tzfree(timezone_t __restrict) __RENAME(__tzfree50);
 const char *tzgetname(timezone_t __restrict, int) __RENAME(__tzgetname50);
+long tzgetgmtoff(timezone_t __restrict, int) __RENAME(__tzgetgmtoff50);
 #endif
 
 size_t strftime_lz(timezone_t __restrict, char * __restrict, size_t,
@@ -223,6 +233,10 @@ char *strptime_l(const char * __restrict, const char * __restrict,
     struct tm * __restrict, locale_t);
 
 #endif /* _NETBSD_SOURCE */
+
+/* ISO/IEC 9899:201x 7.27.2.5 The timespec_get function */
+#define TIME_UTC	1	/* time elapsed since epoch */
+int timespec_get(struct timespec *ts, int base);
 
 __END_DECLS
 

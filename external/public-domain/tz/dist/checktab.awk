@@ -1,6 +1,6 @@
 # Check tz tables for consistency.
 
-# Contributed by Paul Eggert.
+# Contributed by Paul Eggert.  This file is in the public domain.
 
 BEGIN {
 	FS = "\t"
@@ -38,7 +38,7 @@ BEGIN {
 		}
 		cc0 = cc
 		if (name2cc[name]) {
-			printf "%s:%d: '%s' and '%s' have the sname name\n", \
+			printf "%s:%d: '%s' and '%s' have the same name\n", \
 				iso_table, iso_NR, name2cc[name], cc \
 				>>"/dev/stderr"
 			status = 1
@@ -58,24 +58,29 @@ BEGIN {
 				zone_table, zone_NR >>"/dev/stderr"
 			status = 1
 		}
-		split($1, cca, /,/)
-		cc = cca[1]
+		ccs = input_ccs[zone_NR] = $1
 		coordinates = $2
 		tz = $3
-		comments = $4
-		if (cc < cc0) {
+		comments = input_comments[zone_NR] = $4
+		split(ccs, cca, /,/)
+		cc = cca[1]
+
+		# Don't complain about a special case for Crimea in zone.tab.
+		# FIXME: zone.tab should be removed, since it is obsolete.
+		# Or at least put just "XX" in its country-code column.
+		if (cc < cc0 \
+		    && !(zone_table == "zone.tab" \
+			 && tz0 == "Europe/Simferopol")) {
 			printf "%s:%d: country code '%s' is out of order\n", \
 				zone_table, zone_NR, cc >>"/dev/stderr"
 			status = 1
 		}
 		cc0 = cc
+		tz0 = tz
 		tztab[tz] = 1
-		tz2comments[tz] = comments
 		tz2NR[tz] = zone_NR
 		for (i in cca) {
 		    cc = cca[i]
-		    cctz = cc tz
-		    cctztab[cctz] = 1
 		    if (cc2name[cc]) {
 			cc_used[cc]++
 		    } else {
@@ -92,25 +97,26 @@ BEGIN {
 		}
 	}
 
-	for (cctz in cctztab) {
-		cc = substr (cctz, 1, 2)
-		tz = substr (cctz, 3)
-		if (1 < cc_used[cc]) {
-			comments_needed[tz] = cc
-		}
-	}
-	for (cctz in cctztab) {
-	  cc = substr (cctz, 1, 2)
-	  tz = substr (cctz, 3)
-	  if (!comments_needed[tz] && tz2comments[tz]) {
+	for (i = 1; i <= zone_NR; i++) {
+	  ccs = input_ccs[i]
+	  if (!ccs) continue
+	  comments = input_comments[i]
+	  split(ccs, cca, /,/)
+	  used_max = 0
+          for (j in cca) {
+	    cc = cca[j]
+	    if (used_max < cc_used[cc]) {
+	      used_max = cc_used[cc]
+	    }
+	  }
+	  if (used_max <= 1 && comments) {
 	    printf "%s:%d: unnecessary comment '%s'\n", \
-		zone_table, tz2NR[tz], tz2comments[tz] \
-		>>"/dev/stderr"
-	    tz2comments[tz] = 0
+	      zone_table, i, comments \
+	      >>"/dev/stderr"
 	    status = 1
-	  } else if (comments_needed[tz] && !tz2comments[tz]) {
+	  } else if (1 < cc_used[cc] && !comments) {
 	    printf "%s:%d: missing comment for %s\n", \
-	      zone_table, tz2NR[tz], comments_needed[tz] \
+	      zone_table, i, cc \
 	      >>"/dev/stderr"
 	    status = 1
 	  }
@@ -125,6 +131,7 @@ $1 ~ /^#/ { next }
 	if ($1 == "Zone") {
 		tz = $2
 		ruleUsed[$4] = 1
+		if ($5 ~ /%/) rulePercentUsed[$4] = 1
 	} else if ($1 == "Link" && zone_table == "zone.tab") {
 		# Ignore Link commands if source and destination basenames
 		# are identical, e.g. Europe/Istanbul versus Asia/Istanbul.
@@ -135,11 +142,13 @@ $1 ~ /^#/ { next }
 		if (src != dst) tz = $3
 	} else if ($1 == "Rule") {
 		ruleDefined[$2] = 1
+		if ($10 != "-") ruleLetters[$2] = 1
 	} else {
 		ruleUsed[$2] = 1
+		if ($3 ~ /%/) rulePercentUsed[$2] = 1
 	}
-	if (tz && tz ~ /\//) {
-		if (!tztab[tz]) {
+	if (tz && tz ~ /\// && tz !~ /^Etc\//) {
+		if (!tztab[tz] && FILENAME != "backward") {
 			printf "%s: no data for '%s'\n", zone_table, tz \
 				>>"/dev/stderr"
 			status = 1
@@ -155,8 +164,14 @@ END {
 			status = 1
 		}
 	}
+	for (tz in ruleLetters) {
+		if (!rulePercentUsed[tz]) {
+			printf "%s: Rule contains letters never used\n", tz
+			status = 1
+		}
+	}
 	for (tz in tztab) {
-		if (!zoneSeen[tz]) {
+		if (!zoneSeen[tz] && tz !~ /^Etc\//) {
 			printf "%s:%d: no Zone table for '%s'\n", \
 				zone_table, tz2NR[tz], tz >>"/dev/stderr"
 			status = 1

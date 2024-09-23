@@ -178,30 +178,10 @@ extern const int *const uvmexp_pageshift;
 #define	VM_MINADDRESS	14
 #define	VM_MAXADDRESS	15
 #define	VM_PROC		16		/* process information */
-
-#define	VM_MAXID	17		/* number of valid vm ids */
+#define	VM_GUARD_SIZE	17		/* guard size for main thread */
+#define	VM_THREAD_GUARD_SIZE	18	/* default guard size for new threads */
 
 #define VM_PROC_MAP	1		/* struct kinfo_vmentry */
-
-#define	CTL_VM_NAMES { \
-	{ 0, 0 }, \
-	{ "vmmeter", CTLTYPE_STRUCT }, \
-	{ "loadavg", CTLTYPE_STRUCT }, \
-	{ "uvmexp", CTLTYPE_STRUCT }, \
-	{ "nkmempages", CTLTYPE_INT }, \
-	{ "uvmexp2", CTLTYPE_STRUCT }, \
-	{ "anonmin", CTLTYPE_INT }, \
-	{ "execmin", CTLTYPE_INT }, \
-	{ "filemin", CTLTYPE_INT }, \
-	{ "maxslp", CTLTYPE_INT }, \
-	{ "uspace", CTLTYPE_INT }, \
-	{ "anonmax", CTLTYPE_INT }, \
-	{ "execmax", CTLTYPE_INT }, \
-	{ "filemax", CTLTYPE_INT }, \
-	{ "minaddress", CTLTYPE_LONG }, \
-	{ "maxaddress", CTLTYPE_LONG }, \
-	{ "proc", CTLTYPE_STRUCT }, \
-}
 
 #ifndef ASSEMBLER
 /*
@@ -224,9 +204,11 @@ extern const int *const uvmexp_pageshift;
     round_page((vaddr_t)(da) + (vsize_t)maxdmap)
 #endif
 
+extern unsigned int user_stack_guard_size;
+extern unsigned int user_thread_stack_guard_size;
 #ifndef VM_DEFAULT_ADDRESS_TOPDOWN
 #define VM_DEFAULT_ADDRESS_TOPDOWN(da, sz) \
-    trunc_page(VM_MAXUSER_ADDRESS - MAXSSIZ - (sz))
+    trunc_page(VM_MAXUSER_ADDRESS - MAXSSIZ - (sz) - user_stack_guard_size)
 #endif
 
 extern int		ubc_nwins;	/* number of UBC mapping windows */

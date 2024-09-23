@@ -73,6 +73,7 @@ __RCSID("$NetBSD: strftime.c,v 1.35 2015/10/09 17:21:45 christos Exp $");
 #include "tzfile.h"
 #include "fcntl.h"
 #include "locale.h"
+#include <stdio.h>
 
 #ifdef __weak_alias
 __weak_alias(strftime_l, _strftime_l)

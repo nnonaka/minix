@@ -1,4 +1,4 @@
-/*	$NetBSD: tlb.h,v 1.2 2015/09/21 15:50:19 matt Exp $	*/
+/*	$NetBSD: tlb.h,v 1.4 2017/06/24 05:31:03 skrll Exp $	*/
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -27,12 +27,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _UVM_PMAP_PMAP_TLB_TLB_H_
-#define	_UVM_PMAP_PMAP_TLB_TLB_H_
+#ifndef	_UVM_PMAP_TLB_H_
+#define	_UVM_PMAP_TLB_H_
 
 #if defined(_KERNEL) || defined(_KMEMUSER)
 
 struct tlbmask;
+
+typedef bool	(*tlb_walkfunc_t)(void *, vaddr_t, tlb_asid_t, pt_entry_t);
 
 struct tlb_md_ops {
 	void	(*md_tlb_set_asid)(tlb_asid_t);
@@ -45,10 +47,9 @@ struct tlb_md_ops {
 	bool	(*md_tlb_update_addr)(vaddr_t, tlb_asid_t, pt_entry_t, bool);
 	void	(*md_tlb_read_entry)(size_t, struct tlbmask *);
 	void	(*md_tlb_write_entry)(size_t, const struct tlbmask *);
-	u_int	(*md_tlb_record_asids)(u_long *);
+	u_int	(*md_tlb_record_asids)(u_long *, tlb_asid_t);
 	void	(*md_tlb_dump)(void (*)(const char *, ...));
-	void	(*md_tlb_walk)(void *, bool (*)(void *, vaddr_t, tlb_asid_t,
-		    pt_entry_t));
+	void	(*md_tlb_walk)(void *, tlb_walkfunc_t);
 };
 
 tlb_asid_t
@@ -59,13 +60,13 @@ void	tlb_invalidate_globals(void);
 void	tlb_invalidate_asids(tlb_asid_t, tlb_asid_t);
 void	tlb_invalidate_addr(vaddr_t, tlb_asid_t);
 bool	tlb_update_addr(vaddr_t, tlb_asid_t, pt_entry_t, bool);
-u_int	tlb_record_asids(u_long *);
+u_int	tlb_record_asids(u_long *, tlb_asid_t);
 void	tlb_enter_addr(size_t, const struct tlbmask *);
 void	tlb_read_entry(size_t, struct tlbmask *);
 void	tlb_write_entry(size_t, const struct tlbmask *);
-void	tlb_walk(void *, bool (*)(void *, vaddr_t, tlb_asid_t, pt_entry_t));
+void	tlb_walk(void *, tlb_walkfunc_t);
 void	tlb_dump(void (*)(const char *, ...));
 
 #endif /* _KERNEL || _KMEMUSER */
 
-#endif /* !_UVM_PMAP_PMAP_TLB_TLB_H_ */
+#endif /* _UVM_PMAP_TLB_H_ */

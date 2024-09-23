@@ -48,8 +48,12 @@ SUBDIR+= apropos whatis
 .endif
 
 .if (${MKRUMP} != "no")
-SUBDIR+= rump_allserver rump_dhcpclient rump_halt rump_server shmif_dumpbus \
+SUBDIR+= rump_dhcpclient shmif_dumpbus \
 	rump_wmd
+.endif
+
+.if (${MKRUMPSERVER} != "no")
+SUBDIR+= rump_allserver rump_halt rump_server
 .endif
 
 .if (${MKBSDGREP} != "no")

@@ -325,7 +325,6 @@ build: .PHONY .MAKE
 	${MAKEDIRTARGET} etc install-etc-release
 .if defined(__MINIX)
 	${MAKEDIRTARGET} etc install-etc-files-safe DESTDIR=${DESTDIR:U/}
-	${MAKEDIRTARGET} releasetools do-hdboot
 .endif # defined(__MINIX)
 	@echo   "Build started at:  ${START_TIME}"
 	@printf "Build finished at: " && date

@@ -1,4 +1,4 @@
-/*	$NetBSD: stdlib.h,v 1.115 2015/02/17 20:33:40 joerg Exp $	*/
+/*	$NetBSD: stdlib.h,v 1.121 2019/01/05 09:16:46 maya Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -95,7 +95,7 @@ extern size_t __mb_cur_max;
 __BEGIN_DECLS
 __dead	 void _Exit(int);
 __dead	 void abort(void);
-__pure	 int abs(int);
+__constfunc	int abs(int);
 int	 atexit(void (*)(void));
 double	 atof(const char *);
 int	 atoi(const char *);
@@ -111,7 +111,7 @@ div_t	 div(int, int);
 __dead	 void exit(int);
 void	 free(void *);
 __aconst char *getenv(const char *);
-__pure long
+__constfunc long
 	 labs(long);
 ldiv_t	 ldiv(long, long);
 void	*malloc(size_t);
@@ -206,6 +206,8 @@ int	 ttyslot(void);
 
 void	*valloc(size_t);		/* obsoleted by malloc() */
 
+int	 getsubopt(char **, char * const *, char **);
+
 int	 grantpt(int);
 int	 unlockpt(int);
 char	*ptsname(int);
@@ -234,6 +236,7 @@ long double	strtold(const char * __restrict, char ** __restrict);
 
 #if defined(_ISOC11_SOURCE) || (__STDC_VERSION__ - 0) >= 201101L || \
     defined(_NETBSD_SOURCE) || (__cplusplus - 0) >= 201103L
+void	*aligned_alloc(size_t, size_t);
 int	at_quick_exit(void (*)(void));
 __dead void quick_exit(int);
 #endif
@@ -299,6 +302,8 @@ __aconst char *devname(dev_t, mode_t) __RENAME(__devname50);
 
 int	 humanize_number(char *, size_t, int64_t, const char *, int, int);
 int	 dehumanize_number(const char *, int64_t *);
+ssize_t	 hmac(const char *, const void *, size_t, const void *, size_t, void *,
+   size_t);
 
 devmajor_t getdevmajor(const char *, mode_t);
 int	 getloadavg(double [], int);

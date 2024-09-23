@@ -1,4 +1,6 @@
-/*	$NetBSD: asctime.c,v 1.20 2014/10/23 18:45:58 christos Exp $	*/
+/*	$NetBSD: asctime.c,v 1.27 2019/01/27 02:40:49 dholland Exp $	*/
+
+/* asctime and asctime_r a la POSIX and ISO C, except pad years before 1000.  */
 
 /*
 ** This file is in the public domain, so clarified as of
@@ -16,7 +18,7 @@
 #if 0
 static char	elsieid[] = "@(#)asctime.c	8.5";
 #else
-__RCSID("$NetBSD: asctime.c,v 1.20 2014/10/23 18:45:58 christos Exp $");
+__RCSID("$NetBSD: asctime.c,v 1.27 2019/01/27 02:40:49 dholland Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -24,7 +26,7 @@ __RCSID("$NetBSD: asctime.c,v 1.20 2014/10/23 18:45:58 christos Exp $");
 
 #include "namespace.h"
 #include "private.h"
-#include "tzfile.h"
+#include <stdio.h>
 
 #ifdef __weak_alias
 __weak_alias(asctime_r,_asctime_r)
@@ -45,13 +47,13 @@ __weak_alias(asctime_r,_asctime_r)
 ** leading zeroes to get the newline in the traditional place.
 ** The -4 ensures that we get four characters of output even if
 ** we call a strftime variant that produces fewer characters for some years.
-** The ISO C 1999 and POSIX 1003.1-2004 standards prohibit padding the year,
+** The ISO C and POSIX standards prohibit padding the year,
 ** but many implementations pad anyway; most likely the standards are buggy.
 */
 #ifdef __GNUC__
-#define ASCTIME_FMT	"%.3s %.3s%3d %2.2d:%2.2d:%2.2d %-4s\n"
+#define ASCTIME_FMT	"%s %s%3d %2.2d:%2.2d:%2.2d %-4s\n"
 #else /* !defined __GNUC__ */
-#define ASCTIME_FMT	"%.3s %.3s%3d %02.2d:%02.2d:%02.2d %-4s\n"
+#define ASCTIME_FMT	"%s %s%3d %02.2d:%02.2d:%02.2d %-4s\n"
 #endif /* !defined __GNUC__ */
 /*
 ** For years that are more than four digits we put extra spaces before the year
@@ -60,9 +62,9 @@ __weak_alias(asctime_r,_asctime_r)
 ** that no output is better than wrong output).
 */
 #ifdef __GNUC__
-#define ASCTIME_FMT_B	"%.3s %.3s%3d %2.2d:%2.2d:%2.2d     %s\n"
+#define ASCTIME_FMT_B	"%s %s%3d %2.2d:%2.2d:%2.2d     %s\n"
 #else /* !defined __GNUC__ */
-#define ASCTIME_FMT_B	"%.3s %.3s%3d %02.2d:%02.2d:%02.2d     %s\n"
+#define ASCTIME_FMT_B	"%s %s%3d %02.2d:%02.2d:%02.2d     %s\n"
 #endif /* !defined __GNUC__ */
 
 #define STD_ASCTIME_BUF_SIZE	26
@@ -80,17 +82,13 @@ __weak_alias(asctime_r,_asctime_r)
 
 static char	buf_asctime[MAX_ASCTIME_BUF_SIZE];
 
-/*
-** A la ISO/IEC 9945-1, ANSI/IEEE Std 1003.1, 2004 Edition.
-*/
-
 char *
 asctime_r(const struct tm *timeptr, char *buf)
 {
-	static const char	wday_name[][3] = {
+	static const char	wday_name[][4] = {
 		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 	};
-	static const char	mon_name[][3] = {
+	static const char	mon_name[][4] = {
 		"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 	};
@@ -130,10 +128,6 @@ asctime_r(const struct tm *timeptr, char *buf)
 		return NULL;
 	}
 }
-
-/*
-** A la ISO/IEC 9945-1, ANSI/IEEE Std 1003.1, 2004 Edition.
-*/
 
 char *
 asctime(const struct tm *timeptr)

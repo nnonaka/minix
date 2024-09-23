@@ -93,4 +93,3 @@ int loadfile_aout(int, struct exec *, u_long *, int);
 
 extern uint32_t netbsd_version;
 extern u_int netbsd_elf_class;
-extern u_int netbsd_elf_data;

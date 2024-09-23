@@ -1,4 +1,4 @@
-/*	$NetBSD: exec.h,v 1.149 2015/10/10 10:51:15 maxv Exp $	*/
+/*	$NetBSD: exec.h,v 1.154 2019/01/27 02:08:50 pgoyette Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -124,6 +124,7 @@ struct ps_strings32 {
 };
 #endif
 
+#ifdef _KERNEL
 /*
  * the following structures allow execve() to put together processes
  * in a more extensible and cleaner way.
@@ -214,7 +215,6 @@ struct exec_package {
 	struct vnode *ep_emul_root;     /* base of emulation filesystem */
 	struct vnode *ep_interp;        /* vnode of (elf) interpeter */
 	uint32_t ep_pax_flags;		/* pax flags */
-	char	*ep_path;		/* absolute path of executable */
 	void	(*ep_emul_arg_free)(void *);
 					/* free ep_emul_arg */
 	uint32_t ep_osversion;		/* OS version */
@@ -245,11 +245,11 @@ struct exec_vmcmd {
 #define	VMCMD_STACK	0x0008	/* entry is for a stack */
 };
 
-#ifdef _KERNEL
 /*
  * funtions used either by execve() or the various CPU-dependent execve()
  * hooks.
  */
+vaddr_t	exec_vm_minaddr		(vaddr_t);
 void	kill_vmcmd		(struct exec_vmcmd **);
 int	exec_makecmds		(struct lwp *, struct exec_package *);
 int	exec_runcmds		(struct lwp *, struct exec_package *);
@@ -310,9 +310,17 @@ int	check_posix_spawn	(struct lwp *);
 void	posix_spawn_fa_free(struct posix_spawn_file_actions *, size_t);
 int	do_posix_spawn(struct lwp *, pid_t *, bool*, const char *,
     struct posix_spawn_file_actions *, struct posix_spawnattr *,
-    char *const *argv, char *const *, execve_fetch_element_t);
+    char *const *, char *const *, execve_fetch_element_t);
+int      exec_makepathbuf(struct lwp *, const char *, enum uio_seg,
+    struct pathbuf **, size_t *);
 
 extern int	maxexec;
+
+/*
+ * Utility functions
+ */
+void emul_find_root(struct lwp *, struct exec_package *);
+int emul_find_interp(struct lwp *, struct exec_package *, const char *);
 
 #endif /* _KERNEL */
 

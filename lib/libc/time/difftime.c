@@ -1,4 +1,6 @@
-/*	$NetBSD: difftime.c,v 1.16 2015/08/13 11:21:18 christos Exp $	*/
+/*	$NetBSD: difftime.c,v 1.22 2019/04/04 19:25:38 christos Exp $	*/
+
+/* Return the difference between two timestamps.  */
 
 /*
 ** This file is in the public domain, so clarified as of
@@ -10,7 +12,7 @@
 #if 0
 static char	elsieid[] = "@(#)difftime.c	8.1";
 #else
-__RCSID("$NetBSD: difftime.c,v 1.16 2015/08/13 11:21:18 christos Exp $");
+__RCSID("$NetBSD: difftime.c,v 1.22 2019/04/04 19:25:38 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -25,13 +27,14 @@ dminus(double x)
 	return -x;
 }
 
-double ATTRIBUTE_CONST
+double
 difftime(time_t time1, time_t time0)
 {
 	/*
 	** If double is large enough, simply convert and subtract
 	** (assuming that the larger type has more precision).
 	*/
+	/*CONSTCOND*/
 	if (sizeof (time_t) < sizeof (double)) {
 		double t1 = time1, t0 = time0;
 		return t1 - t0;
@@ -42,12 +45,14 @@ difftime(time_t time1, time_t time0)
 	** if the minuend is greater than or equal to the subtrahend.
 	*/
 	if (!TYPE_SIGNED(time_t))
-		return time0 <= time1 ? time1 - time0 : dminus(time0 - time1);
+		return time0 <= time1 ? time1 - time0 :
+		    dminus((double)(time0 - time1));
 
 	/* Use uintmax_t if wide enough.  */
+	/*CONSTCOND*/
 	if (sizeof (time_t) <= sizeof (uintmax_t)) {
 		uintmax_t t1 = time1, t0 = time0;
-		return time0 <= time1 ? t1 - t0 : dminus(t0 - t1);
+		return time0 <= time1 ? t1 - t0 : dminus((double)(t0 - t1));
 	}
 
 	/*

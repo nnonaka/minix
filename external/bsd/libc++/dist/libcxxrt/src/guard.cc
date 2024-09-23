@@ -47,7 +47,7 @@
 #if !defined(__minix)
 #include <pthread.h>
 #else
-#define _MTHREADIFY_PTHREADS 1 
+#define _MTHREADIFY_PTHREADS
 #include <minix/mthread.h>
 #pragma weak sched_yield
 #define sched_yield() do {\

@@ -174,12 +174,12 @@ internalize_phdr(Elf_Byte bo, Elf_Phdr *phdr)
 	I32(phdr->p_align);
 #elif ELFSIZE == 64
 	I32(phdr->p_type);
-	I64(phdr->p_offset);
+	I32(phdr->p_offset);
 	I64(phdr->p_vaddr);
 	I64(phdr->p_paddr);
 	I64(phdr->p_filesz);
 	I64(phdr->p_memsz);
-	I32(phdr->p_flags);
+	I64(phdr->p_flags);
 	I64(phdr->p_align);
 #else
 #error ELFSIZE is not 32 or 64
@@ -332,9 +332,9 @@ ELFNAMEEND(readfile_global)(int fd, u_long offset, Elf_Off elfoff,
 
 /*
  * Load a dynamic ELF binary into memory. Layout of the memory:
- * +------------+--------------+------------+------------------------+
- * | ELF HEADER | SECT HEADERS | KERN SECTS | REL/RELA/SYM/STR SECTS |
- * +------------+--------------+------------+------------------------+
+ * +------------+-----------------+-----------------+------------------+
+ * | ELF HEADER | SECTION HEADERS | KERNEL SECTIONS | SYM+REL SECTIONS |
+ * +------------+-----------------+-----------------+------------------+
  * The ELF HEADER start address is marks[MARK_END]. We then map the rest
  * by increasing maxp. An alignment is enforced between the code sections.
  *
@@ -438,7 +438,7 @@ ELFNAMEEND(loadfile_dynamic)(int fd, Elf_Ehdr *elf, u_long *marks, int flags)
 	maxp = roundup(maxp, KERNALIGN_LARGE);
 
 	/*
-	 * Load the REL/RELA/SYM/STR SECTIONS.
+	 * Load the SYM+REL SECTIONS.
 	 */
 	maxp = roundup(maxp, ELFROUND);
 	for (i = 0; i < elf->e_shnum; i++) {

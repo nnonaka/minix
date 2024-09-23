@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_sys.h,v 1.89 2015/02/15 20:21:29 manu Exp $	*/
+/*	$NetBSD: puffs_sys.h,v 1.91 2019/01/27 02:08:43 pgoyette Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -284,13 +284,13 @@ void	puffs_parkdone_poll(struct puffs_mount *, struct puffs_req *, void *);
 void	puffs_mp_reference(struct puffs_mount *);
 void	puffs_mp_release(struct puffs_mount *);
 
-void	puffs_gop_size(struct vnode *, off_t, off_t *, int); 
+void	puffs_gop_size(struct vnode *, off_t, off_t *, int);
 void	puffs_gop_markupdate(struct vnode *, int);
 
 void	puffs_senderr(struct puffs_mount *, int, int, const char *,
 		      puffs_cookie_t);
 
-bool	puffs_compat_outgoing(struct puffs_req *, struct puffs_req**, ssize_t*);
+int	puffs_compat_outgoing(struct puffs_req *, struct puffs_req**, ssize_t*);
 void	puffs_compat_incoming(struct puffs_req *, struct puffs_req *);
 
 void	puffs_updatenode(struct puffs_node *, int, voff_t);
@@ -358,5 +358,12 @@ do {									\
 	puffs_msg_enqueue(pmp, park);					\
 	var = puffs_msg_wait2(pmp, park, vp1, vp2);			\
 } while (/*CONSTCOND*/0)
+
+/*
+ * compat50 init/fini 
+ */
+
+void puffs_50_init(void);
+void puffs_50_fini(void);
 
 #endif /* _PUFFS_SYS_H_ */
