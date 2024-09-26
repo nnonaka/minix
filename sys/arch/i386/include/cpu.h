@@ -81,8 +81,13 @@ cpu_set_curpri(int pri)
 }
 #endif
 
-#define	CLKF_USERMODE(frame)	USERMODE((frame)->cf_if.if_cs, (frame)->cf_if.if_eflags)
+#ifdef XENPV
+#define	CLKF_USERMODE(frame)	(curcpu()->ci_xen_clockf_usermode)
+#define CLKF_PC(frame)		(curcpu()->ci_xen_clockf_pc)
+#else /* XENPV */
+#define	CLKF_USERMODE(frame)	USERMODE((frame)->cf_if.if_cs)
 #define	CLKF_PC(frame)		((frame)->cf_if.if_eip)
+#endif /* XENPV */
 #define	CLKF_INTR(frame)	(curcpu()->ci_idepth > 0)
 #define	LWP_PC(l)		((l)->l_md.md_regs->tf_eip)
 

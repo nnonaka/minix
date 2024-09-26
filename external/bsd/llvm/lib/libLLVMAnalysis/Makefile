@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.20 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.25 2018/07/17 18:55:27 joerg Exp $
 
 LIB=	LLVMAnalysis
 
@@ -7,9 +7,8 @@ LIB=	LLVMAnalysis
 .PATH: ${LLVM_SRCDIR}/lib/Analysis
 
 SRCS+=	AliasAnalysis.cpp \
-	AliasAnalysisCounter.cpp \
 	AliasAnalysisEvaluator.cpp \
-	AliasDebugger.cpp \
+	AliasAnalysisSummary.cpp \
 	AliasSetTracker.cpp \
 	Analysis.cpp \
 	AssumptionCache.cpp \
@@ -17,54 +16,84 @@ SRCS+=	AliasAnalysis.cpp \
 	BlockFrequencyInfo.cpp \
 	BlockFrequencyInfoImpl.cpp \
 	BranchProbabilityInfo.cpp \
+	CallGraph.cpp \
+	CallGraphSCCPass.cpp \
+	CallPrinter.cpp \
+	CaptureTracking.cpp \
 	CFG.cpp \
 	CFGPrinter.cpp \
-	CFLAliasAnalysis.cpp \
+	CFLAndersAliasAnalysis.cpp \
+	CFLSteensAliasAnalysis.cpp \
 	CGSCCPassManager.cpp \
-	CaptureTracking.cpp \
+	CmpInstAnalysis.cpp \
 	CodeMetrics.cpp \
 	ConstantFolding.cpp \
 	CostModel.cpp \
 	Delinearization.cpp \
+	DemandedBits.cpp \
 	DependenceAnalysis.cpp \
-	DomPrinter.cpp \
+	DivergenceAnalysis.cpp \
 	DominanceFrontier.cpp \
-	FunctionTargetTransformInfo.cpp \
-	IVUsers.cpp \
+	DomPrinter.cpp \
+	EHPersonalities.cpp \
+	GlobalsModRef.cpp \
+	IndirectCallPromotionAnalysis.cpp \
+	InlineCost.cpp \
 	InstCount.cpp \
 	InstructionSimplify.cpp \
 	Interval.cpp \
 	IntervalPartition.cpp \
-	JumpInstrTableInfo.cpp \
+	IteratedDominanceFrontier.cpp \
+	IVUsers.cpp \
+	LazyBlockFrequencyInfo.cpp \
+	LazyBranchProbabilityInfo.cpp \
 	LazyCallGraph.cpp \
 	LazyValueInfo.cpp \
-	LibCallAliasAnalysis.cpp \
-	LibCallSemantics.cpp \
 	Lint.cpp \
 	Loads.cpp \
+	LoopAccessAnalysis.cpp \
+	LoopAnalysisManager.cpp \
 	LoopInfo.cpp \
 	LoopPass.cpp \
+	LoopUnrollAnalyzer.cpp \
 	MemDepPrinter.cpp \
+	MemDerefPrinter.cpp \
 	MemoryBuiltins.cpp \
 	MemoryDependenceAnalysis.cpp \
+	MemoryLocation.cpp \
+	MemorySSA.cpp \
+	MemorySSAUpdater.cpp \
 	ModuleDebugInfoPrinter.cpp \
-	NoAliasAnalysis.cpp \
+	ModuleSummaryAnalysis.cpp \
+	MustExecute.cpp \
+	ObjCARCAliasAnalysis.cpp \
+	ObjCARCAnalysisUtils.cpp \
+	ObjCARCInstKind.cpp \
+	OptimizationRemarkEmitter.cpp \
+	OrderedBasicBlock.cpp \
 	PHITransAddr.cpp \
+	PhiValues.cpp \
 	PostDominators.cpp \
+	ProfileSummaryInfo.cpp \
 	PtrUseVisitor.cpp \
 	RegionInfo.cpp \
 	RegionPass.cpp \
 	RegionPrinter.cpp \
-	ScalarEvolution.cpp \
 	ScalarEvolutionAliasAnalysis.cpp \
+	ScalarEvolution.cpp \
 	ScalarEvolutionExpander.cpp \
 	ScalarEvolutionNormalization.cpp \
 	ScopedNoAliasAA.cpp \
-	SparsePropagation.cpp \
+	SyntheticCountsUtils.cpp \
+	TargetLibraryInfo.cpp \
 	TargetTransformInfo.cpp \
 	Trace.cpp \
 	TypeBasedAliasAnalysis.cpp \
-	ValueTracking.cpp
+	TypeMetadataUtils.cpp \
+	ValueLattice.cpp \
+	ValueLatticeUtils.cpp \
+	ValueTracking.cpp \
+	VectorUtils.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

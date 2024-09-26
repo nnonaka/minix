@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.43 2014/07/23 18:19:44 alnsn Exp $
+#	$NetBSD: Makefile,v 1.49.4.1 2019/09/17 19:31:59 martin Exp $
 
 INCSDIR= /usr/include/i386
 
@@ -16,13 +16,13 @@ INCS=	ansi.h aout_machdep.h apmvar.h asm.h \
 	kcore.h \
 	limits.h lock.h \
 	math.h mcontext.h mutex.h mtrr.h multiboot.h multiboot2.h \
-	param.h pcb.h pio.h pmap.h pmc.h proc.h profile.h psl.h \
+	param.h pcb.h pio.h pmap.h proc.h profile.h psl.h \
 	pte.h ptrace.h \
 	reg.h rwlock.h \
 	segments.h setjmp.h signal.h sljit_machdep.h specialreg.h spkr.h \
 	sysarch.h \
 	trap.h tss.h types.h \
-	vm86.h vmparam.h \
+	vmparam.h \
 	wchar_limits.h
 
 .include <bsd.kinc.mk>

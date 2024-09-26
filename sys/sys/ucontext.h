@@ -86,7 +86,7 @@ struct __ucontext {
  *			[undefined]	alpha, powerpc and vax
  *			0x00020000	other ports
  *
- *	_UC_POWERPC_VEC Context does not use signal stack
+ *	_UC_POWERPC_VEC Context contains valid AltiVec context
  *			0x00010000	powerpc only
  *
  *	_UC_POWERPC_SPE	Context contains valid SPE context

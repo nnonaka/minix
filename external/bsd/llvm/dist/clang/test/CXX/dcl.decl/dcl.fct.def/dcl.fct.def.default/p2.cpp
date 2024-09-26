@@ -36,7 +36,7 @@ struct S3 {
 constexpr S3 s3a = S3(0);
 constexpr S3 s3b = s3a;
 constexpr S3 s3c = S3();
-constexpr S3 s3d; // expected-error {{default initialization of an object of const type 'const S3' without a user-provided default constructor}} expected-note{{add an explicit initializer to initialize 's3d'}}
+constexpr S3 s3d; // expected-error {{default initialization of an object of const type 'const S3' without a user-provided default constructor}}
 
 struct S4 {
   S4() = default;
@@ -116,9 +116,10 @@ static_assert(!noexcept(e5 = e5), "");
 namespace PR13492 {
   struct B {
     B() = default;
+    int field;
   };
 
   void f() {
-    const B b; // expected-error {{default initialization of an object of const type 'const PR13492::B' without a user-provided default constructor}} expected-note {{add an explicit initializer to initialize 'b'}}
+    const B b; // expected-error {{default initialization of an object of const type 'const PR13492::B' without a user-provided default constructor}}
   }
 }

@@ -63,18 +63,20 @@ typedef	__uint32_t	__fd_mask;
 #endif /* defined(__minix) */
 #endif
 
-#define	__NFD_SIZE	(((FD_SETSIZE) + (__NFDBITS - 1)) / __NFDBITS)
+#define	__NFD_LEN(a)	(((a) + (__NFDBITS - 1)) / __NFDBITS)
+#define	__NFD_SIZE	__NFD_LEN(FD_SETSIZE)
+#define	__NFD_BYTES(a)	(__NFD_LEN(a) * sizeof(__fd_mask))
 
 typedef	struct fd_set {
 	__fd_mask	fds_bits[__NFD_SIZE];
 } fd_set;
 
 #define	FD_SET(n, p)	\
-    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] |= (1 << ((n) & __NFDMASK)))
+    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] |= (1U << ((n) & __NFDMASK)))
 #define	FD_CLR(n, p)	\
-    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] &= ~(1 << ((n) & __NFDMASK)))
+    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] &= ~(1U << ((n) & __NFDMASK)))
 #define	FD_ISSET(n, p)	\
-    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] & (1 << ((n) & __NFDMASK)))
+    ((p)->fds_bits[(unsigned)(n) >> __NFDSHIFT] & (1U << ((n) & __NFDMASK)))
 #if __GNUC_PREREQ__(2, 95)
 #define	FD_ZERO(p)	(void)__builtin_memset((p), 0, sizeof(*(p)))
 #else

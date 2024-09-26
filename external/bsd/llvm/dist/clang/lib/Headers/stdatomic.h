@@ -40,16 +40,16 @@ extern "C" {
 
 /* 7.17.1 Introduction */
 
-#define ATOMIC_BOOL_LOCK_FREE       __GCC_ATOMIC_BOOL_LOCK_FREE
-#define ATOMIC_CHAR_LOCK_FREE       __GCC_ATOMIC_CHAR_LOCK_FREE
-#define ATOMIC_CHAR16_T_LOCK_FREE   __GCC_ATOMIC_CHAR16_T_LOCK_FREE
-#define ATOMIC_CHAR32_T_LOCK_FREE   __GCC_ATOMIC_CHAR32_T_LOCK_FREE
-#define ATOMIC_WCHAR_T_LOCK_FREE    __GCC_ATOMIC_WCHAR_T_LOCK_FREE
-#define ATOMIC_SHORT_T_LOCK_FREE    __GCC_ATOMIC_SHORT_T_LOCK_FREE
-#define ATOMIC_INT_T_LOCK_FREE      __GCC_ATOMIC_INT_T_LOCK_FREE
-#define ATOMIC_LONG_T_LOCK_FREE     __GCC_ATOMIC_LONG_T_LOCK_FREE
-#define ATOMIC_LLONG_T_LOCK_FREE    __GCC_ATOMIC_LLONG_T_LOCK_FREE
-#define ATOMIC_POINTER_T_LOCK_FREE  __GCC_ATOMIC_POINTER_T_LOCK_FREE
+#define ATOMIC_BOOL_LOCK_FREE       __CLANG_ATOMIC_BOOL_LOCK_FREE
+#define ATOMIC_CHAR_LOCK_FREE       __CLANG_ATOMIC_CHAR_LOCK_FREE
+#define ATOMIC_CHAR16_T_LOCK_FREE   __CLANG_ATOMIC_CHAR16_T_LOCK_FREE
+#define ATOMIC_CHAR32_T_LOCK_FREE   __CLANG_ATOMIC_CHAR32_T_LOCK_FREE
+#define ATOMIC_WCHAR_T_LOCK_FREE    __CLANG_ATOMIC_WCHAR_T_LOCK_FREE
+#define ATOMIC_SHORT_LOCK_FREE      __CLANG_ATOMIC_SHORT_LOCK_FREE
+#define ATOMIC_INT_LOCK_FREE        __CLANG_ATOMIC_INT_LOCK_FREE
+#define ATOMIC_LONG_LOCK_FREE       __CLANG_ATOMIC_LONG_LOCK_FREE
+#define ATOMIC_LLONG_LOCK_FREE      __CLANG_ATOMIC_LLONG_LOCK_FREE
+#define ATOMIC_POINTER_LOCK_FREE    __CLANG_ATOMIC_POINTER_LOCK_FREE
 
 /* 7.17.2 Initialization */
 
@@ -71,7 +71,7 @@ typedef enum memory_order {
 
 /* 7.17.4 Fences */
 
-// These should be provided by the libc implementation.
+/* These should be provided by the libc implementation. */
 void atomic_thread_fence(memory_order);
 void atomic_signal_fence(memory_order);
 
@@ -164,7 +164,7 @@ typedef struct atomic_flag { atomic_bool _Value; } atomic_flag;
 
 #define ATOMIC_FLAG_INIT { 0 }
 
-// These should be provided by the libc implementation.
+/* These should be provided by the libc implementation. */
 #ifdef __cplusplus
 bool atomic_flag_test_and_set(volatile atomic_flag *);
 bool atomic_flag_test_and_set_explicit(volatile atomic_flag *, memory_order);

@@ -1,4 +1,4 @@
-/*	$NetBSD: fenv.h,v 1.13 2014/12/27 16:54:02 martin Exp $	*/
+/*	$NetBSD: fenv.h,v 1.26 2017/04/09 15:29:07 christos Exp $	*/
 /*
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -24,19 +24,57 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-#if !defined(__aarch64__) && !defined(__arm__) && !defined(__i386__) \
-    && !defined(__hppa__) \
-    && !defined(__or1k__) && !defined(__riscv__) && !defined(__sparc__) \
-    && !defined(__x86_64__)
-#error	"fenv.h is currently not supported for this architecture"
-#endif
-
 #ifndef _FENV_H_
 #define _FENV_H_
 
 #include <sys/featuretest.h>
-#include <machine/fenv.h>
+
+#if defined(__vax__)
+# ifndef __TEST_FENV
+#  error	"fenv.h is currently not supported for this architecture"
+# endif
+typedef int fexcept_t;
+typedef int fenv_t;
+#else
+# define __HAVE_FENV
+# include <machine/fenv.h>
+#endif
+
+#if \
+	(defined(__arm__) && defined(__SOFTFP__)) || \
+	(defined(__m68k__) && !defined(__HAVE_68881__)) || \
+	defined(__mips_soft_float) || \
+	(defined(__powerpc__) && defined(_SOFT_FLOAT)) || \
+	(defined(__sh__) && !defined(__SH_FPU_ANY__)) || \
+	0
+
+/*
+ * Common definitions for softfloat.
+ */
+
+#ifndef __HAVE_FENV_SOFTFLOAT_DEFS
+
+typedef int fexcept_t;
+
+typedef struct {
+	int	__flags;
+	int	__mask;
+	int	__round;
+} fenv_t;
+
+#define __FENV_GET_FLAGS(__envp)	(__envp)->__flags
+#define __FENV_GET_MASK(__envp)		(__envp)->__mask
+#define __FENV_GET_ROUND(__envp)	(__envp)->__round
+#define __FENV_SET_FLAGS(__envp, __val) \
+	(__envp)->__flags = (__val)
+#define __FENV_SET_MASK(__envp, __val) \
+	(__envp)->__mask = (__val)
+#define __FENV_SET_ROUND(__envp, __val) \
+	(__envp)->__round = (__val)
+
+#endif /* __FENV_GET_FLAGS */
+
+#endif /* softfloat */
 
 __BEGIN_DECLS
 
@@ -55,8 +93,8 @@ int	feupdateenv(const fenv_t *);
 
 #if defined(_NETBSD_SOURCE) || defined(_GNU_SOURCE)
 
-int	feenableexcept(int mask);
-int	fedisableexcept(int mask);
+int	feenableexcept(int);
+int	fedisableexcept(int);
 int	fegetexcept(void);
 
 #endif /* _NETBSD_SOURCE || _GNU_SOURCE */

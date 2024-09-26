@@ -1,4 +1,4 @@
-/*	$NetBSD: vmparam.h,v 1.81 2014/07/24 13:42:28 riastradh Exp $	*/
+/*	$NetBSD: vmparam.h,v 1.86 2019/02/11 14:59:32 cherry Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -37,7 +37,6 @@
 #ifndef _I386_VMPARAM_H_
 #define _I386_VMPARAM_H_
 
-#include <sys/tree.h>
 #include <sys/mutex.h>
 
 /*
@@ -101,7 +100,7 @@
 
 /* user/kernel map constants */
 #define VM_MIN_ADDRESS		((vaddr_t)0)
-#define	VM_MAXUSER_ADDRESS	((vaddr_t)(PDIR_SLOT_PTE << L2_SHIFT))
+#define	VM_MAXUSER_ADDRESS	((vaddr_t)(PDIR_SLOT_PTE << L2_SHIFT) - PAGE_SIZE)
 #define	VM_MAX_ADDRESS		\
 	((vaddr_t)((PDIR_SLOT_PTE << L2_SHIFT) + (PDIR_SLOT_PTE << L1_SHIFT)))
 #define	VM_MIN_KERNEL_ADDRESS	((vaddr_t)(PDIR_SLOT_KERN << L2_SHIFT))
@@ -115,22 +114,15 @@
 #include "opt_xen.h"
 #endif
 #define __USE_TOPDOWN_VM
-#define VM_DEFAULT_ADDRESS_TOPDOWN(da, sz) \
-    trunc_page(USRSTACK - MAXSSIZ - (sz))
 #define VM_DEFAULT_ADDRESS_BOTTOMUP(da, sz) \
     round_page((vaddr_t)(da) + (vsize_t)MIN(maxdmap, MAXDSIZ_BU))
-
-/* XXX max. amount of KVM to be used by buffers. */
-#ifndef VM_MAX_KERNEL_BUF
-#define VM_MAX_KERNEL_BUF	(384 * 1024 * 1024)
-#endif
 
 /* virtual sizes (bytes) for various kernel submaps */
 #define VM_PHYS_SIZE		(USRIOSIZE*PAGE_SIZE)
 
 #define VM_PHYSSEG_STRAT	VM_PSTRAT_BIGFIRST
 
-#ifdef XEN
+#ifdef XENPV
 #define	VM_PHYSSEG_MAX		1
 #define	VM_NFREELIST		1
 #else
@@ -139,7 +131,7 @@
 #define	VM_FREELIST_FIRST16	3
 #define	VM_FREELIST_FIRST1G	2
 #define	VM_FREELIST_FIRST4G	1
-#endif /* XEN */
+#endif /* XENPV */
 #define	VM_FREELIST_DEFAULT	0
 
 #endif /* _I386_VMPARAM_H_ */

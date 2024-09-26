@@ -1,22 +1,24 @@
 ; RUN: llc %s -filetype=asm -o -
 
+source_filename = "test/DebugInfo/AArch64/big-endian.ll"
 target datalayout = "E-m:e-i64:64-i128:128-n32:64-S128"
 target triple = "aarch64_be--none-eabi"
 
-@a = common global i32 0, align 4
+@a = common global i32 0, align 4, !dbg !0
 
-!llvm.dbg.cu = !{!0}
+!llvm.dbg.cu = !{!4}
 !llvm.module.flags = !{!8, !9}
 !llvm.ident = !{!10}
 
-!0 = !{!"0x11\0012\00clang version 3.6.0 \001\00\000\00\001", !1, !2, !2, !2, !3, !2} ; [ DW_TAG_compile_unit ] [/work/validation/-] [DW_LANG_C99]
-!1 = !{!"-", !"/work/validation"}
-!2 = !{}
-!3 = !{!4}
-!4 = !{!"0x34\00a\00a\00\001\000\001", null, !5, !7, i32* @a, null} ; [ DW_TAG_variable ] [a] [line 1] [def]
-!5 = !{!"0x29", !6}          ; [ DW_TAG_file_type ] [/work/validation/<stdin>]
-!6 = !{!"<stdin>", !"/work/validation"}
-!7 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "a", scope: null, file: !2, line: 1, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "<stdin>", directory: "/work/validation")
+!3 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!4 = distinct !DICompileUnit(language: DW_LANG_C99, file: !5, producer: "clang version 3.6.0 ", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !6, retainedTypes: !6, globals: !7, imports: !6)
+!5 = !DIFile(filename: "-", directory: "/work/validation")
+!6 = !{}
+!7 = !{!0}
 !8 = !{i32 2, !"Dwarf Version", i32 4}
-!9 = !{i32 2, !"Debug Info Version", i32 2}
+!9 = !{i32 2, !"Debug Info Version", i32 3}
 !10 = !{!"clang version 3.6.0 "}
+

@@ -1,8 +1,9 @@
-#	$NetBSD: Makefile.host,v 1.31 2013/06/14 16:10:02 tsutsui Exp $
+#	$NetBSD: Makefile.host,v 1.34 2018/05/04 14:50:18 christos Exp $
 
-NOINFO=		# defined
-NOLINT=		# defined
-NOMAN=		# defined
+NOINFO=         # defined
+NOLINT=         # defined
+NOMAN=          # defined
+MKREPRO=no	# Native toolchain might be unable to do it
 
 .include <bsd.own.mk>
 

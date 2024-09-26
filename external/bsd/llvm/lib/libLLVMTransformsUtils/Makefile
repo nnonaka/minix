@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.17 2015/01/29 20:41:36 joerg Exp $
+#	$NetBSD: Makefile,v 1.21 2018/07/17 18:55:29 joerg Exp $
 
 LIB=	LLVMTransformsUtils
 
@@ -6,44 +6,64 @@ LIB=	LLVMTransformsUtils
 
 .PATH: ${LLVM_SRCDIR}/lib/Transforms/Utils
 
-SRCS+=	ASanStackFrameLayout.cpp \
-	AddDiscriminators.cpp \
+SRCS+=	AddDiscriminators.cpp \
+	ASanStackFrameLayout.cpp \
 	BasicBlockUtils.cpp \
 	BreakCriticalEdges.cpp \
 	BuildLibCalls.cpp \
 	BypassSlowDivision.cpp \
+	CallPromotionUtils.cpp \
 	CloneFunction.cpp \
 	CloneModule.cpp \
-	CmpInstAnalysis.cpp \
 	CodeExtractor.cpp \
 	CtorUtils.cpp \
 	DemoteRegToStack.cpp \
+	EntryExitInstrumenter.cpp \
+	EscapeEnumerator.cpp \
+	Evaluator.cpp \
 	FlattenCFG.cpp \
+	FunctionComparator.cpp \
+	FunctionImportUtils.cpp \
 	GlobalStatus.cpp \
+	ImportedFunctionsInliningStatistics.cpp \
 	InlineFunction.cpp \
 	InstructionNamer.cpp \
 	IntegerDivision.cpp \
 	LCSSA.cpp \
+	LibCallsShrinkWrap.cpp \
 	Local.cpp \
+	LoopRotationUtils.cpp \
 	LoopSimplify.cpp \
+	LoopUnrollAndJam.cpp \
 	LoopUnroll.cpp \
+	LoopUnrollPeel.cpp \
 	LoopUnrollRuntime.cpp \
-	LowerExpectIntrinsic.cpp \
+	LoopUtils.cpp \
+	LoopVersioning.cpp \
 	LowerInvoke.cpp \
+	LowerMemIntrinsics.cpp \
 	LowerSwitch.cpp \
 	Mem2Reg.cpp \
 	MetaRenamer.cpp \
 	ModuleUtils.cpp \
+	NameAnonGlobals.cpp \
+	OrderedInstructions.cpp \
+	PredicateInfo.cpp \
 	PromoteMemoryToRegister.cpp \
-	SSAUpdater.cpp \
+	SanitizerStats.cpp \
 	SimplifyCFG.cpp \
 	SimplifyIndVar.cpp \
-	SimplifyInstructions.cpp \
 	SimplifyLibCalls.cpp \
+	SplitModule.cpp \
+	SSAUpdaterBulk.cpp \
+	SSAUpdater.cpp \
+	StripGCRelocates.cpp \
+	StripNonLineTableDebugInfo.cpp \
 	SymbolRewriter.cpp \
 	UnifyFunctionExitNodes.cpp \
 	Utils.cpp \
-	ValueMapper.cpp
+	ValueMapper.cpp \
+	VNCoercion.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

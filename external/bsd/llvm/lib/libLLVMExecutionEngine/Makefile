@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2015/03/18 17:43:20 joerg Exp $
+#	$NetBSD: Makefile,v 1.7 2019/03/10 12:14:06 mrg Exp $
 
 LIB=	LLVMExecutionEngine
 
@@ -9,6 +9,11 @@ LIB=	LLVMExecutionEngine
 SRCS+=	GDBRegistrationListener.cpp \
 	ExecutionEngine.cpp \
 	ExecutionEngineBindings.cpp \
+	SectionMemoryManager.cpp \
 	TargetSelect.cpp
 
+.if defined(HOSTLIB)
+.include <bsd.hostlib.mk>
+.else
 .include <bsd.lib.mk>
+.endif

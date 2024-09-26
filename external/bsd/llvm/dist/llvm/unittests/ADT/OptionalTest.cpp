@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "gtest/gtest.h"
 #include "llvm/ADT/Optional.h"
+#include "gtest/gtest.h"
+
 using namespace llvm;
 
 namespace {
@@ -183,10 +184,10 @@ struct MultiArgConstructor {
   explicit MultiArgConstructor(int x, bool positive)
     : x(x), y(positive ? x : -x) {}
 
-  MultiArgConstructor(const MultiArgConstructor &) LLVM_DELETED_FUNCTION;
-  MultiArgConstructor(MultiArgConstructor &&) LLVM_DELETED_FUNCTION;
-  MultiArgConstructor &operator=(const MultiArgConstructor &) LLVM_DELETED_FUNCTION;
-  MultiArgConstructor &operator=(MultiArgConstructor &&) LLVM_DELETED_FUNCTION;
+  MultiArgConstructor(const MultiArgConstructor &) = delete;
+  MultiArgConstructor(MultiArgConstructor &&) = delete;
+  MultiArgConstructor &operator=(const MultiArgConstructor &) = delete;
+  MultiArgConstructor &operator=(MultiArgConstructor &&) = delete;
 
   static unsigned Destructions;
   ~MultiArgConstructor() {
@@ -267,12 +268,12 @@ TEST_F(OptionalTest, MoveOnlyMoveConstruction) {
   Optional<MoveOnly> A(MoveOnly(3));
   MoveOnly::ResetCounts();
   Optional<MoveOnly> B(std::move(A));
-  EXPECT_FALSE((bool)A);
+  EXPECT_TRUE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);
   EXPECT_EQ(1u, MoveOnly::MoveConstructions);
   EXPECT_EQ(0u, MoveOnly::MoveAssignments);
-  EXPECT_EQ(1u, MoveOnly::Destructions);
+  EXPECT_EQ(0u, MoveOnly::Destructions);
 }
 
 TEST_F(OptionalTest, MoveOnlyAssignment) {
@@ -291,12 +292,12 @@ TEST_F(OptionalTest, MoveOnlyInitializingAssignment) {
   Optional<MoveOnly> B;
   MoveOnly::ResetCounts();
   B = std::move(A);
-  EXPECT_FALSE((bool)A);
+  EXPECT_TRUE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);
   EXPECT_EQ(1u, MoveOnly::MoveConstructions);
   EXPECT_EQ(0u, MoveOnly::MoveAssignments);
-  EXPECT_EQ(1u, MoveOnly::Destructions);
+  EXPECT_EQ(0u, MoveOnly::Destructions);
 }
 
 TEST_F(OptionalTest, MoveOnlyNullingAssignment) {
@@ -316,12 +317,12 @@ TEST_F(OptionalTest, MoveOnlyAssigningAssignment) {
   Optional<MoveOnly> B(MoveOnly(4));
   MoveOnly::ResetCounts();
   B = std::move(A);
-  EXPECT_FALSE((bool)A);
+  EXPECT_TRUE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);
   EXPECT_EQ(0u, MoveOnly::MoveConstructions);
   EXPECT_EQ(1u, MoveOnly::MoveAssignments);
-  EXPECT_EQ(1u, MoveOnly::Destructions);
+  EXPECT_EQ(0u, MoveOnly::Destructions);
 }
 
 struct Immovable {
@@ -340,7 +341,7 @@ struct Immovable {
   }
 private:
   // This should disable all move/copy operations.
-  Immovable(Immovable&& other) LLVM_DELETED_FUNCTION;
+  Immovable(Immovable&& other) = delete;
 };
 
 unsigned Immovable::Constructions = 0;
@@ -376,6 +377,154 @@ TEST_F(OptionalTest, MoveGetValueOr) {
 }
 
 #endif // LLVM_HAS_RVALUE_REFERENCE_THIS
+
+struct EqualTo {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X == Y;
+  }
+};
+
+struct NotEqualTo {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X != Y;
+  }
+};
+
+struct Less {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X < Y;
+  }
+};
+
+struct Greater {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X > Y;
+  }
+};
+
+struct LessEqual {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X <= Y;
+  }
+};
+
+struct GreaterEqual {
+  template <typename T, typename U> static bool apply(const T &X, const U &Y) {
+    return X >= Y;
+  }
+};
+
+template <typename OperatorT, typename T>
+void CheckRelation(const Optional<T> &Lhs, const Optional<T> &Rhs,
+                   bool Expected) {
+  EXPECT_EQ(Expected, OperatorT::apply(Lhs, Rhs));
+
+  if (Lhs)
+    EXPECT_EQ(Expected, OperatorT::apply(*Lhs, Rhs));
+  else
+    EXPECT_EQ(Expected, OperatorT::apply(None, Rhs));
+
+  if (Rhs)
+    EXPECT_EQ(Expected, OperatorT::apply(Lhs, *Rhs));
+  else
+    EXPECT_EQ(Expected, OperatorT::apply(Lhs, None));
+}
+
+struct EqualityMock {};
+const Optional<EqualityMock> NoneEq, EqualityLhs((EqualityMock())),
+    EqualityRhs((EqualityMock()));
+bool IsEqual;
+
+bool operator==(const EqualityMock &Lhs, const EqualityMock &Rhs) {
+  EXPECT_EQ(&*EqualityLhs, &Lhs);
+  EXPECT_EQ(&*EqualityRhs, &Rhs);
+  return IsEqual;
+}
+
+TEST_F(OptionalTest, OperatorEqual) {
+  CheckRelation<EqualTo>(NoneEq, NoneEq, true);
+  CheckRelation<EqualTo>(NoneEq, EqualityRhs, false);
+  CheckRelation<EqualTo>(EqualityLhs, NoneEq, false);
+
+  IsEqual = false;
+  CheckRelation<EqualTo>(EqualityLhs, EqualityRhs, IsEqual);
+  IsEqual = true;
+  CheckRelation<EqualTo>(EqualityLhs, EqualityRhs, IsEqual);
+}
+
+TEST_F(OptionalTest, OperatorNotEqual) {
+  CheckRelation<NotEqualTo>(NoneEq, NoneEq, false);
+  CheckRelation<NotEqualTo>(NoneEq, EqualityRhs, true);
+  CheckRelation<NotEqualTo>(EqualityLhs, NoneEq, true);
+
+  IsEqual = false;
+  CheckRelation<NotEqualTo>(EqualityLhs, EqualityRhs, !IsEqual);
+  IsEqual = true;
+  CheckRelation<NotEqualTo>(EqualityLhs, EqualityRhs, !IsEqual);
+}
+
+struct InequalityMock {};
+const Optional<InequalityMock> NoneIneq, InequalityLhs((InequalityMock())),
+    InequalityRhs((InequalityMock()));
+bool IsLess;
+
+bool operator<(const InequalityMock &Lhs, const InequalityMock &Rhs) {
+  EXPECT_EQ(&*InequalityLhs, &Lhs);
+  EXPECT_EQ(&*InequalityRhs, &Rhs);
+  return IsLess;
+}
+
+TEST_F(OptionalTest, OperatorLess) {
+  CheckRelation<Less>(NoneIneq, NoneIneq, false);
+  CheckRelation<Less>(NoneIneq, InequalityRhs, true);
+  CheckRelation<Less>(InequalityLhs, NoneIneq, false);
+
+  IsLess = false;
+  CheckRelation<Less>(InequalityLhs, InequalityRhs, IsLess);
+  IsLess = true;
+  CheckRelation<Less>(InequalityLhs, InequalityRhs, IsLess);
+}
+
+TEST_F(OptionalTest, OperatorGreater) {
+  CheckRelation<Greater>(NoneIneq, NoneIneq, false);
+  CheckRelation<Greater>(NoneIneq, InequalityRhs, false);
+  CheckRelation<Greater>(InequalityLhs, NoneIneq, true);
+
+  IsLess = false;
+  CheckRelation<Greater>(InequalityRhs, InequalityLhs, IsLess);
+  IsLess = true;
+  CheckRelation<Greater>(InequalityRhs, InequalityLhs, IsLess);
+}
+
+TEST_F(OptionalTest, OperatorLessEqual) {
+  CheckRelation<LessEqual>(NoneIneq, NoneIneq, true);
+  CheckRelation<LessEqual>(NoneIneq, InequalityRhs, true);
+  CheckRelation<LessEqual>(InequalityLhs, NoneIneq, false);
+
+  IsLess = false;
+  CheckRelation<LessEqual>(InequalityRhs, InequalityLhs, !IsLess);
+  IsLess = true;
+  CheckRelation<LessEqual>(InequalityRhs, InequalityLhs, !IsLess);
+}
+
+TEST_F(OptionalTest, OperatorGreaterEqual) {
+  CheckRelation<GreaterEqual>(NoneIneq, NoneIneq, true);
+  CheckRelation<GreaterEqual>(NoneIneq, InequalityRhs, false);
+  CheckRelation<GreaterEqual>(InequalityLhs, NoneIneq, true);
+
+  IsLess = false;
+  CheckRelation<GreaterEqual>(InequalityLhs, InequalityRhs, !IsLess);
+  IsLess = true;
+  CheckRelation<GreaterEqual>(InequalityLhs, InequalityRhs, !IsLess);
+}
+
+#if __has_feature(is_trivially_copyable) && defined(_LIBCPP_VERSION)
+static_assert(std::is_trivially_copyable<Optional<int>>::value,
+              "Should be trivially copyable");
+static_assert(
+    !std::is_trivially_copyable<Optional<NonDefaultConstructible>>::value,
+    "Shouldn't be trivially copyable");
+#endif
 
 } // end anonymous namespace
 

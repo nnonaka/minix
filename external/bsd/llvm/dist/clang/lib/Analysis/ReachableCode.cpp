@@ -18,7 +18,7 @@
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/ParentMap.h"
 #include "clang/AST/StmtCXX.h"
-#include "clang/Analysis/AnalysisContext.h"
+#include "clang/Analysis/AnalysisDeclContext.h"
 #include "clang/Analysis/CFG.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Lex/Preprocessor.h"
@@ -53,6 +53,29 @@ static bool isTrivialDoWhile(const CFGBlock *B, const Stmt *S) {
     if (const DoStmt *DS = dyn_cast<DoStmt>(Term)) {
       const Expr *Cond = DS->getCond()->IgnoreParenCasts();
       return Cond == S && isTrivialExpression(Cond);
+    }
+  }
+  return false;
+}
+
+static bool isBuiltinUnreachable(const Stmt *S) {
+  if (const auto *DRE = dyn_cast<DeclRefExpr>(S))
+    if (const auto *FDecl = dyn_cast<FunctionDecl>(DRE->getDecl()))
+      return FDecl->getIdentifier() &&
+             FDecl->getBuiltinID() == Builtin::BI__builtin_unreachable;
+  return false;
+}
+
+static bool isBuiltinAssumeFalse(const CFGBlock *B, const Stmt *S,
+                                 ASTContext &C) {
+  if (B->empty())  {
+    // Happens if S is B's terminator and B contains nothing else
+    // (e.g. a CFGBlock containing only a goto).
+    return false;
+  }
+  if (Optional<CFGStmt> CS = B->back().getAs<CFGStmt>()) {
+    if (const auto *CE = dyn_cast<CallExpr>(CS->getStmt())) {
+      return CE->getCallee()->IgnoreCasts() == S && CE->isBuiltinAssumeFalse(C);
     }
   }
   return false;
@@ -132,14 +155,20 @@ static bool isExpandedFromConfigurationMacro(const Stmt *S,
   // so that we can refine it later.
   SourceLocation L = S->getLocStart();
   if (L.isMacroID()) {
+    SourceManager &SM = PP.getSourceManager();
     if (IgnoreYES_NO) {
       // The Objective-C constant 'YES' and 'NO'
       // are defined as macros.  Do not treat them
       // as configuration values.
-      SourceManager &SM = PP.getSourceManager();
       SourceLocation TopL = getTopMostMacro(L, SM);
       StringRef MacroName = PP.getImmediateMacroName(TopL);
       if (MacroName == "YES" || MacroName == "NO")
+        return false;
+    } else if (!PP.getLangOpts().CPlusPlus) {
+      // Do not treat C 'false' and 'true' macros as configuration values.
+      SourceLocation TopL = getTopMostMacro(L, SM);
+      StringRef MacroName = PP.getImmediateMacroName(TopL);
+      if (MacroName == "false" || MacroName == "true")
         return false;
     }
     return true;
@@ -163,6 +192,8 @@ static bool isConfigurationValue(const Stmt *S,
                                  bool WrappedInParens = false) {
   if (!S)
     return false;
+
+  S = S->IgnoreImplicit();
 
   if (const Expr *Ex = dyn_cast<Expr>(S))
     S = Ex->IgnoreCasts();
@@ -216,11 +247,21 @@ static bool isConfigurationValue(const Stmt *S,
     }
     case Stmt::UnaryOperatorClass: {
       const UnaryOperator *UO = cast<UnaryOperator>(S);
-      if (SilenceableCondVal) 
-        *SilenceableCondVal = UO->getSourceRange();      
-      return UO->getOpcode() == UO_LNot &&
-             isConfigurationValue(UO->getSubExpr(), PP, SilenceableCondVal,
-                                  IncludeIntegers, WrappedInParens);
+      if (UO->getOpcode() != UO_LNot)
+        return false;
+      bool SilenceableCondValNotSet =
+          SilenceableCondVal && SilenceableCondVal->getBegin().isInvalid();
+      bool IsSubExprConfigValue =
+          isConfigurationValue(UO->getSubExpr(), PP, SilenceableCondVal,
+                               IncludeIntegers, WrappedInParens);
+      // Update the silenceable condition value source range only if the range
+      // was set directly by the child expression.
+      if (SilenceableCondValNotSet &&
+          SilenceableCondVal->getBegin().isValid() &&
+          *SilenceableCondVal ==
+              UO->getSubExpr()->IgnoreCasts()->getSourceRange())
+        *SilenceableCondVal = UO->getSourceRange();
+      return IsSubExprConfigValue;
     }
     default:
       return false;
@@ -346,6 +387,7 @@ namespace {
     llvm::BitVector &Reachable;
     SmallVector<const CFGBlock *, 10> WorkList;
     Preprocessor &PP;
+    ASTContext &C;
 
     typedef SmallVector<std::pair<const CFGBlock *, const Stmt *>, 12>
     DeferredLocsTy;
@@ -353,10 +395,10 @@ namespace {
     DeferredLocsTy DeferredLocs;
 
   public:
-    DeadCodeScan(llvm::BitVector &reachable, Preprocessor &PP)
+    DeadCodeScan(llvm::BitVector &reachable, Preprocessor &PP, ASTContext &C)
     : Visited(reachable.size()),
       Reachable(reachable),
-      PP(PP) {}
+      PP(PP), C(C) {}
 
     void enqueue(const CFGBlock *block);
     unsigned scanBackwards(const CFGBlock *Start,
@@ -574,8 +616,8 @@ void DeadCodeScan::reportDeadCode(const CFGBlock *B,
 
   if (isa<BreakStmt>(S)) {
     UK = reachable_code::UK_Break;
-  }
-  else if (isTrivialDoWhile(B, S)) {
+  } else if (isTrivialDoWhile(B, S) || isBuiltinUnreachable(S) ||
+             isBuiltinAssumeFalse(B, S, C)) {
     return;
   }
   else if (isDeadReturn(B, S)) {
@@ -668,7 +710,7 @@ void FindUnreachableCode(AnalysisDeclContext &AC, Preprocessor &PP,
     if (reachable[block->getBlockID()])
       continue;
     
-    DeadCodeScan DS(reachable, PP);
+    DeadCodeScan DS(reachable, PP, AC.getASTContext());
     numReachable += DS.scanBackwards(block, CB);
     
     if (numReachable == cfg->getNumBlockIDs())

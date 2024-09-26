@@ -26,18 +26,18 @@ namespace llvm {
 ///
 struct MachinePostDominatorTree : public MachineFunctionPass {
 private:
-  DominatorTreeBase<MachineBasicBlock> *DT;
+ PostDomTreeBase<MachineBasicBlock> *DT;
 
 public:
   static char ID;
 
   MachinePostDominatorTree();
 
-  ~MachinePostDominatorTree();
+  ~MachinePostDominatorTree() override;
 
   FunctionPass *createMachinePostDominatorTreePass();
 
-  const std::vector<MachineBasicBlock *> &getRoots() const {
+  const SmallVectorImpl<MachineBasicBlock *> &getRoots() const {
     return DT->getRoots();
   }
 

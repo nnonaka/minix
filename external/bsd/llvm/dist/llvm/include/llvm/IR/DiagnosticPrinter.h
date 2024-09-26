@@ -19,17 +19,19 @@
 #include <string>
 
 namespace llvm {
+
 // Forward declarations.
 class Module;
 class raw_ostream;
+class SMDiagnostic;
 class StringRef;
 class Twine;
 class Value;
 
-/// \brief Interface for custom diagnostic printing.
+/// Interface for custom diagnostic printing.
 class DiagnosticPrinter {
 public:
-  virtual ~DiagnosticPrinter() {}
+  virtual ~DiagnosticPrinter() = default;
 
   // Simple types.
   virtual DiagnosticPrinter &operator<<(char C) = 0;
@@ -51,15 +53,18 @@ public:
   // IR related types.
   virtual DiagnosticPrinter &operator<<(const Value &V) = 0;
   virtual DiagnosticPrinter &operator<<(const Module &M) = 0;
+
+  // Other types.
+  virtual DiagnosticPrinter &operator<<(const SMDiagnostic &Diag) = 0;
 };
 
-/// \brief Basic diagnostic printer that uses an underlying raw_ostream.
+/// Basic diagnostic printer that uses an underlying raw_ostream.
 class DiagnosticPrinterRawOStream : public DiagnosticPrinter {
 protected:
   raw_ostream &Stream;
 
 public:
-  DiagnosticPrinterRawOStream(raw_ostream &Stream) : Stream(Stream) {};
+  DiagnosticPrinterRawOStream(raw_ostream &Stream) : Stream(Stream) {}
 
   // Simple types.
   DiagnosticPrinter &operator<<(char C) override;
@@ -81,7 +86,11 @@ public:
   // IR related types.
   DiagnosticPrinter &operator<<(const Value &V) override;
   DiagnosticPrinter &operator<<(const Module &M) override;
-};
-} // End namespace llvm
 
-#endif
+  // Other types.
+  DiagnosticPrinter &operator<<(const SMDiagnostic &Diag) override;
+};
+
+} // end namespace llvm
+
+#endif // LLVM_IR_DIAGNOSTICPRINTER_H

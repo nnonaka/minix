@@ -17,9 +17,9 @@ namespace {
 
 TEST(AllocatorTest, Basics) {
   BumpPtrAllocator Alloc;
-  int *a = (int*)Alloc.Allocate(sizeof(int), 1);
-  int *b = (int*)Alloc.Allocate(sizeof(int) * 10, 1);
-  int *c = (int*)Alloc.Allocate(sizeof(int), 1);
+  int *a = (int*)Alloc.Allocate(sizeof(int), alignof(int));
+  int *b = (int*)Alloc.Allocate(sizeof(int) * 10, alignof(int));
+  int *c = (int*)Alloc.Allocate(sizeof(int), alignof(int));
   *a = 1;
   b[0] = 2;
   b[9] = 2;
@@ -61,6 +61,13 @@ TEST(AllocatorTest, ThreeSlabs) {
 // again.
 TEST(AllocatorTest, TestReset) {
   BumpPtrAllocator Alloc;
+
+  // Allocate something larger than the SizeThreshold=4096.
+  (void)Alloc.Allocate(5000, 1);
+  Alloc.Reset();
+  // Calling Reset should free all CustomSizedSlabs.
+  EXPECT_EQ(0u, Alloc.GetNumSlabs());
+
   Alloc.Allocate(3000, 1);
   EXPECT_EQ(1U, Alloc.GetNumSlabs());
   Alloc.Allocate(3000, 1);
@@ -122,7 +129,7 @@ TEST(AllocatorTest, TestAlignmentPastSlab) {
 
   // Aligning the current slab pointer is likely to move it past the end of the
   // slab, which would confuse any unsigned comparisons with the difference of
-  // the the end pointer and the aligned pointer.
+  // the end pointer and the aligned pointer.
   Alloc.Allocate(1024, 8192);
 
   EXPECT_EQ(2U, Alloc.GetNumSlabs());
@@ -140,7 +147,7 @@ public:
     // Allocate space for the alignment, the slab, and a void* that goes right
     // before the slab.
     size_t Alignment = 4096;
-    void *MemBase = malloc(Size + Alignment - 1 + sizeof(void*));
+    void *MemBase = safe_malloc(Size + Alignment - 1 + sizeof(void*));
 
     // Find the slab start.
     void *Slab = (void *)alignAddr((char*)MemBase + sizeof(void *), Alignment);

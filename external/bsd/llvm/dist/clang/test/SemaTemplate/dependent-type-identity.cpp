@@ -80,11 +80,20 @@ namespace PR6851 {
     S< S<w>::cond && 1 > foo();
   };
 
+  struct Arrow { Arrow *operator->(); int n; };
+  template<typename T> struct M {
+    Arrow a;
+    auto f() -> M<decltype(a->n)>;
+  };
+
   struct Alien;
   bool operator&&(const Alien&, const Alien&);
 
   template <bool w>
   S< S<w>::cond && 1 > N::foo() { }
+
+  template<typename T>
+  auto M<T>::f() -> M<decltype(a->n)> {}
 }
 
 namespace PR7460 {
@@ -111,7 +120,9 @@ namespace PR18275 {
   void A<T>::f(int x) { x = 0; }
 
   template<typename T>
-  void A<T>::g(const int x) { x = 0; } // expected-error {{not assignable}}
+  void A<T>::g(const int x) {  // expected-note {{declared const here}}
+    x = 0; // expected-error {{cannot assign to variable 'x'}}
+  }
 
   template<typename T>
   void A<T>::h(T) {} // FIXME: Should reject this. Type is different from prior decl if T is an array type.

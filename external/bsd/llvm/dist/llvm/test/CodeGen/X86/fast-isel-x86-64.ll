@@ -1,5 +1,6 @@
-; RUN: llc < %s -mattr=-avx -fast-isel -mcpu=core2 -O0 -regalloc=fast -asm-verbose=0 -fast-isel-abort | FileCheck %s
-; RUN: llc < %s -mattr=+avx -fast-isel -mcpu=core2 -O0 -regalloc=fast -asm-verbose=0 -fast-isel-abort | FileCheck %s --check-prefix=AVX
+; RUN: llc < %s -mattr=-avx -fast-isel -mcpu=core2 -O0 -regalloc=fast -asm-verbose=0 -fast-isel-abort=1 | FileCheck %s
+; RUN: llc < %s -mattr=-avx -fast-isel -mcpu=core2 -O0 -regalloc=fast -asm-verbose=0 -pass-remarks-missed=isel 2>&1 >/dev/null | FileCheck %s --check-prefix=STDERR --allow-empty
+; RUN: llc < %s -mattr=+avx -fast-isel -mcpu=core2 -O0 -regalloc=fast -asm-verbose=0 -fast-isel-abort=1 | FileCheck %s --check-prefix=AVX
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-apple-darwin10.0.0"
@@ -20,7 +21,7 @@ define void @test2(i64 %x) nounwind ssp {
 entry:
   %x.addr = alloca i64, align 8
   store i64 %x, i64* %x.addr, align 8
-  %tmp = load i64* %x.addr, align 8
+  %tmp = load i64, i64* %x.addr, align 8
   %cmp = icmp sgt i64 %tmp, 42
   br i1 %cmp, label %if.then, label %if.end
 
@@ -52,8 +53,8 @@ define i64 @test3() nounwind {
 @rtx_length = external global [153 x i8]
 
 define i32 @test4(i64 %idxprom9) nounwind {
-  %arrayidx10 = getelementptr inbounds [153 x i8]* @rtx_length, i32 0, i64 %idxprom9
-  %tmp11 = load i8* %arrayidx10, align 1
+  %arrayidx10 = getelementptr inbounds [153 x i8], [153 x i8]* @rtx_length, i32 0, i64 %idxprom9
+  %tmp11 = load i8, i8* %arrayidx10, align 1
   %conv = zext i8 %tmp11 to i32
   ret i32 %conv
 
@@ -171,11 +172,11 @@ entry:
 ; CHECK: callq
 }
 
-declare void @llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i32, i1)
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i1)
 
 ; rdar://9289488 - fast-isel shouldn't bail out on llvm.memcpy
 define void @test15(i8* %a, i8* %b) nounwind {
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %a, i8* %b, i64 4, i32 4, i1 false)
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %a, i8* align 4 %b, i64 4, i1 false)
   ret void
 ; CHECK-LABEL: test15:
 ; CHECK-NEXT: movl	(%rsi), %eax
@@ -190,7 +191,7 @@ define void @test16() nounwind {
 ; CHECK: movl $1, %edi
 ; CHECK: movb $0, %al
 ; CHECK: callq _test16callee
-  call void (...)* @test16callee(i32 1)
+  call void (...) @test16callee(i32 1)
   br label %block2
 
 block2:
@@ -201,7 +202,7 @@ block2:
 ; AVX: vmovsd LCP{{.*}}_{{.*}}(%rip), %xmm0
 ; AVX: movb $1, %al
 ; AVX: callq _test16callee
-  call void (...)* @test16callee(double 1.000000e+00)
+  call void (...) @test16callee(double 1.000000e+00)
   ret void
 }
 
@@ -212,7 +213,7 @@ declare void @foo() unnamed_addr ssp align 2
 ; w.r.t. the call.
 define i32 @test17(i32 *%P) ssp nounwind {
 entry:
-  %tmp = load i32* %P
+  %tmp = load i32, i32* %P
   %cmp = icmp ne i32 %tmp, 5
   call void @foo()
   br i1 %cmp, label %if.then, label %if.else
@@ -253,7 +254,7 @@ entry:
   call void @test20sret(%struct.a* sret %tmp)
   ret void
 ; CHECK-LABEL: test20:
-; CHECK: leaq (%rsp), %rdi
+; CHECK: movq %rsp, %rdi
 ; CHECK: callq _test20sret
 }
 declare void @test20sret(%struct.a* sret)
@@ -310,5 +311,12 @@ define void @allocamaterialize() {
   %a = alloca i32
 ; CHECK: leaq {{.*}}, %rdi
   call void @takesi32ptr(i32* %a)
+  ret void
+}
+
+; STDERR-NOT: FastISel missed terminator:   ret void
+; CHECK-LABEL: win64ccfun
+define win64cc void @win64ccfun(i32 %i) {
+; CHECK: ret
   ret void
 }

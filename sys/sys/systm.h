@@ -1,4 +1,4 @@
-/*	$NetBSD: systm.h,v 1.268 2015/08/28 07:18:40 knakahara Exp $	*/
+/*	$NetBSD: systm.h,v 1.286 2019/07/23 17:39:36 rin Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1988, 1991, 1993
@@ -42,6 +42,9 @@
 #if defined(_KERNEL_OPT)
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
+#include "opt_gprof.h"
+#include "opt_kleak.h"
+#include "opt_wsdisplay_compat.h"
 #endif
 #if !defined(_KERNEL) && !defined(_STANDALONE)
 #include <stdbool.h>
@@ -82,7 +85,7 @@ extern int autoniceval;         /* proc priority after autonicetime */
 extern int selwait;		/* select timeout address */
 
 extern int maxmem;		/* max memory per process */
-extern int physmem;		/* physical memory */
+extern psize_t physmem;		/* physical memory */
 
 extern dev_t dumpdev;		/* dump device */
 extern dev_t dumpcdev;		/* dump device (character equivalent) */
@@ -114,6 +117,7 @@ extern struct vnode *swapdev_vp;/* vnode equivalent to above */
 
 extern const dev_t zerodev;	/* /dev/zero */
 
+#if defined(_KERNEL)
 typedef int	sy_call_t(struct lwp *, const void *, register_t *);
 
 extern struct sysent {		/* system call table */
@@ -125,6 +129,9 @@ extern struct sysent {		/* system call table */
 	uint32_t sy_return;	/* DTrace return ID for systrace. */
 } sysent[];
 extern int nsysent;
+extern const uint32_t sysent_nomodbits[];
+#endif
+
 #if	BYTE_ORDER == BIG_ENDIAN
 #define	SCARG(p,k)	((p)->k.be.datum)	/* get arg from args pointer */
 #elif	BYTE_ORDER == LITTLE_ENDIAN
@@ -174,10 +181,19 @@ int	eopnotsupp(void);
 enum hashtype {
 	HASH_LIST,
 	HASH_SLIST,
-	HASH_TAILQ
+	HASH_TAILQ,
+	HASH_PSLIST
 };
 
 #ifdef _KERNEL
+#define COND_SET_VALUE(dst, src, allow)	\
+	do {				\
+		if (allow)		\
+			dst = src;	\
+	} while (/*CONSTCOND*/0);
+
+
+bool	get_expose_address(struct proc *);
 void	*hashinit(u_int, enum hashtype, bool, u_long *);
 void	hashdone(void *, enum hashtype, u_long);
 int	seltrue(dev_t, int, struct lwp *);
@@ -190,13 +206,13 @@ void	aprint_naive(const char *, ...) __printflike(1, 2);
 void	aprint_verbose(const char *, ...) __printflike(1, 2);
 void	aprint_debug(const char *, ...) __printflike(1, 2);
 
-void	device_printf(device_t, const char *fmt, ...) __printflike(2, 3);
-
 void	aprint_normal_dev(device_t, const char *, ...) __printflike(2, 3);
 void	aprint_error_dev(device_t, const char *, ...) __printflike(2, 3);
 void	aprint_naive_dev(device_t, const char *, ...) __printflike(2, 3);
 void	aprint_verbose_dev(device_t, const char *, ...) __printflike(2, 3);
 void	aprint_debug_dev(device_t, const char *, ...) __printflike(2, 3);
+
+void	device_printf(device_t, const char *fmt, ...) __printflike(2, 3);
 
 struct ifnet;
 
@@ -221,9 +237,15 @@ void	printf(const char *, ...) __printflike(1, 2);
 
 int	snprintf(char *, size_t, const char *, ...) __printflike(3, 4);
 
+int	vasprintf(char **, const char *, va_list) __printflike(2, 0);
+
 void	vprintf(const char *, va_list) __printflike(1, 0);
 
 int	vsnprintf(char *, size_t, const char *, va_list) __printflike(3, 0);
+
+void	vprintf_flags(int, const char *, va_list) __printflike(2, 0);
+
+void	printf_flags(int, const char *, ...) __printflike(2, 3);
 
 int	humanize_number(char *, size_t, uint64_t, const char *, int);
 
@@ -241,7 +263,12 @@ int	format_bytes(char *, size_t, uint64_t);
 
 void	tablefull(const char *, const char *);
 
+#if defined(_KERNEL) && defined(KASAN)
+int	kasan_kcopy(const void *, void *, size_t);
+#define kcopy		kasan_kcopy
+#else
 int	kcopy(const void *, void *, size_t);
+#endif
 
 #ifdef _KERNEL
 #define bcopy(src, dst, len)	memcpy((dst), (src), (len))
@@ -249,11 +276,34 @@ int	kcopy(const void *, void *, size_t);
 #define bcmp(a, b, len)		memcmp((a), (b), (len))
 #endif /* KERNEL */
 
+#if defined(_KERNEL) && defined(KASAN)
+int	kasan_copystr(const void *, void *, size_t, size_t *);
+int	kasan_copyinstr(const void *, void *, size_t, size_t *);
+int	kasan_copyoutstr(const void *, void *, size_t, size_t *);
+int	kasan_copyin(const void *, void *, size_t);
+#define copystr		kasan_copystr
+#define copyinstr	kasan_copyinstr
+#define copyoutstr	kasan_copyoutstr
+#define copyin		kasan_copyin
+#else
 int	copystr(const void *, void *, size_t, size_t *);
 int	copyinstr(const void *, void *, size_t, size_t *);
 int	copyoutstr(const void *, void *, size_t, size_t *);
 int	copyin(const void *, void *, size_t);
+#endif
 int	copyout(const void *, void *, size_t);
+
+#ifdef KLEAK
+#define copyout		kleak_copyout
+#define copyoutstr	kleak_copyoutstr
+int	kleak_copyout(const void *, void *, size_t);
+int	kleak_copyoutstr(const void *, void *, size_t, size_t *);
+void	kleak_fill_area(void *, size_t);
+void	kleak_fill_stack(void);
+#else
+#define kleak_fill_area(a, b)	__nothing
+#define kleak_fill_stack()	__nothing
+#endif
 
 #ifdef _KERNEL
 typedef	int	(*copyin_t)(const void *, void *, size_t);
@@ -262,30 +312,82 @@ typedef int	(*copyout_t)(const void *, void *, size_t);
 
 int	copyin_proc(struct proc *, const void *, void *, size_t);
 int	copyout_proc(struct proc *, const void *, void *, size_t);
+int	copyin_pid(pid_t, const void *, void *, size_t);
 int	copyin_vmspace(struct vmspace *, const void *, void *, size_t);
 int	copyout_vmspace(struct vmspace *, const void *, void *, size_t);
 
 int	ioctl_copyin(int ioctlflags, const void *src, void *dst, size_t len);
 int	ioctl_copyout(int ioctlflags, const void *src, void *dst, size_t len);
 
+int	ucas_32(volatile uint32_t *uaddr, uint32_t old, uint32_t new,
+		uint32_t *ret);
+#ifdef _LP64
+int	ucas_64(volatile uint64_t *uaddr, uint64_t old, uint64_t new,
+		uint64_t *ret);
+#endif /* _LP64 */
+
 int	ucas_ptr(volatile void *, void *, void *, void *);
-int	ucas_int(volatile int *, int, int, int *);
+int	ucas_int(volatile unsigned int *, unsigned int, unsigned int,
+		 unsigned int *);
 
-int	subyte(void *, int);
-int	suibyte(void *, int);
-int	susword(void *, short);
-int	suisword(void *, short);
-int	suswintr(void *, short);
-int	suword(void *, long);
-int	suiword(void *, long);
+#ifdef __UCAS_PRIVATE
+int	_ucas_32(volatile uint32_t *uaddr, uint32_t old, uint32_t new,
+		 uint32_t *ret);
+#ifdef __HAVE_UCAS_MP
+int	_ucas_32_mp(volatile uint32_t *uaddr, uint32_t old, uint32_t new,
+		    uint32_t *ret);
+#endif /* __HAVE_UCAS_MP */
+#ifdef _LP64
+int	_ucas_64(volatile uint64_t *uaddr, uint64_t old, uint64_t new,
+		 uint64_t *ret);
+#ifdef __HAVE_UCAS_MP
+int	_ucas_64_mp(volatile uint64_t *uaddr, uint64_t old, uint64_t new,
+		    uint64_t *ret);
+#endif /* __HAVE_UCAS_MP */
+#endif /* _LP64 */
+#endif /* __UCAS_PRIVATE */
 
-int	fubyte(const void *);
-int	fuibyte(const void *);
-int	fusword(const void *);
-int	fuisword(const void *);
-int	fuswintr(const void *);
-long	fuword(const void *);
-long	fuiword(const void *);
+int	ufetch_8(const uint8_t *uaddr, uint8_t *valp);
+int	ufetch_16(const uint16_t *uaddr, uint16_t *valp);
+int	ufetch_32(const uint32_t *uaddr, uint32_t *valp);
+#ifdef _LP64
+int	ufetch_64(const uint64_t *uaddr, uint64_t *valp);
+#endif
+
+int	ufetch_char(const unsigned char *uaddr, unsigned char *valp);
+int	ufetch_short(const unsigned short *uaddr, unsigned short *valp);
+int	ufetch_int(const unsigned int *uaddr, unsigned int *valp);
+int	ufetch_long(const unsigned long *uaddr, unsigned long *valp);
+int	ufetch_ptr(const void **uaddr, void **valp);
+
+int	ustore_8(uint8_t *uaddr, uint8_t val);
+int	ustore_16(uint16_t *uaddr, uint16_t val);
+int	ustore_32(uint32_t *uaddr, uint32_t val);
+#ifdef _LP64
+int	ustore_64(uint64_t *uaddr, uint64_t val);
+#endif
+
+int	ustore_char(unsigned char *uaddr, unsigned char val);
+int	ustore_short(unsigned short *uaddr, unsigned short val);
+int	ustore_int(unsigned int *uaddr, unsigned int val);
+int	ustore_long(unsigned long *uaddr, unsigned long val);
+int	ustore_ptr(void **uaddr, void *val);
+
+#ifdef __UFETCHSTORE_PRIVATE
+int	_ufetch_8(const uint8_t *uaddr, uint8_t *valp);
+int	_ufetch_16(const uint16_t *uaddr, uint16_t *valp);
+int	_ufetch_32(const uint32_t *uaddr, uint32_t *valp);
+#ifdef _LP64
+int	_ufetch_64(const uint64_t *uaddr, uint64_t *valp);
+#endif
+
+int	_ustore_8(uint8_t *uaddr, uint8_t val);
+int	_ustore_16(uint16_t *uaddr, uint16_t val);
+int	_ustore_32(uint32_t *uaddr, uint32_t val);
+#ifdef _LP64
+int	_ustore_64(uint64_t *uaddr, uint64_t val);
+#endif
+#endif /* __UFETCHSTORE_PRIVATE */
 
 void	hardclock(struct clockframe *);
 void	softclock(void *);
@@ -440,7 +542,12 @@ typedef struct cnm_state {
 #define cn_trap()	console_debugger()
 #endif
 #ifndef cn_isconsole
+#ifndef WSDISPLAY_MULTICONS
 #define cn_isconsole(d)	(cn_tab != NULL && (d) == cn_tab->cn_dev)
+#else
+bool wsdisplay_cn_isconsole(dev_t);
+#define cn_isconsole(d)	wsdisplay_cn_isconsole(d)
+#endif
 #endif
 
 void cn_init_magic(cnm_state_t *);
@@ -486,9 +593,9 @@ extern int db_fromconsole; /* XXX ddb/ddbvar.h */
 #else
 #define console_debugger() do {} while (/* CONSTCOND */ 0) /* NOP */
 #endif
-#endif /* _KERNEL */
 
 /* For SYSCALL_DEBUG */
+void scdebug_init(void);
 void scdebug_call(register_t, const register_t[]);
 void scdebug_ret(register_t, int, const register_t[]);
 
@@ -497,7 +604,6 @@ void	_kernel_lock(int);
 void	_kernel_unlock(int, int *);
 bool	_kernel_locked_p(void);
 
-#ifdef _KERNEL
 void	kernconfig_lock_init(void);
 void	kernconfig_lock(void);
 void	kernconfig_unlock(void);
@@ -522,11 +628,13 @@ do {						\
 #define	KERNEL_UNLOCK_ALL(l, p)		KERNEL_UNLOCK(0, (l), (p))
 #define	KERNEL_UNLOCK_ONE(l)		KERNEL_UNLOCK(1, (l), NULL)
 
-/* Preemption control. */
 #ifdef _KERNEL
+/* Preemption control. */
 void	kpreempt_disable(void);
 void	kpreempt_enable(void);
 bool	kpreempt_disabled(void);
+
+vaddr_t calc_cache_size(vsize_t , int, int);
 #endif
 
 void assert_sleepable(void);
@@ -536,6 +644,5 @@ void assert_sleepable(void);
 #define	ASSERT_SLEEPABLE()	do {} while (0)
 #endif /* defined(DEBUG) */
 
-vaddr_t calc_cache_size(vsize_t , int, int);
 
 #endif	/* !_SYS_SYSTM_H_ */

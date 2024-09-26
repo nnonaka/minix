@@ -24,13 +24,17 @@ import (
 	"strings"
 )
 
+const (
+	linkmodeComponentLibs = "component-libs"
+	linkmodeDylib         = "dylib"
+)
+
 type pkg struct {
 	llvmpath, pkgpath string
 }
 
 var packages = []pkg{
 	{"bindings/go/llvm", "llvm.org/llvm/bindings/go/llvm"},
-	{"tools/llgo", "llvm.org/llgo"},
 }
 
 type compilerFlags struct {
@@ -46,7 +50,7 @@ var components = []string{
 	"bitwriter",
 	"codegen",
 	"core",
-	"debuginfo",
+	"debuginfodwarf",
 	"executionengine",
 	"instrumentation",
 	"interpreter",
@@ -66,11 +70,12 @@ var components = []string{
 func llvmConfig(args ...string) string {
 	configpath := os.Getenv("LLVM_CONFIG")
 	if configpath == "" {
-		// strip llvm-go, add llvm-config
-		configpath = os.Args[0][:len(os.Args[0])-7] + "llvm-config"
+		bin, _ := filepath.Split(os.Args[0])
+		configpath = filepath.Join(bin, "llvm-config")
 	}
 
 	cmd := exec.Command(configpath, args...)
+	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
 		panic(err.Error())
@@ -78,14 +83,16 @@ func llvmConfig(args ...string) string {
 
 	outstr := string(out)
 	outstr = strings.TrimSuffix(outstr, "\n")
-	return strings.Replace(outstr, "\n", " ", -1)
+	outstr = strings.Replace(outstr, "\n", " ", -1)
+	return outstr
 }
 
 func llvmFlags() compilerFlags {
-	ldflags := llvmConfig(append([]string{"--ldflags", "--libs", "--system-libs"}, components...)...)
+	args := append([]string{"--ldflags", "--libs", "--system-libs"}, components...)
+	ldflags := llvmConfig(args...)
 	if runtime.GOOS != "darwin" {
 		// OS X doesn't like -rpath with cgo. See:
-		// https://code.google.com/p/go/issues/detail?id=7293
+		// https://github.com/golang/go/issues/7293
 		ldflags = "-Wl,-rpath," + llvmConfig("--libdir") + " " + ldflags
 	}
 	return compilerFlags{
@@ -137,7 +144,7 @@ type (run_build_sh int)
 `, flags.cpp, flags.cxx, flags.ld)
 }
 
-func runGoWithLLVMEnv(args []string, cc, cxx, llgo, cppflags, cxxflags, ldflags string) {
+func runGoWithLLVMEnv(args []string, cc, cxx, gocmd, llgo, cppflags, cxxflags, ldflags string, packages []pkg) {
 	args = addTag(args, "byollvm")
 
 	srcdir := llvmConfig("--src-root")
@@ -154,33 +161,18 @@ func runGoWithLLVMEnv(args []string, cc, cxx, llgo, cppflags, cxxflags, ldflags 
 			panic(err.Error())
 		}
 
-		err = os.Symlink(filepath.Join(srcdir, p.llvmpath), path)
+		abspath := p.llvmpath
+		if !filepath.IsAbs(abspath) {
+			abspath = filepath.Join(srcdir, abspath)
+		}
+
+		err = os.Symlink(abspath, path)
 		if err != nil {
 			panic(err.Error())
 		}
 	}
 
 	newpath := os.Getenv("PATH")
-
-	if llgo != "" {
-		bindir := filepath.Join(tmpgopath, "bin")
-
-		err = os.MkdirAll(bindir, os.ModePerm)
-		if err != nil {
-			panic(err.Error())
-		}
-
-		err = os.Symlink(llgo, filepath.Join(bindir, "gccgo"))
-		if err != nil {
-			panic(err.Error())
-		}
-
-		newpathlist := []string{bindir}
-		newpathlist = append(newpathlist, filepath.SplitList(newpath)...)
-		newpath = strings.Join(newpathlist, string(filepath.ListSeparator))
-
-		args = append([]string{args[0], "-compiler", "gccgo"}, args[1:]...)
-	}
 
 	newgopathlist := []string{tmpgopath}
 	newgopathlist = append(newgopathlist, filepath.SplitList(os.Getenv("GOPATH"))...)
@@ -197,24 +189,29 @@ func runGoWithLLVMEnv(args []string, cc, cxx, llgo, cppflags, cxxflags, ldflags 
 		"GOPATH=" + newgopath,
 		"PATH=" + newpath,
 	}
+	if llgo != "" {
+		newenv = append(newenv, "GCCGO="+llgo)
+	}
+
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, "CC=") &&
 			!strings.HasPrefix(v, "CXX=") &&
 			!strings.HasPrefix(v, "CGO_CPPFLAGS=") &&
 			!strings.HasPrefix(v, "CGO_CXXFLAGS=") &&
 			!strings.HasPrefix(v, "CGO_LDFLAGS=") &&
+			!strings.HasPrefix(v, "GCCGO=") &&
 			!strings.HasPrefix(v, "GOPATH=") &&
 			!strings.HasPrefix(v, "PATH=") {
 			newenv = append(newenv, v)
 		}
 	}
 
-	gocmdpath, err := exec.LookPath("go")
+	gocmdpath, err := exec.LookPath(gocmd)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	proc, err := os.StartProcess(gocmdpath, append([]string{"go"}, args...),
+	proc, err := os.StartProcess(gocmdpath, append([]string{gocmd}, args...),
 		&os.ProcAttr{
 			Env:   newenv,
 			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
@@ -247,39 +244,57 @@ func main() {
 	cppflags := os.Getenv("CGO_CPPFLAGS")
 	cxxflags := os.Getenv("CGO_CXXFLAGS")
 	ldflags := os.Getenv("CGO_LDFLAGS")
+	gocmd := "go"
 	llgo := ""
+	packagesString := ""
+
+	flags := []struct {
+		name string
+		dest *string
+	}{
+		{"cc", &cc},
+		{"cxx", &cxx},
+		{"go", &gocmd},
+		{"llgo", &llgo},
+		{"cppflags", &cppflags},
+		{"ldflags", &ldflags},
+		{"packages", &packagesString},
+	}
 
 	args := os.Args[1:]
-	DONE: for {
-		switch {
-		case len(args) == 0:
+LOOP:
+	for {
+		if len(args) == 0 {
 			usage()
-		case strings.HasPrefix(args[0], "cc="):
-			cc = args[0][3:]
-			args = args[1:]
-		case strings.HasPrefix(args[0], "cxx="):
-			cxx = args[0][4:]
-			args = args[1:]
-		case strings.HasPrefix(args[0], "llgo="):
-			llgo = args[0][5:]
-			args = args[1:]
-		case strings.HasPrefix(args[0], "cppflags="):
-			cppflags = args[0][9:]
-			args = args[1:]
-		case strings.HasPrefix(args[0], "cxxflags="):
-			cxxflags = args[0][9:]
-			args = args[1:]
-		case strings.HasPrefix(args[0], "ldflags="):
-			ldflags = args[0][8:]
-			args = args[1:]
-		default:
-			break DONE
+		}
+		for _, flag := range flags {
+			if strings.HasPrefix(args[0], flag.name+"=") {
+				*flag.dest = args[0][len(flag.name)+1:]
+				args = args[1:]
+				continue LOOP
+			}
+		}
+		break
+	}
+
+	packages := packages
+	if packagesString != "" {
+		for _, field := range strings.Fields(packagesString) {
+			pos := strings.IndexRune(field, '=')
+			if pos == -1 {
+				fmt.Fprintf(os.Stderr, "invalid packages value %q, expected 'pkgpath=llvmpath [pkgpath=llvmpath ...]'\n", packagesString)
+				os.Exit(1)
+			}
+			packages = append(packages, pkg{
+				pkgpath:  field[:pos],
+				llvmpath: field[pos+1:],
+			})
 		}
 	}
 
 	switch args[0] {
 	case "build", "get", "install", "run", "test":
-		runGoWithLLVMEnv(args, cc, cxx, llgo, cppflags, cxxflags, ldflags)
+		runGoWithLLVMEnv(args, cc, cxx, gocmd, llgo, cppflags, cxxflags, ldflags, packages)
 	case "print-components":
 		printComponents()
 	case "print-config":

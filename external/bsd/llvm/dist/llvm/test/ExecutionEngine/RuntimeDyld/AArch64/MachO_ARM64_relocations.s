@@ -1,5 +1,6 @@
-# RUN: llvm-mc -triple=arm64-apple-ios7.0.0 -code-model=small -relocation-model=pic -filetype=obj -o %T/foo.o %s
-# RUN: llvm-rtdyld -triple=arm64-apple-ios7.0.0 -map-section foo.o,__text=0x10bc0 -verify -check=%s %/T/foo.o
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: llvm-mc -triple=arm64-apple-ios7.0.0 -filetype=obj -o %t/foo.o %s
+# RUN: llvm-rtdyld -triple=arm64-apple-ios7.0.0 -map-section foo.o,__text=0x10bc0 -dummy-extern _dummy1=0x100000 -verify -check=%s %t/foo.o
 
     .section  __TEXT,__text,regular,pure_instructions
     .ios_version_min 7, 0
@@ -22,6 +23,13 @@ br1:
     b _foo
     ret
 
+    .globl  _test_branch_reloc_bl
+    .align  2
+# rtdyld-check:  decode_operand(br2, 0)[25:0] = (_foo - br2)[27:2]
+_test_branch_reloc_bl:
+br2:
+    bl _foo
+    ret	
 
 # Test ARM64_RELOC_PAGE21 and ARM64_RELOC_PAGEOFF12 relocation. adrp encodes
 # the PC-relative page (4 KiB) difference between the adrp instruction and the
@@ -55,6 +63,18 @@ ldr2:
     ldr  x0, [x0, _ptr@GOTPAGEOFF]
     ret
 
+# rtdyld-check: decode_operand(add1, 2) = (tgt+8)[11:2] << 2
+    .globl  _test_explicit_addend_reloc
+    .align  4
+_test_explicit_addend_reloc:
+add1:
+    add x0, x0, tgt@PAGEOFF+8
+
+    .align  3
+tgt:
+    .long 0
+    .long 0
+    .long 7
 
 # Test ARM64_RELOC_UNSIGNED relocation. The absolute 64-bit address of the
 # function should be stored at the 8-byte memory location.
@@ -65,3 +85,20 @@ ldr2:
     .fill 4096, 1, 0
 _ptr:
     .quad _foo
+
+# Test ARM64_RELOC_SUBTRACTOR.
+# rtdyld-check: *{8}_subtractor_result = _test_branch_reloc - _foo
+_subtractor_result:
+    .quad _test_branch_reloc - _foo
+
+# Test 32-bit relative ARM64_RELOC_POINTER_TO_GOT
+# rtdyld-check: *{4}_pointer_to_got_32_rel = (stub_addr(foo.o, __data, _dummy1) - _pointer_to_got_32_rel)
+_pointer_to_got_32_rel:
+    .long _dummy1@got - .
+
+# Test 64-bit absolute ARM64_RELOC_POINTER_TO_GOT
+# rtdyld-check: *{8}_pointer_to_got_64_abs = stub_addr(foo.o, __data, _dummy1)
+_pointer_to_got_64_abs:
+    .quad _dummy1@got
+
+.subsections_via_symbols

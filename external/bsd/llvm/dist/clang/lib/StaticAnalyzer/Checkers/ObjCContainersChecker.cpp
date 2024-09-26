@@ -29,7 +29,8 @@ using namespace ento;
 
 namespace {
 class ObjCContainersChecker : public Checker< check::PreStmt<CallExpr>,
-                                             check::PostStmt<CallExpr> > {
+                                             check::PostStmt<CallExpr>,
+                                             check::PointerEscape> {
   mutable std::unique_ptr<BugType> BT;
   inline void initBugType() const {
     if (!BT)
@@ -38,7 +39,7 @@ class ObjCContainersChecker : public Checker< check::PreStmt<CallExpr>,
   }
 
   inline SymbolRef getArraySym(const Expr *E, CheckerContext &C) const {
-    SVal ArrayRef = C.getState()->getSVal(E, C.getLocationContext());
+    SVal ArrayRef = C.getSVal(E);
     SymbolRef ArraySym = ArrayRef.getAsSymbol();
     return ArraySym;
   }
@@ -52,6 +53,10 @@ public:
 
   void checkPostStmt(const CallExpr *CE, CheckerContext &C) const;
   void checkPreStmt(const CallExpr *CE, CheckerContext &C) const;
+  ProgramStateRef checkPointerEscape(ProgramStateRef State,
+                                     const InvalidatedSymbols &Escaped,
+                                     const CallEvent *Call,
+                                     PointerEscapeKind Kind) const;
 };
 } // end anonymous namespace
 
@@ -61,20 +66,19 @@ REGISTER_MAP_WITH_PROGRAMSTATE(ArraySizeMap, SymbolRef, DefinedSVal)
 void ObjCContainersChecker::addSizeInfo(const Expr *Array, const Expr *Size,
                                         CheckerContext &C) const {
   ProgramStateRef State = C.getState();
-  SVal SizeV = State->getSVal(Size, C.getLocationContext());
+  SVal SizeV = C.getSVal(Size);
   // Undefined is reported by another checker.
   if (SizeV.isUnknownOrUndef())
     return;
 
   // Get the ArrayRef symbol.
-  SVal ArrayRef = State->getSVal(Array, C.getLocationContext());
+  SVal ArrayRef = C.getSVal(Array);
   SymbolRef ArraySym = ArrayRef.getAsSymbol();
   if (!ArraySym)
     return;
 
   C.addTransition(
       State->set<ArraySizeMap>(ArraySym, SizeV.castAs<DefinedSVal>()));
-  return;
 }
 
 void ObjCContainersChecker::checkPostStmt(const CallExpr *CE,
@@ -110,7 +114,8 @@ void ObjCContainersChecker::checkPreStmt(const CallExpr *CE,
   if (Name.equals("CFArrayGetValueAtIndex")) {
     ProgramStateRef State = C.getState();
     // Retrieve the size.
-    // Find out if we saw this array symbol before and have information about it.
+    // Find out if we saw this array symbol before and have information about
+    // it.
     const Expr *ArrayExpr = CE->getArg(0);
     SymbolRef ArraySym = getArraySym(ArrayExpr, C);
     if (!ArraySym)
@@ -123,26 +128,42 @@ void ObjCContainersChecker::checkPreStmt(const CallExpr *CE,
 
     // Get the index.
     const Expr *IdxExpr = CE->getArg(1);
-    SVal IdxVal = State->getSVal(IdxExpr, C.getLocationContext());
+    SVal IdxVal = C.getSVal(IdxExpr);
     if (IdxVal.isUnknownOrUndef())
       return;
     DefinedSVal Idx = IdxVal.castAs<DefinedSVal>();
-    
+
     // Now, check if 'Idx in [0, Size-1]'.
     const QualType T = IdxExpr->getType();
     ProgramStateRef StInBound = State->assumeInBound(Idx, *Size, true, T);
     ProgramStateRef StOutBound = State->assumeInBound(Idx, *Size, false, T);
     if (StOutBound && !StInBound) {
-      ExplodedNode *N = C.generateSink(StOutBound);
+      ExplodedNode *N = C.generateErrorNode(StOutBound);
       if (!N)
         return;
       initBugType();
-      BugReport *R = new BugReport(*BT, "Index is out of bounds", N);
+      auto R = llvm::make_unique<BugReport>(*BT, "Index is out of bounds", N);
       R->addRange(IdxExpr->getSourceRange());
-      C.emitReport(R);
+      C.emitReport(std::move(R));
       return;
     }
   }
+}
+
+ProgramStateRef
+ObjCContainersChecker::checkPointerEscape(ProgramStateRef State,
+                                          const InvalidatedSymbols &Escaped,
+                                          const CallEvent *Call,
+                                          PointerEscapeKind Kind) const {
+  for (const auto &Sym : Escaped) {
+    // When a symbol for a mutable array escapes, we can't reason precisely
+    // about its size any more -- so remove it from the map.
+    // Note that we aren't notified here when a CFMutableArrayRef escapes as a
+    // CFArrayRef. This is because CFArrayRef is typedef'd as a pointer to a
+    // const-qualified type.
+    State = State->remove<ArraySizeMap>(Sym);
+  }
+  return State;
 }
 
 /// Register checker.

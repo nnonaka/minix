@@ -1,4 +1,4 @@
-/* $NetBSD: pipe.h,v 1.32 2009/12/20 09:36:06 dsl Exp $ */
+/* $NetBSD: pipe.h,v 1.36 2018/08/22 01:05:24 msaitoh Exp $ */
 
 /*
  * Copyright (c) 1996 John S. Dyson
@@ -27,6 +27,7 @@
 #define _SYS_PIPE_H_
 
 #include <sys/selinfo.h>		/* for struct selinfo */
+#include <sys/time.h>			/* for struct timespec */
 
 #include <uvm/uvm_extern.h>
 
@@ -42,10 +43,9 @@
 #endif
 
 /*
- * Maximum size of kva for direct write transfer. If the amount
+ * Maximum size of transfer for direct write transfer. If the amount
  * of data in buffer is larger, it would be transferred in chunks of this
- * size. This kva memory is freed after use if amount of pipe kva memory
- * is bigger than limitpipekva.
+ * size.
  */
 #ifndef PIPE_DIRECT_CHUNK
 #define PIPE_DIRECT_CHUNK	(1*1024*1024)
@@ -76,12 +76,11 @@ struct pipebuf {
  * Information to support direct transfers between processes for pipes.
  */
 struct pipemapping {
-	vaddr_t		kva;		/* kernel virtual address */
 	vsize_t		cnt;		/* number of chars in buffer */
 	voff_t		pos;		/* current position within page */
-	int		npages;		/* how many pages allocated */
+	u_int		npages;		/* how many pages available */
+	u_int		maxpages;	/* how many pages allocated */
 	struct vm_page	**pgs;		/* pointers to the pages */
-	u_int		egen;		/* emap generation number */
 };
 
 /*
@@ -124,21 +123,11 @@ struct pipe {
 /*
  * KERN_PIPE subtypes
  */
-#define	KERN_PIPE_MAXKVASZ		1	/* maximum kva size */
-#define	KERN_PIPE_LIMITKVA		2	/* */
+#define	KERN_PIPE_MAXKVASZ		1	/* maximum kva size (obsolete) */
+#define	KERN_PIPE_LIMITKVA		2	/* limit kva for laons (obsolete) */
 #define	KERN_PIPE_MAXBIGPIPES		3	/* maximum # of "big" pipes */
 #define	KERN_PIPE_NBIGPIPES		4	/* current number of "big" p. */
 #define	KERN_PIPE_KVASIZE		5	/* current pipe kva size */
-#define	KERN_PIPE_MAXID			6
-
-#define	CTL_PIPE_NAMES { \
-	{ 0, 0 }, \
-	{ "maxkvasz", CTLTYPE_INT }, \
-	{ "maxloankvasz", CTLTYPE_INT }, \
-	{ "maxbigpipes", CTLTYPE_INT }, \
-	{ "nbigpipes", CTLTYPE_INT }, \
-	{ "kvasize", CTLTYPE_INT }, \
-}
 
 #ifdef _KERNEL
 int	sysctl_dopipe(int *, u_int, void *, size_t *, void *, size_t);

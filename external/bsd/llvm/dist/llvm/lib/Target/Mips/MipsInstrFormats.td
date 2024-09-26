@@ -50,13 +50,27 @@ def Std2MicroMips : InstrMapping {
   let ValueCols = [["se"], ["micromips"]];
 }
 
+class StdMMR6Rel;
+
+def Std2MicroMipsR6 : InstrMapping {
+  let FilterClass = "StdMMR6Rel";
+  // Instructions with the same BaseOpcode and isNVStore values form a row.
+  let RowFields = ["BaseOpcode"];
+  // Instructions with the same predicate sense form a column.
+  let ColFields = ["Arch"];
+  // The key column is the unpredicated instructions.
+  let KeyCol = ["se"];
+  // Value columns are PredSense=true and PredSense=false
+  let ValueCols = [["se"], ["micromipsr6"]];
+}
+
 class StdArch {
   string Arch = "se";
 }
 
 // Generic Mips Format
 class MipsInst<dag outs, dag ins, string asmstr, list<dag> pattern,
-               InstrItinClass itin, Format f>: Instruction
+               InstrItinClass itin, Format f>: Instruction, PredicateControl
 {
   field bits<32> Inst;
   Format Form = f;
@@ -80,10 +94,22 @@ class MipsInst<dag outs, dag ins, string asmstr, list<dag> pattern,
   //
   // Attributes specific to Mips instructions...
   //
-  bits<4> FormBits = Form.Value;
+  bits<4> FormBits     = Form.Value;
+  bit isCTI            = 0; // Any form of Control Transfer Instruction.
+                            // Required for MIPSR6
+  bit hasForbiddenSlot = 0; // Instruction has a forbidden slot.
+  bit IsPCRelativeLoad = 0; // Load instruction with implicit source register
+                            // ($pc) and with explicit offset and destination
+                            // register
+  bit hasFCCRegOperand = 0; // Instruction uses $fcc<X> register and is
+                            // present in MIPS-I to MIPS-III.
 
-  // TSFlags layout should be kept in sync with MipsInstrInfo.h.
+  // TSFlags layout should be kept in sync with MCTargetDesc/MipsBaseInfo.h.
   let TSFlags{3-0}   = FormBits;
+  let TSFlags{4}     = isCTI;
+  let TSFlags{5}     = hasForbiddenSlot;
+  let TSFlags{6}     = IsPCRelativeLoad;
+  let TSFlags{7}     = hasFCCRegOperand;
 
   let DecoderNamespace = "Mips";
 
@@ -93,8 +119,8 @@ class MipsInst<dag outs, dag ins, string asmstr, list<dag> pattern,
 // Mips32/64 Instruction Format
 class InstSE<dag outs, dag ins, string asmstr, list<dag> pattern,
              InstrItinClass itin, Format f, string opstr = ""> :
-  MipsInst<outs, ins, asmstr, pattern, itin, f>, PredicateControl {
-  let EncodingPredicates = [HasStdEnc];
+  MipsInst<outs, ins, asmstr, pattern, itin, f> {
+  let EncodingPredicates = [NotInMips16Mode];
   string BaseOpcode = opstr;
   string Arch;
 }
@@ -110,8 +136,8 @@ class MipsPseudo<dag outs, dag ins, list<dag> pattern,
 // Mips32/64 Pseudo Instruction Format
 class PseudoSE<dag outs, dag ins, list<dag> pattern,
                InstrItinClass itin = IIPseudo> :
-  MipsPseudo<outs, ins, pattern, itin>, PredicateControl {
-  let EncodingPredicates = [HasStdEnc];
+  MipsPseudo<outs, ins, pattern, itin> {
+  let EncodingPredicates = [NotInMips16Mode];
 }
 
 // Pseudo-instructions for alternate assembly syntax (never used by codegen).
@@ -194,10 +220,9 @@ class FJ<bits<6> op> : StdArch
 }
 
 //===----------------------------------------------------------------------===//
-// MFC instruction class in Mips : <|op|mf|rt|rd|0000000|sel|>
+// MFC instruction class in Mips : <|op|mf|rt|rd|gst|0000|sel|>
 //===----------------------------------------------------------------------===//
-class MFC3OP_FM<bits<6> op, bits<5> mfmt>
-{
+class MFC3OP_FM<bits<6> op, bits<5> mfmt, bits<3> guest> : StdArch {
   bits<5> rt;
   bits<5> rd;
   bits<3> sel;
@@ -208,8 +233,21 @@ class MFC3OP_FM<bits<6> op, bits<5> mfmt>
   let Inst{25-21} = mfmt;
   let Inst{20-16} = rt;
   let Inst{15-11} = rd;
-  let Inst{10-3}  = 0;
+  let Inst{10-8}  = guest;
+  let Inst{7-3}   = 0;
   let Inst{2-0}   = sel;
+}
+
+class MFC2OP_FM<bits<6> op, bits<5> mfmt> : StdArch {
+  bits<5>  rt;
+  bits<16> imm16;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = mfmt;
+  let Inst{20-16} = rt;
+  let Inst{15-0}  = imm16;
 }
 
 class ADD_FM<bits<6> op, bits<6> funct> : StdArch {
@@ -294,6 +332,19 @@ class BGEZ_FM<bits<6> op, bits<5> funct> : StdArch {
   let Inst{31-26} = op;
   let Inst{25-21} = rs;
   let Inst{20-16} = funct;
+  let Inst{15-0}  = offset;
+}
+
+class BBIT_FM<bits<6> op> : StdArch {
+  bits<5>  rs;
+  bits<5>  p;
+  bits<16> offset;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = rs;
+  let Inst{20-16} = p;
   let Inst{15-0}  = offset;
 }
 
@@ -457,6 +508,7 @@ class EXT_FM<bits<6> funct> : StdArch {
 class RDHWR_FM : StdArch {
   bits<5> rt;
   bits<5> rd;
+  bits<3> sel;
 
   bits<32> Inst;
 
@@ -464,7 +516,8 @@ class RDHWR_FM : StdArch {
   let Inst{25-21} = 0;
   let Inst{20-16} = rt;
   let Inst{15-11} = rd;
-  let Inst{10-6}  = 0;
+  let Inst{10-9}  = 0b00;
+  let Inst{8-6}   = sel;
   let Inst{5-0}   = 0x3b;
 }
 
@@ -605,15 +658,15 @@ class BRK_FM<bits<6> funct> : StdArch
 //  Exception return format <Cop0|1|0|funct>
 //===----------------------------------------------------------------------===//
 
-class ER_FM<bits<6> funct> : StdArch
+class ER_FM<bits<6> funct, bit LLBit> : StdArch
 {
   bits<32> Inst;
   let Inst{31-26} = 0x10;
   let Inst{25}    = 1;
-  let Inst{24-6}  = 0;
+  let Inst{24-7}  = 0;
+  let Inst{6} = LLBit;
   let Inst{5-0}   = funct;
 }
-
 
 //===----------------------------------------------------------------------===//
 //  Enable/disable interrupt instruction format <Cop0|MFMC0|rt|12|0|sc|0|0>
@@ -781,6 +834,7 @@ class BC1F_FM<bit nd, bit tf> : StdArch {
 class CEQS_FM<bits<5> fmt> : StdArch {
   bits<5> fs;
   bits<5> ft;
+  bits<3> fcc;
   bits<4> cond;
 
   bits<32> Inst;
@@ -789,7 +843,7 @@ class CEQS_FM<bits<5> fmt> : StdArch {
   let Inst{25-21} = fmt;
   let Inst{20-16} = ft;
   let Inst{15-11} = fs;
-  let Inst{10-8} = 0; // cc
+  let Inst{10-8} = fcc;
   let Inst{7-4} = 0x3;
   let Inst{3-0} = cond;
 }
@@ -917,4 +971,15 @@ class CACHEOP_FM<bits<6> op> : StdArch {
   let Inst{25-21} = base;
   let Inst{20-16} = hint;
   let Inst{15-0}  = offset;
+}
+
+class HYPCALL_FM<bits<6> op> : StdArch {
+  bits<10> code_;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0b010000;
+  let Inst{25}    = 1;
+  let Inst{20-11} = code_;
+  let Inst{5-0}   = op;
 }

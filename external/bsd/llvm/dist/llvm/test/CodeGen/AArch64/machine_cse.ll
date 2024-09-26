@@ -1,4 +1,8 @@
-; RUN: llc < %s -mtriple=aarch64-linux-gnuabi -O2 | FileCheck %s
+; RUN: llc < %s -mtriple=aarch64-linux-gnuabi -O2 -tail-dup-placement=0 | FileCheck %s
+; -tail-dup-placement causes tail duplication during layout. This breaks the
+; assumptions of the test case as written (specifically, it creates an
+; additional cmp instruction, creating a false positive), so we pass
+; -tail-dup-placement=0 to restore the original behavior
 
 ; marked as external to prevent possible optimizations
 @a = external global i32
@@ -14,11 +18,11 @@ define void @combine-sign-comparisons-by-cse(i32 *%arg) {
 ; CHECK: b.le
 
 entry:
-  %a = load i32* @a, align 4
-  %b = load i32* @b, align 4
-  %c = load i32* @c, align 4
-  %d = load i32* @d, align 4
-  %e = load i32* @e, align 4
+  %a = load i32, i32* @a, align 4
+  %b = load i32, i32* @b, align 4
+  %c = load i32, i32* @c, align 4
+  %d = load i32, i32* @d, align 4
+  %e = load i32, i32* @e, align 4
 
   %cmp = icmp slt i32 %a, %e
   br i1 %cmp, label %land.lhs.true, label %lor.lhs.false

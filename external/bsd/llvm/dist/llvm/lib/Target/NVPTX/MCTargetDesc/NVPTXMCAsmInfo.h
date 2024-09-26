@@ -18,12 +18,24 @@
 
 namespace llvm {
 class Target;
-class StringRef;
+class Triple;
 
 class NVPTXMCAsmInfo : public MCAsmInfo {
   virtual void anchor();
+
 public:
-  explicit NVPTXMCAsmInfo(StringRef TT);
+  explicit NVPTXMCAsmInfo(const Triple &TheTriple);
+
+  /// Return true if the .section directive should be omitted when
+  /// emitting \p SectionName.  For example:
+  ///
+  /// shouldOmitSectionDirective(".text")
+  ///
+  /// returns false => .section .text,#alloc,#execinstr
+  /// returns true  => .text
+  bool shouldOmitSectionDirective(StringRef SectionName) const override {
+    return true;
+  }
 };
 } // namespace llvm
 

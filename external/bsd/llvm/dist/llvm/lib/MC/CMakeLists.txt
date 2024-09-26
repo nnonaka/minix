@@ -6,19 +6,23 @@ add_llvm_library(LLVMMC
   MCAsmInfoCOFF.cpp
   MCAsmInfoDarwin.cpp
   MCAsmInfoELF.cpp
+  MCAsmInfoWasm.cpp
+  MCAsmMacro.cpp
   MCAsmStreamer.cpp
   MCAssembler.cpp
   MCCodeEmitter.cpp
-  MCCodeGenInfo.cpp
+  MCCodePadder.cpp
+  MCCodeView.cpp
   MCContext.cpp
   MCDwarf.cpp
-  MCELF.cpp
   MCELFObjectTargetWriter.cpp
   MCELFStreamer.cpp
   MCExpr.cpp
+  MCFragment.cpp
   MCInst.cpp
   MCInstPrinter.cpp
   MCInstrAnalysis.cpp
+  MCInstrDesc.cpp
   MCLabel.cpp
   MCLinkerOptimizationHint.cpp
   MCMachOStreamer.cpp
@@ -28,24 +32,31 @@ add_llvm_library(LLVMMC
   MCObjectStreamer.cpp
   MCObjectWriter.cpp
   MCRegisterInfo.cpp
+  MCSchedule.cpp
   MCSection.cpp
   MCSectionCOFF.cpp
   MCSectionELF.cpp
   MCSectionMachO.cpp
+  MCSectionWasm.cpp
   MCStreamer.cpp
   MCSubtargetInfo.cpp
   MCSymbol.cpp
-  MCSymbolizer.cpp
+  MCSymbolELF.cpp
   MCTargetOptions.cpp
   MCValue.cpp
+  MCWasmObjectTargetWriter.cpp
+  MCWasmStreamer.cpp
   MCWin64EH.cpp
+  MCWinCOFFStreamer.cpp
   MCWinEH.cpp
   MachObjectWriter.cpp
   StringTableBuilder.cpp
   SubtargetFeature.cpp
+  WasmObjectWriter.cpp
   WinCOFFObjectWriter.cpp
-  WinCOFFStreamer.cpp
-  YAML.cpp
+
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC
   )
 
 add_subdirectory(MCParser)

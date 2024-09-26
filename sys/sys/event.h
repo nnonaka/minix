@@ -1,4 +1,4 @@
-/*	$NetBSD: event.h,v 1.24 2015/01/14 22:21:00 christos Exp $	*/
+/*	$NetBSD: event.h,v 1.32.8.2 2019/08/26 13:24:19 martin Exp $	*/
 
 /*-
  * Copyright (c) 1999,2000,2001 Jonathan Lemon <jlemon@FreeBSD.org>
@@ -43,18 +43,8 @@
 #define	EVFILT_PROC		4U	/* attached to struct proc */
 #define	EVFILT_SIGNAL		5U	/* attached to struct proc */
 #define	EVFILT_TIMER		6U	/* arbitrary timer (in ms) */
-#define	EVFILT_SYSCOUNT		7U	/* number of filters */
-
-#define	EV_SET(kevp, a, b, c, d, e, f)					\
-do {									\
-	(kevp)->ident = (a);						\
-	(kevp)->filter = (b);						\
-	(kevp)->flags = (c);						\
-	(kevp)->fflags = (d);						\
-	(kevp)->data = (e);						\
-	(kevp)->udata = (f);						\
-} while (/* CONSTCOND */ 0)
-
+#define	EVFILT_FS		7U	/* filesystem events */
+#define	EVFILT_SYSCOUNT		8U	/* number of filters */
 
 struct kevent {
 	uintptr_t	ident;		/* identifier for this event */
@@ -65,6 +55,22 @@ struct kevent {
 	intptr_t	udata;		/* opaque user data identifier */
 };
 
+#define EV_SET(kevp, ident, filter, flags, fflags, data, udata)	\
+    _EV_SET((kevp), __CAST(uintptr_t, (ident)), (filter), (flags), \
+    (fflags), (data), __CAST(intptr_t, (udata)))
+
+static __inline void
+_EV_SET(struct kevent *_kevp, uintptr_t _ident, uint32_t _filter,
+    uint32_t _flags, uint32_t _fflags, int64_t _data, intptr_t _udata)
+{
+	_kevp->ident = _ident;
+	_kevp->filter = _filter;
+	_kevp->flags = _flags;
+	_kevp->fflags = _fflags;
+	_kevp->data = _data;
+	_kevp->udata = _udata;
+}
+
 /* actions */
 #define	EV_ADD		0x0001U		/* add event to kq (implies ENABLE) */
 #define	EV_DELETE	0x0002U		/* delete event from kq */
@@ -74,6 +80,8 @@ struct kevent {
 /* flags */
 #define	EV_ONESHOT	0x0010U		/* only report one occurrence */
 #define	EV_CLEAR	0x0020U		/* clear event state after reporting */
+#define EV_RECEIPT	0x0040U		/* force EV_ERROR on success, data=0 */
+#define EV_DISPATCH	0x0080U		/* disable event after reporting */
 
 #define	EV_SYSFLAGS	0xF000U		/* reserved by system */
 #define	EV_FLAG1	0x2000U		/* filter-specific flag */
@@ -181,10 +189,10 @@ struct knote {
 	TAILQ_ENTRY(knote)	kn_tqe;		/* q: for struct kqueue */
 	struct kqueue		*kn_kq;		/* q: which queue we are on */
 	struct kevent		kn_kevent;
-	uint32_t		kn_status;
-	uint32_t		kn_sfflags;	/*   saved filter flags */
-	uintptr_t		kn_sdata;	/*   saved data field */
-	void			*kn_obj;	/*   pointer to monitored obj */
+	uint32_t		kn_status;	/* q: flags below */
+	uint32_t		kn_sfflags;	/*    saved filter flags */
+	uintptr_t		kn_sdata;	/*    saved data field */
+	void			*kn_obj;	/*    monitored obj */
 	const struct filterops	*kn_fop;
 	struct kfilter		*kn_kfilter;
 	void 			*kn_hook;
@@ -194,6 +202,17 @@ struct knote {
 #define	KN_DISABLED	0x04U			/* event is disabled */
 #define	KN_DETACHED	0x08U			/* knote is detached */
 #define	KN_MARKER	0x10U			/* is a marker */
+#define	KN_BUSY		0x20U			/* is being scanned */
+/* Toggling KN_BUSY also requires kn_kq->kq_fdp->fd_lock. */
+#define __KN_FLAG_BITS \
+    "\20" \
+    "\1ACTIVE" \
+    "\2QUEUED" \
+    "\3DISABLED" \
+    "\4DETACHED" \
+    "\5MARKER" \
+    "\6BUSY"
+
 
 #define	kn_id		kn_kevent.ident
 #define	kn_filter	kn_kevent.filter
@@ -237,6 +256,8 @@ int	kfilter_unregister(const char *);
 
 int	filt_seltrue(struct knote *, long);
 extern const struct filterops seltrue_filtops;
+
+extern struct klist fs_klist;	/* EVFILT_FS */
 
 #else 	/* !_KERNEL */
 

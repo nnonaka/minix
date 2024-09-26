@@ -1,4 +1,4 @@
-/* $NetBSD: envsys.h,v 1.34 2014/05/18 11:46:24 kardel Exp $ */
+/* $NetBSD: envsys.h,v 1.38 2018/05/27 06:40:31 wiz Exp $ */
 
 /*-
  * Copyright (c) 1999, 2007, 2014 The NetBSD Foundation, Inc.
@@ -64,6 +64,7 @@ enum envsys_units {
 	ENVSYS_BATTERY_CAPACITY,	/* Battery capacity */
 	ENVSYS_BATTERY_CHARGE,		/* Battery charging/discharging */
 	ENVSYS_SRELHUMIDITY,		/* relative humidity */
+	ENVSYS_LUX,			/* illuminance in lux */
 	ENVSYS_NSENSORS
 };
 
@@ -127,7 +128,7 @@ enum envsys_indicator_states {
 /* get sensor data */
 
 struct envsys_tre_data {
-	u_int sensor;
+	unsigned int sensor;
 	union {				/* all data is given */
 		uint32_t data_us;	/* in microKelvins, */
 		int32_t data_s;		/* rpms, volts, amps, */
@@ -136,7 +137,7 @@ struct envsys_tre_data {
 
 	uint32_t	warnflags;	/* warning flags */
 	uint32_t	validflags;	/* sensor valid flags */
-	u_int		units;		/* type of sensor */
+	unsigned int	units;		/* type of sensor */
 };
 typedef struct envsys_tre_data envsys_tre_data_t;
 
@@ -162,7 +163,7 @@ typedef struct envsys_tre_data envsys_tre_data_t;
 #ifdef ENVSYSUNITNAMES
 static const char * const envsysunitnames[] = {
     "degC", "RPM", "VAC", "V", "Ohms", "W",
-    "A", "Wh", "Ah", "bool", "integer", "drive", "%rH", "Unk"
+    "A", "Wh", "Ah", "bool", "integer", "drive", "%rH", "lux", "Unk"
 };
 static const char * const envsysdrivestatus[] = {
     "unknown", "empty", "ready", "powering up", "online", "idle", "active",
@@ -184,11 +185,11 @@ static const char * const envsysdrivestatus[] = {
 /* set and check sensor info */
 
 struct envsys_basic_info {
-	u_int	sensor;		/* sensor number */
-	u_int	units;		/* type of sensor */
+	unsigned int sensor;	/* sensor number */
+	unsigned int units;	/* type of sensor */
 	char	desc[33];	/* sensor description */
-	u_int	rfact;		/* for volts, (int)(factor x 10^4) */
-	u_int	rpms;		/* for fans, set nominal RPMs */
+	unsigned int rfact;	/* for volts, (int)(factor x 10^4) */
+	unsigned int rpms;	/* for fans, set nominal RPMs */
 	uint32_t validflags;	/* sensor valid flags */
 };
 typedef struct envsys_basic_info envsys_basic_info_t;

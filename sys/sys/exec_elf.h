@@ -44,12 +44,8 @@
 #include <sys/types.h>
 #else
 #include <inttypes.h>
+#include <stddef.h>
 #endif /* _KERNEL || _STANDALONE */
-
-#ifdef   _BSD_SIZE_T_
-typedef  _BSD_SIZE_T_    size_t;
-#undef   _BSD_SIZE_T_
-#endif
 
 #if HAVE_NBTOOL_CONFIG_H
 #include <nbinclude/machine/elf_machdep.h>
@@ -213,7 +209,8 @@ typedef struct {
 #define EM_386		3	/* Intel 80386 */
 #define EM_68K		4	/* Motorola 68000 */
 #define EM_88K		5	/* Motorola 88000 */
-#define EM_486		6	/* Intel 80486 */
+#define EM_486		6	/* Intel 80486 [old] */
+#define EM_IAMCU	6	/* Intel MCU. */
 #define EM_860		7	/* Intel 80860 */
 #define EM_MIPS		8	/* MIPS I Architecture */
 #define EM_S370		9	/* Amdahl UTS on System/370 */
@@ -367,6 +364,7 @@ typedef struct {
 #define PT_HIPROC	0x7fffffff
 
 #define PT_MIPS_REGINFO 0x70000000
+#define PT_MIPS_ABIFLAGS 0x70000003
 
 /* p_flags */
 #define PF_R		0x4		/* Segment is readable */
@@ -725,11 +723,34 @@ typedef struct {
 #define DF_BIND_NOW	0x00000008	/* */
 #define DF_STATIC_TLS	0x00000010	/* */
 
-/* Flag values for DT_FLAGS_1 (incomplete) */
-#define DF_1_BIND_NOW	0x00000001	/* Same as DF_BIND_NOW */
-#define DF_1_NODELETE	0x00000008	/* Set the RTLD_NODELETE for object */
-#define DF_1_INITFIRST	0x00000020	/* Object's init/fini take priority */
-#define DF_1_NOOPEN	0x00000040	/* Do not allow loading on dlopen() */
+/* Flag values for DT_FLAGS_1 */
+#define	DF_1_NOW	0x00000001	/* Same as DF_BIND_NOW */
+#define	DF_1_GLOBAL	0x00000002	/* Unused */
+#define	DF_1_GROUP	0x00000004	/* Is member of group */
+#define	DF_1_NODELETE	0x00000008	/* Cannot be deleted from process */
+#define	DF_1_LOADFLTR	0x00000010	/* Immediate loading of filters */
+#define	DF_1_INITFIRST	0x00000020	/* init/fini takes priority */
+#define	DF_1_NOOPEN	0x00000040	/* Do not allow loading on dlopen() */
+#define	DF_1_ORIGIN	0x00000080 	/* Require $ORIGIN processing */
+#define	DF_1_DIRECT	0x00000100	/* Enable direct bindings */
+#define	DF_1_INTERPOSE 	0x00000400	/* Is an interposer */
+#define	DF_1_NODEFLIB	0x00000800 	/* Ignore default library search path */
+#define	DF_1_NODUMP	0x00001000 	/* Cannot be dumped with dldump(3C) */
+#define	DF_1_CONFALT	0x00002000 	/* Configuration alternative */
+#define	DF_1_ENDFILTEE	0x00004000	/* Filtee ends filter's search */
+#define	DF_1_DISPRELDNE	0x00008000	/* Did displacement relocation */
+#define	DF_1_DISPRELPND 0x00010000	/* Pending displacement relocation */
+#define	DF_1_NODIRECT	0x00020000 	/* Has non-direct bindings */
+#define	DF_1_IGNMULDEF	0x00040000	/* Used internally */
+#define	DF_1_NOKSYMS	0x00080000	/* Used internally */
+#define	DF_1_NOHDR	0x00100000	/* Used internally */
+#define	DF_1_EDITED	0x00200000	/* Has been modified since build */
+#define	DF_1_NORELOC	0x00400000 	/* Used internally */
+#define	DF_1_SYMINTPOSE 0x00800000 	/* Has individual symbol interposers */
+#define	DF_1_GLOBAUDIT	0x01000000	/* Require global auditing */
+#define	DF_1_SINGLETON	0x02000000	/* Has singleton symbols */
+#define	DF_1_STUB	0x04000000	/* Stub */
+#define	DF_1_PIE	0x08000000	/* Position Independent Executable */
 
 /*
  * Auxiliary Vectors
@@ -836,6 +857,11 @@ typedef struct {
 #define ELF_NOTE_ABI_OS_KFREEBSD	3
 #define ELF_NOTE_ABI_OS_KNETBSD		4
 
+/* Old gcc style, under the ABI tag */
+#define ELF_NOTE_OGCC_NAMESZ		8
+#define ELF_NOTE_OGCC_NAME		"01.01\0\0\0\0"
+#define ELF_NOTE_OGCC_DESCSZ		0
+
 /*
  * GNU-specific note type: Hardware capabilities
  * name: GNU\0
@@ -895,7 +921,19 @@ typedef struct {
 /* SuSE-specific note name */
 #define ELF_NOTE_SUSE_VERSION_NAME		"SuSE\0\0\0\0"
 
-/* NetBSD-specific note type: Emulation name.
+/* Go-specific note type: buildid
+ * name: Go\0\0
+ * namesz: 4
+ * desc: 
+ *	words[10]
+ * descsz: 40
+ */
+#define ELF_NOTE_TYPE_GO_BUILDID_TAG	4
+#define ELF_NOTE_GO_BUILDID_NAMESZ	4
+#define ELF_NOTE_GO_BUILDID_DESCSZ	40
+#define ELF_NOTE_GO_BUILDID_NAME	"Go\0\0"
+
+/* NetBSD-specific note type: NetBSD ABI version.
  * name: NetBSD\0\0
  * namesz: 8
  * desc: 
@@ -908,7 +946,7 @@ typedef struct {
  * descsz: 4
  */
 #define ELF_NOTE_TYPE_NETBSD_TAG	1
-#if defined(__minix)
+#if !defined(__minix)
 /* NetBSD-specific note name and description sizes */
 #define ELF_NOTE_NETBSD_NAMESZ		7
 #define ELF_NOTE_NETBSD_DESCSZ		4
@@ -921,19 +959,19 @@ typedef struct {
 #define ELF_NOTE_NETBSD_NAME		"Minix\0\0\0"
 #endif /* defined(__minix) */
 
-/* NetBSD-specific note type: Checksum. 
- * There should be 1 NOTE per PT_LOAD section.
- * name: ???
- * namesz: ???
+/* NetBSD-specific note type: Emulation (obsolete; last used early 2000)
+ * name: NetBSD\0\0
+ * namesz: 8
  * desc:
- *	a tuple of <phnum>(16),<chk-type>(16),<chk-value>.
- * descsz: ???
+ *	"netbsd\0"
+ *	
+ * descsz: 8
  */
-#define ELF_NOTE_TYPE_CHECKSUM_TAG	2
-#define ELF_NOTE_CHECKSUM_CRC32		1
-#define ELF_NOTE_CHECKSUM_MD5		2
-#define ELF_NOTE_CHECKSUM_SHA1		3
-#define ELF_NOTE_CHECKSUM_SHA256	4
+#define ELF_NOTE_TYPE_NETBSD_EMUL_TAG	2
+#define ELF_NOTE_NETBSD_EMUL_NAMESZ	7
+#define ELF_NOTE_NETBSD_EMUL_DESCSZ	7
+/* NetBSD-specific note name */
+#define ELF_NOTE_NETBSD_EMUL_NAME	"NetBSD\0\0"
 
 /*
  * NetBSD-specific note type: PaX.
@@ -968,6 +1006,8 @@ typedef struct {
  *
  *	ELF_NOTE_NETBSD_CORE_PROCINFO
  *		Note is a "netbsd_elfcore_procinfo" structure.
+ *	ELF_NOTE_NETBSD_CORE_AUXV
+ *		Note is an array of AuxInfo structures.
  *
  * We also use ptrace(2) request numbers (the ones that exist in
  * machine-dependent space) to identify register info notes.  The
@@ -981,6 +1021,7 @@ typedef struct {
 #define ELF_NOTE_NETBSD_CORE_NAME	"NetBSD-CORE"
 
 #define ELF_NOTE_NETBSD_CORE_PROCINFO	1
+#define ELF_NOTE_NETBSD_CORE_AUXV	2
 
 #define NETBSD_ELFCORE_PROCINFO_VERSION 1
 
@@ -1039,8 +1080,12 @@ struct netbsd_elfcore_procinfo {
 #define ELF_NOTE_MCMODEL_NAME		ELF_NOTE_NETBSD_NAME
 
 
-#if !defined(ELFSIZE) && defined(ARCH_ELFSIZE)
-#define ELFSIZE ARCH_ELFSIZE
+#if !defined(ELFSIZE)
+# if defined(_RUMPKERNEL) || !defined(_KERNEL)
+#  define ELFSIZE ARCH_ELFSIZE
+# else
+#  define ELFSIZE KERN_ELFSIZE
+# endif
 #endif
 
 #if defined(ELFSIZE)
@@ -1049,6 +1094,7 @@ struct netbsd_elfcore_procinfo {
 #define ELFNAME2(x,y)	CONCAT(x,CONCAT(_elf,CONCAT(ELFSIZE,CONCAT(_,y))))
 #define ELFNAMEEND(x)	CONCAT(x,CONCAT(_elf,ELFSIZE))
 #define ELFDEFNNAME(x)	CONCAT(ELF,CONCAT(ELFSIZE,CONCAT(_,x)))
+#define	ElfW(x)		CONCAT(Elf,CONCAT(ELFSIZE,CONCAT(_,x)))
 #endif
 
 #if defined(ELFSIZE) && (ELFSIZE == 32)
@@ -1302,6 +1348,7 @@ struct exec_package;
 
 #ifdef EXEC_ELF32
 int	exec_elf32_makecmds(struct lwp *, struct exec_package *);
+int	elf32_populate_auxv(struct lwp *, struct exec_package *, char **);
 int	elf32_copyargs(struct lwp *, struct exec_package *,
     struct ps_strings *, char **, void *);
 
@@ -1314,6 +1361,7 @@ int	elf32_check_header(Elf32_Ehdr *);
 
 #ifdef EXEC_ELF64
 int	exec_elf64_makecmds(struct lwp *, struct exec_package *);
+int	elf64_populate_auxv(struct lwp *, struct exec_package *, char **);
 int	elf64_copyargs(struct lwp *, struct exec_package *,
     struct ps_strings *, char **, void *);
 

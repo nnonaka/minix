@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.3 2015/01/29 20:41:36 joerg Exp $
+#	$NetBSD: Makefile,v 1.5 2018/07/17 18:55:29 joerg Exp $
 
 LIB=	LLVMProfileData
 
@@ -6,12 +6,11 @@ LIB=	LLVMProfileData
 
 .PATH: ${LLVM_SRCDIR}/lib/ProfileData
 
-SRCS+=	CoverageMapping.cpp \
-	CoverageMappingReader.cpp \
-	CoverageMappingWriter.cpp \
+SRCS+=	GCOV.cpp \
 	InstrProf.cpp \
 	InstrProfReader.cpp \
 	InstrProfWriter.cpp \
+	ProfileSummaryBuilder.cpp \
 	SampleProf.cpp \
 	SampleProfReader.cpp \
 	SampleProfWriter.cpp

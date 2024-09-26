@@ -44,6 +44,7 @@
 
 #include <sys/signal.h>
 
+__BEGIN_DECLS
 #if defined(_NETBSD_SOURCE)
 extern const char *const *sys_signame __RENAME(__sys_signame14);
 #ifndef __SYS_SIGLIST_DECLARED
@@ -54,8 +55,14 @@ extern const char *const *sys_siglist __RENAME(__sys_siglist14);
 extern const int sys_nsig __RENAME(__sys_nsig14);
 #endif
 
-__BEGIN_DECLS
 int	raise(int);
+
+#if defined(_NETBSD_SOURCE)
+const char *signalname(int);
+int signalnext(int);
+int signalnumber(const char *);
+#endif
+
 #if defined(_POSIX_C_SOURCE) || defined(_XOPEN_SOURCE) || \
     defined(_NETBSD_SOURCE)
 int	kill(pid_t, int);

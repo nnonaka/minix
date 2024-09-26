@@ -91,6 +91,13 @@
 #include <sys/null.h>
 #endif
 
+#if defined(_KERNEL) && defined(_KERNEL_OPT)
+#include "opt_diagnostic.h"
+#ifdef DIAGNOSTIC
+#define QUEUEDEBUG	1
+#endif
+#endif
+
 #if defined(QUEUEDEBUG)
 # if defined(_KERNEL)
 #  define QUEUEDEBUG_ABORT(...) panic(__VA_ARGS__)
@@ -211,10 +218,11 @@ struct {								\
 	    ((tvar) = LIST_NEXT((var), field), 1);			\
 	    (var) = (tvar))
 
-#define	LIST_MOVE(head1, head2) do {					\
+#define	LIST_MOVE(head1, head2, field) do {				\
 	LIST_INIT((head2));						\
 	if (!LIST_EMPTY((head1))) {					\
 		(head2)->lh_first = (head1)->lh_first;			\
+		(head2)->lh_first->field.le_prev = &(head2)->lh_first;	\
 		LIST_INIT((head1));					\
 	}								\
 } while (/*CONSTCOND*/0)
@@ -421,9 +429,9 @@ struct {								\
 #define	TAILQ_END(head)			(NULL)
 #define	TAILQ_NEXT(elm, field)		((elm)->field.tqe_next)
 #define	TAILQ_LAST(head, headname) \
-	(*(((struct headname *)((head)->tqh_last))->tqh_last))
+	(*(((struct headname *)(void *)((head)->tqh_last))->tqh_last))
 #define	TAILQ_PREV(elm, headname, field) \
-	(*(((struct headname *)((elm)->field.tqe_prev))->tqh_last))
+	(*(((struct headname *)(void *)((elm)->field.tqe_prev))->tqh_last))
 #define	TAILQ_EMPTY(head)		(TAILQ_FIRST(head) == TAILQ_END(head))
 
 
@@ -438,9 +446,9 @@ struct {								\
 	    ((next) = TAILQ_NEXT(var, field), 1); (var) = (next))
 
 #define	TAILQ_FOREACH_REVERSE(var, head, headname, field)		\
-	for ((var) = (*(((struct headname *)((head)->tqh_last))->tqh_last));\
+	for ((var) = TAILQ_LAST((head), headname);			\
 	    (var) != TAILQ_END(head);					\
-	    (var) = (*(((struct headname *)((var)->field.tqe_prev))->tqh_last)))
+	    (var) = TAILQ_PREV((var), headname, field))
 
 #define	TAILQ_FOREACH_REVERSE_SAFE(var, head, headname, field, prev)	\
 	for ((var) = TAILQ_LAST((head), headname);			\
@@ -664,7 +672,7 @@ struct {								\
  */
 
 /*
- * __launder_type():  We use this ugly hack to work around the the compiler
+ * __launder_type():  We use this ugly hack to work around the compiler
  * noticing that two types may not alias each other and elide tests in code.
  * We hit this in the CIRCLEQ macros when comparing 'struct name *' and
  * 'struct type *' (see CIRCLEQ_HEAD()).  Modern compilers (such as GCC

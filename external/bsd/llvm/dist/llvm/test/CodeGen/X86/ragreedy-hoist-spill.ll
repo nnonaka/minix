@@ -1,7 +1,7 @@
 ; RUN: llc < %s -mtriple=x86_64-apple-macosx -regalloc=greedy | FileCheck %s
 
-; This testing case is reduced from 254.gap SyFgets funciton.
-; We make sure a spill is not hoisted to a hotter outer loop.
+; This testing case is reduced from 254.gap SyFgets function.
+; We make sure a spill is hoisted to a cold BB inside the hotter outer loop.
 
 %struct.TMP.1 = type { %struct.TMP.2*, %struct.TMP.2*, [1024 x i8] }
 %struct.TMP.2 = type { i8*, i32, i32, i16, i16, %struct.TMP.3, i32, i8*, i32 (i8*)*, i32 (i8*, i8*, i32)*, i64 (i8*, i64, i32)*, i32 (i8*, i8*, i32)*, %struct.TMP.3, %struct.TMP.4*, i32, [3 x i8], [1 x i8], %struct.TMP.3, i32, i64 }
@@ -18,7 +18,7 @@ define i8* @SyFgets(i8* %line, i64 %length, i64 %fid) {
 entry:
   %sub.ptr.rhs.cast646 = ptrtoint i8* %line to i64
   %old = alloca [512 x i8], align 16
-  %0 = getelementptr inbounds [512 x i8]* %old, i64 0, i64 0
+  %0 = getelementptr inbounds [512 x i8], [512 x i8]* %old, i64 0, i64 0
   switch i64 %fid, label %if.then [
     i64 2, label %if.end
     i64 0, label %if.end
@@ -30,7 +30,7 @@ if.then:
 if.end:
   switch i64 undef, label %if.end25 [
     i64 0, label %if.then4
-    i64 1, label %land.lhs.true14
+    i64 1, label %if.end25
   ]
 
 if.then4:
@@ -58,17 +58,17 @@ if.then.i2712:
   unreachable
 
 SyTime.exit2720:
-  %add.ptr = getelementptr [512 x i8]* %old, i64 0, i64 512
+  %add.ptr = getelementptr [512 x i8], [512 x i8]* %old, i64 0, i64 512
   %cmp293427 = icmp ult i8* %0, %add.ptr
   br i1 %cmp293427, label %for.body.lr.ph, label %while.body.preheader
 
 for.body.lr.ph:
-  call void @llvm.memset.p0i8.i64(i8* undef, i8 32, i64 512, i32 16, i1 false)
+  call void @llvm.memset.p0i8.i64(i8* align 16 undef, i8 32, i64 512, i1 false)
   br label %while.body.preheader
 
 while.body.preheader:
-  %add.ptr1603 = getelementptr [512 x i8]* null, i64 0, i64 512
-  %echo.i3101 = getelementptr [16 x %struct.TMP.1]* @syBuf, i64 0, i64 %fid, i32 1
+  %add.ptr1603 = getelementptr [512 x i8], [512 x i8]* null, i64 0, i64 512
+  %echo.i3101 = getelementptr [16 x %struct.TMP.1], [16 x %struct.TMP.1]* @syBuf, i64 0, i64 %fid, i32 1
   %1 = xor i64 %sub.ptr.rhs.cast646, -1
   br label %do.body
 
@@ -177,6 +177,10 @@ for.cond357:
   br label %for.cond357
 
 sw.bb474:
+  ; CHECK: sw.bb474
+  ; spill is hoisted here. Although loop depth1 is even hotter than loop depth2, sw.bb474 is still cold.
+  ; CHECK: movq %r{{.*}}, {{[0-9]+}}(%rsp)
+  ; CHECK: land.rhs485
   %cmp476 = icmp eq i8 undef, 0
   br i1 %cmp476, label %if.end517, label %do.body479.preheader
 
@@ -200,8 +204,8 @@ land.lhs.true490:
 
 lor.rhs500:
   ; CHECK: lor.rhs500
-  ; Make sure that we don't hoist the spill to outer loops.
-  ; CHECK: movq %r{{.*}}, {{[0-9]+}}(%rsp)
+  ; Make sure spill is hoisted to a cold preheader in outside loop.
+  ; CHECK-NOT: movq %r{{.*}}, {{[0-9]+}}(%rsp)
   ; CHECK: callq {{.*}}maskrune
   %call3.i.i2792 = call i32 @__maskrune(i32 undef, i64 256)
   br i1 undef, label %land.lhs.true504, label %do.body479.backedge
@@ -210,7 +214,7 @@ land.lhs.true504:
   br i1 undef, label %do.body479.backedge, label %if.end517
 
 do.body479.backedge:
-  %incdec.ptr480 = getelementptr i8* %incdec.ptr4803316, i64 1
+  %incdec.ptr480 = getelementptr i8, i8* %incdec.ptr4803316, i64 1
   %cmp483 = icmp eq i8 undef, 0
   br i1 %cmp483, label %if.end517, label %do.body479.backedge.land.rhs485_crit_edge
 
@@ -228,7 +232,7 @@ if.end517:
   ]
 
 if.then532:
-  store i8 0, i8* getelementptr inbounds ([512 x i8]* @SyFgets.yank, i64 0, i64 0), align 16, !tbaa !5
+  store i8 0, i8* getelementptr inbounds ([512 x i8], [512 x i8]* @SyFgets.yank, i64 0, i64 0), align 16, !tbaa !5
   br label %for.cond534
 
 for.cond534:
@@ -245,7 +249,7 @@ for.end552:
   %s.2.lcssa = phi i8* [ undef, %for.cond542.preheader ], [ %q.4, %for.body545 ]
   %sub.ptr.lhs.cast553 = ptrtoint i8* %s.2.lcssa to i64
   %sub.ptr.sub555 = sub i64 %sub.ptr.lhs.cast553, 0
-  %arrayidx556 = getelementptr i8* null, i64 %sub.ptr.sub555
+  %arrayidx556 = getelementptr i8, i8* null, i64 %sub.ptr.sub555
   store i8 0, i8* %arrayidx556, align 1, !tbaa !5
   br label %while.cond197.backedge
 
@@ -340,7 +344,7 @@ while.cond1683.preheader:
 
 while.body1679:
   %oldc.43406 = phi i32 [ %inc, %syEchoch.exit3070 ], [ %oldc.1.lcssa, %for.body1664.lr.ph ]
-  %4 = load %struct.TMP.2** %echo.i3101, align 8, !tbaa !6
+  %4 = load %struct.TMP.2*, %struct.TMP.2** %echo.i3101, align 8, !tbaa !6
   %call.i3062 = call i32 @fileno(%struct.TMP.2* %4)
   br i1 undef, label %if.then.i3069, label %syEchoch.exit3070
 
@@ -360,10 +364,10 @@ while.end1693:
   unreachable
 
 for.body1723:
-  %q.303203 = phi i8* [ getelementptr inbounds ([8192 x i8]* @syHistory, i64 0, i64 8189), %if.then1477 ], [ %incdec.ptr1730, %for.body1723 ]
-  %add.ptr1728 = getelementptr i8* %q.303203, i64 %idx.neg1727
-  %5 = load i8* %add.ptr1728, align 1, !tbaa !5
-  %incdec.ptr1730 = getelementptr i8* %q.303203, i64 -1
+  %q.303203 = phi i8* [ getelementptr inbounds ([8192 x i8], [8192 x i8]* @syHistory, i64 0, i64 8189), %if.then1477 ], [ %incdec.ptr1730, %for.body1723 ]
+  %add.ptr1728 = getelementptr i8, i8* %q.303203, i64 %idx.neg1727
+  %5 = load i8, i8* %add.ptr1728, align 1, !tbaa !5
+  %incdec.ptr1730 = getelementptr i8, i8* %q.303203, i64 -1
   br label %for.body1723
 
 cleanup:
@@ -373,7 +377,7 @@ cleanup:
 declare i32 @fileno(%struct.TMP.2* nocapture)
 declare i64 @"\01_write"(i32, i8*, i64)
 declare i32 @__maskrune(i32, i64)
-declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1)
+declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i1)
 
 !llvm.ident = !{!0}
 

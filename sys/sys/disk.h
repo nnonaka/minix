@@ -1,4 +1,4 @@
-/*	$NetBSD: disk.h,v 1.65 2015/08/16 18:00:03 mlelstv Exp $	*/
+/*	$NetBSD: disk.h,v 1.74.2.1 2020/03/21 15:18:57 martin Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 2004 The NetBSD Foundation, Inc.
@@ -79,23 +79,10 @@
  * Disk device structures.
  */
 
-#ifdef _KERNEL
-#include <sys/device.h>
-#endif
 #include <sys/dkio.h>
 #include <sys/time.h>
 #include <sys/queue.h>
-#include <sys/mutex.h>
 #include <sys/iostat.h>
-
-#include <prop/proplib.h>
-
-struct buf;
-struct disk;
-struct disklabel;
-struct cpu_disklabel;
-struct lwp;
-struct vnode;
 
 /*
  * Disk information dictionary.
@@ -188,31 +175,6 @@ struct dkwedge_list {
 	u_int		dkwl_ncopied;	/* number actually copied */
 };
 
-#ifdef _KERNEL
-/*
- * dkwedge_discovery_method:
- *
- *	Structure used to describe partition map parsing schemes
- *	used for wedge autodiscovery.
- */
-struct dkwedge_discovery_method {
-					/* link in wedge driver's list */
-	LIST_ENTRY(dkwedge_discovery_method) ddm_list;
-	const char	*ddm_name;	/* name of this method */
-	int		ddm_priority;	/* search priority */
-	int		(*ddm_discover)(struct disk *, struct vnode *);
-};
-
-#define	DKWEDGE_DISCOVERY_METHOD_DECL(name, prio, discover)		\
-static struct dkwedge_discovery_method name ## _ddm = {			\
-	{ NULL, NULL },							\
-	#name,								\
-	prio,								\
-	discover							\
-};									\
-__link_set_add_data(dkwedge_methods, name ## _ddm)
-#endif /* _KERNEL */
-
 /* Some common partition types */
 #define	DKW_PTYPE_UNKNOWN	""
 #define	DKW_PTYPE_UNUSED	"unused"
@@ -246,6 +208,9 @@ __link_set_add_data(dkwedge_methods, name ## _ddm)
 #define	DKW_PTYPE_NILFS		"nilfs"
 #define	DKW_PTYPE_CGD		"cgd"
 #define	DKW_PTYPE_MINIXFS3	"minixfs3"
+#define	DKW_PTYPE_VMKCORE	"vmkcore"
+#define	DKW_PTYPE_VMFS		"vmfs"
+#define	DKW_PTYPE_VMWRESV	"vmwresv"
 
 /*
  * Ensure each symbol used in FSTYPE_DEFN in <sys/disklabel.h>
@@ -309,6 +274,73 @@ struct disk_geom {
 	 */
 	uint32_t	dg_acylinders;
 };
+
+/*
+ * Bad sector lists per fixed disk
+ */
+struct disk_badsectors {
+	SLIST_ENTRY(disk_badsectors)	dbs_next;
+	daddr_t		dbs_min;	/* min. sector number */
+	daddr_t		dbs_max;	/* max. sector number */
+	struct timeval	dbs_failedat;	/* first failure at */
+};
+
+struct disk_badsecinfo {
+	uint32_t	dbsi_bufsize;	/* size of region pointed to */
+	uint32_t	dbsi_skip;	/* how many to skip past */
+	uint32_t	dbsi_copied;	/* how many got copied back */
+	uint32_t	dbsi_left;	/* remaining to copy */
+	void *		dbsi_buffer;	/* region to copy disk_badsectors to */
+};
+
+#define	DK_STRATEGYNAMELEN	32
+struct disk_strategy {
+	char dks_name[DK_STRATEGYNAMELEN]; /* name of strategy */
+	char *dks_param;		/* notyet; should be NULL */
+	size_t dks_paramlen;		/* notyet; should be 0 */
+};
+
+/* Sector alignment */
+struct disk_sectoralign {
+	uint32_t	dsa_firstaligned; /* first aligned sector # */
+	uint32_t	dsa_alignment;	  /* sectors per aligned sector */
+};
+
+#ifdef _KERNEL
+#include <sys/device.h>
+#include <sys/mutex.h>
+
+#include <prop/proplib.h>
+
+struct buf;
+struct disk;
+struct disklabel;
+struct cpu_disklabel;
+struct lwp;
+struct vnode;
+
+/*
+ * dkwedge_discovery_method:
+ *
+ *	Structure used to describe partition map parsing schemes
+ *	used for wedge autodiscovery.
+ */
+struct dkwedge_discovery_method {
+					/* link in wedge driver's list */
+	LIST_ENTRY(dkwedge_discovery_method) ddm_list;
+	const char	*ddm_name;	/* name of this method */
+	int		ddm_priority;	/* search priority */
+	int		(*ddm_discover)(struct disk *, struct vnode *);
+};
+
+#define	DKWEDGE_DISCOVERY_METHOD_DECL(name, prio, discover)		\
+static struct dkwedge_discovery_method name ## _ddm = {			\
+	{ NULL, NULL },							\
+	#name,								\
+	prio,								\
+	discover							\
+};									\
+__link_set_add_data(dkwedge_methods, name ## _ddm)
 
 /*
  * Disk partition dictionary.
@@ -470,7 +502,6 @@ struct disk {
 	struct cpu_disklabel *dk_cpulabel;
 };
 
-#ifdef _KERNEL
 struct dkdriver {
 	void	(*d_strategy)(struct buf *);
 	void	(*d_minphys)(struct buf *);
@@ -481,8 +512,9 @@ struct dkdriver {
 	int	(*d_dumpblocks)(device_t, void *, daddr_t, int);
 	int	(*d_lastclose)(device_t);
 	int	(*d_discard)(device_t, off_t, off_t);
+	int	(*d_firstopen)(device_t, dev_t, int, int);
+	void	(*d_label)(device_t, struct disklabel *lp);
 };
-#endif
 
 /* states */
 #define	DK_CLOSED	0		/* drive is closed */
@@ -492,44 +524,22 @@ struct dkdriver {
 #define	DK_OPEN		4		/* label read, drive open */
 #define	DK_OPENRAW	5		/* open without label */
 
-/*
- * Bad sector lists per fixed disk
- */
-struct disk_badsectors {
-	SLIST_ENTRY(disk_badsectors)	dbs_next;
-	daddr_t		dbs_min;	/* min. sector number */
-	daddr_t		dbs_max;	/* max. sector number */
-	struct timeval	dbs_failedat;	/* first failure at */
-};
-
-struct disk_badsecinfo {
-	uint32_t	dbsi_bufsize;	/* size of region pointed to */
-	uint32_t	dbsi_skip;	/* how many to skip past */
-	uint32_t	dbsi_copied;	/* how many got copied back */
-	uint32_t	dbsi_left;	/* remaining to copy */
-	void *		dbsi_buffer;	/* region to copy disk_badsectors to */
-};
-
-#define	DK_STRATEGYNAMELEN	32
-struct disk_strategy {
-	char dks_name[DK_STRATEGYNAMELEN]; /* name of strategy */
-	char *dks_param;		/* notyet; should be NULL */
-	size_t dks_paramlen;		/* notyet; should be 0 */
-};
-
 #define	DK_BSIZE2BLKSHIFT(b)	((ffs((b) / DEV_BSIZE)) - 1)
 #define	DK_BSIZE2BYTESHIFT(b)	(ffs((b)) - 1)
+#define DK_DEV_BSIZE_OK(b) \
+    ((b) >= DEV_BSIZE && ((b) & ((b) - 1)) == 0 && (b) <= MAXPHYS)
 
-#ifdef _KERNEL
 extern	int disk_count;			/* number of disks in global disklist */
 
 struct proc;
 
+void	disk_rename(struct disk *, const char *);
 void	disk_attach(struct disk *);
 int	disk_begindetach(struct disk *, int (*)(device_t), device_t, int);
 void	disk_detach(struct disk *);
 void	disk_init(struct disk *, const char *, const struct dkdriver *);
 void	disk_destroy(struct disk *);
+void	disk_wait(struct disk *);
 void	disk_busy(struct disk *);
 void	disk_unbusy(struct disk *, long, int);
 bool	disk_isbusy(struct disk *);
@@ -545,9 +555,11 @@ int	dkwedge_list(struct disk *, struct dkwedge_list *, struct lwp *);
 void	dkwedge_discover(struct disk *);
 int	dkwedge_read(struct disk *, struct vnode *, daddr_t, void *, size_t);
 device_t dkwedge_find_by_wname(const char *);
+device_t dkwedge_find_by_parent(const char *, size_t *);
 const char *dkwedge_get_parent_name(dev_t);
 void	dkwedge_print_wnames(void);
 device_t dkwedge_find_partition(device_t, daddr_t, uint64_t);
-#endif
+
+#endif /* _KERNEL */
 
 #endif /* _SYS_DISK_H_ */

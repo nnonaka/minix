@@ -1,6 +1,5 @@
-; RUN: llc < %s -march=arm64 -mcpu=cyclone -enable-misched=false | FileCheck %s
-; RUN: llc < %s -O0 | FileCheck -check-prefix=FAST %s
-target triple = "arm64-apple-darwin"
+; RUN: llc -fast-isel-sink-local-values < %s -mtriple=arm64-apple-darwin -mcpu=cyclone -enable-misched=false -disable-fp-elim | FileCheck %s
+; RUN: llc -fast-isel-sink-local-values < %s -mtriple=arm64-apple-darwin -O0 -disable-fp-elim -fast-isel | FileCheck -check-prefix=FAST %s
 
 ; rdar://12648441
 ; Generated from arm64-arguments.c with -O2.
@@ -59,8 +58,8 @@ entry:
 ; CHECK-LABEL: caller38
 ; CHECK: ldr x1,
 ; CHECK: ldr x2,
-  %0 = load i64* bitcast (%struct.s38* @g38 to i64*), align 4
-  %1 = load i64* bitcast (%struct.s38* @g38_2 to i64*), align 4
+  %0 = load i64, i64* bitcast (%struct.s38* @g38 to i64*), align 4
+  %1 = load i64, i64* bitcast (%struct.s38* @g38_2 to i64*), align 4
   %call = tail call i32 @f38(i32 3, i64 %0, i64 %1) #5
   ret i32 %call
 }
@@ -74,10 +73,10 @@ define i32 @caller38_stack() #1 {
 entry:
 ; CHECK-LABEL: caller38_stack
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #8]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
-  %0 = load i64* bitcast (%struct.s38* @g38 to i64*), align 4
-  %1 = load i64* bitcast (%struct.s38* @g38_2 to i64*), align 4
+  %0 = load i64, i64* bitcast (%struct.s38* @g38 to i64*), align 4
+  %1 = load i64, i64* bitcast (%struct.s38* @g38_2 to i64*), align 4
   %call = tail call i32 @f38_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6,
                                    i32 7, i32 8, i32 9, i64 %0, i64 %1) #5
   ret i32 %call
@@ -112,8 +111,8 @@ entry:
 ; CHECK-LABEL: caller39
 ; CHECK: ldp x1, x2,
 ; CHECK: ldp x3, x4,
-  %0 = load i128* bitcast (%struct.s39* @g39 to i128*), align 16
-  %1 = load i128* bitcast (%struct.s39* @g39_2 to i128*), align 16
+  %0 = load i128, i128* bitcast (%struct.s39* @g39 to i128*), align 16
+  %1 = load i128, i128* bitcast (%struct.s39* @g39_2 to i128*), align 16
   %call = tail call i32 @f39(i32 3, i128 %0, i128 %1) #5
   ret i32 %call
 }
@@ -128,10 +127,10 @@ entry:
 ; CHECK-LABEL: caller39_stack
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #32]
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #16]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
-  %0 = load i128* bitcast (%struct.s39* @g39 to i128*), align 16
-  %1 = load i128* bitcast (%struct.s39* @g39_2 to i128*), align 16
+  %0 = load i128, i128* bitcast (%struct.s39* @g39 to i128*), align 16
+  %1 = load i128, i128* bitcast (%struct.s39* @g39_2 to i128*), align 16
   %call = tail call i32 @f39_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6,
                                    i32 7, i32 8, i32 9, i128 %0, i128 %1) #5
   ret i32 %call
@@ -168,8 +167,8 @@ entry:
 ; CHECK-LABEL: caller40
 ; CHECK: ldp x1, x2,
 ; CHECK: ldp x3, x4,
-  %0 = load [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 4
-  %1 = load [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 4
+  %0 = load [2 x i64], [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 4
+  %1 = load [2 x i64], [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 4
   %call = tail call i32 @f40(i32 3, [2 x i64] %0, [2 x i64] %1) #5
   ret i32 %call
 }
@@ -184,10 +183,10 @@ entry:
 ; CHECK-LABEL: caller40_stack
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #24]
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #8]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
-  %0 = load [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 4
-  %1 = load [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 4
+  %0 = load [2 x i64], [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 4
+  %1 = load [2 x i64], [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 4
   %call = tail call i32 @f40_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6,
                          i32 7, i32 8, i32 9, [2 x i64] %0, [2 x i64] %1) #5
   ret i32 %call
@@ -222,8 +221,8 @@ entry:
 ; CHECK-LABEL: caller41
 ; CHECK: ldp x1, x2,
 ; CHECK: ldp x3, x4,
-  %0 = load i128* bitcast (%struct.s41* @g41 to i128*), align 16
-  %1 = load i128* bitcast (%struct.s41* @g41_2 to i128*), align 16
+  %0 = load i128, i128* bitcast (%struct.s41* @g41 to i128*), align 16
+  %1 = load i128, i128* bitcast (%struct.s41* @g41_2 to i128*), align 16
   %call = tail call i32 @f41(i32 3, i128 %0, i128 %1) #5
   ret i32 %call
 }
@@ -238,10 +237,10 @@ entry:
 ; CHECK-LABEL: caller41_stack
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #32]
 ; CHECK: stp {{x[0-9]+}}, {{x[0-9]+}}, [sp, #16]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
-  %0 = load i128* bitcast (%struct.s41* @g41 to i128*), align 16
-  %1 = load i128* bitcast (%struct.s41* @g41_2 to i128*), align 16
+  %0 = load i128, i128* bitcast (%struct.s41* @g41 to i128*), align 16
+  %1 = load i128, i128* bitcast (%struct.s41* @g41_2 to i128*), align 16
   %call = tail call i32 @f41_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6,
                             i32 7, i32 8, i32 9, i128 %0, i128 %1) #5
   ret i32 %call
@@ -260,15 +259,15 @@ entry:
 ; FAST: ldr w[[B:[0-9]+]], [x2]
 ; FAST: add w[[C:[0-9]+]], w[[A]], w0
 ; FAST: add {{w[0-9]+}}, w[[C]], w[[B]]
-  %i1 = getelementptr inbounds %struct.s42* %s1, i64 0, i32 0
-  %0 = load i32* %i1, align 4, !tbaa !0
-  %i2 = getelementptr inbounds %struct.s42* %s2, i64 0, i32 0
-  %1 = load i32* %i2, align 4, !tbaa !0
-  %s = getelementptr inbounds %struct.s42* %s1, i64 0, i32 1
-  %2 = load i16* %s, align 2, !tbaa !3
+  %i1 = getelementptr inbounds %struct.s42, %struct.s42* %s1, i64 0, i32 0
+  %0 = load i32, i32* %i1, align 4, !tbaa !0
+  %i2 = getelementptr inbounds %struct.s42, %struct.s42* %s2, i64 0, i32 0
+  %1 = load i32, i32* %i2, align 4, !tbaa !0
+  %s = getelementptr inbounds %struct.s42, %struct.s42* %s1, i64 0, i32 1
+  %2 = load i16, i16* %s, align 2, !tbaa !3
   %conv = sext i16 %2 to i32
-  %s5 = getelementptr inbounds %struct.s42* %s2, i64 0, i32 1
-  %3 = load i16* %s5, align 2, !tbaa !3
+  %s5 = getelementptr inbounds %struct.s42, %struct.s42* %s2, i64 0, i32 1
+  %3 = load i16, i16* %s5, align 2, !tbaa !3
   %conv6 = sext i16 %3 to i32
   %add = add i32 %0, %i
   %add3 = add i32 %add, %1
@@ -281,10 +280,10 @@ entry:
 define i32 @caller42() #3 {
 entry:
 ; CHECK-LABEL: caller42
-; CHECK: str {{x[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
-; CHECK: str {{x[0-9]+}}, [sp, #16]
-; CHECK: str {{q[0-9]+}}, [sp]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #16]
+; CHECK-DAG: str {{q[0-9]+}}, [sp]
 ; CHECK: add x1, sp, #32
 ; CHECK: mov x2, sp
 ; Space for s1 is allocated at sp+32
@@ -292,23 +291,24 @@ entry:
 
 ; FAST-LABEL: caller42
 ; FAST: sub sp, sp, #96
-; Space for s1 is allocated at fp-24 = sp+72
-; Space for s2 is allocated at sp+48
+; Space for s1 is allocated at fp-24 = sp+56
 ; FAST: sub x[[A:[0-9]+]], x29, #24
-; FAST: add x[[A:[0-9]+]], sp, #48
 ; Call memcpy with size = 24 (0x18)
 ; FAST: orr {{x[0-9]+}}, xzr, #0x18
+; Space for s2 is allocated at sp+32
+; FAST: add x[[A:[0-9]+]], sp, #32
+; FAST: bl _memcpy
   %tmp = alloca %struct.s42, align 4
   %tmp1 = alloca %struct.s42, align 4
   %0 = bitcast %struct.s42* %tmp to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* bitcast (%struct.s42* @g42 to i8*), i64 24, i32 4, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %0, i8* align 4 bitcast (%struct.s42* @g42 to i8*), i64 24, i1 false), !tbaa.struct !4
   %1 = bitcast %struct.s42* %tmp1 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* bitcast (%struct.s42* @g42_2 to i8*), i64 24, i32 4, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %1, i8* align 4 bitcast (%struct.s42* @g42_2 to i8*), i64 24, i1 false), !tbaa.struct !4
   %call = call i32 @f42(i32 3, %struct.s42* %tmp, %struct.s42* %tmp1) #5
   ret i32 %call
 }
 
-declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1) #4
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i1) #4
 
 declare i32 @f42_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6,
                        i32 %i7, i32 %i8, i32 %i9, %struct.s42* nocapture %s1,
@@ -317,12 +317,12 @@ declare i32 @f42_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6,
 define i32 @caller42_stack() #3 {
 entry:
 ; CHECK-LABEL: caller42_stack
-; CHECK: mov x29, sp
-; CHECK: sub sp, sp, #96
-; CHECK: stur {{x[0-9]+}}, [x29, #-16]
-; CHECK: stur {{q[0-9]+}}, [x29, #-32]
-; CHECK: str {{x[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
+; CHECK: sub sp, sp, #112
+; CHECK: add x29, sp, #96
+; CHECK-DAG: stur {{x[0-9]+}}, [x29, #-16]
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-32]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
 ; Space for s1 is allocated at x29-32 = sp+64
 ; Space for s2 is allocated at sp+32
 ; CHECK: add x[[B:[0-9]+]], sp, #32
@@ -330,26 +330,29 @@ entry:
 ; CHECK: sub x[[A:[0-9]+]], x29, #32
 ; Address of s1 is passed on stack at sp+8
 ; CHECK: str x[[A]], [sp, #8]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
 
 ; FAST-LABEL: caller42_stack
 ; Space for s1 is allocated at fp-24
-; Space for s2 is allocated at fp-48
 ; FAST: sub x[[A:[0-9]+]], x29, #24
-; FAST: sub x[[B:[0-9]+]], x29, #48
 ; Call memcpy with size = 24 (0x18)
 ; FAST: orr {{x[0-9]+}}, xzr, #0x18
-; FAST: str {{w[0-9]+}}, [sp]
+; FAST: bl _memcpy
+; Space for s2 is allocated at fp-48
+; FAST: sub x[[B:[0-9]+]], x29, #48
+; Call memcpy again
+; FAST: bl _memcpy
 ; Address of s1 is passed on stack at sp+8
+; FAST: str {{w[0-9]+}}, [sp]
 ; FAST: str {{x[0-9]+}}, [sp, #8]
 ; FAST: str {{x[0-9]+}}, [sp, #16]
   %tmp = alloca %struct.s42, align 4
   %tmp1 = alloca %struct.s42, align 4
   %0 = bitcast %struct.s42* %tmp to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* bitcast (%struct.s42* @g42 to i8*), i64 24, i32 4, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %0, i8* align 4 bitcast (%struct.s42* @g42 to i8*), i64 24, i1 false), !tbaa.struct !4
   %1 = bitcast %struct.s42* %tmp1 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* bitcast (%struct.s42* @g42_2 to i8*), i64 24, i32 4, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %1, i8* align 4 bitcast (%struct.s42* @g42_2 to i8*), i64 24, i1 false), !tbaa.struct !4
   %call = call i32 @f42_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7,
                        i32 8, i32 9, %struct.s42* %tmp, %struct.s42* %tmp1) #5
   ret i32 %call
@@ -369,15 +372,15 @@ entry:
 ; FAST: ldr w[[B:[0-9]+]], [x2]
 ; FAST: add w[[C:[0-9]+]], w[[A]], w0
 ; FAST: add {{w[0-9]+}}, w[[C]], w[[B]]
-  %i1 = getelementptr inbounds %struct.s43* %s1, i64 0, i32 0
-  %0 = load i32* %i1, align 4, !tbaa !0
-  %i2 = getelementptr inbounds %struct.s43* %s2, i64 0, i32 0
-  %1 = load i32* %i2, align 4, !tbaa !0
-  %s = getelementptr inbounds %struct.s43* %s1, i64 0, i32 1
-  %2 = load i16* %s, align 2, !tbaa !3
+  %i1 = getelementptr inbounds %struct.s43, %struct.s43* %s1, i64 0, i32 0
+  %0 = load i32, i32* %i1, align 4, !tbaa !0
+  %i2 = getelementptr inbounds %struct.s43, %struct.s43* %s2, i64 0, i32 0
+  %1 = load i32, i32* %i2, align 4, !tbaa !0
+  %s = getelementptr inbounds %struct.s43, %struct.s43* %s1, i64 0, i32 1
+  %2 = load i16, i16* %s, align 2, !tbaa !3
   %conv = sext i16 %2 to i32
-  %s5 = getelementptr inbounds %struct.s43* %s2, i64 0, i32 1
-  %3 = load i16* %s5, align 2, !tbaa !3
+  %s5 = getelementptr inbounds %struct.s43, %struct.s43* %s2, i64 0, i32 1
+  %3 = load i16, i16* %s5, align 2, !tbaa !3
   %conv6 = sext i16 %3 to i32
   %add = add i32 %0, %i
   %add3 = add i32 %add, %1
@@ -389,21 +392,19 @@ entry:
 define i32 @caller43() #3 {
 entry:
 ; CHECK-LABEL: caller43
-; CHECK: str {{q[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
-; CHECK: str {{q[0-9]+}}, [sp, #16]
-; CHECK: str {{q[0-9]+}}, [sp]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #16]
+; CHECK-DAG: str {{q[0-9]+}}, [sp]
 ; CHECK: add x1, sp, #32
 ; CHECK: mov x2, sp
 ; Space for s1 is allocated at sp+32
 ; Space for s2 is allocated at sp
 
 ; FAST-LABEL: caller43
-; FAST: mov x29, sp
+; FAST: add x29, sp, #64
 ; Space for s1 is allocated at sp+32
 ; Space for s2 is allocated at sp
-; FAST: add x1, sp, #32
-; FAST: mov x2, sp
 ; FAST: str {{x[0-9]+}}, [sp, #32]
 ; FAST: str {{x[0-9]+}}, [sp, #40]
 ; FAST: str {{x[0-9]+}}, [sp, #48]
@@ -412,12 +413,14 @@ entry:
 ; FAST: str {{x[0-9]+}}, [sp, #8]
 ; FAST: str {{x[0-9]+}}, [sp, #16]
 ; FAST: str {{x[0-9]+}}, [sp, #24]
+; FAST: add x1, sp, #32
+; FAST: mov x2, sp
   %tmp = alloca %struct.s43, align 16
   %tmp1 = alloca %struct.s43, align 16
   %0 = bitcast %struct.s43* %tmp to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* bitcast (%struct.s43* @g43 to i8*), i64 32, i32 16, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %0, i8* align 16 bitcast (%struct.s43* @g43 to i8*), i64 32, i1 false), !tbaa.struct !4
   %1 = bitcast %struct.s43* %tmp1 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* bitcast (%struct.s43* @g43_2 to i8*), i64 32, i32 16, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %1, i8* align 16 bitcast (%struct.s43* @g43_2 to i8*), i64 32, i1 false), !tbaa.struct !4
   %call = call i32 @f43(i32 3, %struct.s43* %tmp, %struct.s43* %tmp1) #5
   ret i32 %call
 }
@@ -429,12 +432,12 @@ declare i32 @f43_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6,
 define i32 @caller43_stack() #3 {
 entry:
 ; CHECK-LABEL: caller43_stack
-; CHECK: mov x29, sp
-; CHECK: sub sp, sp, #96
-; CHECK: stur {{q[0-9]+}}, [x29, #-16]
-; CHECK: stur {{q[0-9]+}}, [x29, #-32]
-; CHECK: str {{q[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
+; CHECK: sub sp, sp, #112
+; CHECK: add x29, sp, #96
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-16]
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-32]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
 ; Space for s1 is allocated at x29-32 = sp+64
 ; Space for s2 is allocated at sp+32
 ; CHECK: add x[[B:[0-9]+]], sp, #32
@@ -442,15 +445,13 @@ entry:
 ; CHECK: sub x[[A:[0-9]+]], x29, #32
 ; Address of s1 is passed on stack at sp+8
 ; CHECK: str x[[A]], [sp, #8]
-; CHECK: movz w[[C:[0-9]+]], #0x9
+; CHECK: mov w[[C:[0-9]+]], #9
 ; CHECK: str w[[C]], [sp]
 
 ; FAST-LABEL: caller43_stack
-; FAST: sub sp, sp, #96
+; FAST: sub sp, sp, #112
 ; Space for s1 is allocated at fp-32 = sp+64
 ; Space for s2 is allocated at sp+32
-; FAST: sub x[[A:[0-9]+]], x29, #32
-; FAST: add x[[B:[0-9]+]], sp, #32
 ; FAST: stur {{x[0-9]+}}, [x29, #-32]
 ; FAST: stur {{x[0-9]+}}, [x29, #-24]
 ; FAST: stur {{x[0-9]+}}, [x29, #-16]
@@ -461,14 +462,16 @@ entry:
 ; FAST: str {{x[0-9]+}}, [sp, #56]
 ; FAST: str {{w[0-9]+}}, [sp]
 ; Address of s1 is passed on stack at sp+8
-; FAST: str {{x[0-9]+}}, [sp, #8]
-; FAST: str {{x[0-9]+}}, [sp, #16]
+; FAST: sub x[[A:[0-9]+]], x29, #32
+; FAST: str x[[A]], [sp, #8]
+; FAST: add x[[B:[0-9]+]], sp, #32
+; FAST: str x[[B]], [sp, #16]
   %tmp = alloca %struct.s43, align 16
   %tmp1 = alloca %struct.s43, align 16
   %0 = bitcast %struct.s43* %tmp to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* bitcast (%struct.s43* @g43 to i8*), i64 32, i32 16, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %0, i8* align 16 bitcast (%struct.s43* @g43 to i8*), i64 32, i1 false), !tbaa.struct !4
   %1 = bitcast %struct.s43* %tmp1 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* bitcast (%struct.s43* @g43_2 to i8*), i64 32, i32 16, i1 false), !tbaa.struct !4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %1, i8* align 16 bitcast (%struct.s43* @g43_2 to i8*), i64 32, i1 false), !tbaa.struct !4
   %call = call i32 @f43_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7,
                        i32 8, i32 9, %struct.s43* %tmp, %struct.s43* %tmp1) #5
   ret i32 %call
@@ -493,7 +496,7 @@ entry:
 ; Load/Store opt is disabled with -O0, so the i128 is split.
 ; FAST: str {{x[0-9]+}}, [x[[ADDR]], #8]
 ; FAST: str {{x[0-9]+}}, [x[[ADDR]]]
-  %0 = load i128* bitcast (%struct.s41* @g41 to i128*), align 16
+  %0 = load i128, i128* bitcast (%struct.s41* @g41 to i128*), align 16
   %call = tail call i32 @callee_i128_split(i32 1, i32 2, i32 3, i32 4, i32 5,
                                            i32 6, i32 7, i128 %0, i32 8) #5
   ret i32 %call
@@ -514,7 +517,7 @@ entry:
 ; FAST: mov x[[R0:[0-9]+]], sp
 ; FAST: orr w[[R1:[0-9]+]], wzr, #0x8
 ; FAST: str w[[R1]], {{\[}}x[[R0]]{{\]}}
-  %0 = load i64* bitcast (%struct.s41* @g41 to i64*), align 16
+  %0 = load i64, i64* bitcast (%struct.s41* @g41 to i64*), align 16
   %call = tail call i32 @callee_i64(i32 1, i32 2, i32 3, i32 4, i32 5,
                                     i32 6, i32 7, i64 %0, i32 8) #5
   ret i32 %call

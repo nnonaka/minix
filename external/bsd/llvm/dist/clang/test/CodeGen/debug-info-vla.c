@@ -1,8 +1,12 @@
-// RUN: %clang_cc1 -emit-llvm -g -triple x86_64-apple-darwin %s -o - | FileCheck %s
+// RUN: %clang_cc1 -emit-llvm -debug-info-kind=limited -triple x86_64-apple-darwin %s -o - | FileCheck %s
 
 void testVLAwithSize(int s)
 {
-// CHECK:  !"0x100\00vla\00[[@LINE+1]]\008192", {{.*}}, {{.*}}, {{.*}}} ; [ DW_TAG_auto_variable ] [vla] [line [[@LINE+1]]]
+// CHECK-DAG: dbg.declare({{.*}} %__vla_expr, metadata ![[VLAEXPR:[0-9]+]]
+// CHECK-DAG: dbg.declare({{.*}} %vla, metadata ![[VAR:[0-9]+]]
+// CHECK-DAG: ![[VLAEXPR]] = !DILocalVariable(name: "__vla_expr", {{.*}} flags: DIFlagArtificial
+// CHECK-DAG: ![[VAR]] = !DILocalVariable(name: "vla",{{.*}} line: [[@LINE+2]]
+// CHECK-DAG: !DISubrange(count: ![[VLAEXPR]])
   int vla[s];
   int i;
   for (i = 0; i < s; i++) {

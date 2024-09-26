@@ -1,4 +1,7 @@
-; RUN: llc -march=mipsel < %s | FileCheck %s
+; RUN: llc -march=mips -relocation-model=pic < %s \
+; RUN:   | FileCheck --check-prefixes=CHECK,EB %s
+; RUN: llc -march=mipsel -relocation-model=pic < %s \
+; RUN:   | FileCheck --check-prefixes=CHECK,EL %s
 
 ; Simple memory
 @g1 = external global i32
@@ -6,14 +9,13 @@
 define i32 @f1(i32 %x) nounwind {
 entry:
 ; CHECK-LABEL: f1:
-; CHECK: addiu $[[T0:[0-9]+]], $sp
 ; CHECK: #APP
-; CHECK: sw $4, 0($[[T0]])
-; CHECK: #NO_APP
-; CHECK: #APP
-; CHECK: lw $[[T3:[0-9]+]], 0($[[T0]])
+; CHECK: sw $4, [[OFFSET:[0-9]+]]($sp)
 ; CHECK: #NO_APP
 ; CHECK: lw  $[[T1:[0-9]+]], %got(g1)
+; CHECK: #APP
+; CHECK: lw $[[T3:[0-9]+]], [[OFFSET]]($sp)
+; CHECK: #NO_APP
 ; CHECK: sw  $[[T3]], 0($[[T1]])
 
   %l1 = alloca i32, align 4
@@ -27,13 +29,25 @@ entry:
 ; "D": Second word of a double word. This works for any memory element
 ; double or single.
 ; CHECK: #APP
-; CHECK: lw ${{[0-9]+}},4(${{[0-9]+}});
+; CHECK: lw ${{[0-9]+}}, 16(${{[0-9]+}})
 ; CHECK: #NO_APP
 
 ; No "D": First word of a double word. This works for any memory element
 ; double or single.
 ; CHECK: #APP
-; CHECK: lw ${{[0-9]+}},0(${{[0-9]+}});
+; CHECK: lw ${{[0-9]+}}, 12(${{[0-9]+}})
+; CHECK: #NO_APP
+
+; "M": High-order word of a double word.
+; CHECK: #APP
+; EB:    lw ${{[0-9]+}}, 12(${{[0-9]+}})
+; EL:    lw ${{[0-9]+}}, 16(${{[0-9]+}})
+; CHECK: #NO_APP
+
+; "L": Low-order word of a double word.
+; CHECK: #APP
+; EB:    lw ${{[0-9]+}}, 16(${{[0-9]+}})
+; EL:    lw ${{[0-9]+}}, 12(${{[0-9]+}})
 ; CHECK: #NO_APP
 
 @b = common global [20 x i32] zeroinitializer, align 4
@@ -41,8 +55,13 @@ entry:
 define void @main() {
 entry:
 ; Second word:
-  tail call void asm sideeffect "    lw    $0,${1:D};", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32]* @b, i32 0, i32 3))
+  tail call void asm sideeffect "    lw    $0, ${1:D}", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32], [20 x i32]* @b, i32 0, i32 3))
 ; First word. Notice, no 'D':
-  tail call void asm sideeffect "    lw    $0,${1};", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32]* @b, i32 0, i32 3))
+  tail call void asm sideeffect "    lw    $0, ${1}", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32], [20 x i32]* @b, i32 0, i32 3))
+
+; High-order part.
+  tail call void asm sideeffect "    lw    $0, ${1:M}", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32], [20 x i32]* @b, i32 0, i32 3))
+; Low-order part.
+  tail call void asm sideeffect "    lw    $0, ${1:L}", "r,*m,~{$11}"(i32 undef, i32* getelementptr inbounds ([20 x i32], [20 x i32]* @b, i32 0, i32 3))
   ret void
 }

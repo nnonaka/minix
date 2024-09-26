@@ -13,7 +13,7 @@
 
 #include "ClangSACheckers.h"
 #include "clang/AST/StmtVisitor.h"
-#include "clang/Analysis/AnalysisContext.h"
+#include "clang/Analysis/AnalysisDeclContext.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -28,15 +28,18 @@ using namespace ento;
 static bool isArc4RandomAvailable(const ASTContext &Ctx) {
   const llvm::Triple &T = Ctx.getTargetInfo().getTriple();
   return T.getVendor() == llvm::Triple::Apple ||
+         T.getOS() == llvm::Triple::CloudABI ||
          T.getOS() == llvm::Triple::FreeBSD ||
          T.getOS() == llvm::Triple::NetBSD ||
          T.getOS() == llvm::Triple::OpenBSD ||
-         T.getOS() == llvm::Triple::Bitrig ||
          T.getOS() == llvm::Triple::DragonFly;
 }
 
 namespace {
 struct ChecksFilter {
+  DefaultBool check_bcmp;
+  DefaultBool check_bcopy;
+  DefaultBool check_bzero;
   DefaultBool check_gets;
   DefaultBool check_getpw;
   DefaultBool check_mktemp;
@@ -47,6 +50,9 @@ struct ChecksFilter {
   DefaultBool check_FloatLoopCounter;
   DefaultBool check_UncheckedReturn;
 
+  CheckName checkName_bcmp;
+  CheckName checkName_bcopy;
+  CheckName checkName_bzero;
   CheckName checkName_gets;
   CheckName checkName_getpw;
   CheckName checkName_mktemp;
@@ -85,11 +91,13 @@ public:
   // Helpers.
   bool checkCall_strCommon(const CallExpr *CE, const FunctionDecl *FD);
 
-  typedef void (WalkAST::*FnCheck)(const CallExpr *,
-				   const FunctionDecl *);
+  typedef void (WalkAST::*FnCheck)(const CallExpr *, const FunctionDecl *);
 
   // Checker-specific methods.
   void checkLoopConditionForFloat(const ForStmt *FS);
+  void checkCall_bcmp(const CallExpr *CE, const FunctionDecl *FD);
+  void checkCall_bcopy(const CallExpr *CE, const FunctionDecl *FD);
+  void checkCall_bzero(const CallExpr *CE, const FunctionDecl *FD);
   void checkCall_gets(const CallExpr *CE, const FunctionDecl *FD);
   void checkCall_getpw(const CallExpr *CE, const FunctionDecl *FD);
   void checkCall_mktemp(const CallExpr *CE, const FunctionDecl *FD);
@@ -108,13 +116,13 @@ public:
 //===----------------------------------------------------------------------===//
 
 void WalkAST::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end(); I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
+  for (Stmt *Child : S->children())
+    if (Child)
+      Visit(Child);
 }
 
 void WalkAST::VisitCallExpr(CallExpr *CE) {
-  // Get the callee.  
+  // Get the callee.
   const FunctionDecl *FD = CE->getDirectCallee();
 
   if (!FD)
@@ -130,6 +138,9 @@ void WalkAST::VisitCallExpr(CallExpr *CE) {
 
   // Set the evaluation function by switching on the callee name.
   FnCheck evalFunction = llvm::StringSwitch<FnCheck>(Name)
+    .Case("bcmp", &WalkAST::checkCall_bcmp)
+    .Case("bcopy", &WalkAST::checkCall_bcopy)
+    .Case("bzero", &WalkAST::checkCall_bzero)
     .Case("gets", &WalkAST::checkCall_gets)
     .Case("getpw", &WalkAST::checkCall_getpw)
     .Case("mktemp", &WalkAST::checkCall_mktemp)
@@ -161,11 +172,11 @@ void WalkAST::VisitCallExpr(CallExpr *CE) {
 }
 
 void WalkAST::VisitCompoundStmt(CompoundStmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end(); I!=E; ++I)
-    if (Stmt *child = *I) {
-      if (CallExpr *CE = dyn_cast<CallExpr>(child))
+  for (Stmt *Child : S->children())
+    if (Child) {
+      if (CallExpr *CE = dyn_cast<CallExpr>(Child))
         checkUncheckedReturnValue(CE);
-      Visit(child);
+      Visit(Child);
     }
 }
 
@@ -297,6 +308,132 @@ void WalkAST::checkLoopConditionForFloat(const ForStmt *FS) {
 }
 
 //===----------------------------------------------------------------------===//
+// Check: Any use of bcmp.
+// CWE-477: Use of Obsolete Functions
+// bcmp was deprecated in POSIX.1-2008
+//===----------------------------------------------------------------------===//
+
+void WalkAST::checkCall_bcmp(const CallExpr *CE, const FunctionDecl *FD) {
+  if (!filter.check_bcmp)
+    return;
+
+  const FunctionProtoType *FPT = FD->getType()->getAs<FunctionProtoType>();
+  if (!FPT)
+    return;
+
+  // Verify that the function takes three arguments.
+  if (FPT->getNumParams() != 3)
+    return;
+
+  for (int i = 0; i < 2; i++) {
+    // Verify the first and second argument type is void*.
+    const PointerType *PT = FPT->getParamType(i)->getAs<PointerType>();
+    if (!PT)
+      return;
+
+    if (PT->getPointeeType().getUnqualifiedType() != BR.getContext().VoidTy)
+      return;
+  }
+
+  // Verify the third argument type is integer.
+  if (!FPT->getParamType(2)->isIntegralOrUnscopedEnumerationType())
+    return;
+
+  // Issue a warning.
+  PathDiagnosticLocation CELoc =
+    PathDiagnosticLocation::createBegin(CE, BR.getSourceManager(), AC);
+  BR.EmitBasicReport(AC->getDecl(), filter.checkName_bcmp,
+                     "Use of deprecated function in call to 'bcmp()'",
+                     "Security",
+                     "The bcmp() function is obsoleted by memcmp().",
+                     CELoc, CE->getCallee()->getSourceRange());
+}
+
+//===----------------------------------------------------------------------===//
+// Check: Any use of bcopy.
+// CWE-477: Use of Obsolete Functions
+// bcopy was deprecated in POSIX.1-2008
+//===----------------------------------------------------------------------===//
+
+void WalkAST::checkCall_bcopy(const CallExpr *CE, const FunctionDecl *FD) {
+  if (!filter.check_bcopy)
+    return;
+
+  const FunctionProtoType *FPT = FD->getType()->getAs<FunctionProtoType>();
+  if (!FPT)
+    return;
+
+  // Verify that the function takes three arguments.
+  if (FPT->getNumParams() != 3)
+    return;
+
+  for (int i = 0; i < 2; i++) {
+    // Verify the first and second argument type is void*.
+    const PointerType *PT = FPT->getParamType(i)->getAs<PointerType>();
+    if (!PT)
+      return;
+
+    if (PT->getPointeeType().getUnqualifiedType() != BR.getContext().VoidTy)
+      return;
+  }
+
+  // Verify the third argument type is integer.
+  if (!FPT->getParamType(2)->isIntegralOrUnscopedEnumerationType())
+    return;
+
+  // Issue a warning.
+  PathDiagnosticLocation CELoc =
+    PathDiagnosticLocation::createBegin(CE, BR.getSourceManager(), AC);
+  BR.EmitBasicReport(AC->getDecl(), filter.checkName_bcopy,
+                     "Use of deprecated function in call to 'bcopy()'",
+                     "Security",
+                     "The bcopy() function is obsoleted by memcpy() "
+		     "or memmove().",
+                     CELoc, CE->getCallee()->getSourceRange());
+}
+
+//===----------------------------------------------------------------------===//
+// Check: Any use of bzero.
+// CWE-477: Use of Obsolete Functions
+// bzero was deprecated in POSIX.1-2008
+//===----------------------------------------------------------------------===//
+
+void WalkAST::checkCall_bzero(const CallExpr *CE, const FunctionDecl *FD) {
+  if (!filter.check_bzero)
+    return;
+
+  const FunctionProtoType *FPT = FD->getType()->getAs<FunctionProtoType>();
+  if (!FPT)
+    return;
+
+  // Verify that the function takes two arguments.
+  if (FPT->getNumParams() != 2)
+    return;
+
+  // Verify the first argument type is void*.
+  const PointerType *PT = FPT->getParamType(0)->getAs<PointerType>();
+  if (!PT)
+    return;
+
+  if (PT->getPointeeType().getUnqualifiedType() != BR.getContext().VoidTy)
+    return;
+
+  // Verify the second argument type is integer.
+  if (!FPT->getParamType(1)->isIntegralOrUnscopedEnumerationType())
+    return;
+
+  // Issue a warning.
+  PathDiagnosticLocation CELoc =
+    PathDiagnosticLocation::createBegin(CE, BR.getSourceManager(), AC);
+  BR.EmitBasicReport(AC->getDecl(), filter.checkName_bzero,
+                     "Use of deprecated function in call to 'bzero()'",
+                     "Security",
+                     "The bzero() function is obsoleted by memset().",
+                     CELoc, CE->getCallee()->getSourceRange());
+}
+
+
+//===----------------------------------------------------------------------===//
 // Check: Any use of 'gets' is insecure.
 // Originally: <rdar://problem/6335715>
 // Implements (part of): 300-BSI (buildsecurityin.us-cert.gov)
@@ -306,7 +443,7 @@ void WalkAST::checkLoopConditionForFloat(const ForStmt *FS) {
 void WalkAST::checkCall_gets(const CallExpr *CE, const FunctionDecl *FD) {
   if (!filter.check_gets)
     return;
-  
+
   const FunctionProtoType *FPT = FD->getType()->getAs<FunctionProtoType>();
   if (!FPT)
     return;
@@ -433,18 +570,18 @@ void WalkAST::checkCall_mkstemp(const CallExpr *CE, const FunctionDecl *FD) {
       .Case("mkdtemp", std::make_pair(0,-1))
       .Case("mkstemps", std::make_pair(0,1))
       .Default(std::make_pair(-1, -1));
-  
+
   assert(ArgSuffix.first >= 0 && "Unsupported function");
 
   // Check if the number of arguments is consistent with out expectations.
   unsigned numArgs = CE->getNumArgs();
   if ((signed) numArgs <= ArgSuffix.first)
     return;
-  
+
   const StringLiteral *strArg =
     dyn_cast<StringLiteral>(CE->getArg((unsigned)ArgSuffix.first)
                               ->IgnoreParenImpCasts());
-  
+
   // Currently we only handle string literals.  It is possible to do better,
   // either by looking at references to const variables, or by doing real
   // flow analysis.
@@ -469,13 +606,13 @@ void WalkAST::checkCall_mkstemp(const CallExpr *CE, const FunctionDecl *FD) {
     suffix = (unsigned) Result.getZExtValue();
     n = (n > suffix) ? n - suffix : 0;
   }
-  
+
   for (unsigned i = 0; i < n; ++i)
     if (str[i] == 'X') ++numX;
-  
+
   if (numX >= 6)
     return;
-  
+
   // Issue a warning.
   PathDiagnosticLocation CELoc =
     PathDiagnosticLocation::createBegin(CE, BR.getSourceManager(), AC);
@@ -501,15 +638,26 @@ void WalkAST::checkCall_mkstemp(const CallExpr *CE, const FunctionDecl *FD) {
 //===----------------------------------------------------------------------===//
 // Check: Any use of 'strcpy' is insecure.
 //
-// CWE-119: Improper Restriction of Operations within 
-// the Bounds of a Memory Buffer 
+// CWE-119: Improper Restriction of Operations within
+// the Bounds of a Memory Buffer
 //===----------------------------------------------------------------------===//
 void WalkAST::checkCall_strcpy(const CallExpr *CE, const FunctionDecl *FD) {
   if (!filter.check_strcpy)
     return;
-  
+
   if (!checkCall_strCommon(CE, FD))
     return;
+
+  const auto *Target = CE->getArg(0)->IgnoreImpCasts(),
+             *Source = CE->getArg(1)->IgnoreImpCasts();
+  if (const auto *DeclRef = dyn_cast<DeclRefExpr>(Target))
+    if (const auto *Array = dyn_cast<ConstantArrayType>(DeclRef->getType())) {
+      uint64_t ArraySize = BR.getContext().getTypeSize(Array) / 8;
+      if (const auto *String = dyn_cast<StringLiteral>(Source)) {
+        if (ArraySize >= String->getLength() + 1)
+          return;
+      }
+    }
 
   // Issue a warning.
   PathDiagnosticLocation CELoc =
@@ -528,8 +676,8 @@ void WalkAST::checkCall_strcpy(const CallExpr *CE, const FunctionDecl *FD) {
 //===----------------------------------------------------------------------===//
 // Check: Any use of 'strcat' is insecure.
 //
-// CWE-119: Improper Restriction of Operations within 
-// the Bounds of a Memory Buffer 
+// CWE-119: Improper Restriction of Operations within
+// the Bounds of a Memory Buffer
 //===----------------------------------------------------------------------===//
 void WalkAST::checkCall_strcat(const CallExpr *CE, const FunctionDecl *FD) {
   if (!filter.check_strcpy)
@@ -683,7 +831,7 @@ void WalkAST::checkCall_vfork(const CallExpr *CE, const FunctionDecl *FD) {
 void WalkAST::checkUncheckedReturnValue(CallExpr *CE) {
   if (!filter.check_UncheckedReturn)
     return;
-  
+
   const FunctionDecl *FD = CE->getDirectCallee();
   if (!FD)
     return;
@@ -748,7 +896,7 @@ namespace {
 class SecuritySyntaxChecker : public Checker<check::ASTCodeBody> {
 public:
   ChecksFilter filter;
-  
+
   void checkASTCodeBody(const Decl *D, AnalysisManager& mgr,
                         BugReporter &BR) const {
     WalkAST walker(BR, mgr.getAnalysisDeclContext(D), filter);
@@ -765,6 +913,9 @@ public:
     checker->filter.checkName_##name = mgr.getCurrentCheckName();              \
   }
 
+REGISTER_CHECKER(bcmp)
+REGISTER_CHECKER(bcopy)
+REGISTER_CHECKER(bzero)
 REGISTER_CHECKER(gets)
 REGISTER_CHECKER(getpw)
 REGISTER_CHECKER(mkstemp)

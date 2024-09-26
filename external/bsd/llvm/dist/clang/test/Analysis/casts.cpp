@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-store=region -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-store=region -verify %s
 
 bool PR14634(int x) {
   double y = (double)x;
@@ -20,4 +20,24 @@ void intAsBoolAsSwitchCondition(int c) {
     case 0:
       break;
   }
+}
+
+int *&castToIntPtrLValueRef(char *p) {
+  return (int *&)*(int *)p;
+}
+bool testCastToIntPtrLValueRef(char *p, int *s) {
+  return castToIntPtrLValueRef(p) != s; // no-crash
+}
+
+int *&&castToIntPtrRValueRef(char *p) {
+  return (int *&&)*(int *)p;
+}
+bool testCastToIntPtrRValueRef(char *p, int *s) {
+  return castToIntPtrRValueRef(p) != s; // no-crash
+}
+
+bool retrievePointerFromBoolean(int *p) {
+  bool q;
+  *reinterpret_cast<int **>(&q) = p;
+  return q;
 }

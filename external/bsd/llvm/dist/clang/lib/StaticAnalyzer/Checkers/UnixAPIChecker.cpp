@@ -21,6 +21,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 #include <fcntl.h>
@@ -28,26 +29,45 @@
 using namespace clang;
 using namespace ento;
 
+enum class OpenVariant {
+  /// The standard open() call:
+  ///    int open(const char *path, int oflag, ...);
+  Open,
+
+  /// The variant taking a directory file descriptor and a relative path:
+  ///    int openat(int fd, const char *path, int oflag, ...);
+  OpenAt
+};
+
 namespace {
 class UnixAPIChecker : public Checker< check::PreStmt<CallExpr> > {
   mutable std::unique_ptr<BugType> BT_open, BT_pthreadOnce, BT_mallocZero;
   mutable Optional<uint64_t> Val_O_CREAT;
 
 public:
+  DefaultBool CheckMisuse, CheckPortability;
+
   void checkPreStmt(const CallExpr *CE, CheckerContext &C) const;
 
   void CheckOpen(CheckerContext &C, const CallExpr *CE) const;
+  void CheckOpenAt(CheckerContext &C, const CallExpr *CE) const;
+
   void CheckPthreadOnce(CheckerContext &C, const CallExpr *CE) const;
   void CheckCallocZero(CheckerContext &C, const CallExpr *CE) const;
   void CheckMallocZero(CheckerContext &C, const CallExpr *CE) const;
   void CheckReallocZero(CheckerContext &C, const CallExpr *CE) const;
   void CheckReallocfZero(CheckerContext &C, const CallExpr *CE) const;
   void CheckAllocaZero(CheckerContext &C, const CallExpr *CE) const;
+  void CheckAllocaWithAlignZero(CheckerContext &C, const CallExpr *CE) const;
   void CheckVallocZero(CheckerContext &C, const CallExpr *CE) const;
 
   typedef void (UnixAPIChecker::*SubChecker)(CheckerContext &,
                                              const CallExpr *) const;
 private:
+
+  void CheckOpenVariant(CheckerContext &C,
+                        const CallExpr *CE, OpenVariant Variant) const;
+
   bool ReportZeroByteAllocation(CheckerContext &C,
                                 ProgramStateRef falseState,
                                 const Expr *arg,
@@ -77,44 +97,90 @@ void UnixAPIChecker::ReportOpenBug(CheckerContext &C,
                                    ProgramStateRef State,
                                    const char *Msg,
                                    SourceRange SR) const {
-  ExplodedNode *N = C.generateSink(State);
+  ExplodedNode *N = C.generateErrorNode(State);
   if (!N)
     return;
 
   LazyInitialize(BT_open, "Improper use of 'open'");
 
-  BugReport *Report = new BugReport(*BT_open, Msg, N);
+  auto Report = llvm::make_unique<BugReport>(*BT_open, Msg, N);
   Report->addRange(SR);
-  C.emitReport(Report);
+  C.emitReport(std::move(Report));
 }
 
 void UnixAPIChecker::CheckOpen(CheckerContext &C, const CallExpr *CE) const {
+  CheckOpenVariant(C, CE, OpenVariant::Open);
+}
+
+void UnixAPIChecker::CheckOpenAt(CheckerContext &C, const CallExpr *CE) const {
+  CheckOpenVariant(C, CE, OpenVariant::OpenAt);
+}
+
+void UnixAPIChecker::CheckOpenVariant(CheckerContext &C,
+                                      const CallExpr *CE,
+                                      OpenVariant Variant) const {
+  // The index of the argument taking the flags open flags (O_RDONLY,
+  // O_WRONLY, O_CREAT, etc.),
+  unsigned int FlagsArgIndex;
+  const char *VariantName;
+  switch (Variant) {
+  case OpenVariant::Open:
+    FlagsArgIndex = 1;
+    VariantName = "open";
+    break;
+  case OpenVariant::OpenAt:
+    FlagsArgIndex = 2;
+    VariantName = "openat";
+    break;
+  };
+
+  // All calls should at least provide arguments up to the 'flags' parameter.
+  unsigned int MinArgCount = FlagsArgIndex + 1;
+
+  // If the flags has O_CREAT set then open/openat() require an additional
+  // argument specifying the file mode (permission bits) for the created file.
+  unsigned int CreateModeArgIndex = FlagsArgIndex + 1;
+
+  // The create mode argument should be the last argument.
+  unsigned int MaxArgCount = CreateModeArgIndex + 1;
+
   ProgramStateRef state = C.getState();
 
-  if (CE->getNumArgs() < 2) {
+  if (CE->getNumArgs() < MinArgCount) {
     // The frontend should issue a warning for this case, so this is a sanity
     // check.
     return;
-  } else if (CE->getNumArgs() == 3) {
-    const Expr *Arg = CE->getArg(2);
+  } else if (CE->getNumArgs() == MaxArgCount) {
+    const Expr *Arg = CE->getArg(CreateModeArgIndex);
     QualType QT = Arg->getType();
     if (!QT->isIntegerType()) {
+      SmallString<256> SBuf;
+      llvm::raw_svector_ostream OS(SBuf);
+      OS << "The " << CreateModeArgIndex + 1
+         << llvm::getOrdinalSuffix(CreateModeArgIndex + 1)
+         << " argument to '" << VariantName << "' is not an integer";
+
       ReportOpenBug(C, state,
-                    "Third argument to 'open' is not an integer",
+                    SBuf.c_str(),
                     Arg->getSourceRange());
       return;
     }
-  } else if (CE->getNumArgs() > 3) {
+  } else if (CE->getNumArgs() > MaxArgCount) {
+    SmallString<256> SBuf;
+    llvm::raw_svector_ostream OS(SBuf);
+    OS << "Call to '" << VariantName << "' with more than " << MaxArgCount
+       << " arguments";
+
     ReportOpenBug(C, state,
-                  "Call to 'open' with more than three arguments",
-                  CE->getArg(3)->getSourceRange());
+                  SBuf.c_str(),
+                  CE->getArg(MaxArgCount)->getSourceRange());
     return;
   }
 
   // The definition of O_CREAT is platform specific.  We need a better way
   // of querying this information from the checking environment.
   if (!Val_O_CREAT.hasValue()) {
-    if (C.getASTContext().getTargetInfo().getTriple().getVendor() 
+    if (C.getASTContext().getTargetInfo().getTriple().getVendor()
                                                       == llvm::Triple::Apple)
       Val_O_CREAT = 0x0200;
     else {
@@ -127,8 +193,8 @@ void UnixAPIChecker::CheckOpen(CheckerContext &C, const CallExpr *CE) const {
   }
 
   // Now check if oflags has O_CREAT set.
-  const Expr *oflagsEx = CE->getArg(1);
-  const SVal V = state->getSVal(oflagsEx, C.getLocationContext());
+  const Expr *oflagsEx = CE->getArg(FlagsArgIndex);
+  const SVal V = C.getSVal(oflagsEx);
   if (!V.getAs<NonLoc>()) {
     // The case where 'V' can be a location can only be due to a bad header,
     // so in this case bail out.
@@ -153,10 +219,15 @@ void UnixAPIChecker::CheckOpen(CheckerContext &C, const CallExpr *CE) const {
   if (!(trueState && !falseState))
     return;
 
-  if (CE->getNumArgs() < 3) {
+  if (CE->getNumArgs() < MaxArgCount) {
+    SmallString<256> SBuf;
+    llvm::raw_svector_ostream OS(SBuf);
+    OS << "Call to '" << VariantName << "' requires a "
+       << CreateModeArgIndex + 1
+       << llvm::getOrdinalSuffix(CreateModeArgIndex + 1)
+       << " argument when the 'O_CREAT' flag is set";
     ReportOpenBug(C, trueState,
-                  "Call to 'open' requires a third argument when "
-                  "the 'O_CREAT' flag is set",
+                  SBuf.c_str(),
                   oflagsEx->getSourceRange());
   }
 }
@@ -177,12 +248,11 @@ void UnixAPIChecker::CheckPthreadOnce(CheckerContext &C,
   // Check if the first argument is stack allocated.  If so, issue a warning
   // because that's likely to be bad news.
   ProgramStateRef state = C.getState();
-  const MemRegion *R =
-    state->getSVal(CE->getArg(0), C.getLocationContext()).getAsRegion();
+  const MemRegion *R = C.getSVal(CE->getArg(0)).getAsRegion();
   if (!R || !isa<StackSpaceRegion>(R->getMemorySpace()))
     return;
 
-  ExplodedNode *N = C.generateSink(state);
+  ExplodedNode *N = C.generateErrorNode(state);
   if (!N)
     return;
 
@@ -200,9 +270,9 @@ void UnixAPIChecker::CheckPthreadOnce(CheckerContext &C,
 
   LazyInitialize(BT_pthreadOnce, "Improper use of 'pthread_once'");
 
-  BugReport *report = new BugReport(*BT_pthreadOnce, os.str(), N);
+  auto report = llvm::make_unique<BugReport>(*BT_pthreadOnce, os.str(), N);
   report->addRange(CE->getArg(0)->getSourceRange());
-  C.emitReport(report);
+  C.emitReport(std::move(report));
 }
 
 //===----------------------------------------------------------------------===//
@@ -220,7 +290,7 @@ static bool IsZeroByteAllocation(ProgramStateRef state,
                                 ProgramStateRef *falseState) {
   std::tie(*trueState, *falseState) =
     state->assume(argVal.castAs<DefinedSVal>());
-  
+
   return (*falseState && !*trueState);
 }
 
@@ -231,7 +301,7 @@ bool UnixAPIChecker::ReportZeroByteAllocation(CheckerContext &C,
                                               ProgramStateRef falseState,
                                               const Expr *arg,
                                               const char *fn_name) const {
-  ExplodedNode *N = C.generateSink(falseState);
+  ExplodedNode *N = C.generateErrorNode(falseState);
   if (!N)
     return false;
 
@@ -239,13 +309,13 @@ bool UnixAPIChecker::ReportZeroByteAllocation(CheckerContext &C,
                  "Undefined allocation of 0 bytes (CERT MEM04-C; CWE-131)");
 
   SmallString<256> S;
-  llvm::raw_svector_ostream os(S);    
+  llvm::raw_svector_ostream os(S);
   os << "Call to '" << fn_name << "' has an allocation size of 0 bytes";
-  BugReport *report = new BugReport(*BT_mallocZero, os.str(), N);
+  auto report = llvm::make_unique<BugReport>(*BT_mallocZero, os.str(), N);
 
   report->addRange(arg->getSourceRange());
   bugreporter::trackNullOrUndefValue(N, arg, *report);
-  C.emitReport(report);
+  C.emitReport(std::move(report));
 
   return true;
 }
@@ -265,20 +335,20 @@ void UnixAPIChecker::BasicAllocationCheck(CheckerContext &C,
   ProgramStateRef state = C.getState();
   ProgramStateRef trueState = nullptr, falseState = nullptr;
   const Expr *arg = CE->getArg(sizeArg);
-  SVal argVal = state->getSVal(arg, C.getLocationContext());
+  SVal argVal = C.getSVal(arg);
 
   if (argVal.isUnknownOrUndef())
     return;
 
   // Is the value perfectly constrained to zero?
   if (IsZeroByteAllocation(state, argVal, &trueState, &falseState)) {
-    (void) ReportZeroByteAllocation(C, falseState, arg, fn); 
+    (void) ReportZeroByteAllocation(C, falseState, arg, fn);
     return;
   }
   // Assume the value is non-zero going forward.
   assert(trueState);
   if (trueState != state)
-    C.addTransition(trueState);                           
+    C.addTransition(trueState);
 }
 
 void UnixAPIChecker::CheckCallocZero(CheckerContext &C,
@@ -293,7 +363,7 @@ void UnixAPIChecker::CheckCallocZero(CheckerContext &C,
   unsigned int i;
   for (i = 0; i < nArgs; i++) {
     const Expr *arg = CE->getArg(i);
-    SVal argVal = state->getSVal(arg, C.getLocationContext());
+    SVal argVal = C.getSVal(arg);
     if (argVal.isUnknownOrUndef()) {
       if (i == 0)
         continue;
@@ -337,6 +407,11 @@ void UnixAPIChecker::CheckAllocaZero(CheckerContext &C,
   BasicAllocationCheck(C, CE, 1, 0, "alloca");
 }
 
+void UnixAPIChecker::CheckAllocaWithAlignZero(CheckerContext &C,
+                                              const CallExpr *CE) const {
+  BasicAllocationCheck(C, CE, 2, 0, "__builtin_alloca_with_align");
+}
+
 void UnixAPIChecker::CheckVallocZero(CheckerContext &C,
                                      const CallExpr *CE) const {
   BasicAllocationCheck(C, CE, 1, 0, "valloc");
@@ -353,30 +428,52 @@ void UnixAPIChecker::checkPreStmt(const CallExpr *CE,
   if (!FD || FD->getKind() != Decl::Function)
     return;
 
+  // Don't treat functions in namespaces with the same name a Unix function
+  // as a call to the Unix function.
+  const DeclContext *NamespaceCtx = FD->getEnclosingNamespaceContext();
+  if (NamespaceCtx && isa<NamespaceDecl>(NamespaceCtx))
+    return;
+
   StringRef FName = C.getCalleeName(FD);
   if (FName.empty())
     return;
 
-  SubChecker SC =
-    llvm::StringSwitch<SubChecker>(FName)
-      .Case("open", &UnixAPIChecker::CheckOpen)
-      .Case("pthread_once", &UnixAPIChecker::CheckPthreadOnce)
-      .Case("calloc", &UnixAPIChecker::CheckCallocZero)
-      .Case("malloc", &UnixAPIChecker::CheckMallocZero)
-      .Case("realloc", &UnixAPIChecker::CheckReallocZero)
-      .Case("reallocf", &UnixAPIChecker::CheckReallocfZero)
-      .Cases("alloca", "__builtin_alloca", &UnixAPIChecker::CheckAllocaZero)
-      .Case("valloc", &UnixAPIChecker::CheckVallocZero)
-      .Default(nullptr);
-
-  if (SC)
-    (this->*SC)(C, CE);
+  if (CheckMisuse) {
+    if (SubChecker SC =
+            llvm::StringSwitch<SubChecker>(FName)
+                .Case("open", &UnixAPIChecker::CheckOpen)
+                .Case("openat", &UnixAPIChecker::CheckOpenAt)
+                .Case("pthread_once", &UnixAPIChecker::CheckPthreadOnce)
+                .Default(nullptr)) {
+      (this->*SC)(C, CE);
+    }
+  }
+  if (CheckPortability) {
+    if (SubChecker SC =
+            llvm::StringSwitch<SubChecker>(FName)
+                .Case("calloc", &UnixAPIChecker::CheckCallocZero)
+                .Case("malloc", &UnixAPIChecker::CheckMallocZero)
+                .Case("realloc", &UnixAPIChecker::CheckReallocZero)
+                .Case("reallocf", &UnixAPIChecker::CheckReallocfZero)
+                .Cases("alloca", "__builtin_alloca",
+                       &UnixAPIChecker::CheckAllocaZero)
+                .Case("__builtin_alloca_with_align",
+                      &UnixAPIChecker::CheckAllocaWithAlignZero)
+                .Case("valloc", &UnixAPIChecker::CheckVallocZero)
+                .Default(nullptr)) {
+      (this->*SC)(C, CE);
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//
 // Registration.
 //===----------------------------------------------------------------------===//
 
-void ento::registerUnixAPIChecker(CheckerManager &mgr) {
-  mgr.registerChecker<UnixAPIChecker>();
-}
+#define REGISTER_CHECKER(Name)                                                 \
+  void ento::registerUnixAPI##Name##Checker(CheckerManager &mgr) {             \
+    mgr.registerChecker<UnixAPIChecker>()->Check##Name = true;                 \
+  }
+
+REGISTER_CHECKER(Misuse)
+REGISTER_CHECKER(Portability)

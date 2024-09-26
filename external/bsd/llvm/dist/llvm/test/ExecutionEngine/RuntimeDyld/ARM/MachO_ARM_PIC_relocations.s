@@ -1,5 +1,6 @@
-# RUN: llvm-mc -triple=armv7s-apple-ios7.0.0 -relocation-model=pic -filetype=obj -o %T/foo.o %s
-# RUN: llvm-rtdyld -triple=armv7s-apple-ios7.0.0 -verify -check=%s %/T/foo.o
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: llvm-mc -triple=armv7s-apple-ios7.0.0 -filetype=obj -o %t/foo.o %s
+# RUN: llvm-rtdyld -triple=armv7s-apple-ios7.0.0 -verify -check=%s %t/foo.o
 
         .syntax unified
         .section        __TEXT,__text,regular,pure_instructions
@@ -39,6 +40,13 @@ insn4:
         .comm   aaa, 4, 2
         .comm   baz, 4, 2
         .comm   foo, 4, 2
+
+	.section        __DATA,__data
+	.globl  _a
+	.align  2
+# rtdyld-check: *{4}bar_ofs = bar + 4
+bar_ofs:
+	.long   bar + 4
 
 # Check that the symbol pointer section entries are fixed up properly:
 # rtdyld-check: *{4}foo$non_lazy_ptr = foo

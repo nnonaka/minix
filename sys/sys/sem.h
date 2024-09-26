@@ -230,7 +230,7 @@ int	semconfig(int);
 #endif
 __END_DECLS
 #else
-void	seminit(void);
+int	seminit(struct sysctllog **);
 int	semfini(void);
 void	semexit(struct proc *, void *);
 

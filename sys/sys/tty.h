@@ -1,4 +1,4 @@
-/*	$NetBSD: tty.h,v 1.93 2014/11/15 19:17:05 christos Exp $	*/
+/*	$NetBSD: tty.h,v 1.95 2019/01/27 02:08:50 pgoyette Exp $	*/
 
 /*-
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
@@ -203,6 +203,10 @@ struct tty {
 #define	TS_TYPEN	0x08000		/* Retyping suspended input (PENDIN). */
 #define	TS_LOCAL	(TS_BKSL | TS_CNTTB | TS_ERASE | TS_LNCH | TS_TYPEN)
 
+/* for special line disciplines, like dev/sun/sunkbd.c */
+#define	TS_KERN_ONLY	0x10000		/* Device is accessible by kernel
+					 * only, deny all userland access */
+
 /* Character type information. */
 #define	ORDINARY	0
 #define	CONTROL		1
@@ -309,7 +313,10 @@ bool	 ttypull(struct tty *);
 int	clalloc(struct clist *, int, int);
 void	clfree(struct clist *);
 
-extern int (*ttcompatvec)(struct tty *, u_long, void *, int, struct lwp *);
+/* overwritten to be non-null if ptm(4) is present */
+
+struct ptm_pty;
+extern struct ptm_pty *ptm;
 
 unsigned char tty_getctrlchar(struct tty *, unsigned /*which*/);
 void tty_setctrlchar(struct tty *, unsigned /*which*/, unsigned char /*val*/);

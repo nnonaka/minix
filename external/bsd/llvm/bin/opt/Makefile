@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.15 2015/01/29 20:41:34 joerg Exp $
+#	$NetBSD: Makefile,v 1.19 2018/07/17 18:55:26 joerg Exp $
 
 PROG_CXX=	opt
 NOMAN=		yes
@@ -9,48 +9,63 @@ NOMAN=		yes
 
 SRCS=	AnalysisWrappers.cpp \
 	BreakpointPrinter.cpp \
+	Debugify.cpp \
 	GraphPrinters.cpp \
 	NewPMDriver.cpp \
 	PassPrinters.cpp \
-	Passes.cpp \
 	PrintSCC.cpp \
 	opt.cpp
 
 LLVM_LIBS+= \
+	TransformsAggressiveInstCombine \
+	Passes \
 	ObjCARC \
 	ipo \
+	Linker \
+	Object \
 	IRReader \
 	AsmParser \
 	BitReader \
 	BitWriter \
 	AArch64CodeGen \
 	AArch64TargetInfo \
+	AArch64AsmParser \
 	AArch64MCTargetDesc \
 	AArch64AsmPrinter \
 	AArch64Utils \
 	ARMCodeGen \
 	ARMTargetInfo \
+	ARMAsmParser \
 	ARMMCTargetDesc \
 	ARMAsmPrinter \
+	ARMUtils \
 	MipsCodeGen \
 	MipsTargetInfo \
+	MipsAsmParser \
 	MipsMCTargetDesc \
 	MipsAsmPrinter \
 	PowerPCCodeGen \
 	PowerPCTargetInfo \
+	PowerPCAsmParser \
 	PowerPCMCTargetDesc \
 	PowerPCAsmPrinter \
 	SparcCodeGen \
 	SparcTargetInfo \
+	SparcAsmParser \
 	SparcMCTargetDesc \
 	SparcAsmPrinter \
 	X86CodeGen \
+	X86AsmParser \
 	X86MCTargetDesc \
 	X86TargetInfo \
 	X86Utils \
 	X86AsmPrinter \
+	GlobalISel \
+	TransformsCoroutines \
 	MCDisassembler \
 	AsmPrinter \
+	DebugInfoCodeView \
+	DebugInfoMSF \
 	Object \
 	MCParser \
 	SelectionDAG \
@@ -61,12 +76,13 @@ LLVM_LIBS+= \
 	Instrumentation \
 	ScalarOpts \
 	ProfileData \
-	Analysis \
 	MC \
 	TransformsUtils \
-	ipa \
+	Analysis \
 	IR \
-	Support
+	BinaryFormat \
+	Support \
+	Demangle
 
 LDADD+=	-lz
 DPADD+=	${LIBZ}

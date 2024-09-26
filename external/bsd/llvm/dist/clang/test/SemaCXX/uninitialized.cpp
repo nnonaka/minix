@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -Wall -Wuninitialized -Wno-unused-value -std=c++11 -verify %s
+// RUN: %clang_cc1 -fsyntax-only -Wall -Wuninitialized -Wno-unused-value -Wno-unused-lambda-capture -std=c++1z -verify %s
 
 // definitions for std::move
 namespace std {
@@ -26,7 +26,7 @@ int c = (c + c); // expected-warning 2 {{variable 'c' is uninitialized when used
 int e = static_cast<long>(e) + 1; // expected-warning {{variable 'e' is uninitialized when used within its own initialization}}
 int f = foo(f); // expected-warning {{variable 'f' is uninitialized when used within its own initialization}}
 
-// Thes don't warn as they don't require the value.
+// These don't warn as they don't require the value.
 int g = sizeof(g);
 void* ptr = &ptr;
 int h = bar(&h);
@@ -60,7 +60,7 @@ void test_stuff () {
   int e = static_cast<long>(e) + 1; // expected-warning {{variable 'e' is uninitialized when used within its own initialization}}
   int f = foo(f); // expected-warning {{variable 'f' is uninitialized when used within its own initialization}}
 
-  // Thes don't warn as they don't require the value.
+  // These don't warn as they don't require the value.
   int g = sizeof(g);
   void* ptr = &ptr;
   int h = bar(&h);
@@ -86,7 +86,6 @@ void test_stuff () {
   int aa = (ref(aa) += 10); // expected-warning {{variable 'aa' is uninitialized when used within its own initialization}}
   int bb = bb ? x : y; // expected-warning {{variable 'bb' is uninitialized when used within its own initialization}}
 
-
   for (;;) {
     int a = a; // no-warning: used to signal intended lack of initialization.
     int b = b + 1; // expected-warning {{variable 'b' is uninitialized when used within its own initialization}}
@@ -95,7 +94,7 @@ void test_stuff () {
     int e = static_cast<long>(e) + 1; // expected-warning {{variable 'e' is uninitialized when used within its own initialization}}
     int f = foo(f); // expected-warning {{variable 'f' is uninitialized when used within its own initialization}}
 
-    // Thes don't warn as they don't require the value.
+    // These don't warn as they don't require the value.
     int g = sizeof(g);
     void* ptr = &ptr;
     int h = bar(&h);
@@ -122,6 +121,50 @@ void test_stuff () {
     int bb = bb ? x : y; // expected-warning {{variable 'bb' is uninitialized when used within its own initialization}}
 
   }
+}
+
+void test_comma() {
+  int a;  // expected-note {{initialize the variable 'a' to silence this warning}}
+  int b = (a, a ?: 2);  // expected-warning {{variable 'a' is uninitialized when used here}}
+  int c = (a, a, b, c);  // expected-warning {{variable 'c' is uninitialized when used within its own initialization}}
+  int d;  // expected-note {{initialize the variable 'd' to silence this warning}}
+  int e = (foo(d), e, b); // expected-warning {{variable 'd' is uninitialized when used here}}
+  int f;  // expected-note {{initialize the variable 'f' to silence this warning}}
+  f = f + 1, 2;  // expected-warning {{variable 'f' is uninitialized when used here}}
+  int h;
+  int g = (h, g, 2);  // no-warning: h, g are evaluated but not used.
+}
+
+namespace member_ptr {
+struct A {
+  int x;
+  int y;
+  A(int x) : x{x} {}
+};
+
+void test_member_ptr() {
+  int A::* px = &A::x;
+  A a{a.*px}; // expected-warning {{variable 'a' is uninitialized when used within its own initialization}}
+  A b = b; // expected-warning {{variable 'b' is uninitialized when used within its own initialization}}
+}
+}
+
+namespace const_ptr {
+void foo(int *a);
+void bar(const int *a);
+void foobar(const int **a);
+
+void test_const_ptr() {
+  int a;
+  int b;  // expected-note {{initialize the variable 'b' to silence this warning}}
+  foo(&a);
+  bar(&b);
+  b = a + b; // expected-warning {{variable 'b' is uninitialized when used here}}
+  int *ptr;  //expected-note {{initialize the variable 'ptr' to silence this warning}}
+  const int *ptr2;
+  foo(ptr); // expected-warning {{variable 'ptr' is uninitialized when used here}}
+  foobar(&ptr2);
+}
 }
 
 // Also test similar constructs in a field's initializer.
@@ -661,7 +704,7 @@ namespace statics {
   static int e = static_cast<long>(e) + 1; // expected-warning {{variable 'e' is uninitialized when used within its own initialization}}
   static int f = foo(f); // expected-warning {{variable 'f' is uninitialized when used within its own initialization}}
 
-  // Thes don't warn as they don't require the value.
+  // These don't warn as they don't require the value.
   static int g = sizeof(g);
   int gg = g;  // Silence unneeded warning
   static void* ptr = &ptr;
@@ -697,7 +740,7 @@ namespace statics {
     static int e = static_cast<long>(e) + 1; // expected-warning {{static variable 'e' is suspiciously used within its own initialization}}
     static int f = foo(f); // expected-warning {{static variable 'f' is suspiciously used within its own initialization}}
 
-    // Thes don't warn as they don't require the value.
+    // These don't warn as they don't require the value.
     static int g = sizeof(g);
     static void* ptr = &ptr;
     static int h = bar(&h);
@@ -731,7 +774,7 @@ namespace statics {
       static int e = static_cast<long>(e) + 1; // expected-warning {{static variable 'e' is suspiciously used within its own initialization}}
       static int f = foo(f); // expected-warning {{static variable 'f' is suspiciously used within its own initialization}}
 
-      // Thes don't warn as they don't require the value.
+      // These don't warn as they don't require the value.
       static int g = sizeof(g);
       static void* ptr = &ptr;
       static int h = bar(&h);
@@ -912,7 +955,7 @@ namespace record_fields {
     A a13 = rref(std::move(a13));  // expected-warning {{uninitialized}}
     A a14 = std::move(x ? a13 : (22, a14));  // expected-warning {{uninitialized}}
   };
-  D d;
+  D d; // expected-note {{in implicit default constructor for 'record_fields::D' first required here}}
   struct E {
     A a1 = a1;
     A a2 = a2.get();
@@ -1384,4 +1427,23 @@ class A {
   A(int (*) [6]) : a(rvalueref::move(a)) {}
   A(int (*) [7]) : a(rvalueref::notmove(a)) {}
 };
+}
+
+void array_capture(bool b) {
+  const char fname[] = "array_capture";
+  if (b) {
+    int unused; // expected-warning {{unused variable}}
+  } else {
+    [fname]{};
+  }
+}
+
+void if_switch_init_stmt(int k) {
+  if (int n = 0; (n == k || k > 5)) {}
+
+  if (int n; (n == k || k > 5)) {} // expected-warning {{uninitialized}} expected-note {{initialize}}
+
+  switch (int n = 0; (n == k || k > 5)) {} // expected-warning {{boolean}}
+
+  switch (int n; (n == k || k > 5)) {} // expected-warning {{uninitialized}} expected-note {{initialize}} expected-warning {{boolean}}
 }

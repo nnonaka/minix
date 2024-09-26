@@ -1,9 +1,9 @@
 ; RUN: llc %s -o %t -filetype=obj -O0 -mtriple=x86_64-unknown-linux-gnu -dwarf-version=4
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s -check-prefix=PRESENT 
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s -check-prefix=ABSENT
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s -check-prefix=PRESENT 
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s -check-prefix=ABSENT
 ; RUN: llc %s -o %t -filetype=obj -O0 -mtriple=x86_64-apple-darwin -dwarf-version=4
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s -check-prefix=DARWINP
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s -check-prefix=DARWINA
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s -check-prefix=DARWINP
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s -check-prefix=DARWINA
 ; Verify that attributes we do want are PRESENT;
 ; verify that attributes we don't want are ABSENT.
 ; It's a lot easier to do this in two passes than in one.
@@ -36,62 +36,73 @@
 ;         return C::c;
 ; }
 
+source_filename = "test/DebugInfo/X86/debug-info-static-member.ll"
+
 %class.C = type { i32 }
 
-@_ZN1C1aE = global i32 4, align 4
-@_ZN1C1bE = global i32 2, align 4
-@_ZN1C1cE = global i32 1, align 4
+@_ZN1C1aE = global i32 4, align 4, !dbg !0
+@_ZN1C1bE = global i32 2, align 4, !dbg !18
+@_ZN1C1cE = global i32 1, align 4, !dbg !20
 
-define i32 @main() nounwind uwtable {
+; Function Attrs: nounwind uwtable
+define i32 @main() #0 !dbg !26 {
 entry:
   %retval = alloca i32, align 4
   %instance_C = alloca %class.C, align 4
   store i32 0, i32* %retval
-  call void @llvm.dbg.declare(metadata %class.C* %instance_C, metadata !29, metadata !{!"0x102"}), !dbg !30
-  %d = getelementptr inbounds %class.C* %instance_C, i32 0, i32 0, !dbg !31
-  store i32 8, i32* %d, align 4, !dbg !31
-  %0 = load i32* @_ZN1C1cE, align 4, !dbg !32
-  ret i32 %0, !dbg !32
+  call void @llvm.dbg.declare(metadata %class.C* %instance_C, metadata !29, metadata !30), !dbg !31
+  %d = getelementptr inbounds %class.C, %class.C* %instance_C, i32 0, i32 0, !dbg !32
+  store i32 8, i32* %d, align 4, !dbg !32
+  %0 = load i32, i32* @_ZN1C1cE, align 4, !dbg !33
+  ret i32 %0, !dbg !33
 }
 
-declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone
+; Function Attrs: nounwind readnone
+declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!34}
+attributes #0 = { nounwind uwtable }
+attributes #1 = { nounwind readnone }
 
-!0 = !{!"0x11\004\00clang version 3.3 (trunk 171914)\000\00\000\00\000", !33, !1, !1, !3, !10,  !1} ; [ DW_TAG_compile_unit ] [/home/probinson/projects/upstream/static-member/test/debug-info-static-member.cpp] [DW_LANG_C_plus_plus]
-!1 = !{}
-!3 = !{!5}
-!5 = !{!"0x2e\00main\00main\00\0018\000\001\000\006\00256\000\0023", !33, !6, !7, null, i32 ()* @main, null, null, !1} ; [ DW_TAG_subprogram ] [line 18] [def] [scope 23] [main]
-!6 = !{!"0x29", !33} ; [ DW_TAG_file_type ]
-!7 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !8, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!8 = !{!9}
-!9 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!10 = !{!12, !27, !28}
-!12 = !{!"0x34\00a\00a\00_ZN1C1aE\0014\000\001", null, !6, !9, i32* @_ZN1C1aE, !15} ; [ DW_TAG_variable ] [a] [line 14] [def]
-!13 = !{!"0x2\00C\001\0032\0032\000\000\000", !33, null, null, !14, null, null, null} ; [ DW_TAG_class_type ] [C] [line 1, size 32, align 32, offset 0] [def] [from ]
-!14 = !{!15, !16, !19, !20, !23, !24, !26}
-!15 = !{!"0xd\00a\003\000\000\000\004097", !33, !13, !9, null} ; [ DW_TAG_member ] [a] [line 3, size 0, align 0, offset 0] [private] [static] [from int]
-!16 = !{!"0xd\00const_a\004\000\000\000\004097", !33, !13, !17, i1 true} ; [ DW_TAG_member ] [const_a] [line 4, size 0, align 0, offset 0] [private] [static] [from ]
-!17 = !{!"0x26\00\000\000\000\000\000", null, null, !18} ; [ DW_TAG_const_type ] [line 0, size 0, align 0, offset 0] [from bool]
-!18 = !{!"0x24\00bool\000\008\008\000\000\002", null, null} ; [ DW_TAG_base_type ] [bool] [line 0, size 8, align 8, offset 0, enc DW_ATE_boolean]
-!19 = !{!"0xd\00b\006\000\000\000\004098", !33, !13, !9, null} ; [ DW_TAG_member ] [b] [line 6, size 0, align 0, offset 0] [protected] [static] [from int]
-!20 = !{!"0xd\00const_b\007\000\000\000\004098", !33, !13, !21, float 0x40091EB860000000} ; [ DW_TAG_member ] [const_b] [line 7, size 0, align 0, offset 0] [protected] [static] [from ]
-!21 = !{!"0x26\00\000\000\000\000\000", null, null, !22} ; [ DW_TAG_const_type ] [line 0, size 0, align 0, offset 0] [from float]
-!22 = !{!"0x24\00float\000\0032\0032\000\000\004", null, null} ; [ DW_TAG_base_type ] [float] [line 0, size 32, align 32, offset 0, enc DW_ATE_float]
-!23 = !{!"0xd\00c\009\000\000\000\004099", !33, !13, !9, null} ; [ DW_TAG_member ] [c] [line 9, size 0, align 0, offset 0] [static] [from int]
-!24 = !{!"0xd\00const_c\0010\000\000\000\004099", !33, !13, !25, i32 18} ; [ DW_TAG_member ] [const_c] [line 10, size 0, align 0, offset 0] [static] [from ]
-!25 = !{!"0x26\00\000\000\000\000\000", null, null, !9} ; [ DW_TAG_const_type ] [line 0, size 0, align 0, offset 0] [from int]
-!26 = !{!"0xd\00d\0011\0032\0032\000\003", !33, !13, !9} ; [ DW_TAG_member ] [d] [line 11, size 32, align 32, offset 0] [from int]
-!27 = !{!"0x34\00b\00b\00_ZN1C1bE\0015\000\001", null, !6, !9, i32* @_ZN1C1bE, !19} ; [ DW_TAG_variable ] [b] [line 15] [def]
-!28 = !{!"0x34\00c\00c\00_ZN1C1cE\0016\000\001", null, !6, !9, i32* @_ZN1C1cE, !23} ; [ DW_TAG_variable ] [c] [line 16] [def]
-!29 = !{!"0x100\00instance_C\0020\000", !5, !6, !13} ; [ DW_TAG_auto_variable ] [instance_C] [line 20]
-!30 = !MDLocation(line: 20, scope: !5)
-!31 = !MDLocation(line: 21, scope: !5)
-!32 = !MDLocation(line: 22, scope: !5)
-!33 = !{!"/usr/local/google/home/blaikie/Development/llvm/src/tools/clang/test/CodeGenCXX/debug-info-static-member.cpp", !"/home/blaikie/local/Development/llvm/build/clang/x86-64/Debug/llvm"}
+!llvm.dbg.cu = !{!22}
+!llvm.module.flags = !{!25}
+
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "a", linkageName: "_ZN1C1aE", scope: null, file: !2, line: 14, type: !3, isLocal: false, isDefinition: true, declaration: !4)
+!2 = !DIFile(filename: "/usr/local/google/home/blaikie/Development/llvm/src/tools/clang/test/CodeGenCXX/debug-info-static-member.cpp", directory: "/home/blaikie/local/Development/llvm/build/clang/x86-64/Debug/llvm")
+!3 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!4 = !DIDerivedType(tag: DW_TAG_member, name: "a", scope: !5, file: !2, line: 3, baseType: !3, flags: DIFlagPrivate | DIFlagStaticMember)
+!5 = !DICompositeType(tag: DW_TAG_class_type, name: "C", file: !2, line: 1, size: 32, align: 32, elements: !6)
+!6 = !{!4, !7, !10, !11, !14, !15, !17}
+!7 = !DIDerivedType(tag: DW_TAG_member, name: "const_a", scope: !5, file: !2, line: 4, baseType: !8, flags: DIFlagPrivate | DIFlagStaticMember, extraData: i1 true)
+!8 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !9)
+!9 = !DIBasicType(name: "bool", size: 8, align: 8, encoding: DW_ATE_boolean)
+!10 = !DIDerivedType(tag: DW_TAG_member, name: "b", scope: !5, file: !2, line: 6, baseType: !3, flags: DIFlagProtected | DIFlagStaticMember)
+!11 = !DIDerivedType(tag: DW_TAG_member, name: "const_b", scope: !5, file: !2, line: 7, baseType: !12, flags: DIFlagProtected | DIFlagStaticMember, extraData: float 0x40091EB860000000)
+!12 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !13)
+!13 = !DIBasicType(name: "float", size: 32, align: 32, encoding: DW_ATE_float)
+!14 = !DIDerivedType(tag: DW_TAG_member, name: "c", scope: !5, file: !2, line: 9, baseType: !3, flags: DIFlagPublic | DIFlagStaticMember)
+!15 = !DIDerivedType(tag: DW_TAG_member, name: "const_c", scope: !5, file: !2, line: 10, baseType: !16, flags: DIFlagPublic | DIFlagStaticMember, extraData: i32 18)
+!16 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !3)
+!17 = !DIDerivedType(tag: DW_TAG_member, name: "d", scope: !5, file: !2, line: 11, baseType: !3, size: 32, align: 32, flags: DIFlagPublic)
+!18 = !DIGlobalVariableExpression(var: !19, expr: !DIExpression())
+!19 = !DIGlobalVariable(name: "b", linkageName: "_ZN1C1bE", scope: null, file: !2, line: 15, type: !3, isLocal: false, isDefinition: true, declaration: !10)
+!20 = !DIGlobalVariableExpression(var: !21, expr: !DIExpression())
+!21 = !DIGlobalVariable(name: "c", linkageName: "_ZN1C1cE", scope: null, file: !2, line: 16, type: !3, isLocal: false, isDefinition: true, declaration: !14)
+!22 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "clang version 3.3 (trunk 171914)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !23, retainedTypes: !23, globals: !24, imports: !23)
+!23 = !{}
+!24 = !{!0, !18, !20}
+!25 = !{i32 1, !"Debug Info Version", i32 3}
+!26 = distinct !DISubprogram(name: "main", scope: !2, file: !2, line: 18, type: !27, isLocal: false, isDefinition: true, scopeLine: 23, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !22, retainedNodes: !23)
+!27 = !DISubroutineType(types: !28)
+!28 = !{!3}
+!29 = !DILocalVariable(name: "instance_C", scope: !26, file: !2, line: 20, type: !5)
+!30 = !DIExpression()
+!31 = !DILocation(line: 20, scope: !26)
+!32 = !DILocation(line: 21, scope: !26)
+!33 = !DILocation(line: 22, scope: !26)
+
 ; PRESENT verifies that static member declarations have these attributes:
-; external, declaration, accessibility, and either DW_AT_MIPS_linkage_name
+; external, declaration, accessibility, and either DW_AT_linkage_name
 ; (for variables) or DW_AT_const_value (for constants).
 ;
 ; PRESENT:      .debug_info contents:
@@ -253,4 +264,3 @@ declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone
 ; DARWINA-NOT:  DW_AT_const_value
 ; DARWINA-NOT:  DW_AT_location
 ; DARWINA:      NULL
-!34 = !{i32 1, !"Debug Info Version", i32 2}

@@ -1,4 +1,4 @@
-; RUN: opt < %s -basicaa -slp-vectorizer -S -mtriple=x86_64-apple-macosx10.8.0 -mcpu=corei7
+; RUN: opt < %s -basicaa -disable-verify -slp-vectorizer -S -mtriple=x86_64-apple-macosx10.8.0 -mcpu=corei7
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-darwin13.3.0"
@@ -25,11 +25,11 @@ for.body:
   %p3.addr.0258 = phi double [ %add, %bb1 ], [ %add28, %for.body ]
   %vecinit.i.i237 = insertelement <2 x double> undef, double %t.0259, i32 0
   %x13 = tail call i32 @_xfn(<2 x double> %vecinit.i.i237) #2
-  %arrayidx = getelementptr inbounds [256 x i32]* %tab1, i64 0, i64 %indvars.iv266
+  %arrayidx = getelementptr inbounds [256 x i32], [256 x i32]* %tab1, i64 0, i64 %indvars.iv266
   store i32 %x13, i32* %arrayidx, align 4, !tbaa !4
   %vecinit.i.i = insertelement <2 x double> undef, double %p3.addr.0258, i32 0
   %x14 = tail call i32 @_xfn(<2 x double> %vecinit.i.i) #2
-  %arrayidx26 = getelementptr inbounds [256 x i32]* %tab2, i64 0, i64 %indvars.iv266
+  %arrayidx26 = getelementptr inbounds [256 x i32], [256 x i32]* %tab2, i64 0, i64 %indvars.iv266
   store i32 %x14, i32* %arrayidx26, align 4, !tbaa !4
   %add27 = fadd double %mul19, %t.0259
   %add28 = fadd double %mul21, %p3.addr.0258

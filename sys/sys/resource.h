@@ -1,4 +1,4 @@
-/*	$NetBSD: resource.h,v 1.33 2012/06/09 02:31:15 christos Exp $	*/
+/*	$NetBSD: resource.h,v 1.36 2019/03/30 23:29:55 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -75,6 +75,13 @@ struct	rusage {
 #define	ru_last		ru_nivcsw
 };
 
+#ifdef _NETBSD_SOURCE
+struct wrusage {  
+        struct rusage   wru_self;
+	struct rusage   wru_children;
+};  
+#endif
+
 /*
  * Resource limits
  */
@@ -94,6 +101,21 @@ struct	rusage {
 
 #if defined(_NETBSD_SOURCE)
 #define	RLIM_NLIMITS	12		/* number of resource limits */
+
+#define RLIM_STRINGS { \
+	"cpu-time", \
+	"file-size", \
+	"data-size", \
+	"stack-size", \
+	"core-dump-size", \
+	"resident-memory-size", \
+	"locked-memory-size", \
+	"processes-number", \
+	"files-number", \
+	"socket-buffer-size", \
+	"virtual-memory-size", \
+	"threads-number", \
+}
 #endif
 
 #define	RLIM_INFINITY	(~((u_quad_t)1 << 63))	/* no limit */

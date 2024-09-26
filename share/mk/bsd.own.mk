@@ -22,6 +22,7 @@ MANDIR?=	/usr/man
 MKKYUA?=	yes
 MKMCLINKER?=	no
 MKCLANGRT?=	no
+MKLLVMRT?=	no
 MKGCC?=		no
 MKGCCCMDS?=	no
 MKPROFILE?=	no
@@ -262,6 +263,19 @@ EXTERNAL_GCC_SUBDIR=	/does/not/exist
 MKGCCCMDS?=	no
 .endif
 
+#
+# What OpenSSL is used?
+# 
+HAVE_OPENSSL?=  11
+
+.if ${HAVE_OPENSSL} == 11
+EXTERNAL_OPENSSL_SUBDIR=openssl
+.elif ${HAVE_OPENSSL} == 10
+EXTERNAL_OPENSSL_SUBDIR=openssl.old
+.else
+EXTERNAL_OPENSSL_SUBDIR=/does/not/exist
+.endif
+
 .if !empty(MACHINE_ARCH:Mearm*)
 _LIBC_COMPILER_RT.${MACHINE_ARCH}=	yes
 .endif
@@ -279,7 +293,7 @@ HAVE_LIBGCC?=	yes
 .endif
 
 
-# ia64 is not support
+# Should libgcc have unwinding code?
 .if ${HAVE_LLVM:Uno} == "yes" || !empty(MACHINE_ARCH:Mearm*)
 HAVE_LIBGCC_EH?=	no
 .else
@@ -288,17 +302,51 @@ HAVE_LIBGCC_EH?=	yes
 
 HAVE_GDB?=	79
 
-.if (${MACHINE_ARCH} == "alpha") || \
-    (${MACHINE_ARCH} == "hppa") || \
-    (${MACHINE_ARCH} == "ia64") || \
-    (${MACHINE_CPU} == "mips")
+# Coverity does not like SSP
+.if defined(COVERITY_TOP_CONFIG) || \
+    ${MACHINE} == "alpha" || \
+    ${MACHINE} == "hppa" || \
+    ${MACHINE} == "ia64" || \
+    ${MACHINE_CPU} == "mips"
 HAVE_SSP?=	no
 .else
 HAVE_SSP?=	yes
-.if ${USE_FORT:Uno} != "no"
+.if !defined(NOFORT) && ${USE_FORT:Uno} != "no"
 USE_SSP?=	yes
 .endif
 .endif
+
+#
+# What GDB is used?
+#
+HAVE_GDB?=	830
+
+.if ${HAVE_GDB} == 830
+EXTERNAL_GDB_SUBDIR=		gdb
+.elif ${HAVE_GDB} == 801
+EXTERNAL_GDB_SUBDIR=		gdb.old
+.else
+EXTERNAL_GDB_SUBDIR=		/does/not/exist
+.endif
+
+#
+# What binutils is used?
+#
+HAVE_BINUTILS?=	234
+
+.if ${HAVE_BINUTILS} == 234
+EXTERNAL_BINUTILS_SUBDIR=	binutils
+.elif ${HAVE_BINUTILS} == 227
+EXTERNAL_BINUTILS_SUBDIR=	binutils.old
+.else
+EXTERNAL_BINUTILS_SUBDIR=	/does/not/exist
+.endif
+
+#
+# What version of jemalloc we use (100 is the one
+# built-in to libc from 2005 (pre version 3).
+#
+HAVE_JEMALLOC?=		510
 
 .if empty(.MAKEFLAGS:tW:M*-V .OBJDIR*)
 .if defined(MAKEOBJDIRPREFIX) || defined(MAKEOBJDIR)
@@ -494,7 +542,7 @@ TOOL_AWK=		${TOOLDIR}/bin/${_TOOL_PREFIX}awk
 TOOL_CAP_MKDB=		${TOOLDIR}/bin/${_TOOL_PREFIX}cap_mkdb
 TOOL_CAT=		${TOOLDIR}/bin/${_TOOL_PREFIX}cat
 TOOL_CKSUM=		${TOOLDIR}/bin/${_TOOL_PREFIX}cksum
-TOOL_CLANG_TBLGEN=		${TOOLDIR}/bin/${_TOOL_PREFIX}clang-tblgen
+TOOL_CLANG_TBLGEN=	${TOOLDIR}/bin/${_TOOL_PREFIX}clang-tblgen
 TOOL_COMPILE_ET=	${TOOLDIR}/bin/${_TOOL_PREFIX}compile_et
 TOOL_CONFIG=		${TOOLDIR}/bin/${_TOOL_PREFIX}config
 TOOL_CRUNCHGEN=		MAKE=${.MAKE:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}crunchgen
@@ -502,7 +550,8 @@ TOOL_CTAGS=		${TOOLDIR}/bin/${_TOOL_PREFIX}ctags
 TOOL_CTFCONVERT=	${TOOLDIR}/bin/${_TOOL_PREFIX}ctfconvert
 TOOL_CTFMERGE=		${TOOLDIR}/bin/${_TOOL_PREFIX}ctfmerge
 TOOL_DB=		${TOOLDIR}/bin/${_TOOL_PREFIX}db
-TOOL_DISKLABEL=		${TOOLDIR}/bin/nbdisklabel
+TOOL_DISKLABEL=		${TOOLDIR}/bin/${_TOOL_PREFIX}disklabel
+TOOL_DTC=		${TOOLDIR}/bin/${_TOOL_PREFIX}dtc
 TOOL_EQN=		${TOOLDIR}/bin/${_TOOL_PREFIX}eqn
 TOOL_FDISK=		${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-fdisk
 TOOL_FGEN=		${TOOLDIR}/bin/${_TOOL_PREFIX}fgen
@@ -519,7 +568,7 @@ TOOL_INDXBIB=		${TOOLDIR}/bin/${_TOOL_PREFIX}indxbib
 TOOL_INSTALLBOOT=	${TOOLDIR}/bin/${_TOOL_PREFIX}installboot
 TOOL_INSTALL_INFO=	${TOOLDIR}/bin/${_TOOL_PREFIX}install-info
 TOOL_JOIN=		${TOOLDIR}/bin/${_TOOL_PREFIX}join
-TOOL_LLVM_TBLGEN=		${TOOLDIR}/bin/${_TOOL_PREFIX}llvm-tblgen
+TOOL_LLVM_TBLGEN=	${TOOLDIR}/bin/${_TOOL_PREFIX}llvm-tblgen
 TOOL_M4=		${TOOLDIR}/bin/${_TOOL_PREFIX}m4
 TOOL_MACPPCFIXCOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc-fixcoff
 TOOL_MAKEFS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makefs
@@ -550,6 +599,7 @@ TOOL_NCDCS=		${TOOLDIR}/bin/${_TOOL_PREFIX}ibmnws-ncdcs
 TOOL_PAX=		${TOOLDIR}/bin/${_TOOL_PREFIX}pax
 TOOL_PIC=		${TOOLDIR}/bin/${_TOOL_PREFIX}pic
 TOOL_PIGZ=		${TOOLDIR}/bin/${_TOOL_PREFIX}pigz
+TOOL_XZ=		${TOOLDIR}/bin/${_TOOL_PREFIX}xz
 TOOL_PKG_CREATE=	${TOOLDIR}/bin/${_TOOL_PREFIX}pkg_create
 TOOL_POWERPCMKBOOTIMAGE=${TOOLDIR}/bin/${_TOOL_PREFIX}powerpc-mkbootimage
 TOOL_PWD_MKDB=		${TOOLDIR}/bin/${_TOOL_PREFIX}pwd_mkdb
@@ -565,6 +615,7 @@ TOOL_RPCGEN=		RPCGEN_CPP=${CPP:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}rpcgen
 TOOL_SED=		${TOOLDIR}/bin/${_TOOL_PREFIX}sed
 TOOL_SLC=		${TOOLDIR}/bin/${_TOOL_PREFIX}slc
 TOOL_SOELIM=		${TOOLDIR}/bin/${_TOOL_PREFIX}soelim
+TOOL_SORTINFO=		${TOOLDIR}/bin/${_TOOL_PREFIX}sortinfo
 TOOL_SPARKCRC=		${TOOLDIR}/bin/${_TOOL_PREFIX}sparkcrc
 TOOL_STAT=		${TOOLDIR}/bin/${_TOOL_PREFIX}stat
 TOOL_STRFILE=		${TOOLDIR}/bin/${_TOOL_PREFIX}strfile
@@ -630,6 +681,7 @@ TOOL_CTFCONVERT=	ctfconvert
 TOOL_CTFMERGE=		ctfmerge
 TOOL_DB=		db
 TOOL_DISKLABEL=		disklabel
+TOOL_DTC=		dtc
 TOOL_EQN=		eqn
 TOOL_FDISK=		fdisk
 TOOL_FGEN=		fgen
@@ -699,6 +751,7 @@ TOOL_NCDCS=		ncdcs
 TOOL_PAX=		pax
 TOOL_PIC=		pic
 TOOL_PIGZ=		pigz
+TOOL_XZ=		xz
 TOOL_PKG_CREATE=	pkg_create
 TOOL_POWERPCMKBOOTIMAGE=	powerpc-mkbootimage
 TOOL_PWD_MKDB=		pwd_mkdb
@@ -713,6 +766,7 @@ TOOL_ROFF_RAW=		${TOOL_GROFF} -Z
 TOOL_RPCGEN=		rpcgen
 TOOL_SED=		sed
 TOOL_SOELIM=		soelim
+TOOL_SORTINFO=		sortinfo
 TOOL_SPARKCRC=		sparkcrc
 TOOL_STAT=		stat
 .if defined(__MINIX)
@@ -790,16 +844,6 @@ MACHINES.sparc=		sparc sparc64
 MACHINES.sparc64=	sparc64
 MACHINES.vax=		vax
 MACHINES.x86_64=	amd64
-
-# for crunchide & ldd, define the OBJECT_FMTS used by a MACHINE_ARCH
-#
-OBJECT_FMTS=
-.if	${MACHINE_ARCH} != "alpha" 
-OBJECT_FMTS+=	elf32
-.endif
-.if	${MACHINE_ARCH} == "alpha" || ${MACHINE_ARCH:M*64*} != ""
-OBJECT_FMTS+=	elf64
-.endif
 
 # OBJCOPY flags to create a.out binaries for old firmware
 # shared among src/distrib and ${MACHINE}/conf/Makefile.${MACHINE}.inc
@@ -1009,7 +1053,8 @@ MKPICLIB.powerpc64=	no
 
 #
 # On VAX using ELF, all objects are PIC, not just shared libraries,
-# so don't build the _pic version.
+# so don't build the _pic version. VAX has no native TLS support either,
+# so differences between TLS models are not relevant.
 #
 MKPICLIB.vax=	no
 
@@ -1164,8 +1209,9 @@ dependall:	.NOTMAIN realdepend .MAKE
 # including bsd.own.mk.
 #
 .for var in \
-	NOCRYPTO NODOC NOHTML NOINFO NOLINKLIB NOLINT NOMAN NONLS NOOBJ NOPIC \
-	NOPICINSTALL NOPROFILE NOSHARE NOSTATICLIB
+	NOCRYPTO NODOC NOHTML NOINFO NOLIBCSANITIZER NOLINKLIB NOLINT NOMAN \
+	NONLS NOOBJ NOPIC NOPICINSTALL NOPROFILE NOSHARE NOSTATICLIB \
+	NODEBUGLIB NOSANITIZER NORELRO
 .if defined(${var})
 MK${var:S/^NO//}:=	no
 .endif
@@ -1192,6 +1238,9 @@ MKCOMPAT?=	yes
 .else
 # Don't let this build where it really isn't supported.
 MKCOMPAT:=	no
+.endif
+
+.if ${MKCOMPAT} == "no"
 MKCOMPATTESTS:=	no
 MKCOMPATX11:=	no
 .endif
@@ -1252,7 +1301,9 @@ MKZFS?=		yes
 _MKVARS.yes= \
 	MKATF \
 	MKBINUTILS \
-	MKCRYPTO MKCOMPLEX MKCVS MKCXX \
+	MKBSDTAR \
+	MKCRYPTO \
+	MKCOMPLEX MKCVS MKCXX \
 	MKDOC \
 	MKGCC MKGDB MKGROFF \
 	MKHESIOD MKHTML \
@@ -1306,8 +1357,11 @@ USE_LIBCSANITIZER?=	undefined
 #
 # Exceptions to the above:
 #
-.if ${MACHINE} == "acorn26"	# page size is prohibitive
-MKKMOD=		no
+
+# RUMP uses -nostdinc which coverity does not like
+# It also does not use many new files, so disable it
+.if defined(COVERITY_TOP_CONFIG)
+MKRUMP=		no
 .endif
 
 #
@@ -1315,16 +1369,25 @@ MKKMOD=		no
 # default for some platforms, see above.
 #
 _MKVARS.no= \
-	MKBSDGREP MKBSDTAR \
-	MKCATPAGES MKCOMPATTESTS MKCOMPATX11 MKCRYPTO_RC5 MKCTF MKDEBUG \
-	MKDEBUGLIB MKDTRACE MKEXTSRC MKGROFFHTMLDOC \
-	MKKYUA MKLLD MKLLDB MKLINT \
-	MKMANZ MKMCLINKER MKOBJDIRS \
-	MKLIBCXX MKLLVM MKPCC \
-	MKPIGZGZIP \
-	MKREPRO \
-	MKSOFTFLOAT MKSTRIPIDENT MKTPM \
-	MKUNPRIVED MKUPDATE MKX11 MKX11MOTIF MKZFS
+	MKARZERO \
+	MKBSDGREP \
+	MKCATPAGES MKCOMPATTESTS MKCOMPATX11 MKCRYPTO_RC5 MKCTF \
+	MKDEBUG MKDEBUGLIB MKDTRACE \
+	MKEXTSRC \
+	MKFIRMWARE \
+	MKGROFFHTMLDOC \
+	MKKYUA \
+	MKLIBCXX MKLLD MKLLDB MKLLVM MKLLVMRT MKLINT \
+	MKMANZ MKMCLINKER \
+	MKNOUVEAUFIRMWARE MKNSD \
+	MKOBJDIRS \
+	MKPCC MKPICINSTALL MKPIGZGZIP \
+	MKRADEONFIRMWARE MKREPRO \
+	MKSLJIT MKSOFTFLOAT MKSTRIPIDENT \
+	MKTEGRAFIRMWARE MKTPM \
+	MKUNPRIVED MKUPDATE \
+	MKX11 MKX11MOTIF MKXORG_SERVER \
+	MKZFS
 
 #MINIX-specific vars
 _MKVARS.no+= \
@@ -1489,6 +1552,18 @@ INSTALL_LINK?=		${INSTALL} ${INSTPRIV} ${HRDLINK} ${RENAME}
 INSTALL_SYMLINK?=	${INSTALL} ${INSTPRIV} ${SYMLINK} ${RENAME}
 .endif
 
+# for crunchide & ldd, define the OBJECT_FMTS used by a MACHINE_ARCH
+#
+OBJECT_FMTS=
+.if	${MACHINE_ARCH} != "alpha" && ${MACHINE_ARCH} != "ia64"
+OBJECT_FMTS+=	elf32
+.endif
+.if	${MACHINE_ARCH} == "alpha" || ${MACHINE_ARCH:M*64*} != ""
+. if !(${MKCOMPAT:Uyes} == "no" && ${MACHINE_CPU} == "mips")
+OBJECT_FMTS+=	elf64
+. endif
+.endif
+
 #
 # Set defaults for the USE_xxx variables.
 #
@@ -1542,6 +1617,18 @@ ${var}?= yes
 .for var in USE_PIGZGZIP USE_LIBTRE
 ${var}?= no
 .endfor
+
+# Default to USE_XZ_SETS on some 64bit architectures where decompressor
+# memory will likely not be in short supply.
+# Since pigz can not create .xz format files currently, disable .xz
+# format if USE_PIGZGZIP is enabled.
+.if ${USE_PIGZGZIP} == "no" && \
+		(${MACHINE} == "amd64" || \
+		 ${MACHINE} == "sparc64")
+USE_XZ_SETS?= yes
+.else
+USE_XZ_SETS?= no
+.endif 
 
 #
 # TOOL_GZIP and friends.  These might refer to TOOL_PIGZ or to the host gzip.

@@ -1,5 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -Wno-unused-value -fsyntax-only -verify -fblocks %s
-// RUN: %clang_cc1 -std=c++1y -Wno-unused-value -fsyntax-only -verify -fblocks %s
+// RUN: %clang_cc1 -std=c++14 -Wno-unused-value -fsyntax-only -verify -fblocks %s
 
 namespace std { class type_info; };
 
@@ -93,6 +92,39 @@ namespace ImplicitCapture {
     static int j;
     int &ref_j = j;
     [] { return ref_j; }; // ok
+  }
+}
+
+namespace SpecialMembers {
+  void f() {
+    auto a = []{}; // expected-note 2{{here}} expected-note 2{{candidate}}
+    decltype(a) b; // expected-error {{no matching constructor}}
+    decltype(a) c = a;
+    decltype(a) d = static_cast<decltype(a)&&>(a);
+    a = a; // expected-error {{copy assignment operator is implicitly deleted}}
+    a = static_cast<decltype(a)&&>(a); // expected-error {{copy assignment operator is implicitly deleted}}
+  }
+  struct P {
+    P(const P&) = delete; // expected-note {{deleted here}}
+  };
+  struct Q {
+    ~Q() = delete; // expected-note {{deleted here}}
+  };
+  struct R {
+    R(const R&) = default;
+    R(R&&) = delete;
+    R &operator=(const R&) = delete;
+    R &operator=(R&&) = delete;
+  };
+  void g(P &p, Q &q, R &r) {
+    auto pp = [p]{}; // expected-error {{deleted constructor}}
+    auto qq = [q]{}; // expected-error {{deleted function}} expected-note {{because}}
+
+    auto a = [r]{}; // expected-note 2{{here}}
+    decltype(a) b = a;
+    decltype(a) c = static_cast<decltype(a)&&>(a); // ok, copies R
+    a = a; // expected-error {{copy assignment operator is implicitly deleted}}
+    a = static_cast<decltype(a)&&>(a); // expected-error {{copy assignment operator is implicitly deleted}}
   }
 }
 
@@ -445,4 +477,149 @@ namespace PR21857 {
   };
   template<typename Fn> fun<Fn> wrap(Fn fn);
   auto x = wrap([](){});
+}
+
+namespace PR13987 {
+class Enclosing {
+  void Method(char c = []()->char {
+    int d = []()->int {
+        struct LocalClass {
+          int Method() { return 0; }
+        };
+      return 0;
+    }();
+    return d; }()
+  );
+};
+}
+
+namespace PR23860 {
+template <class> struct A {
+  void f(int x = []() {
+    struct B {
+      void g() {}
+    };
+    return 0;
+  }());
+};
+
+int main() {
+}
+
+A<int> a;
+}
+
+// rdar://22032373
+namespace rdar22032373 {
+void foo() {
+  auto blk = [](bool b) {
+    if (b)
+      return undeclared_error; // expected-error {{use of undeclared identifier}}
+    return 0;
+  };
+}
+}
+
+namespace nested_lambda {
+template <int N>
+class S {};
+
+void foo() {
+  const int num = 18; 
+  auto outer = []() {
+    auto inner = [](S<num> &X) {};  
+  };
+}
+}
+
+namespace PR27994 {
+struct A { template <class T> A(T); };
+
+template <class T>
+struct B {
+  int x;
+  A a = [&] { int y = x; };
+  A b = [&] { [&] { [&] { int y = x; }; }; };
+  A d = [&](auto param) { int y = x; };
+  A e = [&](auto param) { [&] { [&](auto param2) { int y = x; }; }; };
+};
+
+B<int> b;
+
+template <class T> struct C {
+  struct D {
+    int x;
+    A f = [&] { int y = x; };
+  };
+};
+
+int func() {
+  C<int> a;
+  decltype(a)::D b;
+}
+}
+
+namespace PR30566 {
+int name1; // expected-note {{'name1' declared here}}
+
+struct S1 {
+  template<class T>
+  S1(T t) { s = sizeof(t); }
+  int s;
+};
+
+void foo1() {
+  auto s0 = S1{[name=]() {}}; // expected-error 2 {{expected expression}}
+  auto s1 = S1{[name=name]() {}}; // expected-error {{use of undeclared identifier 'name'; did you mean 'name1'?}}
+}
+}
+
+namespace PR25627_dont_odr_use_local_consts {
+  
+  template<int> struct X {};
+  
+  void foo() {
+    const int N = 10;
+    (void) [] { X<N> x; };
+  }
+}
+
+namespace ConversionOperatorDoesNotHaveDeducedReturnType {
+  auto x = [](int){};
+  auto y = [](auto) -> void {};
+  using T = decltype(x);
+  using U = decltype(y);
+  using ExpectedTypeT = void (*)(int);
+  template<typename T>
+    using ExpectedTypeU = void (*)(T);
+
+  struct X {
+    friend T::operator ExpectedTypeT() const;
+
+    // Formally, this is invalid, because the return type of the conversion
+    // function for a generic lambda expression is an unspecified decltype
+    // type, which this should not match. However, this declaration is
+    // functionally equivalent to that one, so we're permitted to choose to
+    // accept this.
+    template<typename T>
+      friend U::operator ExpectedTypeU<T>() const;
+  };
+
+  // This used to crash in return type deduction for the conversion opreator.
+  struct A { int n; void f() { +[](decltype(n)) {}; } };
+}
+
+namespace TypoCorrection {
+template <typename T> struct X {};
+// expected-note@-1 {{template parameter is declared here}}
+
+template <typename T>
+void Run(const int& points) {
+// expected-note@-1 {{'points' declared here}}
+  auto outer_lambda = []() {
+    auto inner_lambda = [](const X<Points>&) {};
+    // expected-error@-1 {{use of undeclared identifier 'Points'; did you mean 'points'?}}
+    // expected-error@-2 {{template argument for template type parameter must be a type}}
+  };
+}
 }

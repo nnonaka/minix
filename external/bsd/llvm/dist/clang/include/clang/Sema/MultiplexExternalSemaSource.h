@@ -33,7 +33,7 @@ namespace clang {
   class VarDecl;
 
 
-/// \brief An abstract interface that should be implemented by
+/// An abstract interface that should be implemented by
 /// external AST sources that also provide information for semantic
 /// analysis.
 class MultiplexExternalSemaSource : public ExternalSemaSource {
@@ -43,7 +43,7 @@ private:
 
 public:
   
-  ///\brief Constructs a new multiplexing external sema source and appends the
+  ///Constructs a new multiplexing external sema source and appends the
   /// given element to it.
   ///
   ///\param[in] s1 - A non-null (old) ExternalSemaSource.
@@ -51,9 +51,9 @@ public:
   ///
   MultiplexExternalSemaSource(ExternalSemaSource& s1, ExternalSemaSource& s2);
 
-  ~MultiplexExternalSemaSource();
+  ~MultiplexExternalSemaSource() override;
 
-  ///\brief Appends new source to the source list.
+  ///Appends new source to the source list.
   ///
   ///\param[in] source - An ExternalSemaSource.
   ///
@@ -63,76 +63,65 @@ public:
   // ExternalASTSource.
   //===--------------------------------------------------------------------===//
 
-  /// \brief Resolve a declaration ID into a declaration, potentially
+  /// Resolve a declaration ID into a declaration, potentially
   /// building a new declaration.
   Decl *GetExternalDecl(uint32_t ID) override;
 
-  /// \brief Complete the redeclaration chain if it's been extended since the
+  /// Complete the redeclaration chain if it's been extended since the
   /// previous generation of the AST source.
   void CompleteRedeclChain(const Decl *D) override;
 
-  /// \brief Resolve a selector ID into a selector.
+  /// Resolve a selector ID into a selector.
   Selector GetExternalSelector(uint32_t ID) override;
 
-  /// \brief Returns the number of selectors known to the external AST
+  /// Returns the number of selectors known to the external AST
   /// source.
   uint32_t GetNumExternalSelectors() override;
 
-  /// \brief Resolve the offset of a statement in the decl stream into
+  /// Resolve the offset of a statement in the decl stream into
   /// a statement.
   Stmt *GetExternalDeclStmt(uint64_t Offset) override;
 
-  /// \brief Resolve the offset of a set of C++ base specifiers in the decl
+  /// Resolve the offset of a set of C++ base specifiers in the decl
   /// stream into an array of specifiers.
   CXXBaseSpecifier *GetExternalCXXBaseSpecifiers(uint64_t Offset) override;
 
-  /// \brief Find all declarations with the given name in the
-  /// given context.
-  bool
-  FindExternalVisibleDeclsByName(const DeclContext *DC, DeclarationName Name) override;
+  /// Resolve a handle to a list of ctor initializers into the list of
+  /// initializers themselves.
+  CXXCtorInitializer **GetExternalCXXCtorInitializers(uint64_t Offset) override;
 
-  /// \brief Ensures that the table of all visible declarations inside this
+  ExtKind hasExternalDefinitions(const Decl *D) override;
+
+  /// Find all declarations with the given name in the
+  /// given context.
+  bool FindExternalVisibleDeclsByName(const DeclContext *DC,
+                                      DeclarationName Name) override;
+
+  /// Ensures that the table of all visible declarations inside this
   /// context is up to date.
   void completeVisibleDeclsMap(const DeclContext *DC) override;
 
-  /// \brief Finds all declarations lexically contained within the given
+  /// Finds all declarations lexically contained within the given
   /// DeclContext, after applying an optional filter predicate.
   ///
-  /// \param isKindWeWant a predicate function that returns true if the passed
-  /// declaration kind is one we are looking for. If NULL, all declarations
-  /// are returned.
-  ///
-  /// \return an indication of whether the load succeeded or failed.
-  ExternalLoadResult FindExternalLexicalDecls(const DeclContext *DC,
-                                bool (*isKindWeWant)(Decl::Kind),
-                                SmallVectorImpl<Decl*> &Result) override;
+  /// \param IsKindWeWant a predicate function that returns true if the passed
+  /// declaration kind is one we are looking for.
+  void
+  FindExternalLexicalDecls(const DeclContext *DC,
+                           llvm::function_ref<bool(Decl::Kind)> IsKindWeWant,
+                           SmallVectorImpl<Decl *> &Result) override;
 
-  /// \brief Finds all declarations lexically contained within the given
-  /// DeclContext.
-  ///
-  /// \return true if an error occurred
-  ExternalLoadResult FindExternalLexicalDecls(const DeclContext *DC,
-                                SmallVectorImpl<Decl*> &Result) {
-    return FindExternalLexicalDecls(DC, nullptr, Result);
-  }
-
-  template <typename DeclTy>
-  ExternalLoadResult FindExternalLexicalDeclsBy(const DeclContext *DC,
-                                  SmallVectorImpl<Decl*> &Result) {
-    return FindExternalLexicalDecls(DC, DeclTy::classofKind, Result);
-  }
-
-  /// \brief Get the decls that are contained in a file in the Offset/Length
+  /// Get the decls that are contained in a file in the Offset/Length
   /// range. \p Length can be 0 to indicate a point at \p Offset instead of
   /// a range. 
   void FindFileRegionDecls(FileID File, unsigned Offset,unsigned Length,
                            SmallVectorImpl<Decl *> &Decls) override;
 
-  /// \brief Gives the external AST source an opportunity to complete
+  /// Gives the external AST source an opportunity to complete
   /// an incomplete type.
   void CompleteType(TagDecl *Tag) override;
 
-  /// \brief Gives the external AST source an opportunity to complete an
+  /// Gives the external AST source an opportunity to complete an
   /// incomplete Objective-C class.
   ///
   /// This routine will only be invoked if the "externally completed" bit is
@@ -140,28 +129,32 @@ public:
   /// \c ObjCInterfaceDecl::setExternallyCompleted().
   void CompleteType(ObjCInterfaceDecl *Class) override;
 
-  /// \brief Loads comment ranges.
+  /// Loads comment ranges.
   void ReadComments() override;
 
-  /// \brief Notify ExternalASTSource that we started deserialization of
+  /// Notify ExternalASTSource that we started deserialization of
   /// a decl or type so until FinishedDeserializing is called there may be
   /// decls that are initializing. Must be paired with FinishedDeserializing.
   void StartedDeserializing() override;
 
-  /// \brief Notify ExternalASTSource that we finished the deserialization of
+  /// Notify ExternalASTSource that we finished the deserialization of
   /// a decl or type. Must be paired with StartedDeserializing.
   void FinishedDeserializing() override;
 
-  /// \brief Function that will be invoked when we begin parsing a new
+  /// Function that will be invoked when we begin parsing a new
   /// translation unit involving this external AST source.
   void StartTranslationUnit(ASTConsumer *Consumer) override;
 
-  /// \brief Print any statistics that have been gathered regarding
+  /// Print any statistics that have been gathered regarding
   /// the external AST source.
   void PrintStats() override;
-  
-  
-  /// \brief Perform layout on the given record.
+
+  /// Retrieve the module that corresponds to the given module ID.
+  Module *getModule(unsigned ID) override;
+
+  bool DeclIsFromPCHWithObjectFile(const Decl *D) override;
+
+  /// Perform layout on the given record.
   ///
   /// This routine allows the external AST source to provide an specific 
   /// layout for a record, overriding the layout that would normally be
@@ -204,29 +197,37 @@ public:
   // ExternalSemaSource.
   //===--------------------------------------------------------------------===//
 
-  /// \brief Initialize the semantic source with the Sema instance
+  /// Initialize the semantic source with the Sema instance
   /// being used to perform semantic analysis on the abstract syntax
   /// tree.
   void InitializeSema(Sema &S) override;
 
-  /// \brief Inform the semantic consumer that Sema is no longer available.
+  /// Inform the semantic consumer that Sema is no longer available.
   void ForgetSema() override;
 
-  /// \brief Load the contents of the global method pool for a given
+  /// Load the contents of the global method pool for a given
   /// selector.
   void ReadMethodPool(Selector Sel) override;
 
-  /// \brief Load the set of namespaces that are known to the external source,
+  /// Load the contents of the global method pool for a given
+  /// selector if necessary.
+  void updateOutOfDateSelector(Selector Sel) override;
+
+  /// Load the set of namespaces that are known to the external source,
   /// which will be used during typo correction.
   void
   ReadKnownNamespaces(SmallVectorImpl<NamespaceDecl*> &Namespaces) override;
 
-  /// \brief Load the set of used but not defined functions or variables with
+  /// Load the set of used but not defined functions or variables with
   /// internal linkage, or used but not defined inline functions.
   void ReadUndefinedButUsed(
-                llvm::DenseMap<NamedDecl*, SourceLocation> &Undefined) override;
+      llvm::MapVector<NamedDecl *, SourceLocation> &Undefined) override;
 
-  /// \brief Do last resort, unqualified lookup on a LookupResult that
+  void ReadMismatchingDeleteExpressions(llvm::MapVector<
+      FieldDecl *, llvm::SmallVector<std::pair<SourceLocation, bool>, 4>> &
+                                            Exprs) override;
+
+  /// Do last resort, unqualified lookup on a LookupResult that
   /// Sema cannot find.
   ///
   /// \param R a LookupResult that is being recovered.
@@ -236,7 +237,7 @@ public:
   /// \return true to tell Sema to recover using the LookupResult.
   bool LookupUnqualified(LookupResult &R, Scope *S) override;
 
-  /// \brief Read the set of tentative definitions known to the external Sema
+  /// Read the set of tentative definitions known to the external Sema
   /// source.
   ///
   /// The external source should append its own tentative definitions to the
@@ -245,7 +246,7 @@ public:
   /// introduce the same declarations repeatedly.
   void ReadTentativeDefinitions(SmallVectorImpl<VarDecl*> &Defs) override;
 
-  /// \brief Read the set of unused file-scope declarations known to the
+  /// Read the set of unused file-scope declarations known to the
   /// external Sema source.
   ///
   /// The external source should append its own unused, filed-scope to the
@@ -255,7 +256,7 @@ public:
   void ReadUnusedFileScopedDecls(
                         SmallVectorImpl<const DeclaratorDecl*> &Decls) override;
 
-  /// \brief Read the set of delegating constructors known to the
+  /// Read the set of delegating constructors known to the
   /// external Sema source.
   ///
   /// The external source should append its own delegating constructors to the
@@ -265,7 +266,7 @@ public:
   void ReadDelegatingConstructors(
                           SmallVectorImpl<CXXConstructorDecl*> &Decls) override;
 
-  /// \brief Read the set of ext_vector type declarations known to the
+  /// Read the set of ext_vector type declarations known to the
   /// external Sema source.
   ///
   /// The external source should append its own ext_vector type declarations to
@@ -274,15 +275,7 @@ public:
   /// introduce the same declarations repeatedly.
   void ReadExtVectorDecls(SmallVectorImpl<TypedefNameDecl*> &Decls) override;
 
-  /// \brief Read the set of dynamic classes known to the external Sema source.
-  ///
-  /// The external source should append its own dynamic classes to
-  /// the given vector of declarations. Note that this routine may be
-  /// invoked multiple times; the external source should take care not to
-  /// introduce the same declarations repeatedly.
-  void ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl*> &Decls) override;
-
-  /// \brief Read the set of potentially unused typedefs known to the source.
+  /// Read the set of potentially unused typedefs known to the source.
   ///
   /// The external source should append its own potentially unused local
   /// typedefs to the given vector of declarations. Note that this routine may
@@ -291,17 +284,7 @@ public:
   void ReadUnusedLocalTypedefNameCandidates(
       llvm::SmallSetVector<const TypedefNameDecl *, 4> &Decls) override;
 
-  /// \brief Read the set of locally-scoped extern "C" declarations known to the
-  /// external Sema source.
-  ///
-  /// The external source should append its own locally-scoped external
-  /// declarations to the given vector of declarations. Note that this routine
-  /// may be invoked multiple times; the external source should take care not
-  /// to introduce the same declarations repeatedly.
-  void ReadLocallyScopedExternCDecls(
-                                   SmallVectorImpl<NamedDecl*> &Decls) override;
-
-  /// \brief Read the set of referenced selectors known to the
+  /// Read the set of referenced selectors known to the
   /// external Sema source.
   ///
   /// The external source should append its own referenced selectors to the 
@@ -311,7 +294,7 @@ public:
   void ReadReferencedSelectors(SmallVectorImpl<std::pair<Selector,
                                               SourceLocation> > &Sels) override;
 
-  /// \brief Read the set of weak, undeclared identifiers known to the
+  /// Read the set of weak, undeclared identifiers known to the
   /// external Sema source.
   ///
   /// The external source should append its own weak, undeclared identifiers to
@@ -321,14 +304,14 @@ public:
   void ReadWeakUndeclaredIdentifiers(
            SmallVectorImpl<std::pair<IdentifierInfo*, WeakInfo> > &WI) override;
 
-  /// \brief Read the set of used vtables known to the external Sema source.
+  /// Read the set of used vtables known to the external Sema source.
   ///
   /// The external source should append its own used vtables to the given
   /// vector. Note that this routine may be invoked multiple times; the external
   /// source should take care not to introduce the same vtables repeatedly.
   void ReadUsedVTables(SmallVectorImpl<ExternalVTableUse> &VTables) override;
 
-  /// \brief Read the set of pending instantiations known to the external
+  /// Read the set of pending instantiations known to the external
   /// Sema source.
   ///
   /// The external source should append its own pending instantiations to the
@@ -338,15 +321,15 @@ public:
   void ReadPendingInstantiations(
      SmallVectorImpl<std::pair<ValueDecl*, SourceLocation> >& Pending) override;
 
-  /// \brief Read the set of late parsed template functions for this source.
+  /// Read the set of late parsed template functions for this source.
   ///
   /// The external source should insert its own late parsed template functions
   /// into the map. Note that this routine may be invoked multiple times; the
   /// external source should take care not to introduce the same map entries
   /// repeatedly.
   void ReadLateParsedTemplates(
-                         llvm::DenseMap<const FunctionDecl *,
-                                        LateParsedTemplate *> &LPTMap) override;
+      llvm::MapVector<const FunctionDecl *, std::unique_ptr<LateParsedTemplate>>
+          &LPTMap) override;
 
   /// \copydoc ExternalSemaSource::CorrectTypo
   /// \note Returns the first nonempty correction.
@@ -357,7 +340,7 @@ public:
                              bool EnteringContext,
                              const ObjCObjectPointerType *OPT) override;
 
-  /// \brief Produces a diagnostic note if one of the attached sources
+  /// Produces a diagnostic note if one of the attached sources
   /// contains a complete definition for \p T. Queries the sources in list
   /// order until the first one claims that a diagnostic was produced.
   ///

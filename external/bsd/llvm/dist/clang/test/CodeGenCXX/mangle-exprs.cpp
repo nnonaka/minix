@@ -293,3 +293,83 @@ namespace test6 {
   // CHECK-LABEL: define weak_odr void @_ZN5test62f8IiEEvDTcvT_dtptL_ZNS_2zpEE4uuss1iE
 }
 
+namespace test7 {
+  struct A { int x[3]; };
+  struct B { B(int, int); } extern b;
+  struct C { C(B); };
+  struct D { D(C); };
+  struct E { E(std::initializer_list<int>); };
+  struct F { F(E); };
+
+  template<class T> decltype(A{1,2},T()) fA1(T t) {}
+  template<class T> decltype(A({1,2}),T()) fA2(T t) {}
+  template<class T> decltype(B{1,2},T()) fB1(T t) {}
+  template<class T> decltype(B({1,2}),T()) fB2(T t) {}
+  template<class T> decltype(C{{1,2}},T()) fC1(T t) {}
+  template<class T> decltype(C({1,2}),T()) fC2(T t) {}
+  template<class T> decltype(D{b},T()) fD1(T t) {}
+  template<class T> decltype(D(b),T()) fD2(T t) {}
+  template<class T> decltype(E{1,2},T()) fE1(T t) {}
+  template<class T> decltype(E({1,2}),T()) fE2(T t) {}
+  template<class T> decltype(F{{1,2}},T()) fF1(T t) {}
+  template<class T> decltype(F({1,2}),T()) fF2(T t) {}
+
+  template<class T> decltype(T{}) fT1(T t) {}
+  template<class T> decltype(T()) fT2(T t) {}
+  template<class T> decltype(T{1}) fT3(T t) {}
+  template<class T> decltype(T(1)) fT4(T t) {}
+  template<class T> decltype(T{1,2}) fT5(T t) {}
+  template<class T> decltype(T(1,2)) fT6(T t) {}
+  template<class T> decltype(T{{}}) fT7(T t) {}
+  template<class T> decltype(T({})) fT8(T t) {}
+  template<class T> decltype(T{{1}}) fT9(T t) {}
+  template<class T> decltype(T({1})) fTA(T t) {}
+  template<class T> decltype(T{{1,2}}) fTB(T t) {}
+  template<class T> decltype(T({1,2})) fTC(T t) {}
+
+  int main() {
+    fA1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fA1IiEEDTcmtlNS_1AELi1ELi2EEcvT__EES2_
+    fA2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fA2IiEEDTcmcvNS_1AEilLi1ELi2EEcvT__EES2_
+    fB1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fB1IiEEDTcmtlNS_1BELi1ELi2EEcvT__EES2_
+    fB2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fB2IiEEDTcmcvNS_1BEilLi1ELi2EEcvT__EES2_
+    fC1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fC1IiEEDTcmtlNS_1CEilLi1ELi2EEEcvT__EES2_
+    fC2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fC2IiEEDTcmcvNS_1CEilLi1ELi2EEcvT__EES2_
+    fD1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fD1IiEEDTcmtlNS_1DEL_ZNS_1bEEEcvT__EES2_
+    fD2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fD2IiEEDTcmcvNS_1DEL_ZNS_1bEEcvT__EES2_
+    fE1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fE1IiEEDTcmtlNS_1EELi1ELi2EEcvT__EES2_
+    fE2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fE2IiEEDTcmcvNS_1EEilLi1ELi2EEcvT__EES2_
+    fF1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fF1IiEEDTcmtlNS_1FEilLi1ELi2EEEcvT__EES2_
+    fF2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fF2IiEEDTcmcvNS_1FEilLi1ELi2EEcvT__EES2_
+    fT1(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fT1IiEEDTtlT_EES1_(
+    fT2(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fT2IiEEDTcvT__EES1_(
+    fT3(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fT3IiEEDTtlT_Li1EEES1_(
+    fT4(1); // CHECK-LABEL: define {{.*}} @_ZN5test73fT4IiEEDTcvT_Li1EES1_(
+    fT5(b); // CHECK-LABEL: define {{.*}} @_ZN5test73fT5INS_1BEEEDTtlT_Li1ELi2EEES2_(
+    fT6(b); // CHECK-LABEL: define {{.*}} @_ZN5test73fT6INS_1BEEEDTcvT__Li1ELi2EEES2_(
+    fT7(A{}); // CHECK-LABEL: define {{.*}} @_ZN5test73fT7INS_1AEEEDTtlT_ilEEES2_(
+    fT8(A{}); // CHECK-LABEL: define {{.*}} @_ZN5test73fT8INS_1AEEEDTcvT_ilEES2_(
+    fT9(A{}); // CHECK-LABEL: define {{.*}} @_ZN5test73fT9INS_1AEEEDTtlT_ilLi1EEEES2_(
+    fTA(A{}); // CHECK-LABEL: define {{.*}} @_ZN5test73fTAINS_1AEEEDTcvT_ilLi1EEES2_(
+    fTB<C>(b); // CHECK-LABEL: define {{.*}} @_ZN5test73fTBINS_1CEEEDTtlT_ilLi1ELi2EEEES2_(
+    fTC<C>(b); // CHECK-LABEL: define {{.*}} @_ZN5test73fTCINS_1CEEEDTcvT_ilLi1ELi2EEES2_(
+  }
+}
+
+
+namespace test8 {
+  template <class>
+  struct X {
+    template<typename T> T foo() const { return 0; }
+    template <class T> auto bar() const -> decltype(foo<T>()) { return 0; }
+  };
+
+  // CHECK-LABEL: define weak_odr i32 @_ZNK5test81XIiE3barIiEEDTcl3fooIT_EEEv
+  template int X<int>::bar<int>() const;
+}
+
+namespace designated_init {
+  struct A { struct B { int b[5][5]; } a; };
+  // CHECK-LABEL: define {{.*}} @_ZN15designated_init1fINS_1AEEEvDTtlT_di1adi1bdxLi3EdXLi1ELi4ELi9EEE(
+  template<typename T> void f(decltype(T{.a.b[3][1 ... 4] = 9}) x) {}
+  void use_f(A a) { f<A>(a); }
+}

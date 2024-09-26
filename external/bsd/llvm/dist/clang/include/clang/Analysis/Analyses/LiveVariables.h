@@ -15,8 +15,7 @@
 #define LLVM_CLANG_ANALYSIS_ANALYSES_LIVEVARIABLES_H
 
 #include "clang/AST/Decl.h"
-#include "clang/Analysis/AnalysisContext.h"
-#include "llvm/ADT/DenseMap.h"
+#include "clang/Analysis/AnalysisDeclContext.h"
 #include "llvm/ADT/ImmutableSet.h"
 
 namespace clang {
@@ -34,18 +33,19 @@ public:
 
     llvm::ImmutableSet<const Stmt *> liveStmts;
     llvm::ImmutableSet<const VarDecl *> liveDecls;
+    llvm::ImmutableSet<const BindingDecl *> liveBindings;
     
     bool equals(const LivenessValues &V) const;
 
     LivenessValues()
-      : liveStmts(nullptr), liveDecls(nullptr) {}
+      : liveStmts(nullptr), liveDecls(nullptr), liveBindings(nullptr) {}
 
     LivenessValues(llvm::ImmutableSet<const Stmt *> LiveStmts,
-                   llvm::ImmutableSet<const VarDecl *> LiveDecls)
-      : liveStmts(LiveStmts), liveDecls(LiveDecls) {}
+                   llvm::ImmutableSet<const VarDecl *> LiveDecls,
+                   llvm::ImmutableSet<const BindingDecl *> LiveBindings)
+        : liveStmts(LiveStmts), liveDecls(LiveDecls),
+          liveBindings(LiveBindings) {}
 
-    ~LivenessValues() {}
-    
     bool isLive(const Stmt *S) const;
     bool isLive(const VarDecl *D) const;
     
@@ -66,11 +66,10 @@ public:
     /// Called when the live variables analysis registers
     /// that a variable is killed.
     virtual void observerKill(const DeclRefExpr *DR) {}
-  };    
+  };
 
+  ~LiveVariables() override;
 
-  virtual ~LiveVariables();
-  
   /// Compute the liveness information for a given CFG.
   static LiveVariables *computeLiveness(AnalysisDeclContext &analysisContext,
                                         bool killAtAssign);

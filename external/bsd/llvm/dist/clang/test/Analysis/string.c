@@ -1,7 +1,8 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,unix.cstring,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_cc1 -analyze -DUSE_BUILTINS -analyzer-checker=core,unix.cstring,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_cc1 -analyze -DVARIANT -analyzer-checker=core,unix.cstring,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_cc1 -analyze -DUSE_BUILTINS -DVARIANT -analyzer-checker=alpha.security.taint,core,unix.cstring,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -DVARIANT -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -DVARIANT -analyzer-checker=alpha.security.taint,core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -DSUPPRESS_OUT_OF_BOUND -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
 
 //===----------------------------------------------------------------------===
 // Declarations
@@ -30,6 +31,8 @@ typedef typeof(sizeof(int)) size_t;
 void clang_analyzer_eval(int);
 
 int scanf(const char *restrict format, ...);
+void *malloc(size_t);
+void free(void *);
 
 //===----------------------------------------------------------------------===
 // strlen()
@@ -109,7 +112,7 @@ void strlen_global() {
   if (a == 0) {
     clang_analyzer_eval(b == 0); // expected-warning{{TRUE}}
     // Make sure clang_analyzer_eval does not invalidate globals.
-    clang_analyzer_eval(strlen(global_str) == 0); // expected-warning{{TRUE}}    
+    clang_analyzer_eval(strlen(global_str) == 0); // expected-warning{{TRUE}}
   }
 
   // Call a function with unknown effects, which should invalidate globals.
@@ -153,6 +156,23 @@ void strlen_liveness(const char *x) {
     return;
   clang_analyzer_eval(strlen(x) < 5); // expected-warning{{FALSE}}
 }
+
+
+size_t strlenWrapper(const char *str) {
+  return strlen(str);
+}
+
+extern void invalidate(char *s);
+
+void testStrlenCallee() {
+  char str[42];
+  invalidate(str);
+  size_t lenBefore = strlenWrapper(str);
+  invalidate(str);
+  size_t lenAfter = strlenWrapper(str);
+  clang_analyzer_eval(lenBefore == lenAfter); // expected-warning{{UNKNOWN}}
+}
+
 
 //===----------------------------------------------------------------------===
 // strnlen()
@@ -291,11 +311,13 @@ void strcpy_effects(char *x, char *y) {
   clang_analyzer_eval(globalInt == 42); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strcpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
     strcpy(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void strcpy_no_overflow(char *y) {
   char x[4];
@@ -330,11 +352,13 @@ void stpcpy_effect(char *x, char *y) {
   clang_analyzer_eval(a == x[0]); // expected-warning{{UNKNOWN}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void stpcpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
     stpcpy(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void stpcpy_no_overflow(char *y) {
   char x[4];
@@ -385,6 +409,7 @@ void strcat_effects(char *y) {
   clang_analyzer_eval((int)strlen(x) == (orig_len + strlen(y))); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strcat_overflow_0(char *y) {
   char x[4] = "12";
   if (strlen(y) == 4)
@@ -402,6 +427,7 @@ void strcat_overflow_2(char *y) {
   if (strlen(y) == 2)
     strcat(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void strcat_no_overflow(char *y) {
   char x[5] = "12";
@@ -478,6 +504,15 @@ void strncpy_effects(char *x, char *y) {
   clang_analyzer_eval(a == x[0]); // expected-warning{{UNKNOWN}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
+// Enabling the malloc checker enables some of the buffer-checking portions
+// of the C-string checker.
+void cstringchecker_bounds_nocrash() {
+  char *p = malloc(2);
+  strncpy(p, "AAA", sizeof("AAA")); // expected-warning {{Size argument is greater than the length of the destination buffer}}
+  free(p);
+}
+
 void strncpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
@@ -498,6 +533,7 @@ void strncpy_no_overflow2(char *y, int n) {
   if (strlen(y) == 3)
     strncpy(x, y, n); // expected-warning{{Size argument is greater than the length of the destination buffer}}
 }
+#endif
 
 void strncpy_truncate(char *y) {
   char x[4];
@@ -574,6 +610,7 @@ void strncat_effects(char *y) {
   clang_analyzer_eval(strlen(x) == (orig_len + strlen(y))); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strncat_overflow_0(char *y) {
   char x[4] = "12";
   if (strlen(y) == 4)
@@ -597,6 +634,8 @@ void strncat_overflow_3(char *y) {
   if (strlen(y) == 4)
     strncat(x, y, 2); // expected-warning{{Size argument is greater than the free space in the destination buffer}}
 }
+#endif
+
 void strncat_no_overflow_1(char *y) {
   char x[5] = "12";
   if (strlen(y) == 2)
@@ -614,6 +653,7 @@ void strncat_symbolic_dst_length(char *dst) {
   clang_analyzer_eval(strlen(dst) >= 4); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strncat_symbolic_src_length(char *src) {
   char dst[8] = "1234";
   strncat(dst, src, 3);
@@ -631,6 +671,7 @@ void strncat_unknown_src_length(char *src, int offset) {
   char dst2[8] = "1234";
   strncat(dst2, &src[offset], 4); // expected-warning{{Size argument is greater than the free space in the destination buffer}}
 }
+#endif
 
 // There is no strncat_unknown_dst_length because if we can't get a symbolic
 // length for the "before" strlen, we won't be able to set one for "after".
@@ -680,6 +721,18 @@ void strncat_empty() {
 #define strcmp BUILTIN(strcmp)
 int strcmp(const char * s1, const char * s2);
 
+void strcmp_check_modelling() {
+  char *x = "aa";
+  char *y = "a";
+  clang_analyzer_eval(strcmp(x, y) > 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) <= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strcmp(x, y) > 1); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(strcmp(y, x) < 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(y, x) >= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strcmp(y, x) < -1); // expected-warning{{UNKNOWN}}
+}
+
 void strcmp_constant0() {
   clang_analyzer_eval(strcmp("123", "123") == 0); // expected-warning{{TRUE}}
 }
@@ -703,13 +756,13 @@ void strcmp_0() {
 void strcmp_1() {
   char *x = "234";
   char *y = "123";
-  clang_analyzer_eval(strcmp(x, y) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) > 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_2() {
   char *x = "123";
   char *y = "234";
-  clang_analyzer_eval(strcmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_null_0() {
@@ -727,25 +780,25 @@ void strcmp_null_1() {
 void strcmp_diff_length_0() {
   char *x = "12345";
   char *y = "234";
-  clang_analyzer_eval(strcmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_diff_length_1() {
   char *x = "123";
   char *y = "23456";
-  clang_analyzer_eval(strcmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_diff_length_2() {
   char *x = "12345";
   char *y = "123";
-  clang_analyzer_eval(strcmp(x, y) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) > 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_diff_length_3() {
   char *x = "123";
   char *y = "12345";
-  clang_analyzer_eval(strcmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcmp_embedded_null () {
@@ -756,12 +809,38 @@ void strcmp_unknown_arg (char *unknown) {
 	clang_analyzer_eval(strcmp(unknown, unknown) == 0); // expected-warning{{TRUE}}
 }
 
+union argument {
+   char *f;
+};
+
+void function_pointer_cast_helper(char **a) {
+  strcmp("Hi", *a); // PR24951 crash
+}
+
+void strcmp_union_function_pointer_cast(union argument a) {
+  void (*fPtr)(union argument *) = (void (*)(union argument *))function_pointer_cast_helper;
+
+  fPtr(&a);
+}
+
 //===----------------------------------------------------------------------===
 // strncmp()
 //===----------------------------------------------------------------------===
 
 #define strncmp BUILTIN(strncmp)
 int strncmp(const char *s1, const char *s2, size_t n);
+
+void strncmp_check_modelling() {
+  char *x = "aa";
+  char *y = "a";
+  clang_analyzer_eval(strncmp(x, y, 2) > 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 2) <= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strncmp(x, y, 2) > 1); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(strncmp(y, x, 2) < 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(y, x, 2) >= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strncmp(y, x, 2) < -1); // expected-warning{{UNKNOWN}}
+}
 
 void strncmp_constant0() {
   clang_analyzer_eval(strncmp("123", "123", 3) == 0); // expected-warning{{TRUE}}
@@ -786,13 +865,13 @@ void strncmp_0() {
 void strncmp_1() {
   char *x = "234";
   char *y = "123";
-  clang_analyzer_eval(strncmp(x, y, 3) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 3) > 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_2() {
   char *x = "123";
   char *y = "234";
-  clang_analyzer_eval(strncmp(x, y, 3) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 3) < 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_null_0() {
@@ -810,25 +889,25 @@ void strncmp_null_1() {
 void strncmp_diff_length_0() {
   char *x = "12345";
   char *y = "234";
-  clang_analyzer_eval(strncmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_diff_length_1() {
   char *x = "123";
   char *y = "23456";
-  clang_analyzer_eval(strncmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_diff_length_2() {
   char *x = "12345";
   char *y = "123";
-  clang_analyzer_eval(strncmp(x, y, 5) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 5) > 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_diff_length_3() {
   char *x = "123";
   char *y = "12345";
-  clang_analyzer_eval(strncmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_diff_length_4() {
@@ -840,13 +919,13 @@ void strncmp_diff_length_4() {
 void strncmp_diff_length_5() {
   char *x = "012";
   char *y = "12345";
-  clang_analyzer_eval(strncmp(x, y, 3) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 3) < 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_diff_length_6() {
   char *x = "234";
   char *y = "12345";
-  clang_analyzer_eval(strncmp(x, y, 3) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncmp(x, y, 3) > 0); // expected-warning{{TRUE}}
 }
 
 void strncmp_embedded_null () {
@@ -859,6 +938,18 @@ void strncmp_embedded_null () {
 
 #define strcasecmp BUILTIN(strcasecmp)
 int strcasecmp(const char *s1, const char *s2);
+
+void strcasecmp_check_modelling() {
+  char *x = "aa";
+  char *y = "a";
+  clang_analyzer_eval(strcasecmp(x, y) > 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) <= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strcasecmp(x, y) > 1); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(strcasecmp(y, x) < 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(y, x) >= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strcasecmp(y, x) < -1); // expected-warning{{UNKNOWN}}
+}
 
 void strcasecmp_constant0() {
   clang_analyzer_eval(strcasecmp("abc", "Abc") == 0); // expected-warning{{TRUE}}
@@ -883,13 +974,13 @@ void strcasecmp_0() {
 void strcasecmp_1() {
   char *x = "Bcd";
   char *y = "abc";
-  clang_analyzer_eval(strcasecmp(x, y) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) > 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_2() {
   char *x = "abc";
   char *y = "Bcd";
-  clang_analyzer_eval(strcasecmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_null_0() {
@@ -907,25 +998,25 @@ void strcasecmp_null_1() {
 void strcasecmp_diff_length_0() {
   char *x = "abcde";
   char *y = "aBd";
-  clang_analyzer_eval(strcasecmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_diff_length_1() {
   char *x = "abc";
   char *y = "aBdef";
-  clang_analyzer_eval(strcasecmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_diff_length_2() {
   char *x = "aBcDe";
   char *y = "abc";
-  clang_analyzer_eval(strcasecmp(x, y) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) > 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_diff_length_3() {
   char *x = "aBc";
   char *y = "abcde";
-  clang_analyzer_eval(strcasecmp(x, y) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strcasecmp(x, y) < 0); // expected-warning{{TRUE}}
 }
 
 void strcasecmp_embedded_null () {
@@ -938,6 +1029,18 @@ void strcasecmp_embedded_null () {
 
 #define strncasecmp BUILTIN(strncasecmp)
 int strncasecmp(const char *s1, const char *s2, size_t n);
+
+void strncasecmp_check_modelling() {
+  char *x = "aa";
+  char *y = "a";
+  clang_analyzer_eval(strncasecmp(x, y, 2) > 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 2) <= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strncasecmp(x, y, 2) > 1); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(strncasecmp(y, x, 2) < 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(y, x, 2) >= 0); // expected-warning{{FALSE}}
+  clang_analyzer_eval(strncasecmp(y, x, 2) < -1); // expected-warning{{UNKNOWN}}
+}
 
 void strncasecmp_constant0() {
   clang_analyzer_eval(strncasecmp("abc", "Abc", 3) == 0); // expected-warning{{TRUE}}
@@ -962,13 +1065,13 @@ void strncasecmp_0() {
 void strncasecmp_1() {
   char *x = "Bcd";
   char *y = "abc";
-  clang_analyzer_eval(strncasecmp(x, y, 3) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 3) > 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_2() {
   char *x = "abc";
   char *y = "Bcd";
-  clang_analyzer_eval(strncasecmp(x, y, 3) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 3) < 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_null_0() {
@@ -986,25 +1089,25 @@ void strncasecmp_null_1() {
 void strncasecmp_diff_length_0() {
   char *x = "abcde";
   char *y = "aBd";
-  clang_analyzer_eval(strncasecmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_diff_length_1() {
   char *x = "abc";
   char *y = "aBdef";
-  clang_analyzer_eval(strncasecmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_diff_length_2() {
   char *x = "aBcDe";
   char *y = "abc";
-  clang_analyzer_eval(strncasecmp(x, y, 5) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 5) > 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_diff_length_3() {
   char *x = "aBc";
   char *y = "abcde";
-  clang_analyzer_eval(strncasecmp(x, y, 5) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 5) < 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_diff_length_4() {
@@ -1016,13 +1119,13 @@ void strncasecmp_diff_length_4() {
 void strncasecmp_diff_length_5() {
   char *x = "abcde";
   char *y = "aBd";
-  clang_analyzer_eval(strncasecmp(x, y, 3) == -1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 3) < 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_diff_length_6() {
   char *x = "aBDe";
   char *y = "abc";
-  clang_analyzer_eval(strncasecmp(x, y, 3) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strncasecmp(x, y, 3) > 0); // expected-warning{{TRUE}}
 }
 
 void strncasecmp_embedded_null () {
@@ -1081,18 +1184,219 @@ void strsep_changes_input_string() {
 }
 
 //===----------------------------------------------------------------------===
+// memset()
+//===----------------------------------------------------------------------===
+
+void *memset(void *dest, int ch, size_t count);
+
+void *malloc(size_t size);
+void free(void *);
+
+void memset1_char_array_null() {
+  char str[] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  memset(str, '\0', 2);
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{TRUE}}
+}
+
+void memset2_char_array_null() {
+  char str[] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  memset(str, '\0', strlen(str) + 1);
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(str[2] == 0);      // expected-warning{{TRUE}}
+}
+
+void memset3_char_malloc_null() {
+  char *str = (char *)malloc(10 * sizeof(char));
+  memset(str + 1, '\0', 8);
+  clang_analyzer_eval(str[1] == 0); // expected-warning{{UNKNOWN}}
+  free(str);
+}
+
+void memset4_char_malloc_null() {
+  char *str = (char *)malloc(10 * sizeof(char));
+  //void *str = malloc(10 * sizeof(char));
+  memset(str, '\0', 10);
+  clang_analyzer_eval(str[1] == 0);      // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{TRUE}}
+  free(str);
+}
+
+#ifdef SUPPRESS_OUT_OF_BOUND
+void memset5_char_malloc_overflow_null() {
+  char *str = (char *)malloc(10 * sizeof(char));
+  memset(str, '\0', 12);
+  clang_analyzer_eval(str[1] == 0); // expected-warning{{UNKNOWN}}
+  free(str);
+}
+#endif
+
+void memset6_char_array_nonnull() {
+  char str[] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  memset(str, '0', 2);
+  clang_analyzer_eval(str[0] == 'a');    // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{UNKNOWN}}
+}
+
+#ifdef SUPPRESS_OUT_OF_BOUND
+void memset8_char_array_nonnull() {
+  char str[5] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  memset(str, '0', 10);
+  clang_analyzer_eval(str[0] != '0');     // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen(str) >= 10); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) < 10);  // expected-warning{{FALSE}}
+}
+#endif
+
+struct POD_memset {
+  int num;
+  char c;
+};
+
+void memset10_struct() {
+  struct POD_memset pod;
+  char *str = (char *)&pod;
+  pod.num = 1;
+  pod.c = 1;
+  clang_analyzer_eval(pod.num == 0); // expected-warning{{FALSE}}
+  memset(str, 0, sizeof(struct POD_memset));
+  clang_analyzer_eval(pod.num == 0); // expected-warning{{TRUE}}
+}
+
+#ifdef SUPPRESS_OUT_OF_BOUND
+void memset11_struct_field() {
+  struct POD_memset pod;
+  pod.num = 1;
+  pod.c = '1';
+  memset(&pod.num, 0, sizeof(struct POD_memset));
+
+  clang_analyzer_eval(pod.num == 0);  // expected-warning{{TRUE}}
+  clang_analyzer_eval(pod.c == '\0'); // expected-warning{{TRUE}}
+}
+
+void memset12_struct_field() {
+  struct POD_memset pod;
+  pod.num = 1;
+  pod.c = '1';
+  memset(&pod.c, 0, sizeof(struct POD_memset));
+  clang_analyzer_eval(pod.num == 0); // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(pod.c == 0);   // expected-warning{{UNKNOWN}}
+}
+
+union U_memset {
+  int i;
+  double d;
+  char c;
+};
+
+void memset13_union_field() {
+  union U_memset u;
+  u.i = 5;
+  memset(&u.i, '\0', sizeof(union U_memset));
+  // Note: This should be TRUE, analyzer can't handle union perfectly now.
+  clang_analyzer_eval(u.d == 0); // expected-warning{{UNKNOWN}}
+}
+#endif
+
+void memset14_region_cast() {
+  char *str = (char *)malloc(10 * sizeof(int));
+  int *array = (int *)str;
+  memset(array, 0, 10 * sizeof(int));
+  clang_analyzer_eval(str[10] == '\0');            // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen((char *)array) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) == 0);           // expected-warning{{TRUE}}
+  free(str);
+}
+
+void memset15_region_cast() {
+  char *str = (char *)malloc(10 * sizeof(int));
+  int *array = (int *)str;
+  memset(array, 0, 5 * sizeof(int));
+  clang_analyzer_eval(str[10] == '\0');            // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen((char *)array) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) == 0);           // expected-warning{{TRUE}}
+  free(str);
+}
+
+int memset20_scalar() {
+  int *x = malloc(sizeof(int));
+  *x = 10;
+  memset(x, 0, sizeof(int));
+  int num = 1 / *x; // expected-warning{{Division by zero}}
+  free(x);
+  return num;
+}
+
+int memset21_scalar() {
+  int *x = malloc(sizeof(int));
+  memset(x, 0, 1);
+  int num = 1 / *x;
+  free(x);
+  return num;
+}
+
+void memset22_array() {
+  int array[] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+  clang_analyzer_eval(array[1] == 2); // expected-warning{{TRUE}}
+  memset(array, 0, sizeof(array));
+  clang_analyzer_eval(array[1] == 0); // expected-warning{{TRUE}}
+}
+
+void memset23_array_pod_object() {
+  struct POD_memset array[10];
+  array[1].num = 10;
+  array[1].c = 'c';
+  clang_analyzer_eval(array[1].num == 10); // expected-warning{{TRUE}}
+  memset(&array[1], 0, sizeof(struct POD_memset));
+  clang_analyzer_eval(array[1].num == 0); // expected-warning{{UNKNOWN}}
+}
+
+void memset24_array_pod_object() {
+  struct POD_memset array[10];
+  array[1].num = 10;
+  array[1].c = 'c';
+  clang_analyzer_eval(array[1].num == 10); // expected-warning{{TRUE}}
+  memset(array, 0, sizeof(array));
+  clang_analyzer_eval(array[1].num == 0); // expected-warning{{TRUE}}
+}
+
+void memset25_symbol(char c) {
+  char array[10] = {1};
+  if (c != 0)
+    return;
+
+  memset(array, c, 10);
+
+  clang_analyzer_eval(strlen(array) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(array[4] == 0); // expected-warning{{TRUE}}
+}
+
+void memset26_upper_UCHAR_MAX() {
+  char array[10] = {1};
+
+  memset(array, 1024, 10);
+
+  clang_analyzer_eval(strlen(array) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(array[4] == 0); // expected-warning{{TRUE}}
+}
+
+//===----------------------------------------------------------------------===
 // FIXMEs
 //===----------------------------------------------------------------------===
 
-// The analyzer_eval call below should evaluate to true. We are being too 
-// aggressive in marking the (length of) src symbol dead. The length of dst 
-// depends on src. This could be explicitely specified in the checker or the 
+// The analyzer_eval call below should evaluate to true. We are being too
+// aggressive in marking the (length of) src symbol dead. The length of dst
+// depends on src. This could be explicitly specified in the checker or the
 // logic for handling MetadataSymbol in SymbolManager needs to change.
 void strcat_symbolic_src_length(char *src) {
 	char dst[8] = "1234";
 	strcat(dst, src);
   clang_analyzer_eval(strlen(dst) >= 4); // expected-warning{{UNKNOWN}}
 }
+
 
 // The analyzer_eval call below should evaluate to true. Most likely the same
 // issue as the test above.
@@ -1105,4 +1409,88 @@ void strncpy_exactly_matching_buffer2(char *y) {
 
 	// This time, we know that y fits in x anyway.
   clang_analyzer_eval(strlen(x) <= 3); // expected-warning{{UNKNOWN}}
+}
+
+void memset7_char_array_nonnull() {
+  char str[5] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  memset(str, '0', 5);
+  // FIXME: This should be TRUE.
+  clang_analyzer_eval(str[0] == '0');    // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen(str) >= 5); // expected-warning{{TRUE}}
+}
+
+void memset16_region_cast() {
+  char *str = (char *)malloc(10 * sizeof(int));
+  int *array = (int *)str;
+  memset(array, '0', 10 * sizeof(int));
+  // FIXME: This should be TRUE.
+  clang_analyzer_eval(str[10] == '0');                            // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen((char *)array) >= 10 * sizeof(int)); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) >= 10 * sizeof(int));           // expected-warning{{TRUE}}
+  free(str);
+}
+
+#ifdef SUPPRESS_OUT_OF_BOUND
+void memset17_region_cast() {
+  char *str = (char *)malloc(10 * sizeof(int));
+  int *array = (int *)str;
+  memset(array, '0', 12 * sizeof(int));
+  clang_analyzer_eval(str[10] == '0');                            // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(strlen((char *)array) >= 12 * sizeof(int)); // expected-warning{{TRUE}}
+  clang_analyzer_eval(strlen(str) >= 12 * sizeof(int));           // expected-warning{{TRUE}}
+  free(str);
+}
+
+void memset18_memset_multiple_times() {
+  char *str = (char *)malloc(10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{UNKNOWN}}
+
+  memset(str + 2, '\0', 10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(str[1] == '\0');   // expected-warning{{UNKNOWN}}
+
+  memset(str, '0', 10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) >= 10); // expected-warning{{TRUE}}
+  // FIXME: This should be TRUE.
+  clang_analyzer_eval(str[1] == '0');     // expected-warning{{UNKNOWN}}
+
+  free(str);
+}
+
+void memset19_memset_multiple_times() {
+  char *str = (char *)malloc(10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{UNKNOWN}}
+
+  memset(str, '0', 10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) >= 10); // expected-warning{{TRUE}}
+  // FIXME: This should be TRUE.
+  clang_analyzer_eval(str[1] == '0');     // expected-warning{{UNKNOWN}}
+
+  memset(str + 2, '\0', 10 * sizeof(char));
+  clang_analyzer_eval(strlen(str) >= 10); // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(str[1] == '0');     // expected-warning{{UNKNOWN}}
+
+  free(str);
+}
+#endif
+
+// The analyzer does not support binding a symbol with default binding.
+void memset27_symbol(char c) {
+  char array[10] = {0};
+  if (c < 10)
+    return;
+
+  memset(array, c, 10);
+
+  clang_analyzer_eval(strlen(array) >= 10); // expected-warning{{TRUE}}
+  // FIXME: This should be TRUE.
+  clang_analyzer_eval(array[4] >= 10); // expected-warning{{UNKNOWN}}
+}
+
+void memset28() {
+  short x;
+  memset(&x, 1, sizeof(short));
+  // This should be true.
+  clang_analyzer_eval(x == 0x101); // expected-warning{{UNKNOWN}}
 }

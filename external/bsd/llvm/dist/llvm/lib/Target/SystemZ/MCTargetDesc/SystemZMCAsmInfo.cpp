@@ -13,8 +13,8 @@
 
 using namespace llvm;
 
-SystemZMCAsmInfo::SystemZMCAsmInfo(StringRef TT) {
-  PointerSize = 8;
+SystemZMCAsmInfo::SystemZMCAsmInfo(const Triple &TT) {
+  CodePointerSize = 8;
   CalleeSaveStackSlotSize = 8;
   IsLittleEndian = false;
 

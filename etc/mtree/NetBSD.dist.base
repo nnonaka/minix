@@ -82,7 +82,7 @@
 ./usr/include/c++
 ./usr/include/c++/experimental
 ./usr/include/c++/ext
-./usr/include/clang-3.6
+./usr/include/clang-7.0
 ./usr/include/crypto
 ./usr/include/ddekit
 ./usr/include/ddekit/minix
@@ -115,7 +115,10 @@
 ./usr/include/prop
 ./usr/include/protocols
 ./usr/include/readline
+./usr/include/rpc
 ./usr/include/rpcsvc
+./usr/include/rump
+./usr/include/security
 ./usr/include/ssp
 ./usr/include/sys
 ./usr/include/ufs
@@ -125,6 +128,14 @@
 ./usr/include/ufs/mfs
 ./usr/include/ufs/ufs
 ./usr/lib
+./usr/lib/clang
+./usr/lib/clang/7.0.0
+./usr/lib/clang/7.0.0/include
+./usr/lib/clang/7.0.0/include/sanitizer
+./usr/lib/clang/7.0.0/include/xray
+./usr/lib/clang/7.0.0/lib
+./usr/lib/clang/7.0.0/lib/minix
+./usr/lib/clang/7.0.0/share
 ./usr/lib/i18n
 ./usr/lib/bc
 ./usr/lib/cawf

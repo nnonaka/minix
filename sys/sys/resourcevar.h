@@ -1,4 +1,4 @@
-/*	$NetBSD: resourcevar.h,v 1.55 2014/09/05 05:47:40 matt Exp $	*/
+/*	$NetBSD: resourcevar.h,v 1.57 2018/05/07 21:03:45 christos Exp $	*/
 
 /*
  * Copyright (c) 1991, 1993
@@ -39,6 +39,7 @@
 #endif
 
 #include <sys/mutex.h>
+#include <sys/resource.h>
 
 /*
  * Kernel per-process accounting / statistics
@@ -114,6 +115,7 @@ void	lim_setcorename(struct proc *, char *, size_t);
 void	lim_free(struct plimit *);
 
 void	resource_init(void);
+void	ruspace(struct proc *);
 void	ruadd(struct rusage *, struct rusage *);
 void	rulwps(proc_t *, struct rusage *);
 struct	pstats *pstatscopy(struct pstats *);

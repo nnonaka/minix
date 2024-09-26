@@ -5,7 +5,7 @@ define <4 x half> @load_64(<4 x half>* nocapture readonly %a) #0 {
 ; CHECK-LABEL: load_64:
 ; CHECK: ldr d0, [x0]
 entry:
-  %0 = load <4 x half>* %a, align 8
+  %0 = load <4 x half>, <4 x half>* %a, align 8
   ret <4 x half> %0
 }
 
@@ -14,7 +14,7 @@ define <8 x half> @load_128(<8 x half>* nocapture readonly %a) #0 {
 ; CHECK-LABEL: load_128:
 ; CHECK: ldr q0, [x0]
 entry:
-  %0 = load <8 x half>* %a, align 16
+  %0 = load <8 x half>, <8 x half>* %a, align 16
   ret <8 x half> %0
 }
 
@@ -23,7 +23,7 @@ define <4 x half> @load_dup_64(half* nocapture readonly %a) #0 {
 ; CHECK-LABEL: load_dup_64:
 ; CHECK: ld1r { v0.4h }, [x0]
 entry:
-  %0 = load half* %a, align 2
+  %0 = load half, half* %a, align 2
   %1 = insertelement <4 x half> undef, half %0, i32 0
   %2 = shufflevector <4 x half> %1, <4 x half> undef, <4 x i32> zeroinitializer
   ret <4 x half> %2
@@ -34,7 +34,7 @@ define <8 x half> @load_dup_128(half* nocapture readonly %a) #0 {
 ; CHECK-LABEL: load_dup_128:
 ; CHECK: ld1r { v0.8h }, [x0]
 entry:
-  %0 = load half* %a, align 2
+  %0 = load half, half* %a, align 2
   %1 = insertelement <8 x half> undef, half %0, i32 0
   %2 = shufflevector <8 x half> %1, <8 x half> undef, <8 x i32> zeroinitializer
   ret <8 x half> %2
@@ -45,7 +45,7 @@ define <4 x half> @load_lane_64(half* nocapture readonly %a, <4 x half> %b) #0 {
 ; CHECK-LABEL: load_lane_64:
 ; CHECK: ld1 { v0.h }[2], [x0]
 entry:
-  %0 = load half* %a, align 2
+  %0 = load half, half* %a, align 2
   %1 = insertelement <4 x half> %b, half %0, i32 2
   ret <4 x half> %1
 }
@@ -55,7 +55,7 @@ define <8 x half> @load_lane_128(half* nocapture readonly %a, <8 x half> %b) #0 
 ; CHECK-LABEL: load_lane_128:
 ; CHECK: ld1 { v0.h }[5], [x0]
 entry:
-  %0 = load half* %a, align 2
+  %0 = load half, half* %a, align 2
   %1 = insertelement <8 x half> %b, half %0, i32 5
   ret <8 x half> %1
 }
@@ -88,6 +88,45 @@ entry:
   ret void
 }
 
+define void @store_lane0_64(half* nocapture %a, <4 x half> %b) #1 {
+; CHECK-LABEL: store_lane0_64:
+; CHECK: str h0, [x0]
+entry:
+  %0 = extractelement <4 x half> %b, i32 0
+  store half %0, half* %a, align 2
+  ret void
+}
+
+define void @storeu_lane0_64(half* nocapture %a, <4 x half> %b) #1 {
+; CHECK-LABEL: storeu_lane0_64:
+; CHECK: stur h0, [x{{[0-9]+}}, #-2]
+entry:
+  %0 = getelementptr half, half* %a, i64 -1
+  %1 = extractelement <4 x half> %b, i32 0
+  store half %1, half* %0, align 2
+  ret void
+}
+
+define void @storero_lane_64(half* nocapture %a, <4 x half> %b, i64 %c) #1 {
+; CHECK-LABEL: storero_lane_64:
+; CHECK: st1 { v0.h }[2], [x{{[0-9]+}}]
+entry:
+  %0 = getelementptr half, half* %a, i64 %c
+  %1 = extractelement <4 x half> %b, i32 2
+  store half %1, half* %0, align 2
+  ret void
+}
+
+define void @storero_lane0_64(half* nocapture %a, <4 x half> %b, i64 %c) #1 {
+; CHECK-LABEL: storero_lane0_64:
+; CHECK: str h0, [x0, x1, lsl #1]
+entry:
+  %0 = getelementptr half, half* %a, i64 %c
+  %1 = extractelement <4 x half> %b, i32 0
+  store half %1, half* %0, align 2
+  ret void
+}
+
 ; Store from one lane of v8f16
 define void @store_lane_128(half* nocapture %a, <8 x half> %b) #1 {
 ; CHECK-LABEL: store_lane_128:
@@ -95,6 +134,45 @@ define void @store_lane_128(half* nocapture %a, <8 x half> %b) #1 {
 entry:
   %0 = extractelement <8 x half> %b, i32 5
   store half %0, half* %a, align 2
+  ret void
+}
+
+define void @store_lane0_128(half* nocapture %a, <8 x half> %b) #1 {
+; CHECK-LABEL: store_lane0_128:
+; CHECK: str h0, [x0]
+entry:
+  %0 = extractelement <8 x half> %b, i32 0
+  store half %0, half* %a, align 2
+  ret void
+}
+
+define void @storeu_lane0_128(half* nocapture %a, <8 x half> %b) #1 {
+; CHECK-LABEL: storeu_lane0_128:
+; CHECK: stur h0, [x{{[0-9]+}}, #-2]
+entry:
+  %0 = getelementptr half, half* %a, i64 -1
+  %1 = extractelement <8 x half> %b, i32 0
+  store half %1, half* %0, align 2
+  ret void
+}
+
+define void @storero_lane_128(half* nocapture %a, <8 x half> %b, i64 %c) #1 {
+; CHECK-LABEL: storero_lane_128:
+; CHECK: st1 { v0.h }[4], [x{{[0-9]+}}]
+entry:
+  %0 = getelementptr half, half* %a, i64 %c
+  %1 = extractelement <8 x half> %b, i32 4
+  store half %1, half* %0, align 2
+  ret void
+}
+
+define void @storero_lane0_128(half* nocapture %a, <8 x half> %b, i64 %c) #1 {
+; CHECK-LABEL: storero_lane0_128:
+; CHECK: str h0, [x0, x1, lsl #1]
+entry:
+  %0 = getelementptr half, half* %a, i64 %c
+  %1 = extractelement <8 x half> %b, i32 0
+  store half %1, half* %0, align 2
   ret void
 }
 

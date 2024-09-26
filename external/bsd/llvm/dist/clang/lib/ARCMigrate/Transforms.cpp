@@ -11,16 +11,12 @@
 #include "Internals.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
-#include "clang/AST/StmtVisitor.h"
 #include "clang/Analysis/DomainSpecific/CocoaConventions.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Lexer.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Sema.h"
-#include "clang/Sema/SemaDiagnostic.h"
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/StringSwitch.h"
-#include <map>
 
 using namespace clang;
 using namespace arcmt;
@@ -41,7 +37,7 @@ bool MigrationPass::CFBridgingFunctionsDefined() {
 
 bool trans::canApplyWeak(ASTContext &Ctx, QualType type,
                          bool AllowOnUnknownClass) {
-  if (!Ctx.getLangOpts().ObjCARCWeak)
+  if (!Ctx.getLangOpts().ObjCWeakRuntime)
     return false;
 
   QualType T = type;
@@ -49,7 +45,8 @@ bool trans::canApplyWeak(ASTContext &Ctx, QualType type,
     return false;
 
   // iOS is always safe to use 'weak'.
-  if (Ctx.getTargetInfo().getTriple().isiOS())
+  if (Ctx.getTargetInfo().getTriple().isiOS() ||
+      Ctx.getTargetInfo().getTriple().isWatchOS())
     AllowOnUnknownClass = true;
 
   while (const PointerType *ptr = T->getAs<PointerType>())
@@ -111,13 +108,10 @@ bool trans::isPlusOne(const Expr *E) {
   while (implCE && implCE->getCastKind() ==  CK_BitCast)
     implCE = dyn_cast<ImplicitCastExpr>(implCE->getSubExpr());
 
-  if (implCE && implCE->getCastKind() == CK_ARCConsumeObject)
-    return true;
-
-  return false;
+  return implCE && implCE->getCastKind() == CK_ARCConsumeObject;
 }
 
-/// \brief 'Loc' is the end of a statement range. This returns the location
+/// 'Loc' is the end of a statement range. This returns the location
 /// immediately after the semicolon following the statement.
 /// If no semicolon is found or the location is inside a macro, the returned
 /// source location will be invalid.
@@ -129,7 +123,7 @@ SourceLocation trans::findLocationAfterSemi(SourceLocation loc,
   return SemiLoc.getLocWithOffset(1);
 }
 
-/// \brief \arg Loc is the end of a statement range. This returns the location
+/// \arg Loc is the end of a statement range. This returns the location
 /// of the semicolon following the statement.
 /// If no semicolon is found or the location is inside a macro, the returned
 /// source location will be invalid.
@@ -212,11 +206,8 @@ bool trans::isGlobalVar(Expr *E) {
   return false;  
 }
 
-StringRef trans::getNilString(ASTContext &Ctx) {
-  if (Ctx.Idents.get("nil").hasMacroDefinition())
-    return "nil";
-  else
-    return "0";
+StringRef trans::getNilString(MigrationPass &Pass) {
+  return Pass.SemaRef.PP.isMacroDefined("nil") ? "nil" : "0";
 }
 
 namespace {

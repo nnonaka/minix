@@ -1,4 +1,4 @@
-//RUN: not llvm-mc -triple=aarch64-linux -filetype=obj %s -o %t1 2> %t2
+//RUN: not llvm-mc -triple=aarch64-linux -filetype=obj %s -o /dev/null 2> %t2
 //RUN: cat %t2 | FileCheck %s
 
 //These tests look for errors that should be reported for invalid object layout
@@ -8,6 +8,6 @@
 
 .text
 foo:
+// CHECK: :[[@LINE+1]]:{{[0-9]+}}: error: fixup value out of range
   ldr x0, =0x10111
   .space 0xdeadb0
-// CHECK: LVM ERROR: fixup value out of range

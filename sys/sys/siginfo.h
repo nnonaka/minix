@@ -1,4 +1,4 @@
-/*	$NetBSD: siginfo.h,v 1.25 2013/11/22 21:04:11 christos Exp $	 */
+/*	$NetBSD: siginfo.h,v 1.33.2.1 2019/10/15 18:32:13 martin Exp $	 */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -77,6 +77,21 @@ struct _ksiginfo {
 			long	_band;
 			int	_fd;
 		} _poll;
+
+		struct {
+			int	_sysnum;
+			int	_retval[2];
+			int	_error;
+			uint64_t _args[8]; /* SYS_MAXSYSARGS */
+		} _syscall;
+
+		struct {
+			int	_pe_report_event;
+			union {
+				pid_t _pe_other_pid;
+				lwpid_t _pe_lwp;
+			} _option;
+		} _ptrace_state;
 	} _reason;
 };
 
@@ -155,6 +170,15 @@ typedef union siginfo {
 #define	si_band		_info._reason._poll._band
 #define	si_fd		_info._reason._poll._fd
 
+#define	si_sysnum	_info._reason._syscall._sysnum
+#define si_retval	_info._reason._syscall._retval
+#define si_error	_info._reason._syscall._error
+#define si_args		_info._reason._syscall._args
+
+#define si_pe_report_event	_info._reason._ptrace_state._pe_report_event
+#define si_pe_other_pid	_info._reason._ptrace_state._option._pe_other_pid
+#define si_pe_lwp	_info._reason._ptrace_state._option._pe_lwp
+
 #ifdef _KERNEL
 /** Field access macros */
 #define	ksi_signo	ksi_info._signo
@@ -175,6 +199,15 @@ typedef union siginfo {
 
 #define	ksi_band	ksi_info._reason._poll._band
 #define	ksi_fd		ksi_info._reason._poll._fd
+
+#define	ksi_sysnum	ksi_info._reason._syscall._sysnum
+#define ksi_retval	ksi_info._reason._syscall._retval
+#define ksi_error	ksi_info._reason._syscall._error
+#define ksi_args	ksi_info._reason._syscall._args
+
+#define ksi_pe_report_event	ksi_info._reason._ptrace_state._pe_report_event
+#define ksi_pe_other_pid	ksi_info._reason._ptrace_state._option._pe_other_pid
+#define ksi_pe_lwp		ksi_info._reason._ptrace_state._option._pe_lwp
 #endif /* _KERNEL */
 
 /** si_code */
@@ -210,6 +243,12 @@ typedef union siginfo {
 /* SIGTRAP */
 #define	TRAP_BRKPT	1	/* Process breakpoint			*/
 #define	TRAP_TRACE	2	/* Process trace trap			*/
+#define	TRAP_EXEC	3	/* Process exec trap			*/
+#define	TRAP_CHLD	4	/* Process child trap			*/
+#define	TRAP_LWP	5	/* Process lwp trap			*/
+#define	TRAP_DBREG	6	/* Process hardware debug register trap	*/
+#define	TRAP_SCE	7	/* Process syscall entry trap		*/
+#define	TRAP_SCX	8	/* Process syscall exit trap		*/
 
 /* SIGCHLD */
 #define	CLD_EXITED	1	/* Child has exited			*/
@@ -221,7 +260,7 @@ typedef union siginfo {
 #define	CLD_STOPPED	5	/* Child has stopped			*/
 #define	CLD_CONTINUED	6	/* Stopped child has continued		*/
 
-/* SIGPOLL */
+/* SIGIO */
 #define	POLL_IN		1	/* Data input available			*/
 #define	POLL_OUT	2	/* Output buffers available		*/
 #define	POLL_MSG	3	/* Input message available		*/

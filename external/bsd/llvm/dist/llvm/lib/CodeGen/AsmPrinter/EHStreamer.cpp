@@ -1,4 +1,4 @@
-//===-- CodeGen/AsmPrinter/EHStreamer.cpp - Exception Directive Streamer --===//
+//===- CodeGen/AsmPrinter/EHStreamer.cpp - Exception Directive Streamer ---===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,22 +12,34 @@
 //===----------------------------------------------------------------------===//
 
 #include "EHStreamer.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
-#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCTargetOptions.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <vector>
 
 using namespace llvm;
 
 EHStreamer::EHStreamer(AsmPrinter *A) : Asm(A), MMI(Asm->MMI) {}
 
-EHStreamer::~EHStreamer() {}
+EHStreamer::~EHStreamer() = default;
 
 /// How many leading type ids two landing pads have in common.
 unsigned EHStreamer::sharedTypeIDs(const LandingPadInfo *L,
@@ -46,11 +58,10 @@ unsigned EHStreamer::sharedTypeIDs(const LandingPadInfo *L,
 
 /// Compute the actions table and gather the first action index for each landing
 /// pad site.
-unsigned EHStreamer::
-computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
-                    SmallVectorImpl<ActionEntry> &Actions,
-                    SmallVectorImpl<unsigned> &FirstActions) {
-
+void EHStreamer::computeActionsTable(
+    const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+    SmallVectorImpl<ActionEntry> &Actions,
+    SmallVectorImpl<unsigned> &FirstActions) {
   // The action table follows the call-site table in the LSDA. The individual
   // records are of two types:
   //
@@ -74,7 +85,7 @@ computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
   // output using a fixed width encoding.  FilterOffsets[i] holds the byte
   // offset corresponding to FilterIds[i].
 
-  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
+  const std::vector<unsigned> &FilterIds = Asm->MF->getFilterIds();
   SmallVector<int, 16> FilterOffsets;
   FilterOffsets.reserve(FilterIds.size());
   int Offset = -1;
@@ -121,7 +132,8 @@ computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
       for (unsigned J = NumShared, M = TypeIds.size(); J != M; ++J) {
         int TypeID = TypeIds[J];
         assert(-1 - TypeID < (int)FilterOffsets.size() && "Unknown filter id!");
-        int ValueForTypeID = TypeID < 0 ? FilterOffsets[-1 - TypeID] : TypeID;
+        int ValueForTypeID =
+            isFilterEHSelector(TypeID) ? FilterOffsets[-1 - TypeID] : TypeID;
         unsigned SizeTypeID = getSLEB128Size(ValueForTypeID);
 
         int NextAction = SizeAction ? -(SizeAction + SizeTypeID) : 0;
@@ -137,7 +149,7 @@ computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
       FirstAction = SizeActions + SizeSiteActions - SizeAction + 1;
     } // else identical - re-use previous FirstAction
 
-    // Information used when created the call-site table. The action record
+    // Information used when creating the call-site table. The action record
     // field of the call site record is the offset of the first associated
     // action record, relative to the start of the actions table. This value is
     // biased by 1 (1 indicating the start of the actions table), and 0
@@ -149,8 +161,6 @@ computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
 
     PrevLPI = LPI;
   }
-
-  return SizeActions;
 }
 
 /// Return `true' if this is a call to a function marked `nounwind'. Return
@@ -187,6 +197,23 @@ bool EHStreamer::callToNoUnwindFunction(const MachineInstr *MI) {
   return MarkedNoUnwind;
 }
 
+void EHStreamer::computePadMap(
+    const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+    RangeMapType &PadMap) {
+  // Invokes and nounwind calls have entries in PadMap (due to being bracketed
+  // by try-range labels when lowered).  Ordinary calls do not, so appropriate
+  // try-ranges for them need be deduced so we can put them in the LSDA.
+  for (unsigned i = 0, N = LandingPads.size(); i != N; ++i) {
+    const LandingPadInfo *LandingPad = LandingPads[i];
+    for (unsigned j = 0, E = LandingPad->BeginLabels.size(); j != E; ++j) {
+      MCSymbol *BeginLabel = LandingPad->BeginLabels[j];
+      assert(!PadMap.count(BeginLabel) && "Duplicate landing pad labels!");
+      PadRange P = { i, j };
+      PadMap[BeginLabel] = P;
+    }
+  }
+}
+
 /// Compute the call-site table.  The entry for an invoke has a try-range
 /// containing the call, a non-zero landing pad, and an appropriate action.  The
 /// entry for an ordinary call has a try-range containing the call and zero for
@@ -197,19 +224,8 @@ void EHStreamer::
 computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
                      const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
                      const SmallVectorImpl<unsigned> &FirstActions) {
-  // Invokes and nounwind calls have entries in PadMap (due to being bracketed
-  // by try-range labels when lowered).  Ordinary calls do not, so appropriate
-  // try-ranges for them need be deduced so we can put them in the LSDA.
   RangeMapType PadMap;
-  for (unsigned i = 0, N = LandingPads.size(); i != N; ++i) {
-    const LandingPadInfo *LandingPad = LandingPads[i];
-    for (unsigned j = 0, E = LandingPad->BeginLabels.size(); j != E; ++j) {
-      MCSymbol *BeginLabel = LandingPad->BeginLabels[j];
-      assert(!PadMap.count(BeginLabel) && "Duplicate landing pad labels!");
-      PadRange P = { i, j };
-      PadMap[BeginLabel] = P;
-    }
-  }
+  computePadMap(LandingPads, PadMap);
 
   // The end label of the previous invoke or nounwind try-range.
   MCSymbol *LastLabel = nullptr;
@@ -252,7 +268,7 @@ computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
       // instruction between the previous try-range and this one may throw,
       // create a call-site entry with no landing pad for the region between the
       // try-ranges.
-      if (SawPotentiallyThrowing && !IsSJLJ) {
+      if (SawPotentiallyThrowing && Asm->MAI->usesCFIForEH()) {
         CallSiteEntry Site = { LastLabel, BeginLabel, nullptr, 0 };
         CallSites.push_back(Site);
         PreviousIsInvoke = false;
@@ -269,14 +285,14 @@ computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
         CallSiteEntry Site = {
           BeginLabel,
           LastLabel,
-          LandingPad->LandingPadLabel,
+          LandingPad,
           FirstActions[P.PadIndex]
         };
 
         // Try to merge with the previous call-site. SJLJ doesn't do this
         if (PreviousIsInvoke && !IsSJLJ) {
           CallSiteEntry &Prev = CallSites.back();
-          if (Site.PadLabel == Prev.PadLabel && Site.Action == Prev.Action) {
+          if (Site.LPad == Prev.LPad && Site.Action == Prev.Action) {
             // Extend the range of the previous entry.
             Prev.EndLabel = Site.EndLabel;
             continue;
@@ -289,7 +305,7 @@ computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
         else {
           // SjLj EH must maintain the call sites in the order assigned
           // to them by the SjLjPrepare pass.
-          unsigned SiteNo = MMI->getCallSiteBeginLabel(BeginLabel);
+          unsigned SiteNo = Asm->MF->getCallSiteBeginLabel(BeginLabel);
           if (CallSites.size() < SiteNo)
             CallSites.resize(SiteNo);
           CallSites[SiteNo - 1] = Site;
@@ -329,9 +345,10 @@ computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
 ///  3. Type ID table contains references to all the C++ typeinfo for all
 ///     catches in the function.  This tables is reverse indexed base 1.
 void EHStreamer::emitExceptionTable() {
-  const std::vector<const GlobalValue *> &TypeInfos = MMI->getTypeInfos();
-  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
-  const std::vector<LandingPadInfo> &PadInfos = MMI->getLandingPads();
+  const MachineFunction *MF = Asm->MF;
+  const std::vector<const GlobalValue *> &TypeInfos = MF->getTypeInfos();
+  const std::vector<unsigned> &FilterIds = MF->getFilterIds();
+  const std::vector<LandingPadInfo> &PadInfos = MF->getLandingPads();
 
   // Sort the landing pads in order of their type ids.  This is used to fold
   // duplicate actions.
@@ -342,55 +359,33 @@ void EHStreamer::emitExceptionTable() {
     LandingPads.push_back(&PadInfos[i]);
 
   // Order landing pads lexicographically by type id.
-  std::sort(LandingPads.begin(), LandingPads.end(),
-            [](const LandingPadInfo *L,
-               const LandingPadInfo *R) { return L->TypeIds < R->TypeIds; });
+  llvm::sort(LandingPads.begin(), LandingPads.end(),
+             [](const LandingPadInfo *L,
+                const LandingPadInfo *R) { return L->TypeIds < R->TypeIds; });
 
   // Compute the actions table and gather the first action index for each
   // landing pad site.
   SmallVector<ActionEntry, 32> Actions;
   SmallVector<unsigned, 64> FirstActions;
-  unsigned SizeActions =
-    computeActionsTable(LandingPads, Actions, FirstActions);
+  computeActionsTable(LandingPads, Actions, FirstActions);
 
   // Compute the call-site table.
   SmallVector<CallSiteEntry, 64> CallSites;
   computeCallSiteTable(CallSites, LandingPads, FirstActions);
 
-  // Final tallies.
-
-  // Call sites.
   bool IsSJLJ = Asm->MAI->getExceptionHandlingType() == ExceptionHandling::SjLj;
-  bool HaveTTData = IsSJLJ ? (!TypeInfos.empty() || !FilterIds.empty()) : true;
-
-  unsigned CallSiteTableLength;
-  if (IsSJLJ)
-    CallSiteTableLength = 0;
-  else {
-    unsigned SiteStartSize  = 4; // dwarf::DW_EH_PE_udata4
-    unsigned SiteLengthSize = 4; // dwarf::DW_EH_PE_udata4
-    unsigned LandingPadSize = 4; // dwarf::DW_EH_PE_udata4
-    CallSiteTableLength =
-      CallSites.size() * (SiteStartSize + SiteLengthSize + LandingPadSize);
-  }
-
-  for (unsigned i = 0, e = CallSites.size(); i < e; ++i) {
-    CallSiteTableLength += getULEB128Size(CallSites[i].Action);
-    if (IsSJLJ)
-      CallSiteTableLength += getULEB128Size(i);
-  }
+  unsigned CallSiteEncoding =
+      IsSJLJ ? dwarf::DW_EH_PE_udata4 : dwarf::DW_EH_PE_uleb128;
+  bool HaveTTData = !TypeInfos.empty() || !FilterIds.empty();
 
   // Type infos.
-  const MCSection *LSDASection = Asm->getObjFileLowering().getLSDASection();
+  MCSection *LSDASection = Asm->getObjFileLowering().getLSDASection();
   unsigned TTypeEncoding;
-  unsigned TypeFormatSize;
 
   if (!HaveTTData) {
-    // For SjLj exceptions, if there is no TypeInfo, then we just explicitly say
-    // that we're omitting that bit.
+    // If there is no TypeInfo, then we just explicitly say that we're omitting
+    // that bit.
     TTypeEncoding = dwarf::DW_EH_PE_omit;
-    // dwarf::DW_EH_PE_absptr
-    TypeFormatSize = Asm->getDataLayout().getPointerSize();
   } else {
     // Okay, we have actual filters or typeinfos to emit.  As such, we need to
     // pick a type encoding for them.  We're about to emit a list of pointers to
@@ -420,90 +415,58 @@ void EHStreamer::emitExceptionTable() {
     // in target-independent code.
     //
     TTypeEncoding = Asm->getObjFileLowering().getTTypeEncoding();
-    TypeFormatSize = Asm->GetSizeOfEncodedValue(TTypeEncoding);
   }
 
   // Begin the exception table.
   // Sometimes we want not to emit the data into separate section (e.g. ARM
   // EHABI). In this case LSDASection will be NULL.
   if (LSDASection)
-    Asm->OutStreamer.SwitchSection(LSDASection);
+    Asm->OutStreamer->SwitchSection(LSDASection);
   Asm->EmitAlignment(2);
 
   // Emit the LSDA.
   MCSymbol *GCCETSym =
-    Asm->OutContext.GetOrCreateSymbol(Twine("GCC_except_table")+
+    Asm->OutContext.getOrCreateSymbol(Twine("GCC_except_table")+
                                       Twine(Asm->getFunctionNumber()));
-  Asm->OutStreamer.EmitLabel(GCCETSym);
-  Asm->OutStreamer.EmitLabel(Asm->GetTempSymbol("exception",
-                                                Asm->getFunctionNumber()));
-
-  if (IsSJLJ)
-    Asm->OutStreamer.EmitLabel(Asm->GetTempSymbol("_LSDA_",
-                                                  Asm->getFunctionNumber()));
+  Asm->OutStreamer->EmitLabel(GCCETSym);
+  Asm->OutStreamer->EmitLabel(Asm->getCurExceptionSym());
 
   // Emit the LSDA header.
   Asm->EmitEncodingByte(dwarf::DW_EH_PE_omit, "@LPStart");
   Asm->EmitEncodingByte(TTypeEncoding, "@TType");
 
-  // The type infos need to be aligned. GCC does this by inserting padding just
-  // before the type infos. However, this changes the size of the exception
-  // table, so you need to take this into account when you output the exception
-  // table size. However, the size is output using a variable length encoding.
-  // So by increasing the size by inserting padding, you may increase the number
-  // of bytes used for writing the size. If it increases, say by one byte, then
-  // you now need to output one less byte of padding to get the type infos
-  // aligned. However this decreases the size of the exception table. This
-  // changes the value you have to output for the exception table size. Due to
-  // the variable length encoding, the number of bytes used for writing the
-  // length may decrease. If so, you then have to increase the amount of
-  // padding. And so on. If you look carefully at the GCC code you will see that
-  // it indeed does this in a loop, going on and on until the values stabilize.
-  // We chose another solution: don't output padding inside the table like GCC
-  // does, instead output it before the table.
-  unsigned SizeTypes = TypeInfos.size() * TypeFormatSize;
-  unsigned CallSiteTableLengthSize = getULEB128Size(CallSiteTableLength);
-  unsigned TTypeBaseOffset =
-    sizeof(int8_t) +                            // Call site format
-    CallSiteTableLengthSize +                   // Call site table length size
-    CallSiteTableLength +                       // Call site table length
-    SizeActions +                               // Actions size
-    SizeTypes;
-  unsigned TTypeBaseOffsetSize = getULEB128Size(TTypeBaseOffset);
-  unsigned TotalSize =
-    sizeof(int8_t) +                            // LPStart format
-    sizeof(int8_t) +                            // TType format
-    (HaveTTData ? TTypeBaseOffsetSize : 0) +    // TType base offset size
-    TTypeBaseOffset;                            // TType base offset
-  unsigned SizeAlign = (4 - TotalSize) & 3;
-
+  MCSymbol *TTBaseLabel = nullptr;
   if (HaveTTData) {
-    // Account for any extra padding that will be added to the call site table
-    // length.
-    Asm->EmitULEB128(TTypeBaseOffset, "@TType base offset", SizeAlign);
-    SizeAlign = 0;
+    // N.B.: There is a dependency loop between the size of the TTBase uleb128
+    // here and the amount of padding before the aligned type table. The
+    // assembler must sometimes pad this uleb128 or insert extra padding before
+    // the type table. See PR35809 or GNU as bug 4029.
+    MCSymbol *TTBaseRefLabel = Asm->createTempSymbol("ttbaseref");
+    TTBaseLabel = Asm->createTempSymbol("ttbase");
+    Asm->EmitLabelDifferenceAsULEB128(TTBaseLabel, TTBaseRefLabel);
+    Asm->OutStreamer->EmitLabel(TTBaseRefLabel);
   }
 
-  bool VerboseAsm = Asm->OutStreamer.isVerboseAsm();
+  bool VerboseAsm = Asm->OutStreamer->isVerboseAsm();
+
+  // Emit the landing pad call site table.
+  MCSymbol *CstBeginLabel = Asm->createTempSymbol("cst_begin");
+  MCSymbol *CstEndLabel = Asm->createTempSymbol("cst_end");
+  Asm->EmitEncodingByte(CallSiteEncoding, "Call site");
+  Asm->EmitLabelDifferenceAsULEB128(CstEndLabel, CstBeginLabel);
+  Asm->OutStreamer->EmitLabel(CstBeginLabel);
 
   // SjLj Exception handling
   if (IsSJLJ) {
-    Asm->EmitEncodingByte(dwarf::DW_EH_PE_udata4, "Call site");
-
-    // Add extra padding if it wasn't added to the TType base offset.
-    Asm->EmitULEB128(CallSiteTableLength, "Call site table length", SizeAlign);
-
-    // Emit the landing pad site information.
     unsigned idx = 0;
     for (SmallVectorImpl<CallSiteEntry>::const_iterator
          I = CallSites.begin(), E = CallSites.end(); I != E; ++I, ++idx) {
       const CallSiteEntry &S = *I;
 
-      // Offset of the landing pad, counted in 16-byte bundles relative to the
-      // @LPStart address.
+      // Index of the call site entry.
       if (VerboseAsm) {
-        Asm->OutStreamer.AddComment(">> Call Site " + Twine(idx) + " <<");
-        Asm->OutStreamer.AddComment("  On exception at call site "+Twine(idx));
+        Asm->OutStreamer->AddComment(">> Call Site " + Twine(idx) + " <<");
+        Asm->OutStreamer->AddComment("  On exception at call site "+Twine(idx));
       }
       Asm->EmitULEB128(idx);
 
@@ -512,10 +475,10 @@ void EHStreamer::emitExceptionTable() {
       // the action table), and 0 indicates that there are no actions.
       if (VerboseAsm) {
         if (S.Action == 0)
-          Asm->OutStreamer.AddComment("  Action: cleanup");
+          Asm->OutStreamer->AddComment("  Action: cleanup");
         else
-          Asm->OutStreamer.AddComment("  Action: " +
-                                      Twine((S.Action - 1) / 2 + 1));
+          Asm->OutStreamer->AddComment("  Action: " +
+                                       Twine((S.Action - 1) / 2 + 1));
       }
       Asm->EmitULEB128(S.Action);
     }
@@ -540,51 +503,41 @@ void EHStreamer::emitExceptionTable() {
     // A missing entry in the call-site table indicates that a call is not
     // supposed to throw.
 
-    // Emit the landing pad call site table.
-    Asm->EmitEncodingByte(dwarf::DW_EH_PE_udata4, "Call site");
-
-    // Add extra padding if it wasn't added to the TType base offset.
-    Asm->EmitULEB128(CallSiteTableLength, "Call site table length", SizeAlign);
-
     unsigned Entry = 0;
     for (SmallVectorImpl<CallSiteEntry>::const_iterator
          I = CallSites.begin(), E = CallSites.end(); I != E; ++I) {
       const CallSiteEntry &S = *I;
 
-      MCSymbol *EHFuncBeginSym =
-        Asm->GetTempSymbol("eh_func_begin", Asm->getFunctionNumber());
+      MCSymbol *EHFuncBeginSym = Asm->getFunctionBegin();
 
       MCSymbol *BeginLabel = S.BeginLabel;
       if (!BeginLabel)
         BeginLabel = EHFuncBeginSym;
       MCSymbol *EndLabel = S.EndLabel;
       if (!EndLabel)
-        EndLabel = Asm->GetTempSymbol("eh_func_end", Asm->getFunctionNumber());
+        EndLabel = Asm->getFunctionEnd();
 
-
-      // Offset of the call site relative to the previous call site, counted in
-      // number of 16-byte bundles. The first call site is counted relative to
-      // the start of the procedure fragment.
+      // Offset of the call site relative to the start of the procedure.
       if (VerboseAsm)
-        Asm->OutStreamer.AddComment(">> Call Site " + Twine(++Entry) + " <<");
-      Asm->EmitLabelDifference(BeginLabel, EHFuncBeginSym, 4);
+        Asm->OutStreamer->AddComment(">> Call Site " + Twine(++Entry) + " <<");
+      Asm->EmitLabelDifferenceAsULEB128(BeginLabel, EHFuncBeginSym);
       if (VerboseAsm)
-        Asm->OutStreamer.AddComment(Twine("  Call between ") +
-                                    BeginLabel->getName() + " and " +
-                                    EndLabel->getName());
-      Asm->EmitLabelDifference(EndLabel, BeginLabel, 4);
+        Asm->OutStreamer->AddComment(Twine("  Call between ") +
+                                     BeginLabel->getName() + " and " +
+                                     EndLabel->getName());
+      Asm->EmitLabelDifferenceAsULEB128(EndLabel, BeginLabel);
 
-      // Offset of the landing pad, counted in 16-byte bundles relative to the
-      // @LPStart address.
-      if (!S.PadLabel) {
+      // Offset of the landing pad relative to the start of the procedure.
+      if (!S.LPad) {
         if (VerboseAsm)
-          Asm->OutStreamer.AddComment("    has no landing pad");
-        Asm->OutStreamer.EmitIntValue(0, 4/*size*/);
+          Asm->OutStreamer->AddComment("    has no landing pad");
+        Asm->EmitULEB128(0);
       } else {
         if (VerboseAsm)
-          Asm->OutStreamer.AddComment(Twine("    jumps to ") +
-                                      S.PadLabel->getName());
-        Asm->EmitLabelDifference(S.PadLabel, EHFuncBeginSym, 4);
+          Asm->OutStreamer->AddComment(Twine("    jumps to ") +
+                                       S.LPad->LandingPadLabel->getName());
+        Asm->EmitLabelDifferenceAsULEB128(S.LPad->LandingPadLabel,
+                                          EHFuncBeginSym);
       }
 
       // Offset of the first associated action record, relative to the start of
@@ -592,14 +545,15 @@ void EHStreamer::emitExceptionTable() {
       // the action table), and 0 indicates that there are no actions.
       if (VerboseAsm) {
         if (S.Action == 0)
-          Asm->OutStreamer.AddComment("  On action: cleanup");
+          Asm->OutStreamer->AddComment("  On action: cleanup");
         else
-          Asm->OutStreamer.AddComment("  On action: " +
-                                      Twine((S.Action - 1) / 2 + 1));
+          Asm->OutStreamer->AddComment("  On action: " +
+                                       Twine((S.Action - 1) / 2 + 1));
       }
       Asm->EmitULEB128(S.Action);
     }
   }
+  Asm->OutStreamer->EmitLabel(CstEndLabel);
 
   // Emit the Action Table.
   int Entry = 0;
@@ -609,7 +563,7 @@ void EHStreamer::emitExceptionTable() {
 
     if (VerboseAsm) {
       // Emit comments that decode the action table.
-      Asm->OutStreamer.AddComment(">> Action Record " + Twine(++Entry) + " <<");
+      Asm->OutStreamer->AddComment(">> Action Record " + Twine(++Entry) + " <<");
     }
 
     // Type Filter
@@ -618,13 +572,13 @@ void EHStreamer::emitExceptionTable() {
     //   type of the catch clauses or the types in the exception specification.
     if (VerboseAsm) {
       if (Action.ValueForTypeID > 0)
-        Asm->OutStreamer.AddComment("  Catch TypeInfo " +
-                                    Twine(Action.ValueForTypeID));
+        Asm->OutStreamer->AddComment("  Catch TypeInfo " +
+                                     Twine(Action.ValueForTypeID));
       else if (Action.ValueForTypeID < 0)
-        Asm->OutStreamer.AddComment("  Filter TypeInfo " +
-                                    Twine(Action.ValueForTypeID));
+        Asm->OutStreamer->AddComment("  Filter TypeInfo " +
+                                     Twine(Action.ValueForTypeID));
       else
-        Asm->OutStreamer.AddComment("  Cleanup");
+        Asm->OutStreamer->AddComment("  Cleanup");
     }
     Asm->EmitSLEB128(Action.ValueForTypeID);
 
@@ -634,46 +588,51 @@ void EHStreamer::emitExceptionTable() {
     //   or 0 if there is no next action record.
     if (VerboseAsm) {
       if (Action.NextAction == 0) {
-        Asm->OutStreamer.AddComment("  No further actions");
+        Asm->OutStreamer->AddComment("  No further actions");
       } else {
         unsigned NextAction = Entry + (Action.NextAction + 1) / 2;
-        Asm->OutStreamer.AddComment("  Continue to action "+Twine(NextAction));
+        Asm->OutStreamer->AddComment("  Continue to action "+Twine(NextAction));
       }
     }
     Asm->EmitSLEB128(Action.NextAction);
   }
 
-  emitTypeInfos(TTypeEncoding);
+  if (HaveTTData) {
+    Asm->EmitAlignment(2);
+    emitTypeInfos(TTypeEncoding, TTBaseLabel);
+  }
 
   Asm->EmitAlignment(2);
 }
 
-void EHStreamer::emitTypeInfos(unsigned TTypeEncoding) {
-  const std::vector<const GlobalValue *> &TypeInfos = MMI->getTypeInfos();
-  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
+void EHStreamer::emitTypeInfos(unsigned TTypeEncoding, MCSymbol *TTBaseLabel) {
+  const MachineFunction *MF = Asm->MF;
+  const std::vector<const GlobalValue *> &TypeInfos = MF->getTypeInfos();
+  const std::vector<unsigned> &FilterIds = MF->getFilterIds();
 
-  bool VerboseAsm = Asm->OutStreamer.isVerboseAsm();
+  bool VerboseAsm = Asm->OutStreamer->isVerboseAsm();
 
   int Entry = 0;
   // Emit the Catch TypeInfos.
   if (VerboseAsm && !TypeInfos.empty()) {
-    Asm->OutStreamer.AddComment(">> Catch TypeInfos <<");
-    Asm->OutStreamer.AddBlankLine();
+    Asm->OutStreamer->AddComment(">> Catch TypeInfos <<");
+    Asm->OutStreamer->AddBlankLine();
     Entry = TypeInfos.size();
   }
 
-  for (std::vector<const GlobalValue *>::const_reverse_iterator
-         I = TypeInfos.rbegin(), E = TypeInfos.rend(); I != E; ++I) {
-    const GlobalValue *GV = *I;
+  for (const GlobalValue *GV : make_range(TypeInfos.rbegin(),
+                                          TypeInfos.rend())) {
     if (VerboseAsm)
-      Asm->OutStreamer.AddComment("TypeInfo " + Twine(Entry--));
+      Asm->OutStreamer->AddComment("TypeInfo " + Twine(Entry--));
     Asm->EmitTTypeReference(GV, TTypeEncoding);
   }
 
+  Asm->OutStreamer->EmitLabel(TTBaseLabel);
+
   // Emit the Exception Specifications.
   if (VerboseAsm && !FilterIds.empty()) {
-    Asm->OutStreamer.AddComment(">> Filter TypeInfos <<");
-    Asm->OutStreamer.AddBlankLine();
+    Asm->OutStreamer->AddComment(">> Filter TypeInfos <<");
+    Asm->OutStreamer->AddBlankLine();
     Entry = 0;
   }
   for (std::vector<unsigned>::const_iterator
@@ -681,26 +640,10 @@ void EHStreamer::emitTypeInfos(unsigned TTypeEncoding) {
     unsigned TypeID = *I;
     if (VerboseAsm) {
       --Entry;
-      if (TypeID != 0)
-        Asm->OutStreamer.AddComment("FilterInfo " + Twine(Entry));
+      if (isFilterEHSelector(TypeID))
+        Asm->OutStreamer->AddComment("FilterInfo " + Twine(Entry));
     }
 
     Asm->EmitULEB128(TypeID);
   }
-}
-
-/// Emit all exception information that should come after the content.
-void EHStreamer::endModule() {
-  llvm_unreachable("Should be implemented");
-}
-
-/// Gather pre-function exception information. Assumes it's being emitted
-/// immediately after the function entry point.
-void EHStreamer::beginFunction(const MachineFunction *MF) {
-  llvm_unreachable("Should be implemented");
-}
-
-/// Gather and emit post-function exception information.
-void EHStreamer::endFunction(const MachineFunction *) {
-  llvm_unreachable("Should be implemented");
 }

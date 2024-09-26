@@ -9,22 +9,22 @@ main_:
   %i32T = alloca i32, align 4
   %i32F = alloca i32, align 4
   %i32X = alloca i32, align 4
-  store i32 0, i32* %tmp
+  store i32 %argc, i32* %tmp
   store i32 15, i32* %i32T, align 4
   store i32 5, i32* %i32F, align 4
-  %tmp6 = load i32* %tmp, align 4
+  %tmp6 = load i32, i32* %tmp, align 4
   %tmp7 = icmp ne i32 %tmp6, 0
   %tmp8 = xor i1 %tmp7, true
-  %tmp9 = load i32* %i32T, align 4
-  %tmp10 = load i32* %i32F, align 4
+  %tmp9 = load i32, i32* %i32T, align 4
+  %tmp10 = load i32, i32* %i32F, align 4
   %DHSelect = select i1 %tmp8, i32 %tmp9, i32 %tmp10
   store i32 %DHSelect, i32* %i32X, align 4
-  %tmp15 = load i32* %i32X, align 4
-  %tmp17 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([9 x i8]* @.str2, i32 0, i32 0), i32 %tmp15)
+  %tmp15 = load i32, i32* %i32X, align 4
+  %tmp17 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str2, i32 0, i32 0), i32 %tmp15)
   ret i32 0
 
 ; CHECK: main:
-; CHECK-DAG: movz
+; CHECK-DAG: mov
 ; CHECK-DAG: orr
 ; CHECK: csel
 }

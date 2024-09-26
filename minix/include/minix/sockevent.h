@@ -2,6 +2,7 @@
 #define _MINIX_SOCKEVENT_H
 
 #include <minix/sockdriver.h>
+#include <sys/queue.h>
 
 /* Socket events. */
 #define SEV_BIND	0x01	/* a pending bind operation has ended */

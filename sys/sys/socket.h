@@ -1,4 +1,4 @@
-/*	$NetBSD: socket.h,v 1.117 2015/04/03 20:01:08 rtr Exp $	*/
+/*	$NetBSD: socket.h,v 1.129 2018/11/04 16:30:29 christos Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -132,6 +132,30 @@ typedef	_BSD_SSIZE_T_	ssize_t;
 #define	SO_NOSIGPIPE	0x0800		/* no SIGPIPE from EPIPE */
 #define	SO_ACCEPTFILTER	0x1000		/* there is an accept filter */
 #define	SO_TIMESTAMP	0x2000		/* timestamp received dgram traffic */
+#define	SO_RERROR	0x4000		/* Keep track of receive errors */
+
+/* Allowed default option flags */
+#define SO_DEFOPTS	(SO_DEBUG|SO_REUSEADDR|SO_KEEPALIVE|SO_DONTROUTE| \
+    SO_BROADCAST|SO_USELOOPBACK|SO_LINGER|SO_OOBINLINE|SO_REUSEPORT| \
+    SO_NOSIGPIPE|SO_TIMESTAMP|SO_RERROR)
+
+#define __SO_OPTION_BITS \
+	"\20" \
+	"\1SO_DEBUG" \
+	"\2SO_ACCEPTCONN" \
+	"\3SO_REUSEADDR" \
+	"\4SO_KEEPALIVE" \
+	"\5SO_DONTROUTE" \
+	"\6SO_BROADCAST" \
+	"\7SO_USELOOPBACK" \
+	"\10SO_LINGER" \
+	"\11SO_OOBINLINE" \
+	"\12SO_REUSEPORT" \
+	"\13SO_OTIMESTAMP" \
+	"\14SO_NOSIGPIPE" \
+	"\15SO_ACCEPTFILTER" \
+	"\16SO_TIMESTAMP" \
+	"\17SO_RERROR"
 
 /*
  * Additional options, not kept in so_options.
@@ -220,7 +244,9 @@ struct	accept_filter_arg {
 #define	AF_IEEE80211	32		/* IEEE80211 */
 #define	AF_MPLS		33		/* MultiProtocol Label Switching */
 #define	AF_ROUTE	34		/* Internal Routing Protocol */
-#define	AF_MAX		35
+#define	AF_CAN		35
+#define	AF_ETHER	36
+#define	AF_MAX		37
 
 /*
  * Structure used by kernel to store most
@@ -329,10 +355,17 @@ struct sockaddr_storage {
 #define PF_BLUETOOTH	AF_BLUETOOTH
 #define	PF_MPLS		AF_MPLS
 #define	PF_ROUTE	AF_ROUTE
+#define	PF_CAN		AF_CAN
+#define	PF_ETHER	AF_ETHER
 
 #define	PF_MAX		AF_MAX
 
 #if defined(_NETBSD_SOURCE)
+
+#ifndef pid_t
+typedef __pid_t		pid_t;		/* process id */
+#define pid_t		__pid_t
+#endif
 
 #ifndef	gid_t
 typedef	__gid_t		gid_t;		/* group id */
@@ -348,6 +381,7 @@ typedef	__uid_t		uid_t;		/* user id */
  * Socket credentials.
  */
 struct sockcred {
+	pid_t	sc_pid;			/* process id */
 	uid_t	sc_uid;			/* real user id */
 	uid_t	sc_euid;		/* effective user id */
 	gid_t	sc_gid;			/* real group id */
@@ -366,52 +400,7 @@ struct sockcred {
 
 
 #if defined(_NETBSD_SOURCE)
-/*
- * Definitions for network related sysctl, CTL_NET.
- *
- * Second level is protocol family.
- * Third level is protocol number.
- *
- * Further levels are defined by the individual families below.
- */
-#define NET_MAXID	AF_MAX
-
-#define CTL_NET_NAMES { \
-	{ 0, 0 }, \
-	{ "local", CTLTYPE_NODE }, \
-	{ "inet", CTLTYPE_NODE }, \
-	{ "implink", CTLTYPE_NODE }, \
-	{ "pup", CTLTYPE_NODE }, \
-	{ "chaos", CTLTYPE_NODE }, \
-	{ "xerox_ns", CTLTYPE_NODE }, \
-	{ "iso", CTLTYPE_NODE }, \
-	{ "emca", CTLTYPE_NODE }, \
-	{ "datakit", CTLTYPE_NODE }, \
-	{ "ccitt", CTLTYPE_NODE }, \
-	{ "ibm_sna", CTLTYPE_NODE }, \
-	{ "decnet", CTLTYPE_NODE }, \
-	{ "dec_dli", CTLTYPE_NODE }, \
-	{ "lat", CTLTYPE_NODE }, \
-	{ "hylink", CTLTYPE_NODE }, \
-	{ "appletalk", CTLTYPE_NODE }, \
-	{ "oroute", CTLTYPE_NODE }, \
-	{ "link_layer", CTLTYPE_NODE }, \
-	{ "xtp", CTLTYPE_NODE }, \
-	{ "coip", CTLTYPE_NODE }, \
-	{ "cnt", CTLTYPE_NODE }, \
-	{ "rtip", CTLTYPE_NODE }, \
-	{ "ipx", CTLTYPE_NODE }, \
-	{ "inet6", CTLTYPE_NODE }, \
-	{ "pip", CTLTYPE_NODE }, \
-	{ "isdn", CTLTYPE_NODE }, \
-	{ "natm", CTLTYPE_NODE }, \
-	{ "arp", CTLTYPE_NODE }, \
-	{ "key", CTLTYPE_NODE }, \
-	{ "ieee80211", CTLTYPE_NODE }, \
-	{ "mlps", CTLTYPE_NODE }, \
-	{ "route", CTLTYPE_NODE }, \
-}
-
+/* Definition for CTL_NET PCB fetching sysctls */
 struct kinfo_pcb {
 	__uint64_t	ki_pcbaddr;	/* PTR: pcb addr */
 	__uint64_t	ki_ppcbaddr;	/* PTR: ppcb addr */
@@ -465,21 +454,13 @@ struct kinfo_pcb {
  *	Fifth: type of info, defined below
  *	Sixth: flag(s) to mask with for NET_RT_FLAGS
  */
-#define NET_RT_DUMP	1		/* dump; may limit to a.f. */
-#define NET_RT_FLAGS	2		/* by flags, e.g. RESOLVING */
-#define NET_RT_OOIFLIST	3		/* old NET_RT_IFLIST (pre 1.5) */
-#define NET_RT_OIFLIST	4		/* survey interface list */
-#define	NET_RT_IFLIST	5
-#define	NET_RT_MAXID	6
+#define	NET_RT_DUMP		1	/* dump; may limit to a.f. */
+#define	NET_RT_FLAGS		2	/* by flags, e.g. RESOLVING */
+#define	NET_RT_OOOIFLIST	3	/* old NET_RT_IFLIST (pre 1.5) */
+#define	NET_RT_OOIFLIST		4	/* old NET_RT_IFLIST (pre-64bit time) */
+#define	NET_RT_OIFLIST		5	/* old NET_RT_IFLIST (pre 8.0) */
+#define	NET_RT_IFLIST		6	/* survey interface list */
 
-#define CTL_NET_RT_NAMES { \
-	{ 0, 0 }, \
-	{ "dump", CTLTYPE_STRUCT }, \
-	{ "flags", CTLTYPE_STRUCT }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "iflist", CTLTYPE_STRUCT }, \
-}
 #endif /* _NETBSD_SOURCE */
 
 /*
@@ -520,6 +501,7 @@ struct msghdr {
 #define	MSG_CMSG_CLOEXEC 0x0800		/* close on exec receiving fd */
 #define	MSG_NBIO	0x1000		/* use non-blocking I/O */
 #define	MSG_WAITFORONE	0x2000		/* recvmmsg() wait for one message */
+#define	MSG_NOTIFICATION 0x4000		/* SCTP notification */
 
 struct mmsghdr {
 	struct msghdr msg_hdr;
@@ -593,9 +575,10 @@ struct cmsghdr {
 /* "Socket"-level control message types: */
 #define	SCM_RIGHTS	0x01		/* access rights (array of int) */
 #if defined(_NETBSD_SOURCE)
-/* 			0x02		   timestamp (struct timeval50) */
-#define	SCM_CREDS	0x04		/* credentials (struct sockcred) */
+/*			0x02		   timestamp (struct timeval50) */
+/*			0x04		   credentials (struct sockcred70) */
 #define	SCM_TIMESTAMP	0x08		/* timestamp (struct timeval) */
+#define	SCM_CREDS	0x10		/* credentials (struct sockcred) */
 #endif
 
 /*
@@ -606,13 +589,14 @@ struct cmsghdr {
 #define	SHUT_RDWR	2		/* Disallow further sends/receives. */
 
 #ifdef	_KERNEL
-static inline socklen_t
+static __inline socklen_t
 sockaddr_getlen(const struct sockaddr *sa)
 {
 	return sa->sa_len;
 }
 
 __BEGIN_DECLS
+socklen_t sockaddr_getsize_by_family(sa_family_t);
 struct sockaddr *sockaddr_copy(struct sockaddr *, socklen_t,
     const struct sockaddr *);
 struct sockaddr *sockaddr_externalize(struct sockaddr *, socklen_t,
@@ -621,7 +605,7 @@ struct sockaddr *sockaddr_alloc(sa_family_t, socklen_t, int);
 const void *sockaddr_const_addr(const struct sockaddr *, socklen_t *);
 void *sockaddr_addr(struct sockaddr *, socklen_t *);
 const struct sockaddr *sockaddr_any(const struct sockaddr *);
-const struct sockaddr *sockaddr_any_by_family(int);
+const struct sockaddr *sockaddr_any_by_family(sa_family_t);
 const void *sockaddr_anyaddr(const struct sockaddr *, socklen_t *);
 int sockaddr_cmp(const struct sockaddr *, const struct sockaddr *);
 struct sockaddr *sockaddr_dup(const struct sockaddr *, int);
@@ -634,11 +618,13 @@ __END_DECLS
 
 __BEGIN_DECLS
 int	accept(int, struct sockaddr * __restrict, socklen_t * __restrict);
+int	accept4(int, struct sockaddr * __restrict, socklen_t * __restrict, int);
 int	bind(int, const struct sockaddr *, socklen_t);
 int	connect(int, const struct sockaddr *, socklen_t);
 int	getpeername(int, struct sockaddr * __restrict, socklen_t * __restrict);
 int	getsockname(int, struct sockaddr * __restrict, socklen_t * __restrict);
 int	getsockopt(int, int, int, void *__restrict, socklen_t * __restrict);
+int	getsockopt2(int, int, int, void *__restrict, socklen_t * __restrict);
 int	listen(int, int);
 int	paccept(int, struct sockaddr * __restrict, socklen_t * __restrict,
 	const sigset_t * __restrict, int);

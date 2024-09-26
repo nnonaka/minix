@@ -1,7 +1,9 @@
 ; RUN: llc -mtriple=x86_64-pc-linux-gnu -filetype=obj -o %t.o < %s
-; RUN: llvm-dwarfdump -debug-dump=pubnames %t.o | FileCheck --check-prefix=LINUX %s
+; RUN: llvm-dwarfdump -debug-pubnames %t.o | FileCheck --check-prefix=LINUX %s
 ; RUN: llc -mtriple=x86_64-apple-darwin12 -filetype=obj -o %t.o < %s
-; RUN: llvm-dwarfdump -debug-dump=pubnames %t.o | FileCheck --check-prefix=DARWIN %s
+; RUN: llvm-dwarfdump -debug-pubnames %t.o | FileCheck --check-prefix=NOPUB %s
+; RUN: llc -mtriple=x86_64-scei-ps4 -filetype=obj -o %t.o < %s
+; RUN: llvm-dwarfdump -debug-pubnames %t.o | FileCheck --check-prefix=NOPUB %s
 ; ModuleID = 'dwarf-public-names.cpp'
 ;
 ; Generated from:
@@ -35,13 +37,13 @@
 ;   int global_namespace_variable = 1;
 ; }
 
-; Darwin shouldn't be generating the section by default
-; DARWIN: debug_pubnames
-; DARWIN: {{^$}}
+; Darwin and PS4 shouldn't be generating the section by default
+; NOPUB: debug_pubnames
+; NOPUB-NEXT: {{^$}}
 
 ; Skip the output to the header of the pubnames section.
 ; LINUX: debug_pubnames
-; LINUX: unit_size = 0x00000128
+; LINUX-NEXT: unit_size = 0x00000128
 
 ; Check for each name in the output.
 ; LINUX-DAG: "ns"
@@ -53,83 +55,91 @@
 ; LINUX-DAG: "C::static_member_variable"
 ; LINUX-DAG: "C::member_function"
 
+source_filename = "test/DebugInfo/X86/dwarf-public-names.ll"
+
 %struct.C = type { i8 }
 
-@_ZN1C22static_member_variableE = global i32 0, align 4
-@global_variable = global %struct.C zeroinitializer, align 1
-@_ZN2ns25global_namespace_variableE = global i32 1, align 4
+@_ZN1C22static_member_variableE = global i32 0, align 4, !dbg !0
+@global_variable = global %struct.C zeroinitializer, align 1, !dbg !15
+@_ZN2ns25global_namespace_variableE = global i32 1, align 4, !dbg !17
 
-define void @_ZN1C15member_functionEv(%struct.C* %this) nounwind uwtable align 2 {
+; Function Attrs: nounwind uwtable
+define void @_ZN1C15member_functionEv(%struct.C* %this) #0 align 2 !dbg !23 {
 entry:
   %this.addr = alloca %struct.C*, align 8
   store %struct.C* %this, %struct.C** %this.addr, align 8
-  call void @llvm.dbg.declare(metadata %struct.C** %this.addr, metadata !28, metadata !{!"0x102"}), !dbg !30
-  %this1 = load %struct.C** %this.addr
-  store i32 0, i32* @_ZN1C22static_member_variableE, align 4, !dbg !31
-  ret void, !dbg !32
+  call void @llvm.dbg.declare(metadata %struct.C** %this.addr, metadata !24, metadata !26), !dbg !27
+  %this1 = load %struct.C*, %struct.C** %this.addr
+  store i32 0, i32* @_ZN1C22static_member_variableE, align 4, !dbg !28
+  ret void, !dbg !29
 }
 
-declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone
+; Function Attrs: nounwind readnone
+declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
-define i32 @_ZN1C22static_member_functionEv() nounwind uwtable align 2 {
+; Function Attrs: nounwind uwtable
+define i32 @_ZN1C22static_member_functionEv() #0 align 2 !dbg !30 {
 entry:
-  %0 = load i32* @_ZN1C22static_member_variableE, align 4, !dbg !33
-  ret i32 %0, !dbg !33
+  %0 = load i32, i32* @_ZN1C22static_member_variableE, align 4, !dbg !31
+  ret i32 %0, !dbg !31
 }
 
-define i32 @_Z15global_functionv() nounwind uwtable {
+; Function Attrs: nounwind uwtable
+define i32 @_Z15global_functionv() #0 !dbg !32 {
 entry:
-  ret i32 -1, !dbg !34
+  ret i32 -1, !dbg !33
 }
 
-define void @_ZN2ns25global_namespace_functionEv() nounwind uwtable {
+; Function Attrs: nounwind uwtable
+define void @_ZN2ns25global_namespace_functionEv() #0 !dbg !34 {
 entry:
-  call void @_ZN1C15member_functionEv(%struct.C* @global_variable), !dbg !35
-  ret void, !dbg !36
+  call void @_ZN1C15member_functionEv(%struct.C* @global_variable), !dbg !37
+  ret void, !dbg !38
 }
 
 attributes #0 = { nounwind uwtable }
 attributes #1 = { nounwind readnone }
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!38}
+!llvm.dbg.cu = !{!20}
+!llvm.module.flags = !{!22}
 
-!0 = !{!"0x11\004\00clang version 3.3 (http://llvm.org/git/clang.git a09cd8103a6a719cb2628cdf0c91682250a17bd2) (http://llvm.org/git/llvm.git 47d03cec0afca0c01ae42b82916d1d731716cd20)\000\00\000\00\000", !37, !1, !1, !2, !24,  !1} ; [ DW_TAG_compile_unit ] [/usr2/kparzysz/s.hex/t/dwarf-public-names.cpp] [DW_LANG_C_plus_plus]
-!1 = !{}
-!2 = !{!3, !18, !19, !20}
-!3 = !{!"0x2e\00member_function\00member_function\00_ZN1C15member_functionEv\009\000\001\000\006\00256\000\009", !4, null, !5, null, void (%struct.C*)* @_ZN1C15member_functionEv, null, !12, !1} ; [ DW_TAG_subprogram ] [line 9] [def] [member_function]
-!4 = !{!"0x29", !37} ; [ DW_TAG_file_type ]
-!5 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !6, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!6 = !{null, !7}
-!7 = !{!"0xf\00\000\0064\0064\000\001088", i32 0, null, !8} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [artificial] [from C]
-!8 = !{!"0x13\00C\001\008\008\000\000\000", !37, null, null, !9, null, null, null} ; [ DW_TAG_structure_type ] [C] [line 1, size 8, align 8, offset 0] [def] [from ]
-!9 = !{!10, !12, !14}
-!10 = !{!"0xd\00static_member_variable\004\000\000\000\004096", !37, !8, !11, null} ; [ DW_TAG_member ] [static_member_variable] [line 4, size 0, align 0, offset 0] [static] [from int]
-!11 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!12 = !{!"0x2e\00member_function\00member_function\00_ZN1C15member_functionEv\002\000\000\000\006\00256\000\002", !4, !8, !5, null, null, null, i32 0, !13} ; [ DW_TAG_subprogram ] [line 2] [member_function]
-!13 = !{!"0x24"}                      ; [ DW_TAG_base_type ] [line 0, size 0, align 0, offset 0]
-!14 = !{!"0x2e\00static_member_function\00static_member_function\00_ZN1C22static_member_functionEv\003\000\000\000\006\00256\000\003", !4, !8, !15, null, null, null, i32 0, !17} ; [ DW_TAG_subprogram ] [line 3] [static_member_function]
-!15 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !16, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!16 = !{!11}
-!17 = !{!"0x24"}                      ; [ DW_TAG_base_type ] [line 0, size 0, align 0, offset 0]
-!18 = !{!"0x2e\00static_member_function\00static_member_function\00_ZN1C22static_member_functionEv\0013\000\001\000\006\00256\000\0013", !4, null, !15, null, i32 ()* @_ZN1C22static_member_functionEv, null, !14, !1} ; [ DW_TAG_subprogram ] [line 13] [def] [static_member_function]
-!19 = !{!"0x2e\00global_function\00global_function\00_Z15global_functionv\0019\000\001\000\006\00256\000\0019", !4, !4, !15, null, i32 ()* @_Z15global_functionv, null, null, !1} ; [ DW_TAG_subprogram ] [line 19] [def] [global_function]
-!20 = !{!"0x2e\00global_namespace_function\00global_namespace_function\00_ZN2ns25global_namespace_functionEv\0024\000\001\000\006\00256\000\0024", !4, !21, !22, null, void ()* @_ZN2ns25global_namespace_functionEv, null, null, !1} ; [ DW_TAG_subprogram ] [line 24] [def] [global_namespace_function]
-!21 = !{!"0x39\00ns\0023", !4, null} ; [ DW_TAG_namespace ] [/usr2/kparzysz/s.hex/t/dwarf-public-names.cpp]
-!22 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !23, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!23 = !{null}
-!24 = !{!25, !26, !27}
-!25 = !{!"0x34\00static_member_variable\00static_member_variable\00_ZN1C22static_member_variableE\007\000\001", !8, !4, !11, i32* @_ZN1C22static_member_variableE, !10} ; [ DW_TAG_variable ] [static_member_variable] [line 7] [def]
-!26 = !{!"0x34\00global_variable\00global_variable\00\0017\000\001", null, !4, !8, %struct.C* @global_variable, null} ; [ DW_TAG_variable ] [global_variable] [line 17] [def]
-!27 = !{!"0x34\00global_namespace_variable\00global_namespace_variable\00_ZN2ns25global_namespace_variableE\0027\000\001", !21, !4, !11, i32* @_ZN2ns25global_namespace_variableE, null} ; [ DW_TAG_variable ] [global_namespace_variable] [line 27] [def]
-!28 = !{!"0x101\00this\0016777225\001088", !3, !4, !29} ; [ DW_TAG_arg_variable ] [this] [line 9]
-!29 = !{!"0xf\00\000\0064\0064\000\000", null, null, !8} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [from C]
-!30 = !MDLocation(line: 9, scope: !3)
-!31 = !MDLocation(line: 10, scope: !3)
-!32 = !MDLocation(line: 11, scope: !3)
-!33 = !MDLocation(line: 14, scope: !18)
-!34 = !MDLocation(line: 20, scope: !19)
-!35 = !MDLocation(line: 25, scope: !20)
-!36 = !MDLocation(line: 26, scope: !20)
-!37 = !{!"dwarf-public-names.cpp", !"/usr2/kparzysz/s.hex/t"}
-!38 = !{i32 1, !"Debug Info Version", i32 2}
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "static_member_variable", linkageName: "_ZN1C22static_member_variableE", scope: !2, file: !3, line: 7, type: !6, isLocal: false, isDefinition: true, declaration: !5)
+!2 = !DICompositeType(tag: DW_TAG_structure_type, name: "C", file: !3, line: 1, size: 8, elements: !4)
+!3 = !DIFile(filename: "dwarf-public-names.cpp", directory: "/usr2/kparzysz/s.hex/t")
+!4 = !{!5, !7, !12}
+!5 = !DIDerivedType(tag: DW_TAG_member, name: "static_member_variable", scope: !2, file: !3, line: 4, baseType: !6, flags: DIFlagStaticMember)
+!6 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+!7 = !DISubprogram(name: "member_function", linkageName: "_ZN1C15member_functionEv", scope: !2, file: !3, line: 2, type: !8, isLocal: false, isDefinition: false, scopeLine: 2, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, retainedNodes: !11)
+!8 = !DISubroutineType(types: !9)
+!9 = !{null, !10}
+!10 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !2, size: 64, flags: DIFlagArtificial | DIFlagObjectPointer)
+!11 = !{}
+!12 = !DISubprogram(name: "static_member_function", linkageName: "_ZN1C22static_member_functionEv", scope: !2, file: !3, line: 3, type: !13, isLocal: false, isDefinition: false, scopeLine: 3, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, retainedNodes: !11)
+!13 = !DISubroutineType(types: !14)
+!14 = !{!6}
+!15 = !DIGlobalVariableExpression(var: !16, expr: !DIExpression())
+!16 = !DIGlobalVariable(name: "global_variable", scope: null, file: !3, line: 17, type: !2, isLocal: false, isDefinition: true) ; previously: invalid DW_TAG_base_type
+!17 = !DIGlobalVariableExpression(var: !18, expr: !DIExpression())
+!18 = !DIGlobalVariable(name: "global_namespace_variable", linkageName: "_ZN2ns25global_namespace_variableE", scope: !19, file: !3, line: 27, type: !6, isLocal: false, isDefinition: true)
+!19 = !DINamespace(name: "ns", scope: null)
+!20 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !3, producer: "clang version 3.3 (http://llvm.org/git/clang.git a09cd8103a6a719cb2628cdf0c91682250a17bd2) (http://llvm.org/git/llvm.git 47d03cec0afca0c01ae42b82916d1d731716cd20)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !11, retainedTypes: !11, globals: !21, imports: !11) ; previously: invalid DW_TAG_base_type
+!21 = !{!0, !15, !17}
+!22 = !{i32 1, !"Debug Info Version", i32 3}
+!23 = distinct !DISubprogram(name: "member_function", linkageName: "_ZN1C15member_functionEv", scope: null, file: !3, line: 9, type: !8, isLocal: false, isDefinition: true, scopeLine: 9, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !20, declaration: !7, retainedNodes: !11)
+!24 = !DILocalVariable(name: "this", arg: 1, scope: !23, file: !3, line: 9, type: !25, flags: DIFlagArtificial | DIFlagObjectPointer)
+!25 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !2, size: 64)
+!26 = !DIExpression()
+!27 = !DILocation(line: 9, scope: !23)
+!28 = !DILocation(line: 10, scope: !23)
+!29 = !DILocation(line: 11, scope: !23)
+!30 = distinct !DISubprogram(name: "static_member_function", linkageName: "_ZN1C22static_member_functionEv", scope: null, file: !3, line: 13, type: !13, isLocal: false, isDefinition: true, scopeLine: 13, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !20, declaration: !12, retainedNodes: !11)
+!31 = !DILocation(line: 14, scope: !30)
+!32 = distinct !DISubprogram(name: "global_function", linkageName: "_Z15global_functionv", scope: !3, file: !3, line: 19, type: !13, isLocal: false, isDefinition: true, scopeLine: 19, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !20, retainedNodes: !11)
+!33 = !DILocation(line: 20, scope: !32)
+!34 = distinct !DISubprogram(name: "global_namespace_function", linkageName: "_ZN2ns25global_namespace_functionEv", scope: !19, file: !3, line: 24, type: !35, isLocal: false, isDefinition: true, scopeLine: 24, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !20, retainedNodes: !11)
+!35 = !DISubroutineType(types: !36)
+!36 = !{null}
+!37 = !DILocation(line: 25, scope: !34)
+!38 = !DILocation(line: 26, scope: !34)
+

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.15 2015/01/29 20:41:37 joerg Exp $
+#	$NetBSD: Makefile,v 1.17 2018/07/17 18:55:30 joerg Exp $
 
 LIB=	clangSema
 
@@ -7,13 +7,13 @@ LIB=	clangSema
 .PATH: ${CLANG_SRCDIR}/lib/Sema
 
 SRCS+=	AnalysisBasedWarnings.cpp \
-	AttributeList.cpp \
 	CodeCompleteConsumer.cpp \
 	DeclSpec.cpp \
 	DelayedDiagnostic.cpp \
 	IdentifierResolver.cpp \
 	JumpDiagnostics.cpp \
 	MultiplexExternalSemaSource.cpp \
+	ParsedAttr.cpp \
 	Scope.cpp \
 	ScopeInfo.cpp \
 	Sema.cpp \
@@ -25,6 +25,7 @@ SRCS+=	AnalysisBasedWarnings.cpp \
 	SemaChecking.cpp \
 	SemaCodeComplete.cpp \
 	SemaConsumer.cpp \
+	SemaCoroutine.cpp \
 	SemaDecl.cpp \
 	SemaDeclAttr.cpp \
 	SemaDeclCXX.cpp \

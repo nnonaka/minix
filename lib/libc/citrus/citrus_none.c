@@ -1,4 +1,4 @@
-/*	$NetBSD: citrus_none.c,v 1.19 2013/05/28 16:57:56 joerg Exp $	*/
+/*	$NetBSD: citrus_none.c,v 1.23 2019/07/28 13:52:23 christos Exp $	*/
 
 /*-
  * Copyright (c)2002 Citrus Project,
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: citrus_none.c,v 1.19 2013/05/28 16:57:56 joerg Exp $");
+__RCSID("$NetBSD: citrus_none.c,v 1.23 2019/07/28 13:52:23 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <assert.h>
@@ -300,6 +300,7 @@ _citrus_NONE_ctype_wcsrtombs(void * __restrict cl, char * __restrict s,
 
 	while (n > 0) {
 		if ((*pwcs0 & ~0xFFU) != 0) {
+			*pwcs = pwcs0;
 			*nresult = (size_t)-1;
 			return (EILSEQ);
 		}
@@ -513,7 +514,10 @@ _citrus_NONE_stdenc_mbtowc(struct _citrus_stdenc * __restrict ce,
 			   void * __restrict pspriv,
 			   size_t * __restrict nresult)
 {
-	if (s == NULL) {
+
+	_DIAGASSERT(s != NULL);
+
+	if (*s == NULL) {
 		*nresult = 0;
 		return (0);
 	}
@@ -525,7 +529,7 @@ _citrus_NONE_stdenc_mbtowc(struct _citrus_stdenc * __restrict ce,
 	if (pwc != NULL)
 		*pwc = (_wc_t)(unsigned char) **s;
 
-	*nresult = *s == '\0' ? 0 : 1;
+	*nresult = **s == '\0' ? 0 : 1;
 	return (0);
 }
 

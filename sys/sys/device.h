@@ -1,4 +1,4 @@
-/* $NetBSD: device.h,v 1.147 2015/03/06 09:28:15 mrg Exp $ */
+/* $NetBSD: device.h,v 1.157 2018/12/01 01:51:38 msaitoh Exp $ */
 
 /*
  * Copyright (c) 1996, 2000 Christopher G. Demetriou
@@ -81,7 +81,7 @@
 #include <sys/evcnt.h>
 #include <sys/queue.h>
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(_KMEMUSER)
 #include <sys/mutex.h>
 #include <sys/condvar.h>
 #include <sys/pmf.h>
@@ -122,7 +122,12 @@ typedef struct cfdata *cfdata_t;
 typedef struct cfdriver *cfdriver_t;
 typedef struct cfattach *cfattach_t;
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(_KMEMUSER)
+struct device_compatible_entry {
+	const char	*compat;
+	uintptr_t	data;
+};
+
 struct device_lock {
 	int		dvl_nwait;
 	int		dvl_nlock;
@@ -197,9 +202,12 @@ struct device {
 #define	DVF_CLASS_SUSPENDED	0x0008	/* device class suspend was called */
 #define	DVF_DRIVER_SUSPENDED	0x0010	/* device driver suspend was called */
 #define	DVF_BUS_SUSPENDED	0x0020	/* device bus suspend was called */
+#define	DVF_ATTACH_INPROGRESS	0x0040	/* device attach is in progress */
 #define	DVF_DETACH_SHUTDOWN	0x0080	/* device detaches safely at shutdown */
 
+#ifdef _KERNEL
 TAILQ_HEAD(devicelist, device);
+#endif
 
 enum deviter_flags {
 	  DEVITER_F_RW =		0x1
@@ -288,7 +296,9 @@ struct cftable {
 	cfdata_t	ct_cfdata;	/* pointer to cfdata table */
 	TAILQ_ENTRY(cftable) ct_list;	/* list linkage */
 };
+#ifdef _KERNEL
 TAILQ_HEAD(cftablelist, cftable);
+#endif
 
 typedef int (*cfsubmatch_t)(device_t, cfdata_t, const int *, void *);
 
@@ -349,6 +359,7 @@ struct cfattach __CONCAT(name,_ca) = {					\
 #define	DETACH_FORCE	0x01		/* force detachment; hardware gone */
 #define	DETACH_QUIET	0x02		/* don't print a notice */
 #define	DETACH_SHUTDOWN	0x04		/* detach because of system shutdown */
+#define	DETACH_POWEROFF	0x08		/* going to power off; power down devices */
 
 struct cfdriver {
 	LIST_ENTRY(cfdriver) cd_list;	/* link on allcfdrivers */
@@ -412,10 +423,12 @@ struct pdevinit {
 extern struct cfdriverlist allcfdrivers;/* list of all cfdrivers */
 extern struct cftablelist allcftables;	/* list of all cfdata tables */
 extern device_t booted_device;		/* the device we booted from */
+extern const char *booted_method;	/* the method the device was found */
 extern int booted_partition;		/* the partition on that device */
 extern daddr_t booted_startblk;		/* or the start of a wedge */
 extern uint64_t booted_nblks;		/* and the size of that wedge */
 extern char *bootspec;			/* and the device/wedge name */
+extern bool root_is_mounted;		/* true if root is mounted */
 
 struct vnode *opendisk(device_t);
 int getdisksize(struct vnode *, uint64_t *, unsigned int *);
@@ -429,6 +442,8 @@ int	config_fini_component(struct cfdriver *const*,
 			      const struct cfattachinit *, struct cfdata *);
 void	config_init_mi(void);
 void	drvctl_init(void);
+void	drvctl_fini(void);
+extern	int (*devmon_insert_vec)(const char *, prop_dictionary_t);
 
 int	config_cfdriver_attach(struct cfdriver *);
 int	config_cfdriver_detach(struct cfdriver *);
@@ -521,6 +536,10 @@ bool		device_is_a(device_t, const char *);
 
 device_t	device_find_by_xname(const char *);
 device_t	device_find_by_driver_unit(const char *, int);
+
+int		device_compatible_match(const char **, int,
+				const struct device_compatible_entry *,
+				const struct device_compatible_entry **);
 
 bool		device_pmf_is_registered(device_t);
 

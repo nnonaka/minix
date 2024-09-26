@@ -15,10 +15,11 @@
 #include "clang/AST/Stmt.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Analysis/Analyses/PostOrderCFGView.h"
-#include "clang/Analysis/AnalysisContext.h"
+#include "clang/Analysis/AnalysisDeclContext.h"
 #include "clang/Analysis/CFG.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/ADT/PriorityQueue.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <vector>
@@ -28,20 +29,21 @@ using namespace clang;
 namespace {
 
 class DataflowWorklist {
-  SmallVector<const CFGBlock *, 20> worklist;
   llvm::BitVector enqueuedBlocks;
   PostOrderCFGView *POV;
+  llvm::PriorityQueue<const CFGBlock *, SmallVector<const CFGBlock *, 20>,
+                      PostOrderCFGView::BlockOrderCompare> worklist;
+
 public:
   DataflowWorklist(const CFG &cfg, AnalysisDeclContext &Ctx)
     : enqueuedBlocks(cfg.getNumBlockIDs()),
-      POV(Ctx.getAnalysis<PostOrderCFGView>()) {}
+      POV(Ctx.getAnalysis<PostOrderCFGView>()),
+      worklist(POV->getComparator()) {}
   
   void enqueueBlock(const CFGBlock *block);
   void enqueuePredecessors(const CFGBlock *block);
 
   const CFGBlock *dequeue();
-
-  void sortWorklist();
 };
 
 }
@@ -49,31 +51,22 @@ public:
 void DataflowWorklist::enqueueBlock(const clang::CFGBlock *block) {
   if (block && !enqueuedBlocks[block->getBlockID()]) {
     enqueuedBlocks[block->getBlockID()] = true;
-    worklist.push_back(block);
+    worklist.push(block);
   }
 }
 
 void DataflowWorklist::enqueuePredecessors(const clang::CFGBlock *block) {
-  const unsigned OldWorklistSize = worklist.size();
   for (CFGBlock::const_pred_iterator I = block->pred_begin(),
        E = block->pred_end(); I != E; ++I) {
     enqueueBlock(*I);
   }
-  
-  if (OldWorklistSize == 0 || OldWorklistSize == worklist.size())
-    return;
-
-  sortWorklist();
-}
-
-void DataflowWorklist::sortWorklist() {
-  std::sort(worklist.begin(), worklist.end(), POV->getComparator());
 }
 
 const CFGBlock *DataflowWorklist::dequeue() {
   if (worklist.empty())
     return nullptr;
-  const CFGBlock *b = worklist.pop_back_val();
+  const CFGBlock *b = worklist.top();
+  worklist.pop();
   enqueuedBlocks[b->getBlockID()] = false;
   return b;
 }
@@ -84,6 +77,7 @@ public:
   AnalysisDeclContext &analysisContext;
   llvm::ImmutableSet<const Stmt *>::Factory SSetFact;
   llvm::ImmutableSet<const VarDecl *>::Factory DSetFact;
+  llvm::ImmutableSet<const BindingDecl *>::Factory BSetFact;
   llvm::DenseMap<const CFGBlock *, LiveVariables::LivenessValues> blocksEndToLiveness;
   llvm::DenseMap<const CFGBlock *, LiveVariables::LivenessValues> blocksBeginToLiveness;
   llvm::DenseMap<const Stmt *, LiveVariables::LivenessValues> stmtsToLiveness;
@@ -104,6 +98,7 @@ public:
     : analysisContext(ac),
       SSetFact(false), // Do not canonicalize ImmutableSets by default.
       DSetFact(false), // This is a *major* performance win.
+      BSetFact(false),
       killAtAssign(KillAtAssign) {}
 };
 }
@@ -121,6 +116,12 @@ bool LiveVariables::LivenessValues::isLive(const Stmt *S) const {
 }
 
 bool LiveVariables::LivenessValues::isLive(const VarDecl *D) const {
+  if (const auto *DD = dyn_cast<DecompositionDecl>(D)) {
+    bool alive = false;
+    for (const BindingDecl *BD : DD->bindings())
+      alive |= liveBindings.contains(BD);
+    return alive;
+  }
   return liveDecls.contains(D);
 }
 
@@ -152,14 +153,19 @@ LiveVariablesImpl::merge(LiveVariables::LivenessValues valsA,
     DSetRefA(valsA.liveDecls.getRootWithoutRetain(), DSetFact.getTreeFactory()),
     DSetRefB(valsB.liveDecls.getRootWithoutRetain(), DSetFact.getTreeFactory());
   
+  llvm::ImmutableSetRef<const BindingDecl *>
+    BSetRefA(valsA.liveBindings.getRootWithoutRetain(), BSetFact.getTreeFactory()),
+    BSetRefB(valsB.liveBindings.getRootWithoutRetain(), BSetFact.getTreeFactory());
 
   SSetRefA = mergeSets(SSetRefA, SSetRefB);
   DSetRefA = mergeSets(DSetRefA, DSetRefB);
+  BSetRefA = mergeSets(BSetRefA, BSetRefB);
   
   // asImmutableSet() canonicalizes the tree, allowing us to do an easy
   // comparison afterwards.
   return LiveVariables::LivenessValues(SSetRefA.asImmutableSet(),
-                                       DSetRefA.asImmutableSet());  
+                                       DSetRefA.asImmutableSet(),
+                                       BSetRefA.asImmutableSet());  
 }
 
 bool LiveVariables::LivenessValues::equals(const LivenessValues &V) const {
@@ -322,12 +328,16 @@ void TransferFunctions::Visit(Stmt *S) {
       return;
     }
   }
-  
-  for (Stmt::child_iterator it = S->child_begin(), ei = S->child_end();
-       it != ei; ++it) {
-    if (Stmt *child = *it)
-      AddLiveStmt(val.liveStmts, LV.SSetFact, child);
+
+  for (Stmt *Child : S->children()) {
+    if (Child)
+      AddLiveStmt(val.liveStmts, LV.SSetFact, Child);
   }
+}
+
+static bool writeShouldKill(const VarDecl *VD) {
+  return VD && !VD->getType()->isReferenceType() &&
+    !isAlwaysAlive(VD);
 }
 
 void TransferFunctions::VisitBinaryOperator(BinaryOperator *B) {
@@ -337,30 +347,31 @@ void TransferFunctions::VisitBinaryOperator(BinaryOperator *B) {
     
     // Assigning to a variable?
     Expr *LHS = B->getLHS()->IgnoreParens();
-    
-    if (DeclRefExpr *DR = dyn_cast<DeclRefExpr>(LHS))
-      if (const VarDecl *VD = dyn_cast<VarDecl>(DR->getDecl())) {
-        // Assignments to references don't kill the ref's address
-        if (VD->getType()->isReferenceType())
-          return;
 
-        if (!isAlwaysAlive(VD)) {
-          // The variable is now dead.
+    if (DeclRefExpr *DR = dyn_cast<DeclRefExpr>(LHS)) {
+      const Decl* D = DR->getDecl();
+      bool Killed = false;
+
+      if (const BindingDecl* BD = dyn_cast<BindingDecl>(D)) {
+        Killed = !BD->getType()->isReferenceType();
+        if (Killed)
+          val.liveBindings = LV.BSetFact.remove(val.liveBindings, BD);
+      } else if (const auto *VD = dyn_cast<VarDecl>(D)) {
+        Killed = writeShouldKill(VD);
+        if (Killed)
           val.liveDecls = LV.DSetFact.remove(val.liveDecls, VD);
-        }
 
-        if (observer)
-          observer->observerKill(DR);
       }
+
+      if (Killed && observer)
+        observer->observerKill(DR);
+    }
   }
 }
 
 void TransferFunctions::VisitBlockExpr(BlockExpr *BE) {
-  AnalysisDeclContext::referenced_decls_iterator I, E;
-  std::tie(I, E) =
-    LV.analysisContext.getReferencedBlockVars(BE->getBlockDecl());
-  for ( ; I != E ; ++I) {
-    const VarDecl *VD = *I;
+  for (const VarDecl *VD :
+       LV.analysisContext.getReferencedBlockVars(BE->getBlockDecl())) {
     if (isAlwaysAlive(VD))
       continue;
     val.liveDecls = LV.DSetFact.add(val.liveDecls, VD);
@@ -368,17 +379,27 @@ void TransferFunctions::VisitBlockExpr(BlockExpr *BE) {
 }
 
 void TransferFunctions::VisitDeclRefExpr(DeclRefExpr *DR) {
-  if (const VarDecl *D = dyn_cast<VarDecl>(DR->getDecl()))
-    if (!isAlwaysAlive(D) && LV.inAssignment.find(DR) == LV.inAssignment.end())
-      val.liveDecls = LV.DSetFact.add(val.liveDecls, D);
+  const Decl* D = DR->getDecl();
+  bool InAssignment = LV.inAssignment[DR];
+  if (const auto *BD = dyn_cast<BindingDecl>(D)) {
+    if (!InAssignment)
+      val.liveBindings = LV.BSetFact.add(val.liveBindings, BD);
+  } else if (const auto *VD = dyn_cast<VarDecl>(D)) {
+    if (!InAssignment && !isAlwaysAlive(VD))
+      val.liveDecls = LV.DSetFact.add(val.liveDecls, VD);
+  }
 }
 
 void TransferFunctions::VisitDeclStmt(DeclStmt *DS) {
-  for (const auto *DI : DS->decls())
-    if (const auto *VD = dyn_cast<VarDecl>(DI)) {
+  for (const auto *DI : DS->decls()) {
+    if (const auto *DD = dyn_cast<DecompositionDecl>(DI)) {
+      for (const auto *BD : DD->bindings())
+        val.liveBindings = LV.BSetFact.remove(val.liveBindings, BD);
+    } else if (const auto *VD = dyn_cast<VarDecl>(DI)) {
       if (!isAlwaysAlive(VD))
         val.liveDecls = LV.DSetFact.remove(val.liveDecls, VD);
     }
+  }
 }
 
 void TransferFunctions::VisitObjCForCollectionStmt(ObjCForCollectionStmt *OS) {
@@ -433,12 +454,14 @@ void TransferFunctions::VisitUnaryOperator(UnaryOperator *UO) {
   case UO_PreDec:
     break;
   }
-  
-  if (DeclRefExpr *DR = dyn_cast<DeclRefExpr>(UO->getSubExpr()->IgnoreParens()))
-    if (isa<VarDecl>(DR->getDecl())) {
+
+  if (auto *DR = dyn_cast<DeclRefExpr>(UO->getSubExpr()->IgnoreParens())) {
+    const Decl *D = DR->getDecl();
+    if (isa<VarDecl>(D) || isa<BindingDecl>(D)) {
       // Treat ++/-- as a kill.
       observer->observerKill(DR);
     }
+  }
 }
 
 LiveVariables::LivenessValues
@@ -519,10 +542,10 @@ LiveVariables::computeLiveness(AnalysisDeclContext &AC,
       for (CFGBlock::const_iterator bi = block->begin(), be = block->end();
            bi != be; ++bi) {
         if (Optional<CFGStmt> cs = bi->getAs<CFGStmt>()) {
-          if (const BinaryOperator *BO =
-                  dyn_cast<BinaryOperator>(cs->getStmt())) {
+          const Stmt* stmt = cs->getStmt();
+          if (const auto *BO = dyn_cast<BinaryOperator>(stmt)) {
             if (BO->getOpcode() == BO_Assign) {
-              if (const DeclRefExpr *DR =
+              if (const auto *DR =
                     dyn_cast<DeclRefExpr>(BO->getLHS()->IgnoreParens())) {
                 LV->inAssignment[DR] = 1;
               }
@@ -531,8 +554,6 @@ LiveVariables::computeLiveness(AnalysisDeclContext &AC,
         }
       }
   }
-  
-  worklist.sortWorklist();
   
   while (const CFGBlock *block = worklist.dequeue()) {
     // Determine if the block's end value has changed.  If not, we
@@ -576,7 +597,7 @@ void LiveVariablesImpl::dumpBlockLiveness(const SourceManager &M) {
        it != ei; ++it) {
     vec.push_back(it->first);    
   }
-  std::sort(vec.begin(), vec.end(), [](const CFGBlock *A, const CFGBlock *B) {
+  llvm::sort(vec.begin(), vec.end(), [](const CFGBlock *A, const CFGBlock *B) {
     return A->getBlockID() < B->getBlockID();
   });
 
@@ -596,7 +617,8 @@ void LiveVariablesImpl::dumpBlockLiveness(const SourceManager &M) {
       declVec.push_back(*si);      
     }
 
-    std::sort(declVec.begin(), declVec.end(), [](const Decl *A, const Decl *B) {
+    llvm::sort(declVec.begin(), declVec.end(),
+               [](const Decl *A, const Decl *B) {
       return A->getLocStart() < B->getLocStart();
     });
 

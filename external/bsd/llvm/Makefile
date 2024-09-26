@@ -1,15 +1,19 @@
-#	$NetBSD: Makefile,v 1.8 2014/01/15 20:53:00 joerg Exp $
+#	$NetBSD: Makefile,v 1.12 2019/04/03 15:21:58 joerg Exp $
 
 .include <bsd.init.mk>
 
 SUBDIR=	include \
-	.WAIT \
+
+.if ${MKLLVMRT} != "no"
+SUBDIR+= \
+	librt
+.endif
+
+.if ${MKLLVM} != "no"
+SUBDIR+= \
 	lib \
 	.WAIT \
 	bin
-
-.if ${MKCLANGRT:Uno} == "yes"
-SUBDIR+=	librt
 .endif
 
 .include "Makefile.inc"
@@ -29,5 +33,10 @@ checkout-mclinker:
 		git clone ${MCLINKER_ROOT} ${MCLINKER_SRCDIR}; \
 	fi
 	cd ${MCLINKER_SRCDIR} && git checkout ${MCLINKER_REVISION}
+
+import-clang:
+	cd ${CLANG_SRCDIR} && cvs -d cvs.netbsd.org:/cvsroot import -m "Import clang ${CLANG_REVISION} from ${SVN_BRANCH}" src/external/bsd/llvm/dist/clang LLVM clang-${CLANG_REVISION:C,^r,,}
+import-llvm:
+	cd ${LLVM_SRCDIR} && cvs -d cvs.netbsd.org:/cvsroot import -m "Import LLVM ${LLVM_REVISION} from ${SVN_BRANCH}" src/external/bsd/llvm/dist/llvm LLVM llvm-${LLVM_REVISION:C,^r,,}
 
 .include <bsd.subdir.mk>

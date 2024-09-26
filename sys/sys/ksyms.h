@@ -1,4 +1,4 @@
-/*	$NetBSD: ksyms.h,v 1.33 2015/09/06 06:01:02 dholland Exp $	*/
+/*	$NetBSD: ksyms.h,v 1.37 2017/11/06 17:56:25 christos Exp $	*/
 
 /*
  * Copyright (c) 2001, 2003 Anders Magnusson (ragge@ludd.luth.se).
@@ -30,8 +30,12 @@
 #ifndef _SYS_KSYMS_H_
 #define _SYS_KSYMS_H_
 
-#ifdef _KSYMS_PRIVATE
+#if !defined(ELFSIZE) && !defined(_RUMPKERNEL)
+#define ELFSIZE KERN_ELFSIZE
+#endif
 #include <sys/exec_elf.h>
+
+#ifdef _KSYMS_PRIVATE
 #include <sys/ioccom.h>
 #include <sys/queue.h>
 
@@ -131,7 +135,8 @@ typedef int (*ksyms_callback_t)(const char *, int, void *,
 
 int ksyms_getname(const char **, const char **, vaddr_t, int);
 int ksyms_getval(const char *, const char *, unsigned long *, int);
-int ksyms_getval_unlocked(const char *, const char *, unsigned long *, int);
+int ksyms_getval_unlocked(const char *, const char *, Elf_Sym **,
+    unsigned long *, int);
 struct ksyms_symtab *ksyms_get_mod(const char *);
 int ksyms_mod_foreach(const char *mod, ksyms_callback_t, void *);
 int ksyms_addsymtab(const char *, void *, vsize_t, char *, vsize_t);

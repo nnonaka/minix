@@ -1,11 +1,11 @@
-/*	$NetBSD: namei.h,v 1.93 2015/04/21 03:19:03 riastradh Exp $	*/
+/*	$NetBSD: namei.h,v 1.98.2.1 2021/06/21 14:52:58 martin Exp $	*/
 
 
 /*
  * WARNING: GENERATED FILE.  DO NOT EDIT
  * (edit namei.src and run make namei in src/sys/sys)
  *   by:   NetBSD: gennameih.awk,v 1.5 2009/12/23 14:17:19 pooka Exp 
- *   from: NetBSD: namei.src,v 1.37 2015/04/21 03:18:21 riastradh Exp 
+ *   from: NetBSD: namei.src,v 1.42.2.1 2021/06/21 14:50:57 martin Exp 
  */
 
 /*
@@ -160,7 +160,8 @@ struct nameidata {
 #define	EMULROOTSET	0x00000080	/* emulation root already
 					   in ni_erootdir */
 #define	NOCHROOT	0x01000000	/* no chroot on abs path lookups */
-#define	MODMASK		0x010000fc	/* mask of operational modifiers */
+#define	NONEXCLHACK	0x02000000	/* open wwith O_CREAT but not O_EXCL */
+#define	MODMASK		0x030000fc	/* mask of operational modifiers */
 /*
  * Namei parameter descriptors.
  */
@@ -208,22 +209,31 @@ struct nameidata {
  * Namecache entry.  This structure is arranged so that frequently
  * accessed and mostly read-only data is toward the front, with
  * infrequently accessed data and the lock towards the rear.  The
- * lock is then more likely to be in a seperate cache line.
+ * lock is then more likely to be in a separate cache line.
+ *
+ * Locking rules:
+ *
+ *      -       stable after initialization
+ *      L       namecache_lock
+ *      C       struct nchcpu::cpu_lock
+ *      L/C     insert needs L, read needs L or any C,
+ *              must hold L and all C after (or during) delete before free
+ *      N       struct namecache::nc_lock
  */
-struct	namecache {
-	LIST_ENTRY(namecache) nc_hash;	/* hash chain */
-	LIST_ENTRY(namecache) nc_vhash;	/* directory hash chain */
-	struct	vnode *nc_dvp;		/* vnode of parent of name */
-	struct	vnode *nc_vp;		/* vnode the name refers to */
-	int	nc_flags;		/* copy of componentname's ISWHITEOUT */
-	char	nc_nlen;		/* length of name */
-	char	nc_name[NCHNAMLEN];	/* segment name */
-	void	*nc_gcqueue;		/* queue for garbage collection */
-	TAILQ_ENTRY(namecache) nc_lru;	/* psuedo-lru chain */
-	LIST_ENTRY(namecache) nc_dvlist;
-	LIST_ENTRY(namecache) nc_vlist;
-	kmutex_t nc_lock;		/* lock on this entry */
-	int	nc_hittime;		/* last time scored a hit */
+struct namecache {
+	LIST_ENTRY(namecache) nc_hash;	/* L/C hash chain */
+	LIST_ENTRY(namecache) nc_vhash;	/* L directory hash chain */
+	struct	vnode *nc_dvp;		/* N vnode of parent of name */
+	struct	vnode *nc_vp;		/* N vnode the name refers to */
+	int	nc_flags;		/* - copy of componentname ISWHITEOUT */
+	char	nc_nlen;		/* - length of name */
+	char	nc_name[NCHNAMLEN];	/* - segment name */
+	void	*nc_gcqueue;		/* N queue for garbage collection */
+	TAILQ_ENTRY(namecache) nc_lru;	/* L psuedo-lru chain */
+	LIST_ENTRY(namecache) nc_dvlist;/* L dvp's list of cache entries */
+	LIST_ENTRY(namecache) nc_vlist; /* L vp's list of cache entries */
+	kmutex_t nc_lock;		/*   lock on this entry */
+	int	nc_hittime;		/* N last time scored a hit */
 };
 
 #ifdef _KERNEL
@@ -282,9 +292,9 @@ void	cache_purge1(struct vnode *, const char *, size_t, int);
 #define	PURGE_PARENTS	1
 #define	PURGE_CHILDREN	2
 #define	cache_purge(vp)	cache_purge1((vp),NULL,0,PURGE_PARENTS|PURGE_CHILDREN)
-int	cache_lookup(struct vnode *, const char *, size_t, uint32_t, uint32_t,
+bool	cache_lookup(struct vnode *, const char *, size_t, uint32_t, uint32_t,
 			int *, struct vnode **);
-int	cache_lookup_raw(struct vnode *, const char *, size_t, uint32_t,
+bool	cache_lookup_raw(struct vnode *, const char *, size_t, uint32_t,
 			int *, struct vnode **);
 int	cache_revlookup(struct vnode *, struct vnode **, char **, char *);
 void	cache_enter(struct vnode *, struct vnode *,
@@ -342,7 +352,8 @@ struct	nchstats _NAMEI_CACHE_STATS(uint64_t);
 #define NAMEI_NOFOLLOW	0x00000000
 #define NAMEI_EMULROOTSET	0x00000080
 #define NAMEI_NOCHROOT	0x01000000
-#define NAMEI_MODMASK	0x010000fc
+#define NAMEI_NONEXCLHACK	0x02000000
+#define NAMEI_MODMASK	0x030000fc
 #define NAMEI_NOCROSSMOUNT	0x0000100
 #define NAMEI_RDONLY	0x0000200
 #define NAMEI_ISDOTDOT	0x0002000

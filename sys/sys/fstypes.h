@@ -1,4 +1,4 @@
-/*	$NetBSD: fstypes.h,v 1.33 2015/05/06 15:57:08 hannken Exp $	*/
+/*	$NetBSD: fstypes.h,v 1.37 2019/02/20 10:07:27 hannken Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993
@@ -99,12 +99,14 @@ typedef struct fhandle	fhandle_t;
 #define	MNT_EXTATTR	0x01000000	/* enable extended attributes */
 #define	MNT_LOG		0x02000000	/* Use logging */
 #define	MNT_NOATIME	0x04000000	/* Never update access times in fs */
+#define	MNT_AUTOMOUNTED 0x10000000	/* mounted by automountd(8) */
 #define	MNT_SYMPERM	0x20000000	/* recognize symlink permission */
 #define	MNT_NODEVMTIME	0x40000000	/* Never update mod times for devs */
 #define	MNT_SOFTDEP	0x80000000	/* Use soft dependencies */
 
 #define	__MNT_BASIC_FLAGS \
 	{ MNT_ASYNC,		0,	"asynchronous" }, \
+	{ MNT_AUTOMOUNTED,	0,	"automounted" }, \
 	{ MNT_DISCARD,		0,	"discard" }, \
 	{ MNT_EXTATTR,		0,	"extattr" }, \
 	{ MNT_IGNORE,		0,	"hidden" }, \
@@ -122,10 +124,10 @@ typedef struct fhandle	fhandle_t;
 	{ MNT_SYNCHRONOUS,	0,	"synchronous" }, \
 	{ MNT_UNION,		0,	"union" }, \
 
-#define MNT_BASIC_FLAGS (MNT_ASYNC | MNT_DISCARD | MNT_EXTATTR | MNT_LOG | \
-    MNT_NOATIME | MNT_NOCOREDUMP | MNT_NODEV | MNT_NODEVMTIME | MNT_NOEXEC | \
-    MNT_NOSUID | MNT_RDONLY | MNT_RELATIME | MNT_SOFTDEP | MNT_SYMPERM | \
-    MNT_SYNCHRONOUS | MNT_UNION)
+#define MNT_BASIC_FLAGS (MNT_ASYNC | MNT_AUTOMOUNTED | MNT_DISCARD | \
+    MNT_EXTATTR | MNT_LOG | MNT_NOATIME | MNT_NOCOREDUMP | MNT_NODEV | \
+    MNT_NODEVMTIME | MNT_NOEXEC | MNT_NOSUID | MNT_RDONLY | MNT_RELATIME | \
+    MNT_SOFTDEP | MNT_SYMPERM | MNT_SYNCHRONOUS | MNT_UNION)
 /*
  * exported mount flags.
  */
@@ -187,7 +189,8 @@ typedef struct fhandle	fhandle_t;
      MNT_QUOTA | \
      MNT_ROOTFS | \
      MNT_LOG | \
-     MNT_EXTATTR)
+     MNT_EXTATTR | \
+     MNT_AUTOMOUNTED)
 
 /*
  * External filesystem control flags.
@@ -216,8 +219,8 @@ typedef struct fhandle	fhandle_t;
 #define	IMNT_GONE	0x00000001	/* filesystem is gone.. */
 #define	IMNT_UNMOUNT	0x00000002	/* unmount in progress */
 #define	IMNT_WANTRDWR	0x00000004	/* upgrade to read/write requested */
+#define	IMNT_WANTRDONLY	0x00000008	/* upgrade to readonly requested */
 #define	IMNT_DTYPE	0x00000040	/* returns d_type fields */
-#define	IMNT_HAS_TRANS	0x00000080	/* supports transactions */
 #define	IMNT_MPSAFE	0x00000100	/* file system code MP safe */
 #define	IMNT_CAN_RWTORO	0x00000200	/* can downgrade fs to from rw to r/o */
 #define	IMNT_ONWORKLIST	0x00000400	/* on syncer worklist */
@@ -267,9 +270,9 @@ typedef struct fhandle	fhandle_t;
 	"\20" \
 	"\13IMNT_ONWORKLIST" \
 	"\12IMNT_CAN_RWTORO" \
-        "\11IMNT_MPSAFE" \
-	"\10IMNT_HAS_TRANS" \
+	"\11IMNT_MPSAFE" \
 	"\07IMNT_DTYPE" \
+	"\04IMNT_WANTRDONLY" \
 	"\03IMNT_WANTRDWR" \
 	"\02IMNT_UNMOUNT" \
 	"\01IMNT_GONE"

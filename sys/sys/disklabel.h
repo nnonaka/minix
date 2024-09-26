@@ -1,4 +1,4 @@
-/*	$NetBSD: disklabel.h,v 1.118 2015/01/02 19:42:07 christos Exp $	*/
+/*	$NetBSD: disklabel.h,v 1.120 2018/11/06 04:04:34 mrg Exp $	*/
 
 /*
  * Copyright (c) 1987, 1988, 1993
@@ -361,7 +361,10 @@ x(SYSVBFS, 25, "SysVBFS",    NULL,  "sysvbfs")/* System V boot file system */ \
 x(EFS,     26, "EFS",        NULL,   "efs")   /* SGI's Extent Filesystem */ \
 x(NILFS,   27, "NiLFS",      NULL,   "nilfs") /* NTT's NiLFS(2) */ \
 x(CGD,     28, "cgd",	     NULL,   NULL)    /* Cryptographic disk */ \
-x(MINIXFS3,29, "MINIX FSv3", NULL,   NULL)    /* MINIX file system v3 */
+x(MINIXFS3,29, "MINIX FSv3", NULL,   NULL)    /* MINIX file system v3 */ \
+x(VMKCORE, 30, "VMware vmkcore", NULL, NULL)  /* VMware vmkcore */ \
+x(VMFS,    31, "VMware VMFS", NULL,  NULL)    /* VMware VMFS */ \
+x(VMWRESV, 32, "VMware Reserved", NULL, NULL) /* VMware reserved */
 
 
 #ifndef _LOCORE
@@ -444,8 +447,14 @@ struct format_op {
  * on a disk.
  */
 struct partinfo {
-	struct disklabel *disklab;
-	struct partition *part;
+	uint64_t pi_offset;
+	uint64_t pi_size;
+	uint32_t pi_secsize;
+	uint32_t pi_bsize;
+	uint8_t	 pi_fstype;
+	uint8_t  pi_frag;
+	uint16_t pi_cpg;
+	uint32_t pi_fsize;
 };
 
 struct disk;

@@ -1,3 +1,16 @@
+//===-- MicroMipsInstrFormats.td - microMIPS Inst Formats -*- tablegen -*--===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This files descributes the formats of the microMIPS instruction set.
+//
+//===----------------------------------------------------------------------===//
+
 //===----------------------------------------------------------------------===//
 // MicroMIPS Base Classes
 //===----------------------------------------------------------------------===//
@@ -7,8 +20,8 @@
 // This class does not depend on the instruction size.
 //
 class MicroMipsInstBase<dag outs, dag ins, string asmstr, list<dag> pattern,
-                        InstrItinClass itin, Format f> : Instruction
-{
+                        InstrItinClass itin, Format f> : Instruction,
+                        PredicateControl {
   let Namespace = "Mips";
   let DecoderNamespace = "MicroMips";
 
@@ -19,7 +32,7 @@ class MicroMipsInstBase<dag outs, dag ins, string asmstr, list<dag> pattern,
   let Pattern     = pattern;
   let Itinerary   = itin;
 
-  let Predicates = [InMicroMips];
+  let EncodingPredicates = [InMicroMips];
 
   Format Form = f;
 }
@@ -131,6 +144,17 @@ class LOAD_STORE_SP_FM_MM16<bits<6> op> {
   let Inst{4-0}   = offset;
 }
 
+class LOAD_GP_FM_MM16<bits<6> op> {
+  bits<3> rt;
+  bits<7> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-7} = rt;
+  let Inst{6-0} = offset;
+}
+
 class ADDIUS5_FM_MM16 {
   bits<5> rd;
   bits<4> imm;
@@ -238,13 +262,35 @@ class BEQNEZ_FM_MM16<bits<6> op> {
   let Inst{6-0}   = offset;
 }
 
+class B16_FM {
+  bits<10> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x33;
+  let Inst{9-0}   = offset;
+}
+
+class MOVEP_FM_MM16 {
+  bits<3> dst_regs;
+  bits<3> rt;
+  bits<3> rs;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x21;
+  let Inst{9-7}   = dst_regs;
+  let Inst{6-4}   = rt;
+  let Inst{3-1}   = rs;
+  let Inst{0}     = 0;
+}
+
 //===----------------------------------------------------------------------===//
 // MicroMIPS 32-bit Instruction Formats
 //===----------------------------------------------------------------------===//
 
 class MMArch {
   string Arch = "micromips";
-  list<dag> Pattern = [];
 }
 
 class ADD_FM_MM<bits<6> op, bits<10> funct> : MMArch {
@@ -346,16 +392,34 @@ class SRLV_FM_MM<bits<10> funct, bit rotate> : MMArch {
 class LW_FM_MM<bits<6> op> : MMArch {
   bits<5> rt;
   bits<21> addr;
+  bits<5> base = addr{20-16};
+  bits<16> offset = addr{15-0};
 
   bits<32> Inst;
 
   let Inst{31-26} = op;
   let Inst{25-21} = rt;
-  let Inst{20-16} = addr{20-16};
-  let Inst{15-0}  = addr{15-0};
+  let Inst{20-16} = base;
+  let Inst{15-0}  = offset;
 }
 
-class LWL_FM_MM<bits<4> funct> {
+class POOL32C_LHUE_FM_MM<bits<6> op, bits<4> fmt, bits<3> funct> : MMArch {
+  bits<5> rt;
+  bits<21> addr;
+  bits<5> base = addr{20-16};
+  bits<9> offset = addr{8-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = base;
+  let Inst{15-12} = fmt;
+  let Inst{11-9} = funct;
+  let Inst{8-0}  = offset;
+}
+
+class LWL_FM_MM<bits<4> funct> : MMArch {
   bits<5> rt;
   bits<21> addr;
 
@@ -366,6 +430,22 @@ class LWL_FM_MM<bits<4> funct> {
   let Inst{20-16} = addr{20-16};
   let Inst{15-12} = funct;
   let Inst{11-0}  = addr{11-0};
+}
+
+class POOL32C_STEVA_LDEVA_FM_MM<bits<4> type, bits<3> funct> : MMArch {
+  bits<5> rt;
+  bits<21> addr;
+  bits<5> base = addr{20-16};
+  bits<9> offset = addr{8-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x18;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = base;
+  let Inst{15-12} = type;
+  let Inst{11-9} = funct;
+  let Inst{8-0}  = offset;
 }
 
 class CMov_F_I_FM_MM<bits<7> func> : MMArch {
@@ -532,6 +612,18 @@ class SYNC_FM_MM : MMArch {
   let Inst{5-0}   = 0x3c;
 }
 
+class SYNCI_FM_MM : MMArch {
+  bits<21> addr;
+  bits<5> rs = addr{20-16};
+  bits<16> offset = addr{15-0};
+  bits<32> Inst;
+
+  let Inst{31-26} = 0b010000;
+  let Inst{25-21} = 0b10000;
+  let Inst{20-16} = rs;
+  let Inst{15-0}  = offset;
+}
+
 class BRK_FM_MM : MMArch {
   bits<10> code_1;
   bits<10> code_2;
@@ -551,7 +643,7 @@ class SYS_FM_MM : MMArch {
   let Inst{5-0}   = 0x3c;
 }
 
-class WAIT_FM_MM {
+class WAIT_FM_MM : MMArch {
   bits<10> code_;
   bits<32> Inst;
 
@@ -608,7 +700,7 @@ class TEQI_FM_MM<bits<5> funct> : MMArch {
   let Inst{15-0}  = imm16;
 }
 
-class LL_FM_MM<bits<4> funct> {
+class LL_FM_MM<bits<4> funct> : MMArch {
   bits<5> rt;
   bits<21> addr;
 
@@ -619,6 +711,22 @@ class LL_FM_MM<bits<4> funct> {
   let Inst{20-16} = addr{20-16};
   let Inst{15-12} = funct;
   let Inst{11-0}  = addr{11-0};
+}
+
+class LLE_FM_MM<bits<4> funct> : MMArch {
+  bits<5> rt;
+  bits<21> addr;
+  bits<5> base = addr{20-16};
+  bits<9> offset = addr{8-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x18;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = base;
+  let Inst{15-12} = funct;
+  let Inst{11-9} = 0x6;
+  let Inst{8-0} = offset;
 }
 
 class ADDS_FM_MM<bits<2> fmt, bits<8> funct> : MMArch {
@@ -636,7 +744,6 @@ class ADDS_FM_MM<bits<2> fmt, bits<8> funct> : MMArch {
   let Inst{9-8}   = fmt;
   let Inst{7-0}   = funct;
 
-  list<dag> Pattern = [];
 }
 
 class LWXC1_FM_MM<bits<9> funct> : MMArch {
@@ -672,6 +779,7 @@ class SWXC1_FM_MM<bits<9> funct> : MMArch {
 class CEQS_FM_MM<bits<2> fmt> : MMArch {
   bits<5> fs;
   bits<5> ft;
+  bits<3> fcc;
   bits<4> cond;
 
   bits<32> Inst;
@@ -679,21 +787,26 @@ class CEQS_FM_MM<bits<2> fmt> : MMArch {
   let Inst{31-26} = 0x15;
   let Inst{25-21} = ft;
   let Inst{20-16} = fs;
-  let Inst{15-13} = 0x0;  // cc
+  let Inst{15-13} = fcc;
   let Inst{12}    = 0;
   let Inst{11-10} = fmt;
   let Inst{9-6}   = cond;
   let Inst{5-0}   = 0x3c;
 }
 
+class C_COND_FM_MM<bits <2> fmt, bits<4> c> : CEQS_FM_MM<fmt> {
+  let cond = c;
+}
+
 class BC1F_FM_MM<bits<5> tf> : MMArch {
+  bits<3> fcc;
   bits<16> offset;
 
   bits<32> Inst;
 
   let Inst{31-26} = 0x10;
   let Inst{25-21} = tf;
-  let Inst{20-18} = 0x0; // cc
+  let Inst{20-18} = fcc; // cc
   let Inst{17-16} = 0x0;
   let Inst{15-0}  = offset;
 }
@@ -731,13 +844,13 @@ class ABS_FM_MM<bits<2> fmt, bits<7> funct> : MMArch {
 class CMov_F_F_FM_MM<bits<9> func, bits<2> fmt> : MMArch {
   bits<5> fd;
   bits<5> fs;
-
+  bits<3> fcc;
   bits<32> Inst;
 
   let Inst{31-26} = 0x15;
   let Inst{25-21} = fd;
   let Inst{20-16} = fs;
-  let Inst{15-13} = 0x0; //cc
+  let Inst{15-13} = fcc; //cc
   let Inst{12-11} = 0x0;
   let Inst{10-9}  = fmt;
   let Inst{8-0}   = func;
@@ -888,6 +1001,37 @@ class CACHE_PREF_FM_MM<bits<6> op, bits<4> funct> : MMArch {
   let Inst{11-0}  = offset;
 }
 
+class CACHE_PREFE_FM_MM<bits<6> op, bits<3> funct> : MMArch {
+  bits<21> addr;
+  bits<5> hint;
+  bits<5> base = addr{20-16};
+  bits<9> offset = addr{8-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = hint;
+  let Inst{20-16} = base;
+  let Inst{15-12} = 0xA;
+  let Inst{11-9} = funct;
+  let Inst{8-0}  = offset;
+}
+
+class POOL32F_PREFX_FM_MM<bits<6> op, bits<9> funct> : MMArch {
+  bits<5> index;
+  bits<5> base;
+  bits<5> hint;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = op;
+  let Inst{25-21} = index;
+  let Inst{20-16} = base;
+  let Inst{15-11} = hint;
+  let Inst{10-9}  = 0x0;
+  let Inst{8-0}   = funct;
+}
+
 class BARRIER_FM_MM<bits<5> op> : MMArch {
   bits<32> Inst;
 
@@ -897,4 +1041,64 @@ class BARRIER_FM_MM<bits<5> op> : MMArch {
   let Inst{15-11} = op;
   let Inst{10-6}  = 0x0;
   let Inst{5-0}   = 0x0;
+}
+
+class ADDIUPC_FM_MM {
+  bits<3> rs;
+  bits<23> imm;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x1e;
+  let Inst{25-23} = rs;
+  let Inst{22-0} = imm;
+}
+
+class POOL32A_CFTC2_FM_MM<bits<10> funct> : MMArch {
+  bits<5> rt;
+  bits<5> impl;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0b000000;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = impl;
+  let Inst{15-6}  = funct;
+  let Inst{5-0}   = 0b111100;
+}
+
+class POOL32A_TLBINV_FM_MM<bits<10> funct> : MMArch {
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-16} = 0x0;
+  let Inst{15-6}  = funct;
+  let Inst{5-0}   = 0b111100;
+}
+
+class POOL32A_MFTC0_FM_MM<bits<5> funct, bits<6> opcode> : MMArch {
+  bits<5> rt;
+  bits<5> rs;
+  bits<3> sel;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0b000000;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = rs;
+  let Inst{15-14} = 0;
+  let Inst{13-11} = sel;
+  let Inst{10-6}  = funct;
+  let Inst{5-0}   = opcode;
+}
+
+class POOL32A_HYPCALL_FM_MM : MMArch {
+  bits<32> Inst;
+
+  bits<10> code_;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-16} = code_;
+  let Inst{15-6}  = 0b1100001101;
+  let Inst{5-0}   = 0b111100;
 }

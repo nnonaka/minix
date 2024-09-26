@@ -64,24 +64,28 @@ typedef	__off_t		off_t;		/* file offset */
 #define	PROT_WRITE	0x02	/* pages can be written */
 #define	PROT_EXEC	0x04	/* pages can be executed */
 
+#ifdef _NETBSD_SOURCE
+/*
+ * PAX mprotect prohibits setting protection bits
+ * missing from the original mmap call unless explicitly
+ * requested with PROT_MPROTECT.
+ */
+#define        PROT_MPROTECT(x)                ((x) << 3)
+#define        PROT_MPROTECT_EXTRACT(x)        (((x) >> 3) & 0x7)
+#endif
+
 /*
  * Flags contain sharing type and options.
  * Sharing types; choose one.
  */
 #define	MAP_SHARED	0x0001	/* share changes */
 #define	MAP_PRIVATE	0x0002	/* changes are private */
-
-#ifdef _KERNEL
-/*
- * Deprecated flag; these are treated as MAP_PRIVATE internally by
- * the kernel.
- */
-#define	MAP_COPY	0x0004	/* "copy" region at mmap time */
-#endif
+	/* old MAP_COPY	0x0004	   "copy" region at mmap time */
 
 /*
  * Other flags
  */
+#define	MAP_REMAPDUP	 0x0004	/* mremap only: duplicate the mapping */
 #define	MAP_FIXED	 0x0010	/* map addr must be exactly as requested */
 #define	MAP_RENAME	 0x0020	/* Sun: rename private pages to file */
 #define	MAP_NORESERVE	 0x0040	/* Sun: don't reserve needed swap area */
@@ -100,9 +104,9 @@ typedef	__off_t		off_t;		/* file offset */
 
 /*
  * Alignment (expressed in log2).  Must be >= log2(PAGE_SIZE) and
- * < # bits in a pointer (26 (acorn26), 32 or 64).
+ * < # bits in a pointer (32 or 64).
  */
-#define	MAP_ALIGNED(n)		((n) << MAP_ALIGNMENT_SHIFT)
+#define	MAP_ALIGNED(n)	((int)((unsigned int)(n) << MAP_ALIGNMENT_SHIFT))
 #define	MAP_ALIGNMENT_SHIFT	24
 #define	MAP_ALIGNMENT_MASK	MAP_ALIGNED(0xff)
 #define	MAP_ALIGNMENT_64KB	MAP_ALIGNED(16)	/* 2^16 */
@@ -122,6 +126,51 @@ typedef	__off_t		off_t;		/* file offset */
 #define MAP_LOWER16M		0x200000        /* physically below 16MB */
 #define MAP_LOWER1M		0x400000        /* physically below 16MB */
 #define MAP_THIRDPARTY		0x800000        /* perform on behalf of any process */
+#else
+#ifdef _NETBSD_SOURCE
+#define MAP_FMT	"\177\020"			\
+	"b\0"  "SHARED\0"			\
+	"b\1"  "PRIVATE\0"			\
+	"b\2"  "COPY\0"				\
+	"b\4"  "FIXED\0"			\
+	"b\5"  "RENAME\0"			\
+	"b\6"  "NORESERVE\0"			\
+	"b\7"  "INHERIT\0"			\
+	"b\11" "HASSEMAPHORE\0"			\
+	"b\12" "TRYFIXED\0"			\
+	"b\13" "WIRED\0"			\
+	"F\14\1\0"				\
+		":\0" "FILE\0"			\
+		":\1" "ANONYMOUS\0"		\
+	"b\15" "STACK\0"			\
+	"F\30\010\0"				\
+		":\000" "ALIGN=NONE\0"		\
+		":\012" "ALIGN=1KB\0"		\
+		":\013" "ALIGN=2KB\0"		\
+		":\014" "ALIGN=4KB\0"		\
+		":\015" "ALIGN=8KB\0"		\
+		":\016" "ALIGN=16KB\0"		\
+		":\017" "ALIGN=32KB\0"		\
+		":\020" "ALIGN=64KB\0"		\
+		":\021" "ALIGN=128KB\0"		\
+		":\022" "ALIGN=256KB\0"		\
+		":\023" "ALIGN=512KB\0"		\
+		":\024" "ALIGN=1MB\0"		\
+		":\025" "ALIGN=2MB\0"		\
+		":\026" "ALIGN=4MB\0"		\
+		":\027" "ALIGN=8MB\0"		\
+		":\030" "ALIGN=16MB\0"		\
+		":\034" "ALIGN=256MB\0"		\
+		":\040" "ALIGN=4GB\0"		\
+		":\044" "ALIGN=64GB\0"		\
+		":\050" "ALIGN=1TB\0"		\
+		":\054" "ALIGN=16TB\0"		\
+		":\060" "ALIGN=256TB\0"		\
+		":\064" "ALIGN=4PB\0"		\
+		":\070" "ALIGN=64PB\0"		\
+		":\074" "ALIGN=256PB\0"		\
+		"*"	"ALIGN=2^%d\0"
+#endif
 #endif /* defined(__minix) */
 
 /*
@@ -143,7 +192,7 @@ typedef	__off_t		off_t;		/* file offset */
 #define	MCL_FUTURE	0x02	/* lock all pages mapped in the future */
 
 /*
- * POSIX memory avissory values.
+ * POSIX memory advisory values.
  * Note: keep consistent with the original definitions below.
  */
 #define	POSIX_MADV_NORMAL	0	/* No further special treatment */

@@ -1,4 +1,4 @@
-/*	$NetBSD: protosw.h,v 1.64 2015/05/02 17:18:04 rtr Exp $	*/
+/*	$NetBSD: protosw.h,v 1.69 2018/09/14 05:09:51 maxv Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1993
@@ -76,9 +76,7 @@ struct protosw {
 
 /* protocol-protocol hooks */
 	void	(*pr_input)		/* input to protocol (from below) */
-			(struct mbuf *, ...);
-	int	(*pr_output)		/* output to protocol (from above) */
-			(struct mbuf *, ...);
+			(struct mbuf *, int, int);
 	void	*(*pr_ctlinput)		/* control input (from below) */
 			(int, const struct sockaddr *, void *);
 	int	(*pr_ctloutput)		/* control output (from above) */
@@ -119,6 +117,8 @@ struct protosw {
 #define PR_PURGEIF	0x100		/* might store struct ifnet pointer;
 					   pr_purgeif() must be called on ifnet
 					   deletion */
+#define	PR_ADDR_OPT	0x200		/* Allow address during delivery */
+
 
 /*
  * The arguments to usrreq are:
@@ -492,6 +492,17 @@ name##_wrapper(int a, const struct sockaddr *b, void *c)\
 	rv = name(a, b, c);				\
 	KERNEL_UNLOCK_ONE(NULL);			\
 	return rv;					\
+}
+
+#include <sys/socketvar.h> /* for softnet_lock */
+
+#define	PR_WRAP_INPUT(name)				\
+static void						\
+name##_wrapper(struct mbuf *m, int off, int proto)	\
+{							\
+	mutex_enter(softnet_lock);			\
+	name(m, off, proto);				\
+	mutex_exit(softnet_lock);			\
 }
 
 #endif /* _KERNEL */

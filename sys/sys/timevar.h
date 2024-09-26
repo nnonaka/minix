@@ -1,4 +1,4 @@
-/*	$NetBSD: timevar.h,v 1.34 2015/08/07 08:11:33 ozaki-r Exp $	*/
+/*	$NetBSD: timevar.h,v 1.38.6.1 2019/09/10 16:16:46 martin Exp $	*/
 
 /*
  *  Copyright (c) 2005, 2008 The NetBSD Foundation.
@@ -84,6 +84,7 @@ struct 	ptimer {
 	int	pt_type;
 	int	pt_entry;
 	int	pt_queued;
+	bool	pt_dying;
 	struct proc *pt_proc;
 	TAILQ_ENTRY(ptimer) pt_chain;
 };
@@ -92,7 +93,9 @@ struct 	ptimer {
 #define pt_list	pt_data.pt_nonreal.pt_list
 #define pt_active	pt_data.pt_nonreal.pt_active
 
-#define	TIMER_MAX	32	/* See ptimers->pts_fired if you enlarge this */
+#define	TIMER_MIN	4	/* [0..3] are reserved for setitimer(2) */
+				/* REAL=0,VIRTUAL=1,PROF=2,MONOTONIC=3 */
+#define	TIMER_MAX	36	/* 32 is minimum user timers per POSIX */
 #define	TIMERS_ALL	0
 #define	TIMERS_POSIX	1
 
@@ -102,7 +105,6 @@ struct	ptimers {
 	struct ptlist pts_virtual;
 	struct ptlist pts_prof;
 	struct ptimer *pts_timers[TIMER_MAX];
-	int pts_fired;
 };
 
 /*
@@ -150,6 +152,7 @@ void	adjtime1(const struct timeval *, struct timeval *, struct proc *);
 int	clock_getres1(clockid_t, struct timespec *);
 int	clock_gettime1(clockid_t, struct timespec *);
 int	clock_settime1(struct proc *, clockid_t, const struct timespec *, bool);
+void	clock_timeleft(clockid_t, struct timespec *, struct timespec *);
 int	dogetitimer(struct proc *, int, struct itimerval *);
 int	dosetitimer(struct proc *, int, struct itimerval *);
 int	dotimer_gettime(int, struct proc *, struct itimerspec *);
@@ -172,7 +175,7 @@ int	settimeofday1(const struct timeval *, bool,
 int	timer_create1(timer_t *, clockid_t, struct sigevent *, copyin_t,
 	    struct lwp *);
 void	timer_gettime(struct ptimer *, struct itimerspec *);
-void	timer_settime(struct ptimer *);
+int	timer_settime(struct ptimer *);
 struct	ptimers *timers_alloc(struct proc *);
 void	timers_free(struct proc *, int);
 void	timer_tick(struct lwp *, bool);
@@ -188,13 +191,13 @@ bool	time_wraps(struct timespec *, struct timespec *);
 extern volatile time_t time_second;	/* current second in the epoch */
 extern volatile time_t time_uptime;	/* system uptime in seconds */
 
-static inline time_t time_mono_to_wall(time_t t)
+static __inline time_t time_mono_to_wall(time_t t)
 {
 
 	return t - time_uptime + time_second;
 }
 
-static inline time_t time_wall_to_mono(time_t t)
+static __inline time_t time_wall_to_mono(time_t t)
 {
 
 	return t - time_second + time_uptime;

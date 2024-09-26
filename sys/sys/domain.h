@@ -1,4 +1,4 @@
-/*	$NetBSD: domain.h,v 1.32 2015/04/22 19:46:08 roy Exp $	*/
+/*	$NetBSD: domain.h,v 1.34 2018/01/10 02:50:26 ozaki-r Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -90,7 +90,6 @@ struct	domain {
 	struct	mowner dom_mowner;
 	uint_fast8_t	dom_sa_cmpofs;
 	uint_fast8_t	dom_sa_cmplen;
-	struct dom_rtlist dom_rtcache;
 };
 
 STAILQ_HEAD(domainhead,domain);
@@ -104,6 +103,7 @@ STAILQ_HEAD(domainhead,domain);
 extern struct domainhead domains;
 void domain_attach(struct domain *);
 void domaininit(bool);
+void domaininit_post(void);
 #endif
 
 #endif /* !_SYS_DOMAIN_H_ */

@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.323 2015/09/24 14:33:31 christos Exp $	*/
+/*	$NetBSD: proc.h,v 1.355 2019/07/15 19:34:45 pgoyette Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007, 2008 The NetBSD Foundation, Inc.
@@ -81,6 +81,7 @@
 #include <machine/proc.h>		/* Machine-dependent proc substruct */
 #include <machine/pcb.h>
 #include <sys/aio.h>
+#include <sys/idtype.h>
 #include <sys/rwlock.h>
 #include <sys/mqueue.h>
 #include <sys/mutex.h>
@@ -124,6 +125,14 @@ struct pgrp {
 };
 
 /*
+ * Autoloadable syscall definition
+ */
+struct sc_autoload {
+	u_int		al_code;
+	const char	*al_module;
+};
+
+/*
  * One structure allocated per emulation.
  */
 struct exec_package;
@@ -141,12 +150,14 @@ struct emul {
 	int		e_nsysent;	/* Number of system call entries */
 #endif
 	struct sysent	*e_sysent;	/* System call array */
+	const uint32_t	*e_nomodbits;	/* sys_nosys/sys_nomodule flags
+					 * for syscall_disestablish() */
 	const char * const *e_syscallnames; /* System call name array */
+	struct sc_autoload *e_sc_autoload; /* List of autoloadable syscalls */
 					/* Signal sending function */
 	void		(*e_sendsig)(const struct ksiginfo *,
 					  const sigset_t *);
 	void		(*e_trapsignal)(struct lwp *, struct ksiginfo *);
-	int		(*e_tracesig)(struct proc *, int);
 	char		*e_sigcode;	/* Start of sigcode */
 	char		*e_esigcode;	/* End of sigcode */
 					/* Set registers before execution */
@@ -168,9 +179,9 @@ struct emul {
 #endif
 					/* Emulation specific sysctl data */
 	struct sysctlnode *e_sysctlovly;
-	int		(*e_fault)(struct proc *, vaddr_t, int);
 
-	vaddr_t		(*e_vm_default_addr)(struct proc *, vaddr_t, vsize_t);
+	vaddr_t		(*e_vm_default_addr)(struct proc *, vaddr_t, vsize_t,
+			     int);
 
 	/* Emulation-specific hook for userspace page faults */
 	int		(*e_usertrap)(struct lwp *, vaddr_t, void *);
@@ -182,10 +193,14 @@ struct emul {
 	void 		(*e_dtrace_syscall)(uint32_t, register_t,
 			    const struct sysent *, const void *,
 			    const register_t *, int);
+
+	/* Emulation specific support for ktracing signal posts */
+	void		(*e_ktrpsig)(int, sig_t, const sigset_t *,
+			    const struct ksiginfo *);
 };
 
 /*
- * Emulation miscelaneous flags
+ * Emulation miscellaneous flags
  */
 #define	EMUL_HAS_SYS___syscall	0x001	/* Has SYS___syscall */
 
@@ -280,6 +295,8 @@ struct proc {
 	u_quad_t 	p_uticks;	/* t: Statclock hits in user mode */
 	u_quad_t 	p_sticks;	/* t: Statclock hits in system mode */
 	u_quad_t 	p_iticks;	/* t: Statclock hits processing intr */
+	uint64_t	p_xutime;	/* p: utime exposed to userspace */
+	uint64_t	p_xstime;	/* p: stime exposed to userspace */
 
 	int		p_traceflag;	/* k: Kernel trace points */
 	void		*p_tracep;	/* k: Trace private data */
@@ -295,6 +312,12 @@ struct proc {
 	struct lcproc	*p_lwpctl;	/* p, a: _lwp_ctl() information */
 	pid_t		p_ppid;		/* :: cached parent pid */
 	pid_t 		p_fpid;		/* :: forked pid */
+	pid_t 		p_vfpid;	/* :: vforked pid */
+	pid_t 		p_vfpid_done;	/* :: vforked done pid */
+	lwpid_t		p_lwp_created;	/* :: lwp created */
+	lwpid_t		p_lwp_exited;	/* :: lwp exited */
+	pid_t 		p_pspid;	/* :: posix_spawn pid */
+	char		*p_path;	/* :: full pathname of executable */
 
 /*
  * End area that is zeroed on creation
@@ -315,13 +338,12 @@ struct proc {
 
 	vaddr_t		p_psstrp;	/* :: address of process's ps_strings */
 	u_int		p_pax;		/* :: PAX flags */
-
+	int		p_xexit;	/* p: exit code */
 /*
  * End area that is copied on creation
  */
-#define	p_endcopy	p_xstat
-
-	u_short		p_xstat;	/* p: Exit status for wait; also stop signal */
+#define	p_endcopy	p_xsig
+	u_short		p_xsig;		/* p: stop signal */
 	u_short		p_acflag;	/* p: Acc. flags; see struct lwp also */
 	struct mdproc	p_md;		/* p: Any machine-dependent fields */
 	vaddr_t		p_stackbase;	/* :: ASLR randomized stack base */
@@ -355,6 +377,7 @@ struct proc {
 #define	PK_SYSTEM	0x00000002 /* System process (kthread) */
 #define	PK_SYSVSEM	0x00000004 /* Used SysV semaphores */
 #define	PK_SUGID	0x00000100 /* Had set id privileges since last exec */
+#define	PK_KMEM		0x00000200 /* Has kmem access */
 #define	PK_EXEC		0x00004000 /* Process called exec */
 #define	PK_NOCLDWAIT	0x00020000 /* No zombies if child dies */
 #define	PK_32		0x00040000 /* 32-bit process (used on 64-bit kernels) */
@@ -372,16 +395,26 @@ struct proc {
 #define	PS_STOPFORK	0x00800000 /* Child will be stopped on fork(2) */
 #define	PS_STOPEXEC	0x01000000 /* Will be stopped on exec(2) */
 #define	PS_STOPEXIT	0x02000000 /* Will be stopped at process exit */
-#define	PS_NOTIFYSTOP	0x10000000 /* Notify parent of successful STOP */
+#define	PS_COREDUMP	0x20000000 /* Process core-dumped */
+#define	PS_CONTINUED	0x40000000 /* Process is continued */
 #define	PS_STOPPING	0x80000000 /* Transitioning SACTIVE -> SSTOP */
 
 /*
- * These flags are kept in p_sflag and are protected by the proc_lock
+ * These flags are kept in p_slflag and are protected by the proc_lock
  * and p_lock.  Access from process context only.
  */
 #define	PSL_TRACEFORK	0x00000001 /* traced process wants fork events */
+#define	PSL_TRACEVFORK	0x00000002 /* traced process wants vfork events */
+#define	PSL_TRACEVFORK_DONE	\
+			0x00000004 /* traced process wants vfork done events */
+#define	PSL_TRACELWP_CREATE	\
+			0x00000008 /* traced process wants LWP create events */
+#define	PSL_TRACELWP_EXIT	\
+			0x00000010 /* traced process wants LWP exit events */
+#define	PSL_TRACEPOSIX_SPAWN	\
+			0x00000020 /* traced process wants posix_spawn events */
+
 #define	PSL_TRACED	0x00000800 /* Debugged process being traced */
-#define	PSL_FSTRACE	0x00010000 /* Debugger process being traced by procfs */
 #define	PSL_CHTRACED	0x00400000 /* Child has been traced & reparented */
 #define	PSL_SYSCALL	0x04000000 /* process has PT_SYSCALL enabled */
 #define	PSL_SYSCALLEMU	0x08000000 /* cancel in-progress syscall */
@@ -392,7 +425,7 @@ struct proc {
 #define	PST_PROFIL	0x00000020 /* Has started profiling */
 
 /*
- * The final set are protected by the proc_lock.  Access
+ * Kept in p_lflag and protected by the proc_lock.  Access
  * from process context only.
  */
 #define	PL_CONTROLT	0x00000002 /* Has a controlling terminal */
@@ -406,7 +439,12 @@ struct proc {
  * Macro to compute the exit signal to be delivered.
  */
 #define	P_EXITSIG(p)	\
-    (((p)->p_slflag & (PSL_TRACED|PSL_FSTRACE)) ? SIGCHLD : p->p_exitsig)
+    (((p)->p_slflag & PSL_TRACED) ? SIGCHLD : p->p_exitsig)
+/*
+ * Compute a wait(2) 16 bit exit status code
+ */
+#define P_WAITSTATUS(p) W_EXITCODE((p)->p_xexit, ((p)->p_xsig | \
+    (((p)->p_sflag & PS_COREDUMP) ? WCOREFLAG : 0)))
 
 LIST_HEAD(proclist, proc);		/* A list of processes */
 
@@ -475,9 +513,12 @@ int	tsleep(wchan_t, pri_t, const char *, int);
 int	mtsleep(wchan_t, pri_t, const char *, int, kmutex_t *);
 void	wakeup(wchan_t);
 int	kpause(const char *, bool, int, kmutex_t *);
-void	exit1(struct lwp *, int) __dead;
+void	exit1(struct lwp *, int, int) __dead;
 int	kill1(struct lwp *l, pid_t pid, ksiginfo_t *ksi, register_t *retval);
 int	do_sys_wait(int *, int *, int, struct rusage *);
+int	do_sys_waitid(idtype_t, id_t, int *, int *, int, struct wrusage *,
+	    siginfo_t *);
+
 struct proc *proc_alloc(void);
 void	proc0_init(void);
 pid_t	proc_alloc_pid(struct proc *);
@@ -485,7 +526,7 @@ void	proc_free_pid(pid_t);
 void	proc_free_mem(struct proc *);
 void	exit_lwps(struct lwp *l);
 int	fork1(struct lwp *, int, int, void *, size_t,
-	    void (*)(void *), void *, register_t *, struct proc **);
+	    void (*)(void *), void *, register_t *);
 int	pgid_in_session(struct proc *, pid_t);
 void	cpu_lwp_fork(struct lwp *, struct lwp *, void *, size_t,
 	    void (*)(void *), void *);
@@ -497,15 +538,16 @@ void	cpu_spawn_return(struct lwp*);
 void	syscall_intern(struct proc *);
 #endif
 
+void	md_child_return(struct lwp *);
 void	child_return(void *);
 
 int	proc_isunder(struct proc *, struct lwp *);
-void	proc_stop(struct proc *, int, int);
 int	proc_uidmatch(kauth_cred_t, kauth_cred_t);
 
 int	proc_vmspace_getref(struct proc *, struct vmspace **);
 void	proc_crmod_leave(kauth_cred_t, kauth_cred_t, bool);
 void	proc_crmod_enter(void);
+int	proc_getauxv(struct proc *, void **, size_t *);
 
 int	proc_specific_key_create(specificdata_key_t *, specificdata_dtor_t);
 void	proc_specific_key_delete(specificdata_key_t);
@@ -519,7 +561,7 @@ int	proc_compare(const struct proc *, const struct lwp *,
 int	proclist_foreach_call(struct proclist *,
     int (*)(struct proc *, void *arg), void *);
 
-static inline struct proc *
+static __inline struct proc *
 _proclist_skipmarker(struct proc *p0)
 {
 	struct proc *p = p0;
@@ -529,6 +571,14 @@ _proclist_skipmarker(struct proc *p0)
 
 	return p;
 }
+
+#define PROC_PTRSZ(p) (((p)->p_flag & PK_32) ? sizeof(int) : sizeof(void *))
+#define PROC_REGSZ(p) (((p)->p_flag & PK_32) ? \
+    sizeof(process_reg32) : sizeof(struct reg))
+#define PROC_FPREGSZ(p) (((p)->p_flag & PK_32) ? \
+    sizeof(process_fpreg32) : sizeof(struct fpreg))
+#define PROC_DBREGSZ(p) (((p)->p_flag & PK_32) ? \
+    sizeof(process_dbreg32) : sizeof(struct dbreg))
 
 /*
  * PROCLIST_FOREACH: iterate on the given proclist, skipping PK_MARKER ones.

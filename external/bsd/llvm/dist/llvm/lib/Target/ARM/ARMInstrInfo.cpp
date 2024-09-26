@@ -30,29 +30,29 @@
 using namespace llvm;
 
 ARMInstrInfo::ARMInstrInfo(const ARMSubtarget &STI)
-  : ARMBaseInstrInfo(STI), RI(STI) {
-}
+    : ARMBaseInstrInfo(STI), RI() {}
 
-/// getNoopForMachoTarget - Return the noop instruction to use for a noop.
-void ARMInstrInfo::getNoopForMachoTarget(MCInst &NopInst) const {
+/// Return the noop instruction to use for a noop.
+void ARMInstrInfo::getNoop(MCInst &NopInst) const {
   if (hasNOP()) {
     NopInst.setOpcode(ARM::HINT);
-    NopInst.addOperand(MCOperand::CreateImm(0));
-    NopInst.addOperand(MCOperand::CreateImm(ARMCC::AL));
-    NopInst.addOperand(MCOperand::CreateReg(0));
+    NopInst.addOperand(MCOperand::createImm(0));
+    NopInst.addOperand(MCOperand::createImm(ARMCC::AL));
+    NopInst.addOperand(MCOperand::createReg(0));
   } else {
     NopInst.setOpcode(ARM::MOVr);
-    NopInst.addOperand(MCOperand::CreateReg(ARM::R0));
-    NopInst.addOperand(MCOperand::CreateReg(ARM::R0));
-    NopInst.addOperand(MCOperand::CreateImm(ARMCC::AL));
-    NopInst.addOperand(MCOperand::CreateReg(0));
-    NopInst.addOperand(MCOperand::CreateReg(0));
+    NopInst.addOperand(MCOperand::createReg(ARM::R0));
+    NopInst.addOperand(MCOperand::createReg(ARM::R0));
+    NopInst.addOperand(MCOperand::createImm(ARMCC::AL));
+    NopInst.addOperand(MCOperand::createReg(0));
+    NopInst.addOperand(MCOperand::createReg(0));
   }
 }
 
 unsigned ARMInstrInfo::getUnindexedOpcode(unsigned Opc) const {
   switch (Opc) {
-  default: break;
+  default:
+    break;
   case ARM::LDR_PRE_IMM:
   case ARM::LDR_PRE_REG:
   case ARM::LDR_POST_IMM:
@@ -90,29 +90,29 @@ unsigned ARMInstrInfo::getUnindexedOpcode(unsigned Opc) const {
   return 0;
 }
 
-void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI,
-                                        Reloc::Model RM) const {
+void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI) const {
   MachineFunction &MF = *MI->getParent()->getParent();
-  const ARMSubtarget &Subtarget = MF.getTarget().getSubtarget<ARMSubtarget>();
+  const ARMSubtarget &Subtarget = MF.getSubtarget<ARMSubtarget>();
+  const TargetMachine &TM = MF.getTarget();
 
   if (!Subtarget.useMovt(MF)) {
-    if (RM == Reloc::PIC_)
-      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12, RM);
+    if (TM.isPositionIndependent())
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_pcrel, ARM::LDRi12);
     else
-      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12, RM);
+      expandLoadStackGuardBase(MI, ARM::LDRLIT_ga_abs, ARM::LDRi12);
     return;
   }
 
-  if (RM != Reloc::PIC_) {
-    expandLoadStackGuardBase(MI, ARM::MOVi32imm, ARM::LDRi12, RM);
+  if (!TM.isPositionIndependent()) {
+    expandLoadStackGuardBase(MI, ARM::MOVi32imm, ARM::LDRi12);
     return;
   }
 
   const GlobalValue *GV =
       cast<GlobalValue>((*MI->memoperands_begin())->getValue());
 
-  if (!Subtarget.GVIsIndirectSymbol(GV, RM)) {
-    expandLoadStackGuardBase(MI, ARM::MOV_ga_pcrel, ARM::LDRi12, RM);
+  if (!Subtarget.isGVIndirectSymbol(GV)) {
+    expandLoadStackGuardBase(MI, ARM::MOV_ga_pcrel, ARM::LDRi12);
     return;
   }
 
@@ -123,84 +123,43 @@ void ARMInstrInfo::expandLoadStackGuard(MachineBasicBlock::iterator MI,
 
   MIB = BuildMI(MBB, MI, DL, get(ARM::MOV_ga_pcrel_ldr), Reg)
             .addGlobalAddress(GV, 0, ARMII::MO_NONLAZY);
-  unsigned Flag = MachineMemOperand::MOLoad | MachineMemOperand::MOInvariant;
+  auto Flags = MachineMemOperand::MOLoad |
+               MachineMemOperand::MODereferenceable |
+               MachineMemOperand::MOInvariant;
   MachineMemOperand *MMO = MBB.getParent()->getMachineMemOperand(
-      MachinePointerInfo::getGOT(), Flag, 4, 4);
+      MachinePointerInfo::getGOT(*MBB.getParent()), Flags, 4, 4);
   MIB.addMemOperand(MMO);
-  MIB = BuildMI(MBB, MI, DL, get(ARM::LDRi12), Reg);
-  MIB.addReg(Reg, RegState::Kill).addImm(0);
-  MIB.setMemRefs(MI->memoperands_begin(), MI->memoperands_end());
-  AddDefaultPred(MIB);
+  BuildMI(MBB, MI, DL, get(ARM::LDRi12), Reg)
+      .addReg(Reg, RegState::Kill)
+      .addImm(0)
+      .setMemRefs(MI->memoperands_begin(), MI->memoperands_end())
+      .add(predOps(ARMCC::AL));
 }
 
-namespace {
-  /// ARMCGBR - Create Global Base Reg pass. This initializes the PIC
-  /// global base register for ARM ELF.
-  struct ARMCGBR : public MachineFunctionPass {
-    static char ID;
-    ARMCGBR() : MachineFunctionPass(ID) {}
-
-    bool runOnMachineFunction(MachineFunction &MF) override {
-      ARMFunctionInfo *AFI = MF.getInfo<ARMFunctionInfo>();
-      if (AFI->getGlobalBaseReg() == 0)
-        return false;
-
-      const ARMTargetMachine *TM =
-        static_cast<const ARMTargetMachine *>(&MF.getTarget());
-      if (TM->getRelocationModel() != Reloc::PIC_)
-        return false;
-
-      LLVMContext *Context = &MF.getFunction()->getContext();
-      unsigned ARMPCLabelIndex = AFI->createPICLabelUId();
-      unsigned PCAdj = TM->getSubtarget<ARMSubtarget>().isThumb() ? 4 : 8;
-      ARMConstantPoolValue *CPV = ARMConstantPoolSymbol::Create(
-          *Context, "_GLOBAL_OFFSET_TABLE_", ARMPCLabelIndex, PCAdj);
-
-      unsigned Align =
-          TM->getSubtargetImpl()->getDataLayout()->getPrefTypeAlignment(
-              Type::getInt32PtrTy(*Context));
-      unsigned Idx = MF.getConstantPool()->getConstantPoolIndex(CPV, Align);
-
-      MachineBasicBlock &FirstMBB = MF.front();
-      MachineBasicBlock::iterator MBBI = FirstMBB.begin();
-      DebugLoc DL = FirstMBB.findDebugLoc(MBBI);
-      unsigned TempReg =
-          MF.getRegInfo().createVirtualRegister(&ARM::rGPRRegClass);
-      unsigned Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ?
-                     ARM::t2LDRpci : ARM::LDRcp;
-      const TargetInstrInfo &TII = *TM->getSubtargetImpl()->getInstrInfo();
-      MachineInstrBuilder MIB = BuildMI(FirstMBB, MBBI, DL,
-                                        TII.get(Opc), TempReg)
-                                .addConstantPoolIndex(Idx);
-      if (Opc == ARM::LDRcp)
-        MIB.addImm(0);
-      AddDefaultPred(MIB);
-
-      // Fix the GOT address by adding pc.
-      unsigned GlobalBaseReg = AFI->getGlobalBaseReg();
-      Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ? ARM::tPICADD
-                                                        : ARM::PICADD;
-      MIB = BuildMI(FirstMBB, MBBI, DL, TII.get(Opc), GlobalBaseReg)
-                .addReg(TempReg)
-                .addImm(ARMPCLabelIndex);
-      if (Opc == ARM::PICADD)
-        AddDefaultPred(MIB);
-
-
-      return true;
-    }
-
-    const char *getPassName() const override {
-      return "ARM PIC Global Base Reg Initialization";
-    }
-
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-      AU.setPreservesCFG();
-      MachineFunctionPass::getAnalysisUsage(AU);
-    }
-  };
+std::pair<unsigned, unsigned>
+ARMInstrInfo::decomposeMachineOperandsTargetFlags(unsigned TF) const {
+  const unsigned Mask = ARMII::MO_OPTION_MASK;
+  return std::make_pair(TF & Mask, TF & ~Mask);
 }
 
-char ARMCGBR::ID = 0;
-FunctionPass*
-llvm::createARMGlobalBaseRegPass() { return new ARMCGBR(); }
+ArrayRef<std::pair<unsigned, const char *>>
+ARMInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
+  using namespace ARMII;
+
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MO_LO16, "arm-lo16"}, {MO_HI16, "arm-hi16"}};
+  return makeArrayRef(TargetFlags);
+}
+
+ArrayRef<std::pair<unsigned, const char *>>
+ARMInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
+  using namespace ARMII;
+
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MO_GOT, "arm-got"},
+      {MO_SBREL, "arm-sbrel"},
+      {MO_DLLIMPORT, "arm-dllimport"},
+      {MO_SECREL, "arm-secrel"},
+      {MO_NONLAZY, "arm-nonlazy"}};
+  return makeArrayRef(TargetFlags);
+}

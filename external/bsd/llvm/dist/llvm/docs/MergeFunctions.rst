@@ -56,10 +56,10 @@ As a good start point, Kaleidoscope tutorial could be used:
 
 Especially it's important to understand chapter 3 of tutorial:
 
-:doc:`tutorial/LangImpl3`
+:doc:`tutorial/LangImpl03`
 
-Reader also should know how passes work in LLVM, he could use next article as a
-reference and start point here:
+Reader also should know how passes work in LLVM, they could use next article as
+a reference and start point here:
 
 :doc:`WritingAnLLVMPass`
 
@@ -88,7 +88,7 @@ part describes the merging process.
 In every part author also tried to put the contents into the top-down form.
 First, the top-level methods will be described, while the terminal ones will be
 at the end, in the tail of each part. If reader will see the reference to the
-method that wasn't described yet, he will find its description a bit below.
+method that wasn't described yet, they will find its description a bit below.
 
 Basics
 ======
@@ -394,7 +394,7 @@ and in right function "*FR*". And every part of *left* place is equal to the
 corresponding part of *right* place, and (!) both parts use *Value* instances,
 for example:
 
-.. code-block:: llvm
+.. code-block:: text
 
    instr0 i32 %LV   ; left side, function FL
    instr0 i32 %RV   ; right side, function FR
@@ -409,13 +409,13 @@ in "*FL*" and "*FR*".
 
 Consider small example here:
 
-.. code-block:: llvm
+.. code-block:: text
 
   define void %f(i32 %pf0, i32 %pf1) {
     instr0 i32 %pf0 instr1 i32 %pf1 instr2 i32 123
   }
 
-.. code-block:: llvm
+.. code-block:: text
 
   define void %g(i32 %pg0, i32 %pg1) {
     instr0 i32 %pg0 instr1 i32 %pg0 instr2 i32 123
@@ -697,7 +697,7 @@ Below is detailed body description.
 If “F” may be overridden
 ------------------------
 As follows from ``mayBeOverridden`` comments: “whether the definition of this
-global may be replaced by something non-equivalent at link time”. If so, thats
+global may be replaced by something non-equivalent at link time”. If so, that's
 ok: we can use alias to *F* instead of *G* or change call instructions itself.
 
 HasGlobalAliases, removeUsers

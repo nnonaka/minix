@@ -2,18 +2,18 @@
 
 ; This file check a bug in MachineCopyPropagation pass. The last COPY will be
 ; incorrectly removed if the machine instructions are as follows:
-;   %Q5_Q6<def> = COPY %Q2_Q3
-;   %D5<def> =
-;   %D3<def> =
-;   %D3<def> = COPY %D6
+;   %q5_q6 = COPY %q2_q3
+;   %d5 =
+;   %d3 =
+;   %d3 = COPY %d6
 ; This is caused by a bug in function SourceNoLongerAvailable(), which fails to
-; remove the relationship of D6 and "%Q5_Q6<def> = COPY %Q2_Q3".
+; remove the relationship of D6 and "%q5_q6 = COPY %q2_q3".
 
 @failed = internal unnamed_addr global i1 false
 
 ; CHECK-LABEL: foo:
 ; CHECK: ld2
-; CHECK-NOT: // kill: D{{[0-9]+}}<def> D{{[0-9]+}}<kill>
+; CHECK-NOT: // kill: def D{{[0-9]+}} killed D{{[0-9]+}}
 define void @foo(<2 x i32> %shuffle251, <8 x i8> %vtbl1.i, i8* %t2, <2 x i32> %vrsubhn_v2.i1364) {
 entry:
   %val0 = alloca [2 x i64], align 8
@@ -47,7 +47,7 @@ if.end:                                           ; preds = %if.then, %entry
   %vld2_lane1.1.extract = extractvalue { <1 x i64>, <1 x i64> } %vld2_lane1, 1
   %t3 = bitcast <2 x i64>* %val1 to i8*
   call void @llvm.aarch64.neon.st2.v1i64.p0i8(<1 x i64> %vld2_lane1.0.extract, <1 x i64> %vld2_lane1.1.extract, i8* %t3)
-  %t4 = load <2 x i64>* %val1, align 16
+  %t4 = load <2 x i64>, <2 x i64>* %val1, align 16
   %vsubhn = sub <2 x i64> <i64 11, i64 0>, %t4
   %vsubhn1 = lshr <2 x i64> %vsubhn, <i64 32, i64 32>
   %vsubhn2 = trunc <2 x i64> %vsubhn1 to <2 x i32>

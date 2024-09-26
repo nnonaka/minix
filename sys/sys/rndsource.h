@@ -1,4 +1,4 @@
-/*	$NetBSD: rndsource.h,v 1.3 2015/04/21 03:53:07 riastradh Exp $	*/
+/*	$NetBSD: rndsource.h,v 1.6 2018/04/19 21:19:07 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -38,8 +38,10 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/null.h>
 #include <sys/rndio.h>		/* RND_TYPE_*, RND_FLAG_* */
 #include <sys/rngtest.h>
+#include <sys/queue.h>
 
 typedef struct rnd_delta_estimator {
 	uint64_t	x;
@@ -66,7 +68,7 @@ typedef struct krndsource {
 	unsigned	refcnt;
 } krndsource_t;
 
-static inline void
+static __inline void
 rndsource_setcb(struct krndsource *const rs, void (*const cb)(size_t, void *),
     void *const arg)
 {
@@ -74,7 +76,7 @@ rndsource_setcb(struct krndsource *const rs, void (*const cb)(size_t, void *),
 	rs->getarg = arg;
 }
 
-static inline void
+static __inline void
 rndsource_setenable(struct krndsource *const rs, void *const cb)
 {
 	rs->enable = cb;
@@ -87,11 +89,13 @@ void		_rnd_add_uint32(krndsource_t *, uint32_t);
 void		_rnd_add_uint64(krndsource_t *, uint64_t);
 void		rnd_add_data(krndsource_t *, const void *const, uint32_t,
 		    uint32_t);
+void		rnd_add_data_sync(krndsource_t *, const void *, uint32_t,
+		    uint32_t);
 void		rnd_attach_source(krndsource_t *, const char *,
 		    uint32_t, uint32_t);
 void		rnd_detach_source(krndsource_t *);
 
-static inline void
+static __inline void
 rnd_add_uint32(krndsource_t *kr, uint32_t val)
 {
 	if (__predict_true(kr)) {
@@ -103,7 +107,7 @@ rnd_add_uint32(krndsource_t *kr, uint32_t val)
 	}
 }
 
-static inline void
+static __inline void
 rnd_add_uint64(krndsource_t *kr, uint64_t val)
 {
 	if (__predict_true(kr)) {

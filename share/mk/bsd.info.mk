@@ -47,6 +47,8 @@ __infoinstall: .USE
 		do sleep 1; done;					\
 	${TOOL_INSTALL_INFO} -d ${INFODIRFILE} -r ${.TARGET} 2> /dev/null; \
 	${TOOL_INSTALL_INFO} -d ${INFODIRFILE} ${.TARGET};		\
+	${TOOL_SORTINFO} < ${INFODIRFILE} > ${INFODIRFILE}.tmp;		\
+	${MV} ${INFODIRFILE}.tmp ${INFODIRFILE};			\
 	rm -f ${INFODIRFILE}.lock
 
 

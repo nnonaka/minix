@@ -69,6 +69,14 @@ enum ArgEffect {
   /// transfers the object to the Garbage Collector under GC.
   MakeCollectable,
 
+  /// The argument is a pointer to a retain-counted object; on exit, the new
+  /// value of the pointer is a +0 value or NULL.
+  UnretainedOutParameter,
+
+  /// The argument is a pointer to a retain-counted object; on exit, the new
+  /// value of the pointer is a +1 value or NULL.
+  RetainedOutParameter,
+
   /// The argument is treated as potentially escaping, meaning that
   /// even when its reference count hits 0 it should be treated as still
   /// possibly being alive as someone else *may* be holding onto the object.
@@ -112,9 +120,6 @@ public:
     NoRet,
     /// Indicates that the returned value is an owned (+1) symbol.
     OwnedSymbol,
-    /// Indicates that the returned value is an owned (+1) symbol and
-    /// that it should be treated as freshly allocated.
-    OwnedAllocatedSymbol,
     /// Indicates that the returned value is an object with retain count
     /// semantics but that it is not owned (+0).  This is the default
     /// for getters, etc.
@@ -140,9 +145,11 @@ public:
     /// Indicates that the tracked object is an Objective-C object.
     ObjC,
     /// Indicates that the tracked object could be a CF or Objective-C object.
-    AnyObj
+    AnyObj,
+    /// Indicates that the tracked object is a generalized object.
+    Generalized
   };
-  
+
 private:
   Kind K;
   ObjKind O;
@@ -155,8 +162,7 @@ public:
   ObjKind getObjKind() const { return O; }
   
   bool isOwned() const {
-    return K == OwnedSymbol || K == OwnedAllocatedSymbol ||
-    K == OwnedWhenTrackedReceiver;
+    return K == OwnedSymbol || K == OwnedWhenTrackedReceiver;
   }
   
   bool notOwned() const {
@@ -171,8 +177,8 @@ public:
     return RetEffect(OwnedWhenTrackedReceiver, ObjC);
   }
   
-  static RetEffect MakeOwned(ObjKind o, bool isAllocated = false) {
-    return RetEffect(isAllocated ? OwnedAllocatedSymbol : OwnedSymbol, o);
+  static RetEffect MakeOwned(ObjKind o) {
+    return RetEffect(OwnedSymbol, o);
   }
   static RetEffect MakeNotOwned(ObjKind o) {
     return RetEffect(NotOwnedSymbol, o);

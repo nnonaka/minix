@@ -1,4 +1,4 @@
-/*	$NetBSD: dkio.h,v 1.21 2014/12/29 18:41:20 mlelstv Exp $	*/
+/*	$NetBSD: dkio.h,v 1.25.4.1 2020/03/21 15:18:57 martin Exp $	*/
 
 /*
  * Copyright (c) 1987, 1988, 1993
@@ -38,14 +38,14 @@
 /*
  * Disk-specific ioctls.
  */
-		/* get and set disklabel; DIOCGPART used internally */
+		/* get and set disklabel; DIOCGPARTINFO used internally */
 #define DIOCGDINFO	_IOR('d', 101, struct disklabel)/* get */
 #define DIOCSDINFO	_IOW('d', 102, struct disklabel)/* set */
 #define DIOCWDINFO	_IOW('d', 103, struct disklabel)/* set, update disk */
 
 #ifdef _KERNEL
 #define DIOCGDINFO32	(DIOCGDINFO - (sizeof(uint32_t) << IOCPARM_SHIFT))
-#define DIOCGPART	_IOW('d', 104, struct partinfo)	/* get partition */
+#define DIOCGPARTINFO	_IOW('d', 104, struct partinfo)	/* get partition */
 #endif
 
 #if defined(__HAVE_OLD_DISKLABEL) && defined(_KERNEL)
@@ -85,6 +85,17 @@
 #define	DKCACHE_RCHANGE	0x000100 /* read enable is changeable */
 #define	DKCACHE_WCHANGE	0x000200 /* write enable is changeable */
 #define	DKCACHE_SAVE	0x010000 /* cache parameters are savable/save them */
+#define	DKCACHE_FUA	0x020000 /* Force Unit Access supported */
+#define	DKCACHE_DPO	0x040000 /* Disable Page Out supported */
+
+/*
+ * Combine disk cache flags of two drives to get common cache capabilities.
+ * All common flags are retained. Besides this, if one of the disks
+ * has a write cache enabled or changeable, propagate those flags into result,
+ * even if it's not shared, to indicate that write cache is present.
+ */
+#define DKCACHE_COMBINE(a, b) \
+	(((a) & (b)) | (((a) | (b)) & (DKCACHE_WRITE|DKCACHE_WCHANGE)))
 
 		/* sync disk cache */
 #define	DIOCCACHESYNC	_IOW('d', 118, int)	/* sync cache (force?) */
@@ -118,5 +129,11 @@
 		/* query disk geometry */
 #define	DIOCGSECTORSIZE	_IOR('d', 133, u_int)	/* sector size in bytes */
 #define	DIOCGMEDIASIZE	_IOR('d', 132, off_t)	/* media size in bytes */
+
+		/* mass removal */
+#define	DIOCRMWEDGES	_IOR('d', 134, int)	/* remove all wedges */
+
+		/* sector alignment */
+#define	DIOCGSECTORALIGN _IOR('d', 135, struct disk_sectoralign)
 
 #endif /* _SYS_DKIO_H_ */

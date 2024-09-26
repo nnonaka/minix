@@ -3,10 +3,10 @@
 .include <bsd.own.mk>
 
 COMMON_DIR:=${.PARSEDIR}
-.if defined(__MINIX)
-COMMON_CODEDIRS=atomic gen inet md net stdlib string
+.if !defined(__MINIX)
+COMMON_CODEDIRS=atomic gen gmon inet md misc net rpc stdlib string sys
 .else
-COMMON_CODEDIRS=atomic gen gmon inet md net stdlib string sys
+COMMON_CODEDIRS=atomic gen inet md misc net rpc stdlib string sys
 .endif
 COMMON_CODEDIRS+=hash/sha1 hash/sha2 hash/sha3 hash/rmd160 hash/murmurhash
 

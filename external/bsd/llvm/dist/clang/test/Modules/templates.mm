@@ -1,8 +1,8 @@
 // RUN: rm -rf %t
-// RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fmodules-cache-path=%t -I %S/Inputs -verify %s -Wno-objc-root-class
-// RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fmodules-cache-path=%t -I %S/Inputs -emit-llvm %s -o - -Wno-objc-root-class | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fimplicit-module-maps -fmodules-cache-path=%t -I %S/Inputs -verify %s -Wno-objc-root-class
+// RUN: %clang_cc1 -triple x86_64-linux-gnu -std=c++11 -x objective-c++ -fmodules -fimplicit-module-maps -fmodules-cache-path=%t -I %S/Inputs -emit-llvm %s -o - -Wno-objc-root-class | FileCheck %s
 // expected-no-diagnostics
-
+// REQUIRES: x86-registered-target
 @import templates_left;
 
 void testInlineRedeclEarly() {
@@ -12,10 +12,10 @@ void testInlineRedeclEarly() {
 
 @import templates_right;
 
-// CHECK-DAG: @list_left = global %class.List { %"struct.List<int>::node"* null, i32 8 }, align 8
-// CHECK-DAG: @list_right = global %class.List { %"struct.List<int>::node"* null, i32 12 }, align 8
-// CHECK-DAG: @_ZZ15testMixedStructvE1l = {{.*}} constant %class.List { %{{.*}}* null, i32 1 }, align 8
-// CHECK-DAG: @_ZZ15testMixedStructvE1r = {{.*}} constant %class.List { %{{.*}}* null, i32 2 }, align 8
+// CHECK-DAG: @list_left = global %[[LIST:.*]] { %[[LISTNODE:.*]]* null, i32 8 }, align 8
+// CHECK-DAG: @list_right = global %[[LIST]] { %[[LISTNODE]]* null, i32 12 }, align 8
+// CHECK-DAG: @_ZZ15testMixedStructvE1l = {{.*}} constant %[[LIST]] { %{{.*}}* null, i32 1 }, align 8
+// CHECK-DAG: @_ZZ15testMixedStructvE1r = {{.*}} constant %[[LIST]] { %{{.*}}* null, i32 2 }, align 8
 // CHECK-DAG: @_ZN29WithUndefinedStaticDataMemberIA_iE9undefinedE = external global
 
 void testTemplateClasses() {
@@ -27,6 +27,8 @@ void testTemplateClasses() {
 
   N::Set<char> set_char;
   set_char.insert('A');
+
+  static_assert(sizeof(List<long>) == sizeof(List<short>), "");
 
   List<double> list_double;
   list_double.push_back(0.0);
@@ -75,10 +77,10 @@ unsigned testMixedStruct() {
   // CHECK: %[[l:.*]] = alloca %[[ListInt:[^ ]*]], align 8
   // CHECK: %[[r:.*]] = alloca %[[ListInt]], align 8
 
-  // CHECK: call {{.*}}memcpy{{.*}}(i8* %{{.*}}, i8* bitcast ({{.*}}* @_ZZ15testMixedStructvE1l to i8*), i64 16,
+  // CHECK: call {{.*}}memcpy{{.*}}(i8* align {{[0-9]+}} %{{.*}}, i8* align {{[0-9]+}} bitcast ({{.*}}* @_ZZ15testMixedStructvE1l to i8*), i64 16,
   ListInt_left l{0, 1};
 
-  // CHECK: call {{.*}}memcpy{{.*}}(i8* %{{.*}}, i8* bitcast ({{.*}}* @_ZZ15testMixedStructvE1r to i8*), i64 16,
+  // CHECK: call {{.*}}memcpy{{.*}}(i8* align {{[0-9]+}} %{{.*}}, i8* align {{[0-9]+}} bitcast ({{.*}}* @_ZZ15testMixedStructvE1r to i8*), i64 16,
   ListInt_right r{0, 2};
 
   // CHECK: call void @_Z10useListIntR4ListIiE(%[[ListInt]]* dereferenceable({{[0-9]+}}) %[[l]])
@@ -86,8 +88,8 @@ unsigned testMixedStruct() {
   // CHECK: call void @_Z10useListIntR4ListIiE(%[[ListInt]]* dereferenceable({{[0-9]+}}) %[[r]])
   useListInt(r);
 
-  // CHECK: load i32* bitcast (i8* getelementptr inbounds (i8* bitcast ({{.*}}* @list_left to i8*), i64 8) to i32*)
-  // CHECK: load i32* bitcast (i8* getelementptr inbounds (i8* bitcast ({{.*}}* @list_right to i8*), i64 8) to i32*)
+  // CHECK: load i32, i32* bitcast (i8* getelementptr inbounds (i8, i8* bitcast ({{.*}}* @list_left to i8*), i64 8) to i32*)
+  // CHECK: load i32, i32* bitcast (i8* getelementptr inbounds (i8, i8* bitcast ({{.*}}* @list_right to i8*), i64 8) to i32*)
   return list_left.*size_right + list_right.*size_left;
 }
 
@@ -106,12 +108,27 @@ void testStaticDataMember() {
   WithUndefinedStaticDataMember<int[]> load_it;
 
   // CHECK-LABEL: define linkonce_odr i32* @_Z23getStaticDataMemberLeftv(
-  // CHECK: ret i32* getelementptr inbounds ([0 x i32]* @_ZN29WithUndefinedStaticDataMemberIA_iE9undefinedE, i32 0, i32 0)
+  // CHECK: ret i32* getelementptr inbounds ([0 x i32], [0 x i32]* @_ZN29WithUndefinedStaticDataMemberIA_iE9undefinedE, i32 0, i32 0)
   (void) getStaticDataMemberLeft();
 
   // CHECK-LABEL: define linkonce_odr i32* @_Z24getStaticDataMemberRightv(
-  // CHECK: ret i32* getelementptr inbounds ([0 x i32]* @_ZN29WithUndefinedStaticDataMemberIA_iE9undefinedE, i32 0, i32 0)
+  // CHECK: ret i32* getelementptr inbounds ([0 x i32], [0 x i32]* @_ZN29WithUndefinedStaticDataMemberIA_iE9undefinedE, i32 0, i32 0)
   (void) getStaticDataMemberRight();
 }
 
+void testWithAttributes() {
+  auto a = make_with_attributes_left();
+  auto b = make_with_attributes_right();
+  static_assert(alignof(decltype(a)) == 2, "");
+  static_assert(alignof(decltype(b)) == 2, "");
+}
 
+// Check that returnNonTrivial doesn't return Class0<S0> directly in registers.
+
+// CHECK: declare void @_Z16returnNonTrivialv(%struct.Class0* sret)
+
+@import template_nontrivial0;
+@import template_nontrivial1;
+
+S1::S1() : a(returnNonTrivial()) {
+}

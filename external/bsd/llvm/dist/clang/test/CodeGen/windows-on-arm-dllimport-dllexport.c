@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Werror -triple thumbv7-windows-itanium -mfloat-abi hard -emit-llvm %s -o - | FileCheck %s
+// RUN: %clang_cc1 -Werror -triple thumbv7-windows-itanium -mfloat-abi hard -fms-extensions -emit-llvm %s -o - | FileCheck %s
 
 __declspec(dllexport) int export_int;
 
@@ -17,9 +17,9 @@ void call_imported_function() {
 }
 
 // CHECK: @import_int = external dllimport global i32
-// CHECK: @export_int = common dllexport global i32 0, align 4
+// CHECK: @export_int = common dso_local dllexport global i32 0, align 4
 
-// CHECK: define dllexport arm_aapcs_vfpcc void @export_implemented_function()
+// CHECK: define dso_local dllexport arm_aapcs_vfpcc void @export_implemented_function()
 
 // CHECK: declare dllimport arm_aapcs_vfpcc void @import_function(i32)
 

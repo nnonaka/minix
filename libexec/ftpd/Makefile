@@ -7,7 +7,7 @@ PROG=	ftpd
 SRCS=	cmds.c conf.c ftpd.c ftpcmd.y logutmp.c logwtmp.c popen.c
 .if defined(__MINIX)
 WARNS=	# BJG too many warnings with clang right now
-CPPFLAGS+=-I${.CURDIR} 
+CPPFLAGS+=-I${.CURDIR} -DSUPPORT_UTMP -DSUPPORT_UTMPX
 .else
 CPPFLAGS+=-I${.CURDIR} -DSUPPORT_UTMP -DSUPPORT_UTMPX -DLOGIN_CAP
 .endif # defined(__MINIX)

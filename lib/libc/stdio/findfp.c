@@ -56,8 +56,6 @@ int	__sdidinit;
 
 #define	NDYNAMIC 10		/* add ten more whenever necessary */
 
-#if !defined(_LIBMINC) && !defined(__kernel__) && defined(__minix)
-
 #define	std(flags, file) { \
 	._p = NULL, \
 	._r = 0, \
@@ -82,40 +80,10 @@ int	__sdidinit;
 	._offset = (off_t)0, \
 }
 
-#else
-
-#define	std(flags, file) { \
-	._p = NULL, \
-	._r = 0, \
-	._w = 0, \
-	._flags = (flags), \
-	._file = (file),  \
-	._bf = { ._base = NULL, ._size = 0 }, \
-	._lbfsize = 0,  \
-	._cookie = __sF + (file), \
-	._close = NULL, \
-	._read = NULL, \
-	._seek = NULL, \
-	._write = NULL, \
-	._ext = { ._base = (void *)(__sFext + (file)), ._size = 0 }, \
-	._up = NULL, \
-        ._ur = 0, \
-	._ubuf = { [0] = '\0', [1] = '\0', [2] = '\0' }, \
-	._nbuf = { [0] = '\0' }, \
-	._flush = NULL, \
-	._lb_unused = { '\0' }, \
-	._blksize = 0, \
-	._offset = (off_t)0, \
-}
-
-#endif /* !defined(_LIBMINC) && !defined(__kernel__) */
-
-#if !defined(__kernel__) && defined(__minix)
 				/* the usual - (stdin + stdout + stderr) */
 static FILE usual[FOPEN_MAX - 3];
 static struct __sfileext usualext[FOPEN_MAX - 3];
 static struct glue uglue = { 0, FOPEN_MAX - 3, usual };
-#endif /* !defined(__kernel__) && defined(__minix) */
 
 #if defined(_REENTRANT) && !defined(__lint__) /* XXX lint is busted */
 #define	STDEXT { ._lock = MUTEX_INITIALIZER, ._lockcond = COND_INITIALIZER }
@@ -131,8 +99,6 @@ FILE __sF[3] = {
 	std(__SWR, STDOUT_FILENO),		/* stdout */
 	std(__SWR|__SNBF, STDERR_FILENO)	/* stderr */
 };
-
-#if !defined(__kernel__) && defined(__minix)
 struct glue __sglue = { &uglue, 3, __sF };
 
 void f_prealloc(void);
@@ -221,7 +187,6 @@ found:
 void
 f_prealloc(void)
 {
-#if !defined(_LIBMINC) && defined(__minix)
 	struct glue *g;
 	int n;
 
@@ -230,7 +195,6 @@ f_prealloc(void)
 		continue;
 	if (n > 0)
 		g->next = moreglue(n);
-#endif /* !defined(_LIBMINC) && defined(__minix) */
 }
 
 /*
@@ -243,10 +207,8 @@ f_prealloc(void)
 void
 _cleanup(void)
 {
-#if !defined(_LIBMINC) && defined(__minix)
 	/* (void) _fwalk(fclose); */
 	(void) fflush(NULL);			/* `cheating' */
-#endif /* !defined(_LIBMINC) && defined(__minix) */
 }
 
 /*
@@ -264,4 +226,3 @@ __sinit(void)
 	__cleanup = _cleanup;		/* conservative */
 	__sdidinit = 1;
 }
-#endif /* !defined(__kernel__) && defined(__minix) */

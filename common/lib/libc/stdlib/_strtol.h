@@ -1,4 +1,4 @@
-/* $NetBSD: _strtol.h,v 1.7 2013/05/17 12:55:56 joerg Exp $ */
+/* $NetBSD: _strtol.h,v 1.11 2017/07/06 21:08:44 joerg Exp $ */
 
 /*-
  * Copyright (c) 1990, 1993
@@ -101,12 +101,22 @@ INT_FUNCNAME(_int_, _FUNCNAME, _l)(const char *nptr, char **endptr,
 			c = *s++;
 	}
 	if ((base == 0 || base == 16) &&
-	    c == '0' && (*s == 'x' || *s == 'X')) {
+	    c == '0' && (*s == 'x' || *s == 'X') &&
+	    ((s[1] >= '0' && s[1] <= '9') ||
+	     (s[1] >= 'a' && s[1] <= 'f') ||
+	     (s[1] >= 'A' && s[1] <= 'F'))) {
 		c = s[1];
 		s += 2;
 		base = 16;
-	}
-	if (base == 0)
+#if 0
+	} else if ((base == 0 || base == 2) &&
+	    c == '0' && (*s == 'b' || *s == 'B') &&
+	    (s[1] >= '0' && s[1] <= '1')) {
+		c = s[1];
+		s += 2;
+		base = 2;
+#endif
+	} else if (base == 0)
 		base = (c == '0' ? 8 : 10);
 
 	/*

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This defines IdenticalExprChecker, a check that warns about
+/// This defines IdenticalExprChecker, a check that warns about
 /// unintended use of identical expressions.
 ///
 /// It checks for use of identical expressions with comparison operators and
@@ -96,7 +96,7 @@ void FindIdenticalExprVisitor::checkBitwiseOrLogicalOp(const BinaryOperator *B,
     }
     LHS = B2->getLHS();
   }
-  
+
   if (isIdenticalStmt(AC->getASTContext(), RHS, LHS)) {
     Sr[0] = RHS->getSourceRange();
     Sr[1] = LHS->getSourceRange();
@@ -107,6 +107,24 @@ void FindIdenticalExprVisitor::checkBitwiseOrLogicalOp(const BinaryOperator *B,
 bool FindIdenticalExprVisitor::VisitIfStmt(const IfStmt *I) {
   const Stmt *Stmt1 = I->getThen();
   const Stmt *Stmt2 = I->getElse();
+
+  // Check for identical inner condition:
+  //
+  // if (x<10) {
+  //   if (x<10) {
+  //   ..
+  if (const CompoundStmt *CS = dyn_cast<CompoundStmt>(Stmt1)) {
+    if (!CS->body_empty()) {
+      const IfStmt *InnerIf = dyn_cast<IfStmt>(*CS->body_begin());
+      if (InnerIf && isIdenticalStmt(AC->getASTContext(), I->getCond(), InnerIf->getCond(), /*ignoreSideEffects=*/ false)) {
+        PathDiagnosticLocation ELoc(InnerIf->getCond(), BR.getSourceManager(), AC);
+        BR.EmitBasicReport(AC->getDecl(), Checker, "Identical conditions",
+          categories::LogicError,
+          "conditions of the inner and outer statements are identical",
+          ELoc);
+      }
+    }
+  }
 
   // Check for identical conditions:
   //
@@ -237,7 +255,10 @@ void FindIdenticalExprVisitor::checkComparisonOp(const BinaryOperator *B) {
     PathDiagnosticLocation ELoc =
         PathDiagnosticLocation::createOperatorLoc(B, BR.getSourceManager());
     StringRef Message;
-    if (((Op == BO_EQ) || (Op == BO_LE) || (Op == BO_GE)))
+    if (Op == BO_Cmp)
+      Message = "comparison of identical expressions always evaluates to "
+                "'equal'";
+    else if (((Op == BO_EQ) || (Op == BO_LE) || (Op == BO_GE)))
       Message = "comparison of identical expressions always evaluates to true";
     else
       Message = "comparison of identical expressions always evaluates to false";
@@ -275,7 +296,7 @@ bool FindIdenticalExprVisitor::VisitConditionalOperator(
   return true;
 }
 
-/// \brief Determines whether two statement trees are identical regarding
+/// Determines whether two statement trees are identical regarding
 /// operators and symbols.
 ///
 /// Exceptions: expressions containing macros or functions with possible side
@@ -287,9 +308,7 @@ static bool isIdenticalStmt(const ASTContext &Ctx, const Stmt *Stmt1,
                             const Stmt *Stmt2, bool IgnoreSideEffects) {
 
   if (!Stmt1 || !Stmt2) {
-    if (!Stmt1 && !Stmt2)
-      return true;
-    return false;
+    return !Stmt1 && !Stmt2;
   }
 
   // If Stmt1 & Stmt2 are of different class then they are not
@@ -332,6 +351,7 @@ static bool isIdenticalStmt(const ASTContext &Ctx, const Stmt *Stmt1,
     return false;
   case Stmt::CallExprClass:
   case Stmt::ArraySubscriptExprClass:
+  case Stmt::OMPArraySectionExprClass:
   case Stmt::ImplicitCastExprClass:
   case Stmt::ParenExprClass:
   case Stmt::BreakStmtClass:

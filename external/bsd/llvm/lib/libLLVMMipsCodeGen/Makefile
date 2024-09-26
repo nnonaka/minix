@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.25 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.29 2018/07/17 18:55:28 joerg Exp $
 
 LIB=	LLVMMipsCodeGen
 
@@ -6,46 +6,48 @@ LIB=	LLVMMipsCodeGen
 
 .PATH: ${LLVM_SRCDIR}/lib/Target/Mips
 
-SRCS+=	Mips16ISelDAGToDAG.cpp \
-	Mips16ISelLowering.cpp \
-	Mips16InstrInfo.cpp \
+SRCS+=	MicroMipsSizeReduction.cpp \
 	Mips16FrameLowering.cpp \
 	Mips16HardFloat.cpp \
 	Mips16HardFloatInfo.cpp \
+	Mips16InstrInfo.cpp \
+	Mips16ISelDAGToDAG.cpp \
+	Mips16ISelLowering.cpp \
 	Mips16RegisterInfo.cpp \
 	MipsAnalyzeImmediate.cpp \
 	MipsAsmPrinter.cpp \
+	MipsBranchExpansion.cpp \
+	MipsCallLowering.cpp \
 	MipsCCState.cpp \
 	MipsConstantIslandPass.cpp \
 	MipsDelaySlotFiller.cpp \
+	MipsExpandPseudo.cpp \
 	MipsFastISel.cpp \
 	MipsFrameLowering.cpp \
 	MipsInstrInfo.cpp \
+	MipsInstructionSelector.cpp \
 	MipsISelDAGToDAG.cpp \
 	MipsISelLowering.cpp \
-	MipsLongBranch.cpp \
+	MipsLegalizerInfo.cpp \
 	MipsMachineFunction.cpp \
-	MipsModuleISelDAGToDAG.cpp \
 	MipsMCInstLower.cpp \
+	MipsModuleISelDAGToDAG.cpp \
 	MipsOptimizePICCall.cpp \
 	MipsOs16.cpp \
+	MipsRegisterBankInfo.cpp \
 	MipsRegisterInfo.cpp \
-	MipsSEISelLowering.cpp \
-	MipsSEISelDAGToDAG.cpp \
-	MipsSEInstrInfo.cpp \
 	MipsSEFrameLowering.cpp \
+	MipsSEInstrInfo.cpp \
+	MipsSEISelDAGToDAG.cpp \
+	MipsSEISelLowering.cpp \
 	MipsSERegisterInfo.cpp \
 	MipsSubtarget.cpp \
 	MipsTargetMachine.cpp \
-	MipsTargetObjectFile.cpp \
-	MipsSelectionDAGInfo.cpp
-
+	MipsTargetObjectFile.cpp
 
 TABLEGEN_SRC=		Mips.td
 TABLEGEN_INCLUDES=	-I${LLVM_SRCDIR}/lib/Target/Mips
 TABLEGEN_OUTPUT= \
-	MipsGenRegisterInfo.inc|-gen-register-info \
-	MipsGenInstrInfo.inc|-gen-instr-info \
 	MipsGenAsmMatcher.inc|-gen-asm-matcher \
 	MipsGenAsmWriter.inc|-gen-asm-writer \
 	MipsGenCallingConv.inc|-gen-callingconv \
@@ -53,8 +55,12 @@ TABLEGEN_OUTPUT= \
 	MipsGenDAGISel.inc|-gen-dag-isel \
 	MipsGenDisassemblerTables.inc|-gen-disassembler \
 	MipsGenFastISel.inc|-gen-fast-isel \
+	MipsGenGlobalISel.inc|-gen-global-isel \
+	MipsGenInstrInfo.inc|-gen-instr-info \
 	MipsGenMCCodeEmitter.inc|-gen-emitter \
 	MipsGenMCPseudoLowering.inc|-gen-pseudo-lowering \
+	MipsGenRegisterBank.inc|-gen-register-bank \
+	MipsGenRegisterInfo.inc|-gen-register-info \
 	MipsGenSubtargetInfo.inc|-gen-subtarget
 
 .include "${.PARSEDIR}/../../tablegen.mk"

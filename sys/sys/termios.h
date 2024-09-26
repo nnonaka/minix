@@ -1,4 +1,4 @@
-/*	$NetBSD: termios.h,v 1.32 2013/07/11 16:46:06 christos Exp $	*/
+/*	$NetBSD: termios.h,v 1.36 2018/12/07 19:01:11 jakllsch Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1993, 1994
@@ -98,7 +98,7 @@
 #define	ICRNL		0x00000100U	/* map CR to NL (ala CRMOD) */
 #define	IXON		0x00000200U	/* enable output flow control */
 #define	IXOFF		0x00000400U	/* enable input flow control */
-#if defined(_NETBSD_SOURCE)
+#if defined(_XOPEN_SOURCE) || defined(_NETBSD_SOURCE)
 #define	IXANY		0x00000800U	/* any char will restart after stop */
 #endif
 #if defined(_NETBSD_SOURCE)
@@ -212,34 +212,42 @@ struct termios {
 /*
  * Standard speeds
  */
-#define B0	0U
-#define B50	50U
-#define B75	75U
-#define B110	110U
-#define B134	134U
-#define B150	150U
-#define B200	200U
-#define B300	300U
-#define B600	600U
-#define B1200	1200U
-#define	B1800	1800U
-#define B2400	2400U
-#define B4800	4800U
-#define B9600	9600U
-#define B19200	19200U
-#define B38400	38400U
+#define B0		0U
+#define B50		50U
+#define B75		75U
+#define B110		110U
+#define B134		134U
+#define B150		150U
+#define B200		200U
+#define B300		300U
+#define B600		600U
+#define B1200		1200U
+#define B1800		1800U
+#define B2400		2400U
+#define B4800		4800U
+#define B9600		9600U
+#define B19200		19200U
+#define B38400		38400U
 #if defined(_NETBSD_SOURCE)
-#define B7200	7200U
-#define B14400	14400U
-#define B28800	28800U
-#define B57600	57600U
-#define B76800	76800U
-#define B115200	115200U
-#define B230400	230400U
-#define B460800	460800U
-#define B921600	921600U
-#define EXTA	19200U
-#define EXTB	38400U
+#define B7200		7200U
+#define B14400		14400U
+#define B28800		28800U
+#define B57600		57600U
+#define B76800		76800U
+#define B115200 	115200U
+#define B230400 	230400U
+#define B460800 	460800U
+#define B500000 	500000U
+#define B921600 	921600U
+#define B1000000	1000000U
+#define B1500000	1500000U
+#define B2000000	2000000U
+#define B2500000	2500000U
+#define B3000000	3000000U
+#define B3500000	3500000U
+#define B4000000	4000000U
+#define EXTA		19200U
+#define EXTB		38400U
 #endif  /* defined(_NETBSD_SOURCE) */
 
 #ifndef _KERNEL
@@ -284,15 +292,17 @@ __END_DECLS
 
 #endif /* !_KERNEL */
 
-#if defined(_NETBSD_SOURCE)
-
 /*
  * Include tty ioctl's that aren't just for backwards compatibility
  * with the old tty driver.  These ioctl definitions were previously
- * in <sys/ioctl.h>.
+ * in <sys/ioctl.h>.   Most of this appears only when _NETBSD_SOURCE
+ * is defined, but (at least) struct winsize has been made standard,
+ * and needs to be visible here (as well as via the old <sys/ioctl.h>.)
  */
 #include <sys/ttycom.h>
-#endif
+
+int	tcgetwinsize(int, struct winsize *);
+int	tcsetwinsize(int, const struct winsize *);
 
 /*
  * END OF PROTECTED INCLUDE.

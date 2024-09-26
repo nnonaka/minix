@@ -1,4 +1,4 @@
-/*	$NetBSD: ktrace.h,v 1.61 2013/12/09 17:43:58 pooka Exp $	*/
+/*	$NetBSD: ktrace.h,v 1.66 2018/04/19 21:19:07 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1993
@@ -36,6 +36,9 @@
 
 #include <sys/mutex.h>
 #include <sys/lwp.h>
+#include <sys/signal.h>
+#include <sys/time.h>
+#include <sys/uio.h>
 
 /*
  * operations to ktrace system call  (KTROP(op))
@@ -126,8 +129,8 @@ struct ktr_sysret {
 	short	ktr_code;
 	short	ktr_eosys;		/* XXX unused */
 	int	ktr_error;
-	register_t ktr_retval;
-	register_t ktr_retval_1;
+	__register_t ktr_retval;
+	__register_t ktr_retval_1;
 };
 
 /*
@@ -293,7 +296,7 @@ void ktr_namei2(const char *, size_t, const char *, size_t);
 void ktr_psig(int, sig_t, const sigset_t *, const ksiginfo_t *);
 void ktr_syscall(register_t, const register_t [], int);
 void ktr_sysret(register_t, int, register_t *);
-void ktr_kuser(const char *, void *, size_t);
+void ktr_kuser(const char *, const void *, size_t);
 void ktr_mib(const int *a , u_int b);
 void ktr_execarg(const void *, size_t);
 void ktr_execenv(const void *, size_t);
@@ -301,7 +304,7 @@ void ktr_execfd(int, u_int);
 
 int  ktrace_common(lwp_t *, int, int, int, file_t **);
 
-static inline int
+static __inline int
 ktrenter(lwp_t *l)
 {
 
@@ -311,123 +314,132 @@ ktrenter(lwp_t *l)
 	return 0;
 }
 
-static inline void
+static __inline void
 ktrexit(lwp_t *l)
 {
 
 	l->l_pflag &= ~LP_KTRACTIVE;
 }
 
-static inline bool
+static __inline bool
 ktrpoint(int fac)
 {
     return __predict_false(ktrace_on) && __predict_false(ktr_point(1 << fac));
 }
 
-static inline void
+static __inline void
 ktrcsw(int a, int b)
 {
 	if (__predict_false(ktrace_on))
 		ktr_csw(a, b);
 }
 
-static inline void
+static __inline void
 ktremul(void)
 {
 	if (__predict_false(ktrace_on))
 		ktr_emul();
 }
 
-static inline void
+static __inline void
 ktrgenio(int a, enum uio_rw b, const void *c, size_t d, int e)
 {
 	if (__predict_false(ktrace_on))
 		ktr_genio(a, b, c, d, e);
 }
 
-static inline void
+static __inline void
 ktrgeniov(int a, enum uio_rw b, struct iovec *c, int d, int e)
 {
 	if (__predict_false(ktrace_on))
 		ktr_geniov(a, b, c, d, e);
 }
 
-static inline void
+static __inline void
 ktrmibio(int a, enum uio_rw b, const void *c, size_t d, int e)
 {
 	if (__predict_false(ktrace_on))
 		ktr_mibio(a, b, c, d, e);
 }
 
-static inline void
+static __inline void
 ktrnamei(const char *a, size_t b)
 {
 	if (__predict_false(ktrace_on))
 		ktr_namei(a, b);
 }
 
-static inline void
+static __inline void
 ktrnamei2(const char *a, size_t b, const char *c, size_t d)
 {
 	if (__predict_false(ktrace_on))
 		ktr_namei2(a, b, c, d);
 }
 
-static inline void
+static __inline void
 ktrpsig(int a, sig_t b, const sigset_t *c, const ksiginfo_t * d)
 {
 	if (__predict_false(ktrace_on))
 		ktr_psig(a, b, c, d);
 }
 
-static inline void
+static __inline void
 ktrsyscall(register_t code, const register_t args[], int narg)
 {
 	if (__predict_false(ktrace_on))
 		ktr_syscall(code, args, narg);
 }
 
-static inline void
+static __inline void
 ktrsysret(register_t a, int b, register_t *c)
 {
 	if (__predict_false(ktrace_on))
 		ktr_sysret(a, b, c);
 }
 
-static inline void
-ktrkuser(const char *a, void *b, size_t c)
+static __inline void
+ktrkuser(const char *a, const void *b, size_t c)
 {
 	if (__predict_false(ktrace_on))
 		ktr_kuser(a, b, c);
 }
 
-static inline void
+static __inline void
 ktrmib(const int *a , u_int b)
 {
 	if (__predict_false(ktrace_on))
 		ktr_mib(a, b);
 }
 
-static inline void
+static __inline void
 ktrexecarg(const void *a, size_t b)
 {
 	if (__predict_false(ktrace_on))
 		ktr_execarg(a, b);
 }
 
-static inline void
+static __inline void
 ktrexecenv(const void *a, size_t b)
 {
 	if (__predict_false(ktrace_on))
 		ktr_execenv(a, b);
 }
 
-static inline void
+static __inline void
 ktrexecfd(int fd, u_int dtype)
 {
 	if (__predict_false(ktrace_on))
 		ktr_execfd(fd, dtype);
 }
+
+struct ktrace_entry;
+int	ktealloc(struct ktrace_entry **, void **, lwp_t *, int, size_t);
+void	ktesethdrlen(struct ktrace_entry *, size_t);
+void	ktraddentry(lwp_t *, struct ktrace_entry *, int);
+/* Flags for ktraddentry (3rd arg) */
+#define	KTA_NOWAIT		0x0000
+#define	KTA_WAITOK		0x0001
+#define	KTA_LARGE		0x0002
 
 #endif	/* !_KERNEL */
 

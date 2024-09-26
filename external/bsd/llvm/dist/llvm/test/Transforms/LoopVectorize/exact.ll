@@ -1,7 +1,6 @@
 ; RUN: opt < %s  -loop-vectorize -force-vector-width=4 -S | FileCheck %s
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-apple-macosx10.9.0"
 
 ; CHECK-LABEL: @lshr_exact(
 ; CHECK: lshr exact <4 x i32>
@@ -11,8 +10,8 @@ entry:
 
 for.body:
   %iv = phi i64 [ 0, %entry ], [ %iv.next, %for.body ]
-  %arrayidx = getelementptr inbounds i32* %x, i64 %iv
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %x, i64 %iv
+  %0 = load i32, i32* %arrayidx, align 4
   %conv1 = lshr exact i32 %0, 1
   store i32 %conv1, i32* %arrayidx, align 4
   %iv.next = add nuw nsw i64 %iv, 1

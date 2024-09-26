@@ -1,4 +1,4 @@
-.\"	$NetBSD: printf.3,v 1.64 2014/09/29 14:58:33 christos Exp $
+.\"	$NetBSD: printf.3,v 1.68 2017/12/31 07:22:55 dholland Exp $
 .\"
 .\" Copyright (c) 1990, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -33,13 +33,13 @@
 .\"
 .\"     @(#)printf.3	8.1 (Berkeley) 6/4/93
 .\"
-.Dd September 29, 2014
+.Dd November 19, 2015
 .Dt PRINTF 3
 .Os
 .Sh NAME
 .Nm printf ,
 .Nm fprintf ,
-.Nm dprintf
+.Nm dprintf ,
 .Nm sprintf ,
 .Nm snprintf ,
 .Nm snprintf_ss ,
@@ -279,7 +279,6 @@ If a precision is given with a numeric conversion
 .Cm i ,
 .Cm o ,
 .Cm u ,
-.Cm i ,
 .Cm x ,
 and
 .Cm X ) ,
@@ -371,7 +370,7 @@ The following length modifiers are valid for the
 .Cm d , i , n , o , u , x ,
 or
 .Cm X
-conversion:
+conversions:
 .Bl -column ".Cm q Em (deprecated)" ".Vt signed char" ".Vt unsigned long long" ".Vt long long *"
 .It Sy Modifier Ta Cm d , i Ta Cm o , u , x , X Ta Cm n
 .It Cm hh Ta Vt "signed char" Ta Vt "unsigned char" Ta Vt "signed char *"
@@ -417,7 +416,7 @@ macros are used when possible.
 These are further described in
 .Xr inttypes 3 .
 .Pp
-The following length modifier is valid for the
+The following length modifiers are valid for the
 .Cm a ,
 .Cm A ,
 .Cm e ,
@@ -427,7 +426,7 @@ The following length modifier is valid for the
 .Cm g ,
 or
 .Cm G
-conversion:
+conversions:
 .Bl -column ".Sy Modifier" ".Cm a , A , e , E , f , F , g , G"
 .It Sy Modifier Ta Cm a , A , e , E , f , F , g , G
 .It Cm l No (ell) Ta Vt double
@@ -439,7 +438,7 @@ The following length modifier is valid for the
 .Cm c
 or
 .Cm s
-conversion:
+conversions:
 .Bl -column ".Sy Modifier" ".Vt wint_t" ".Vt wchar_t *"
 .It Sy Modifier Ta Cm c Ta Cm s
 .It Cm l No (ell) Ta Vt wint_t Ta Vt "wchar_t *"
@@ -758,7 +757,7 @@ and
 .Fa month
 are pointers to strings:
 .Bd -literal -offset indent
-#include \*[Lt]stdio.h\*[Gt]
+#include <stdio.h>
 fprintf(stdout, "%s, %s %d, %.2d:%.2d\en",
 	weekday, month, day, hour, min);
 .Ed
@@ -766,16 +765,16 @@ fprintf(stdout, "%s, %s %d, %.2d:%.2d\en",
 To print \*(Pi
 to five decimal places:
 .Bd -literal -offset indent
-#include \*[Lt]math.h\*[Gt]
-#include \*[Lt]stdio.h\*[Gt]
+#include <math.h>
+#include <stdio.h>
 fprintf(stdout, "pi = %.5f\en", 4 * atan(1.0));
 .Ed
 .Pp
 To allocate a 128 byte string and print into it:
 .Bd -literal -offset indent
-#include \*[Lt]stdio.h\*[Gt]
-#include \*[Lt]stdlib.h\*[Gt]
-#include \*[Lt]stdarg.h\*[Gt]
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 char *newfmt(const char *fmt, ...)
 {
 	char *p;
@@ -938,7 +937,7 @@ conversions, as well as other nonsensical combinations such as
 are not standard; such combinations should be avoided.
 .Pp
 The
-.Nm
+.Fn printf
 family of functions do not correctly handle multibyte characters in the
 .Fa format
 argument.

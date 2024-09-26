@@ -5,82 +5,110 @@ add_llvm_library(LLVMCodeGen
   AtomicExpandPass.cpp
   BasicTargetTransformInfo.cpp
   BranchFolding.cpp
+  BranchRelaxation.cpp
+  BreakFalseDeps.cpp
+  BuiltinGCs.cpp
   CalcSpillWeights.cpp
   CallingConvLower.cpp
+  CFIInstrInserter.cpp
   CodeGen.cpp
   CodeGenPrepare.cpp
   CriticalAntiDepBreaker.cpp
-  DFAPacketizer.cpp
   DeadMachineInstructionElim.cpp
+  DetectDeadLanes.cpp
+  DFAPacketizer.cpp
   DwarfEHPrepare.cpp
   EarlyIfConversion.cpp
   EdgeBundles.cpp
-  ErlangGC.cpp
-  ExecutionDepsFix.cpp
+  ExecutionDomainFix.cpp
   ExpandISelPseudos.cpp
+  ExpandMemCmp.cpp
   ExpandPostRAPseudos.cpp
-  ForwardControlFlowIntegrity.cpp
+  ExpandReductions.cpp
+  FaultMaps.cpp
+  FEntryInserter.cpp
+  FuncletLayout.cpp
   GCMetadata.cpp
   GCMetadataPrinter.cpp
+  GCRootLowering.cpp
   GCStrategy.cpp
   GlobalMerge.cpp
   IfConversion.cpp
+  ImplicitNullChecks.cpp
+  IndirectBrExpandPass.cpp
   InlineSpiller.cpp
   InterferenceCache.cpp
+  InterleavedAccessPass.cpp
   IntrinsicLowering.cpp
-  JumpInstrTables.cpp
-  LLVMTargetMachine.cpp
   LatencyPriorityQueue.cpp
+  LazyMachineBlockFrequencyInfo.cpp
   LexicalScopes.cpp
+  LiveDebugValues.cpp
   LiveDebugVariables.cpp
+  LiveIntervals.cpp
   LiveInterval.cpp
-  LiveIntervalAnalysis.cpp
   LiveIntervalUnion.cpp
+  LivePhysRegs.cpp
   LiveRangeCalc.cpp
   LiveRangeEdit.cpp
+  LiveRangeShrink.cpp
   LiveRegMatrix.cpp
-  LivePhysRegs.cpp
-  LiveStackAnalysis.cpp
+  LiveRegUnits.cpp
+  LiveStacks.cpp
   LiveVariables.cpp
+  LLVMTargetMachine.cpp
   LocalStackSlotAllocation.cpp
+  LoopTraversal.cpp
+  LowLevelType.cpp
+  LowerEmuTLS.cpp
   MachineBasicBlock.cpp
   MachineBlockFrequencyInfo.cpp
   MachineBlockPlacement.cpp
   MachineBranchProbabilityInfo.cpp
-  MachineCSE.cpp
   MachineCombiner.cpp
   MachineCopyPropagation.cpp
-  MachineDominators.cpp
+  MachineCSE.cpp
   MachineDominanceFrontier.cpp
+  MachineDominators.cpp
+  MachineFrameInfo.cpp
   MachineFunction.cpp
-  MachineFunctionAnalysis.cpp
   MachineFunctionPass.cpp
   MachineFunctionPrinterPass.cpp
-  MachineInstr.cpp
   MachineInstrBundle.cpp
+  MachineInstr.cpp
   MachineLICM.cpp
   MachineLoopInfo.cpp
   MachineModuleInfo.cpp
   MachineModuleInfoImpls.cpp
+  MachineOperand.cpp
+  MachineOptimizationRemarkEmitter.cpp
+  MachineOutliner.cpp
   MachinePassRegistry.cpp
+  MachinePipeliner.cpp
   MachinePostDominators.cpp
-  MachineRegisterInfo.cpp
   MachineRegionInfo.cpp
-  MachineSSAUpdater.cpp
+  MachineRegisterInfo.cpp
   MachineScheduler.cpp
   MachineSink.cpp
+  MachineSSAUpdater.cpp
   MachineTraceMetrics.cpp
   MachineVerifier.cpp
-  OcamlGC.cpp
+  PatchableFunction.cpp
+  MIRPrinter.cpp
+  MIRPrintingPass.cpp
+  MacroFusion.cpp
   OptimizePHIs.cpp
+  ParallelCG.cpp
+  PeepholeOptimizer.cpp
   PHIElimination.cpp
   PHIEliminationUtils.cpp
-  Passes.cpp
-  PeepholeOptimizer.cpp
+  PostRAHazardRecognizer.cpp
   PostRASchedulerList.cpp
+  PreISelIntrinsicLowering.cpp
   ProcessImplicitDefs.cpp
   PrologEpilogInserter.cpp
   PseudoSourceValue.cpp
+  ReachingDefAnalysis.cpp
   RegAllocBase.cpp
   RegAllocBasic.cpp
   RegAllocFast.cpp
@@ -90,35 +118,61 @@ add_llvm_library(LLVMCodeGen
   RegisterCoalescer.cpp
   RegisterPressure.cpp
   RegisterScavenging.cpp
+  RenameIndependentSubregs.cpp
+  MIRCanonicalizerPass.cpp
+  RegisterUsageInfo.cpp
+  RegUsageInfoCollector.cpp
+  RegUsageInfoPropagate.cpp
+  ResetMachineFunctionPass.cpp
+  SafeStack.cpp
+  SafeStackColoring.cpp
+  SafeStackLayout.cpp
+  ScalarizeMaskedMemIntrin.cpp
   ScheduleDAG.cpp
   ScheduleDAGInstrs.cpp
   ScheduleDAGPrinter.cpp
   ScoreboardHazardRecognizer.cpp
-  ShadowStackGC.cpp
+  ShadowStackGCLowering.cpp
+  ShrinkWrap.cpp
   SjLjEHPrepare.cpp
   SlotIndexes.cpp
   SpillPlacement.cpp
   SplitKit.cpp
   StackColoring.cpp
-  StackProtector.cpp
-  StackSlotColoring.cpp
   StackMapLivenessAnalysis.cpp
   StackMaps.cpp
-  StatepointExampleGC.cpp
+  StackProtector.cpp
+  StackSlotColoring.cpp
   TailDuplication.cpp
+  TailDuplicator.cpp
   TargetFrameLoweringImpl.cpp
   TargetInstrInfo.cpp
   TargetLoweringBase.cpp
   TargetLoweringObjectFileImpl.cpp
   TargetOptionsImpl.cpp
+  TargetPassConfig.cpp
   TargetRegisterInfo.cpp
   TargetSchedule.cpp
+  TargetSubtargetInfo.cpp
   TwoAddressInstructionPass.cpp
   UnreachableBlockElim.cpp
+  ValueTypes.cpp
   VirtRegMap.cpp
-  )
+  WasmEHPrepare.cpp
+  WinEHPrepare.cpp
+  XRayInstrumentation.cpp
 
-add_dependencies(LLVMCodeGen intrinsics_gen)
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/CodeGen
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/CodeGen/PBQP
+
+  LINK_LIBS ${LLVM_PTHREAD_LIB}
+
+  DEPENDS
+  intrinsics_gen
+  )
 
 add_subdirectory(SelectionDAG)
 add_subdirectory(AsmPrinter)
+add_subdirectory(MIRParser)
+add_subdirectory(GlobalISel)

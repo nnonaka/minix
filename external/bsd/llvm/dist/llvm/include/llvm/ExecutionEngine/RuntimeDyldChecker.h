@@ -10,10 +10,16 @@
 #ifndef LLVM_EXECUTIONENGINE_RUNTIMEDYLDCHECKER_H
 #define LLVM_EXECUTIONENGINE_RUNTIMEDYLDCHECKER_H
 
-#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Optional.h"
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
 
 namespace llvm {
 
+class StringRef;
 class MCDisassembler;
 class MemoryBuffer;
 class MCInstPrinter;
@@ -21,7 +27,7 @@ class RuntimeDyld;
 class RuntimeDyldCheckerImpl;
 class raw_ostream;
 
-/// \brief RuntimeDyld invariant checker for verifying that RuntimeDyld has
+/// RuntimeDyld invariant checker for verifying that RuntimeDyld has
 ///        correctly applied relocations.
 ///
 /// The RuntimeDyldChecker class evaluates expressions against an attached
@@ -52,6 +58,7 @@ class raw_ostream;
 ///
 /// ident_expr = 'decode_operand' '(' symbol ',' operand-index ')'
 ///            | 'next_pc'        '(' symbol ')'
+///            | 'stub_addr' '(' file-name ',' section-name ',' symbol ')'
 ///            | symbol
 ///
 /// binary_expr = expr '+' expr
@@ -67,30 +74,34 @@ public:
                      MCInstPrinter *InstPrinter, raw_ostream &ErrStream);
   ~RuntimeDyldChecker();
 
-  // \brief Get the associated RTDyld instance.
+  // Get the associated RTDyld instance.
   RuntimeDyld& getRTDyld();
 
-  // \brief Get the associated RTDyld instance.
+  // Get the associated RTDyld instance.
   const RuntimeDyld& getRTDyld() const;
 
-  /// \brief Check a single expression against the attached RuntimeDyld
+  /// Check a single expression against the attached RuntimeDyld
   ///        instance.
   bool check(StringRef CheckExpr) const;
 
-  /// \brief Scan the given memory buffer for lines beginning with the string
+  /// Scan the given memory buffer for lines beginning with the string
   ///        in RulePrefix. The remainder of the line is passed to the check
   ///        method to be evaluated as an expression.
   bool checkAllRulesInBuffer(StringRef RulePrefix, MemoryBuffer *MemBuf) const;
 
-  /// \brief Returns the address of the requested section (or an error message
+  /// Returns the address of the requested section (or an error message
   ///        in the second element of the pair if the address cannot be found).
   ///
-  /// if 'LinkerAddress' is true, this returns the address of the section
-  /// within the linker's memory. If 'LinkerAddress' is false it returns the
+  /// if 'LocalAddress' is true, this returns the address of the section
+  /// within the linker's memory. If 'LocalAddress' is false it returns the
   /// address within the target process (i.e. the load address).
   std::pair<uint64_t, std::string> getSectionAddr(StringRef FileName,
                                                   StringRef SectionName,
-                                                  bool LinkerAddress);
+                                                  bool LocalAddress);
+
+  /// If there is a section at the given local address, return its load
+  ///        address, otherwise return none.
+  Optional<uint64_t> getSectionLoadAddress(void *LocalAddress) const;
 
 private:
   std::unique_ptr<RuntimeDyldCheckerImpl> Impl;

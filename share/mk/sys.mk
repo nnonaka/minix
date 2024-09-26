@@ -43,6 +43,7 @@ CC?=	gcc
 AR?=		ar
 ARFLAGS?=	rl
 RANLIB?=	ranlib
+MV?=		mv -f
 
 AS?=		as
 AFLAGS?=
@@ -84,6 +85,7 @@ CTFMFLAGS	?=	-t -g -L VERSION
 CXX?=		c++
 CXXFLAGS?=	${CFLAGS:N-Wno-traditional:N-Wstrict-prototypes:N-Wmissing-prototypes:N-Wno-pointer-sign:N-ffreestanding:N-std=gnu[0-9][0-9]:N-Wold-style-definition:N-Wno-format-zero-length}
 
+# Use the sources, as the seed... Normalize all paths...
 __ALLSRC1=	${empty(DESTDIR):?${.ALLSRC}:${.ALLSRC:S|^${DESTDIR}|^destdir|}}
 __ALLSRC2=	${empty(MAKEOBJDIR):?${__ALLSRC1}:${__ALLSRC1:S|^${MAKEOBJDIR}|^obj|}}
 __ALLSRC3=	${empty(NETBSDSRCDIR):?${__ALLSRC2}:${__ALLSRC2:S|^${NETBSDSRCDIR}|^src|}}
@@ -243,7 +245,7 @@ YACC.y?=	${YACC} ${YFLAGS}
 	rm -f lex.yy.c
 .l.c:
 	${LEX.l} ${.IMPSRC}
-	mv lex.yy.c ${.TARGET}
+	${MV} lex.yy.c ${.TARGET}
 .l.o:
 	${LEX.l} ${.IMPSRC}
 	${COMPILE.c} -o ${.TARGET} lex.yy.c
@@ -257,7 +259,7 @@ YACC.y?=	${YACC} ${YFLAGS}
 	rm -f y.tab.c
 .y.c:
 	${YACC.y} ${.IMPSRC}
-	mv y.tab.c ${.TARGET}
+	${MV} y.tab.c ${.TARGET}
 .y.o:
 	${YACC.y} ${.IMPSRC}
 	${COMPILE.c} -o ${.TARGET} y.tab.c

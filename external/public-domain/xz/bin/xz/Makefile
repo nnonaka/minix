@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.3 2015/04/21 10:12:04 christos Exp $
+# $NetBSD: Makefile,v 1.5 2018/09/25 12:34:42 joerg Exp $
 
 PROG=	xz
 BINDIR=	/usr/bin
@@ -13,21 +13,19 @@ USETBL=	yes
 .include <bsd.init.mk>
 
 CPPFLAGS+=	-DPACKAGE=\"xz\"
+.if !defined(HOSTPROG)
 .if !defined(__MINIX)
 CPPFLAGS+=	-DENABLE_NLS -DLOCALEDIR=\"/usr/share/locale\"
-
-DPADD+=	${LIBLZMA} ${LIBINTL}
-LDADD+=	-llzma -lintl
-.else
-DPADD+=	${LIBLZMA}
-LDADD+=	-llzma
 .endif # !defined(__MINIX)
+.endif
 
+.if !defined(HOSTPROG)
 LINKS+=	${BINDIR}/xz ${BINDIR}/lzcat
 LINKS+=	${BINDIR}/xz ${BINDIR}/lzma
 LINKS+=	${BINDIR}/xz ${BINDIR}/unlzma
 LINKS+=	${BINDIR}/xz ${BINDIR}/unxz
 LINKS+=	${BINDIR}/xz ${BINDIR}/xzcat
+.endif
 
 MLINKS+=	xz.1 lzcat.1
 MLINKS+=	xz.1 lzma.1
@@ -45,9 +43,18 @@ FILESNAME_${XZSRCDIR}/po/${lang}.gmo=	xz.mo
 .endfor
 .endif
 
+.if defined(HOSTPROG)
+HOST_CPPFLAGS+=	${CPPFLAGS:N-Wp,-iremap,*}
+XZLIBDIR!=	cd ${NETBSDSRCDIR}/tools/xz-lib && ${PRINTOBJDIR}
+LDADD+=	-L${XZLIBDIR} -llzma
+DPADD+=	${XZLIBDIR}/liblzma.a
+.else
 .if !defined(__MINIX)
-LDADD+=	-lpthread
-DPADD+=	${LIBPTHREAD}
+DPADD+=	${LIBLZMA} ${LIBINTL} ${LIBPTHREAD}
+LDADD+=	-llzma -lintl -lpthread
+.else
+DPADD+=	${LIBLZMA}
+LDADD+=	-llzma
 .endif # !defined(__MINIX)
-
 .include <bsd.prog.mk>
+.endif

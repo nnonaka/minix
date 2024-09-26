@@ -1,4 +1,4 @@
-/*	$NetBSD: userret.h,v 1.11 2008/04/28 20:23:24 martin Exp $	*/
+/*	$NetBSD: userret.h,v 1.15 2018/07/26 09:29:08 maxv Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -73,7 +73,6 @@ static __inline void userret(struct lwp *);
 static __inline void
 userret(struct lwp *l)
 {
-
 	/* Invoke MI userret code */
 	mi_userret(l);
 }

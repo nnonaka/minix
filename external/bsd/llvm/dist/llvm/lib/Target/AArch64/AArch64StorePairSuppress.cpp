@@ -16,32 +16,33 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineTraceMetrics.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSchedule.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "aarch64-stp-suppress"
+
+#define STPSUPPRESS_PASS_NAME "AArch64 Store Pair Suppression"
 
 namespace {
 class AArch64StorePairSuppress : public MachineFunctionPass {
   const AArch64InstrInfo *TII;
   const TargetRegisterInfo *TRI;
   const MachineRegisterInfo *MRI;
-  MachineFunction *MF;
   TargetSchedModel SchedModel;
   MachineTraceMetrics *Traces;
   MachineTraceMetrics::Ensemble *MinInstr;
 
 public:
   static char ID;
-  AArch64StorePairSuppress() : MachineFunctionPass(ID) {}
-
-  const char *getPassName() const override {
-    return "AArch64 Store Pair Suppression";
+  AArch64StorePairSuppress() : MachineFunctionPass(ID) {
+    initializeAArch64StorePairSuppressPass(*PassRegistry::getPassRegistry());
   }
+
+  StringRef getPassName() const override { return STPSUPPRESS_PASS_NAME; }
 
   bool runOnMachineFunction(MachineFunction &F) override;
 
@@ -59,6 +60,9 @@ private:
 };
 char AArch64StorePairSuppress::ID = 0;
 } // anonymous
+
+INITIALIZE_PASS(AArch64StorePairSuppress, "aarch64-stp-suppress",
+                STPSUPPRESS_PASS_NAME, false, false)
 
 FunctionPass *llvm::createAArch64StorePairSuppressPass() {
   return new AArch64StorePairSuppress();
@@ -87,9 +91,9 @@ bool AArch64StorePairSuppress::shouldAddSTPToBlock(const MachineBasicBlock *BB) 
   if (SCDesc->isValid() && !SCDesc->isVariant()) {
     unsigned ResLenWithSTP = BBTrace.getResourceLength(None, SCDesc);
     if (ResLenWithSTP > ResLength) {
-      DEBUG(dbgs() << "  Suppress STP in BB: " << BB->getNumber()
-                   << " resources " << ResLength << " -> " << ResLenWithSTP
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "  Suppress STP in BB: " << BB->getNumber()
+                        << " resources " << ResLength << " -> " << ResLenWithSTP
+                        << "\n");
       return false;
     }
   }
@@ -115,23 +119,22 @@ bool AArch64StorePairSuppress::isNarrowFPStore(const MachineInstr &MI) {
   }
 }
 
-bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &mf) {
-  MF = &mf;
-  TII =
-      static_cast<const AArch64InstrInfo *>(MF->getSubtarget().getInstrInfo());
-  TRI = MF->getSubtarget().getRegisterInfo();
-  MRI = &MF->getRegInfo();
-  const TargetSubtargetInfo &ST =
-      MF->getTarget().getSubtarget<TargetSubtargetInfo>();
-  SchedModel.init(ST.getSchedModel(), &ST, TII);
+bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(MF.getFunction()))
+    return false;
 
+  const TargetSubtargetInfo &ST = MF.getSubtarget();
+  TII = static_cast<const AArch64InstrInfo *>(ST.getInstrInfo());
+  TRI = ST.getRegisterInfo();
+  MRI = &MF.getRegInfo();
+  SchedModel.init(&ST);
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
 
-  DEBUG(dbgs() << "*** " << getPassName() << ": " << MF->getName() << '\n');
+  LLVM_DEBUG(dbgs() << "*** " << getPassName() << ": " << MF.getName() << '\n');
 
   if (!SchedModel.hasInstrSchedModel()) {
-    DEBUG(dbgs() << "  Skipping pass: no machine model present.\n");
+    LLVM_DEBUG(dbgs() << "  Skipping pass: no machine model present.\n");
     return false;
   }
 
@@ -139,23 +142,23 @@ bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &mf) {
   // precisely determine whether a store pair can be formed. But we do want to
   // filter out most situations where we can't form store pairs to avoid
   // computing trace metrics in those cases.
-  for (auto &MBB : *MF) {
+  for (auto &MBB : MF) {
     bool SuppressSTP = false;
     unsigned PrevBaseReg = 0;
     for (auto &MI : MBB) {
       if (!isNarrowFPStore(MI))
         continue;
       unsigned BaseReg;
-      unsigned Offset;
-      if (TII->getLdStBaseRegImmOfs(&MI, BaseReg, Offset, TRI)) {
+      int64_t Offset;
+      if (TII->getMemOpBaseRegImmOfs(MI, BaseReg, Offset, TRI)) {
         if (PrevBaseReg == BaseReg) {
           // If this block can take STPs, skip ahead to the next block.
           if (!SuppressSTP && shouldAddSTPToBlock(MI.getParent()))
             break;
           // Otherwise, continue unpairing the stores in this block.
-          DEBUG(dbgs() << "Unpairing store " << MI << "\n");
+          LLVM_DEBUG(dbgs() << "Unpairing store " << MI << "\n");
           SuppressSTP = true;
-          TII->suppressLdStPair(&MI);
+          TII->suppressLdStPair(MI);
         }
         PrevBaseReg = BaseReg;
       } else

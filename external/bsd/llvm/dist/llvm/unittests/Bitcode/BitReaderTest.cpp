@@ -7,16 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/AsmParser/Parser.h"
-#include "llvm/Bitcode/BitstreamWriter.h"
-#include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/Instructions.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"
@@ -25,10 +25,10 @@ using namespace llvm;
 
 namespace {
 
-std::unique_ptr<Module> parseAssembly(const char *Assembly) {
+std::unique_ptr<Module> parseAssembly(LLVMContext &Context,
+                                      const char *Assembly) {
   SMDiagnostic Error;
-  std::unique_ptr<Module> M =
-      parseAssemblyString(Assembly, Error, getGlobalContext());
+  std::unique_ptr<Module> M = parseAssemblyString(Assembly, Error, Context);
 
   std::string ErrMsg;
   raw_string_ostream OS(ErrMsg);
@@ -44,41 +44,81 @@ std::unique_ptr<Module> parseAssembly(const char *Assembly) {
 static void writeModuleToBuffer(std::unique_ptr<Module> Mod,
                                 SmallVectorImpl<char> &Buffer) {
   raw_svector_ostream OS(Buffer);
-  WriteBitcodeToFile(Mod.get(), OS);
+  WriteBitcodeToFile(*Mod, OS);
 }
 
 static std::unique_ptr<Module> getLazyModuleFromAssembly(LLVMContext &Context,
                                                          SmallString<1024> &Mem,
                                                          const char *Assembly) {
-  writeModuleToBuffer(parseAssembly(Assembly), Mem);
-  std::unique_ptr<MemoryBuffer> Buffer =
-      MemoryBuffer::getMemBuffer(Mem.str(), "test", false);
-  ErrorOr<Module *> ModuleOrErr =
-      getLazyBitcodeModule(std::move(Buffer), Context);
-  return std::unique_ptr<Module>(ModuleOrErr.get());
+  writeModuleToBuffer(parseAssembly(Context, Assembly), Mem);
+  Expected<std::unique_ptr<Module>> ModuleOrErr =
+      getLazyBitcodeModule(MemoryBufferRef(Mem.str(), "test"), Context);
+  if (!ModuleOrErr)
+    report_fatal_error("Could not parse bitcode module");
+  return std::move(ModuleOrErr.get());
 }
 
-TEST(BitReaderTest, DematerializeFunctionPreservesLinkageType) {
+// Tests that lazy evaluation can parse functions out of order.
+TEST(BitReaderTest, MaterializeFunctionsOutOfOrder) {
   SmallString<1024> Mem;
-
   LLVMContext Context;
   std::unique_ptr<Module> M = getLazyModuleFromAssembly(
-      Context, Mem, "define internal i32 @func() {\n"
-                      "ret i32 0\n"
+      Context, Mem, "define void @f() {\n"
+                    "  unreachable\n"
+                    "}\n"
+                    "define void @g() {\n"
+                    "  unreachable\n"
+                    "}\n"
+                    "define void @h() {\n"
+                    "  unreachable\n"
+                    "}\n"
+                    "define void @j() {\n"
+                    "  unreachable\n"
                     "}\n");
-
   EXPECT_FALSE(verifyModule(*M, &dbgs()));
 
-  M->getFunction("func")->materialize();
-  EXPECT_FALSE(M->getFunction("func")->empty());
-  EXPECT_TRUE(M->getFunction("func")->getLinkage() ==
-              GlobalValue::InternalLinkage);
+  Function *F = M->getFunction("f");
+  Function *G = M->getFunction("g");
+  Function *H = M->getFunction("h");
+  Function *J = M->getFunction("j");
 
-  // Check that the linkage type is preserved after dematerialization.
-  M->getFunction("func")->Dematerialize();
-  EXPECT_TRUE(M->getFunction("func")->empty());
-  EXPECT_TRUE(M->getFunction("func")->getLinkage() ==
-              GlobalValue::InternalLinkage);
+  // Initially all functions are not materialized (no basic blocks).
+  EXPECT_TRUE(F->empty());
+  EXPECT_TRUE(G->empty());
+  EXPECT_TRUE(H->empty());
+  EXPECT_TRUE(J->empty());
+  EXPECT_FALSE(verifyModule(*M, &dbgs()));
+
+  // Materialize h.
+  ASSERT_FALSE(H->materialize());
+  EXPECT_TRUE(F->empty());
+  EXPECT_TRUE(G->empty());
+  EXPECT_FALSE(H->empty());
+  EXPECT_TRUE(J->empty());
+  EXPECT_FALSE(verifyModule(*M, &dbgs()));
+
+  // Materialize g.
+  ASSERT_FALSE(G->materialize());
+  EXPECT_TRUE(F->empty());
+  EXPECT_FALSE(G->empty());
+  EXPECT_FALSE(H->empty());
+  EXPECT_TRUE(J->empty());
+  EXPECT_FALSE(verifyModule(*M, &dbgs()));
+
+  // Materialize j.
+  ASSERT_FALSE(J->materialize());
+  EXPECT_TRUE(F->empty());
+  EXPECT_FALSE(G->empty());
+  EXPECT_FALSE(H->empty());
+  EXPECT_FALSE(J->empty());
+  EXPECT_FALSE(verifyModule(*M, &dbgs()));
+
+  // Materialize f.
+  ASSERT_FALSE(F->materialize());
+  EXPECT_FALSE(F->empty());
+  EXPECT_FALSE(G->empty());
+  EXPECT_FALSE(H->empty());
+  EXPECT_FALSE(J->empty());
   EXPECT_FALSE(verifyModule(*M, &dbgs()));
 }
 
@@ -94,9 +134,6 @@ TEST(BitReaderTest, MaterializeFunctionsForBlockAddr) { // PR11677
                     "  unreachable\n"
                     "}\n");
   EXPECT_FALSE(verifyModule(*M, &dbgs()));
-
-  // Try (and fail) to dematerialize @func.
-  M->getFunction("func")->Dematerialize();
   EXPECT_FALSE(M->getFunction("func")->empty());
 }
 
@@ -125,11 +162,6 @@ TEST(BitReaderTest, MaterializeFunctionsForBlockAddrInFunctionBefore) {
   EXPECT_FALSE(M->getFunction("func")->empty());
   EXPECT_TRUE(M->getFunction("other")->empty());
   EXPECT_FALSE(verifyModule(*M, &dbgs()));
-
-  // Try (and fail) to dematerialize @func.
-  M->getFunction("func")->Dematerialize();
-  EXPECT_FALSE(M->getFunction("func")->empty());
-  EXPECT_FALSE(verifyModule(*M, &dbgs()));
 }
 
 TEST(BitReaderTest, MaterializeFunctionsForBlockAddrInFunctionAfter) {
@@ -156,11 +188,6 @@ TEST(BitReaderTest, MaterializeFunctionsForBlockAddrInFunctionAfter) {
   EXPECT_FALSE(M->getFunction("after")->materialize());
   EXPECT_FALSE(M->getFunction("func")->empty());
   EXPECT_TRUE(M->getFunction("other")->empty());
-  EXPECT_FALSE(verifyModule(*M, &dbgs()));
-
-  // Try (and fail) to dematerialize @func.
-  M->getFunction("func")->Dematerialize();
-  EXPECT_FALSE(M->getFunction("func")->empty());
   EXPECT_FALSE(verifyModule(*M, &dbgs()));
 }
 

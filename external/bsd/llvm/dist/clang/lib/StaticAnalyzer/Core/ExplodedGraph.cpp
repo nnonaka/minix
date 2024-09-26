@@ -1,4 +1,4 @@
-//=-- ExplodedGraph.cpp - Local, Path-Sens. "Exploded Graph" -*- C++ -*------=//
+//===- ExplodedGraph.cpp - Local, Path-Sens. "Exploded Graph" -------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,15 +13,24 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExplodedGraph.h"
+#include "clang/AST/Expr.h"
+#include "clang/AST/ExprObjC.h"
 #include "clang/AST/ParentMap.h"
 #include "clang/AST/Stmt.h"
+#include "clang/Analysis/ProgramPoint.h"
+#include "clang/Analysis/Support/BumpVector.h"
+#include "clang/Basic/LLVM.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
-#include "llvm/ADT/DenseMap.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/FoldingSet.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/Statistic.h"
-#include <vector>
+#include "llvm/Support/Casting.h"
+#include <cassert>
+#include <memory>
 
 using namespace clang;
 using namespace ento;
@@ -31,7 +40,7 @@ using namespace ento;
 //===----------------------------------------------------------------------===//
 
 // An out of line virtual method to provide a home for the class vtable.
-ExplodedNode::Auditor::~Auditor() {}
+ExplodedNode::Auditor::~Auditor() = default;
 
 #ifndef NDEBUG
 static ExplodedNode::Auditor* NodeAuditor = nullptr;
@@ -47,10 +56,9 @@ void ExplodedNode::SetAuditor(ExplodedNode::Auditor* A) {
 // Cleanup.
 //===----------------------------------------------------------------------===//
 
-ExplodedGraph::ExplodedGraph()
-  : NumNodes(0), ReclaimNodeInterval(0) {}
+ExplodedGraph::ExplodedGraph() = default;
 
-ExplodedGraph::~ExplodedGraph() {}
+ExplodedGraph::~ExplodedGraph() = default;
 
 //===----------------------------------------------------------------------===//
 // Node reclamation.
@@ -90,8 +98,8 @@ bool ExplodedGraph::shouldCollect(const ExplodedNode *node) {
   // (7) The LocationContext is the same as the predecessor.
   // (8) Expressions that are *not* lvalue expressions.
   // (9) The PostStmt isn't for a non-consumed Stmt or Expr.
-  // (10) The successor is neither a CallExpr StmtPoint nor a CallEnter or 
-  //      PreImplicitCall (so that we would be able to find it when retrying a 
+  // (10) The successor is neither a CallExpr StmtPoint nor a CallEnter or
+  //      PreImplicitCall (so that we would be able to find it when retrying a
   //      call with no inlining).
   // FIXME: It may be safe to reclaim PreCall and PostCall nodes as well.
 
@@ -102,7 +110,7 @@ bool ExplodedGraph::shouldCollect(const ExplodedNode *node) {
   const ExplodedNode *pred = *(node->pred_begin());
   if (pred->succ_size() != 1)
     return false;
-  
+
   const ExplodedNode *succ = *(node->succ_begin());
   if (succ->pred_size() != 1)
     return false;
@@ -123,7 +131,7 @@ bool ExplodedGraph::shouldCollect(const ExplodedNode *node) {
 
   // Conditions 5, 6, and 7.
   ProgramStateRef state = node->getState();
-  ProgramStateRef pred_state = pred->getState();    
+  ProgramStateRef pred_state = pred->getState();
   if (state->store != pred_state->store || state->GDM != pred_state->GDM ||
       progPoint.getLocationContext() != pred->getLocationContext())
     return false;
@@ -174,7 +182,7 @@ void ExplodedGraph::collectNode(ExplodedNode *node) {
   FreeNodes.push_back(node);
   Nodes.RemoveNode(node);
   --NumNodes;
-  node->~ExplodedNode();  
+  node->~ExplodedNode();
 }
 
 void ExplodedGraph::reclaimRecentlyAllocatedNodes() {
@@ -189,12 +197,9 @@ void ExplodedGraph::reclaimRecentlyAllocatedNodes() {
     return;
   ReclaimCounter = ReclaimNodeInterval;
 
-  for (NodeVector::iterator it = ChangedNodes.begin(), et = ChangedNodes.end();
-       it != et; ++it) {
-    ExplodedNode *node = *it;
+  for (const auto node : ChangedNodes)
     if (shouldCollect(node))
       collectNode(node);
-  }
   ChangedNodes.clear();
 }
 
@@ -212,11 +217,11 @@ void ExplodedGraph::reclaimRecentlyAllocatedNodes() {
 // 2. The group is empty, in which case the storage value is null.
 // 3. The group contains a single node.
 // 4. The group contains more than one node.
-typedef BumpVector<ExplodedNode *> ExplodedNodeVector;
-typedef llvm::PointerUnion<ExplodedNode *, ExplodedNodeVector *> GroupStorage;
+using ExplodedNodeVector = BumpVector<ExplodedNode *>;
+using GroupStorage = llvm::PointerUnion<ExplodedNode *, ExplodedNodeVector *>;
 
 void ExplodedNode::addPredecessor(ExplodedNode *V, ExplodedGraph &G) {
-  assert (!V->isSink());
+  assert(!V->isSink());
   Preds.addNode(V, G);
   V->Succs.addNode(this, G);
 #ifndef NDEBUG
@@ -336,29 +341,34 @@ ExplodedNode *ExplodedGraph::getNode(const ProgramPoint &L,
   return V;
 }
 
+ExplodedNode *ExplodedGraph::createUncachedNode(const ProgramPoint &L,
+                                                ProgramStateRef State,
+                                                bool IsSink) {
+  NodeTy *V = (NodeTy *) getAllocator().Allocate<NodeTy>();
+  new (V) NodeTy(L, State, IsSink);
+  return V;
+}
+
 std::unique_ptr<ExplodedGraph>
 ExplodedGraph::trim(ArrayRef<const NodeTy *> Sinks,
                     InterExplodedGraphMap *ForwardMap,
                     InterExplodedGraphMap *InverseMap) const {
-
   if (Nodes.empty())
     return nullptr;
 
-  typedef llvm::DenseSet<const ExplodedNode*> Pass1Ty;
+  using Pass1Ty = llvm::DenseSet<const ExplodedNode *>;
   Pass1Ty Pass1;
 
-  typedef InterExplodedGraphMap Pass2Ty;
+  using Pass2Ty = InterExplodedGraphMap;
   InterExplodedGraphMap Pass2Scratch;
   Pass2Ty &Pass2 = ForwardMap ? *ForwardMap : Pass2Scratch;
 
   SmallVector<const ExplodedNode*, 10> WL1, WL2;
 
   // ===- Pass 1 (reverse DFS) -===
-  for (ArrayRef<const NodeTy *>::iterator I = Sinks.begin(), E = Sinks.end();
-       I != E; ++I) {
-    if (*I)
-      WL1.push_back(*I);
-  }
+  for (const auto Sink : Sinks)
+    if (Sink)
+      WL1.push_back(Sink);
 
   // Process the first worklist until it is empty.
   while (!WL1.empty()) {
@@ -395,8 +405,7 @@ ExplodedGraph::trim(ArrayRef<const NodeTy *> Sinks,
 
     // Create the corresponding node in the new graph and record the mapping
     // from the old node to the new node.
-    ExplodedNode *NewN = G->getNode(N->getLocation(), N->State, N->isSink(),
-                                    nullptr);
+    ExplodedNode *NewN = G->createUncachedNode(N->getLocation(), N->State, N->isSink());
     Pass2[N] = NewN;
 
     // Also record the reverse mapping from the new node to the old node.
@@ -440,4 +449,3 @@ ExplodedGraph::trim(ArrayRef<const NodeTy *> Sinks,
 
   return G;
 }
-

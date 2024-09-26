@@ -1,6 +1,8 @@
 #ifndef _VTREEFS_INODE_H
 #define _VTREEFS_INODE_H
 
+#include <sys/queue.h>
+
 /*
  * Callback data can be a pointer or a (cast) integer value.  For now, we
  * instruct the state transfer framework that it should translate only

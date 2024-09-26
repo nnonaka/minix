@@ -73,9 +73,10 @@ def XCoreLdwsp        : SDNode<"XCoreISD::LDWSP", SDT_XCoreLdwsp,
                                [SDNPHasChain, SDNPMayLoad]>;
 
 // These are target-independent nodes, but have target-specific formats.
-def SDT_XCoreCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32> ]>;
+def SDT_XCoreCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32>,
+                                             SDTCisVT<1, i32> ]>;
 def SDT_XCoreCallSeqEnd   : SDCallSeqEnd<[ SDTCisVT<0, i32>,
-                                        SDTCisVT<1, i32> ]>;
+                                           SDTCisVT<1, i32> ]>;
 
 def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_XCoreCallSeqStart,
                            [SDNPHasChain, SDNPOutGlue]>;
@@ -94,33 +95,34 @@ def XCoreMemBarrier : SDNode<"XCoreISD::MEMBARRIER", SDT_XCoreMEMBARRIER,
 def div4_xform : SDNodeXForm<imm, [{
   // Transformation function: imm/4
   assert(N->getZExtValue() % 4 == 0);
-  return getI32Imm(N->getZExtValue()/4);
+  return getI32Imm(N->getZExtValue()/4, SDLoc(N));
 }]>;
 
 def msksize_xform : SDNodeXForm<imm, [{
   // Transformation function: get the size of a mask
   assert(isMask_32(N->getZExtValue()));
   // look for the first non-zero bit
-  return getI32Imm(32 - countLeadingZeros((uint32_t)N->getZExtValue()));
+  return getI32Imm(32 - countLeadingZeros((uint32_t)N->getZExtValue()),
+                   SDLoc(N));
 }]>;
 
 def neg_xform : SDNodeXForm<imm, [{
   // Transformation function: -imm
   uint32_t value = N->getZExtValue();
-  return getI32Imm(-value);
+  return getI32Imm(-value, SDLoc(N));
 }]>;
 
 def bpwsub_xform : SDNodeXForm<imm, [{
   // Transformation function: 32-imm
   uint32_t value = N->getZExtValue();
-  return getI32Imm(32-value);
+  return getI32Imm(32 - value, SDLoc(N));
 }]>;
 
 def div4neg_xform : SDNodeXForm<imm, [{
   // Transformation function: -imm/4
   uint32_t value = N->getZExtValue();
   assert(-value % 4 == 0);
-  return getI32Imm(-value/4);
+  return getI32Imm(-value/4, SDLoc(N));
 }]>;
 
 def immUs4Neg : PatLeaf<(imm), [{
@@ -145,16 +147,8 @@ def immU6 : PatLeaf<(imm), [{
   return (uint32_t)N->getZExtValue() < (1 << 6);
 }]>;
 
-def immU10 : PatLeaf<(imm), [{
-  return (uint32_t)N->getZExtValue() < (1 << 10);
-}]>;
-
 def immU16 : PatLeaf<(imm), [{
   return (uint32_t)N->getZExtValue() < (1 << 16);
-}]>;
-
-def immU20 : PatLeaf<(imm), [{
-  return (uint32_t)N->getZExtValue() < (1 << 20);
 }]>;
 
 def immMskBitp : PatLeaf<(imm), [{ return immMskBitp(N); }]>;
@@ -330,9 +324,9 @@ class F2R_np<bits<6> opc, string OpcStr> :
 //===----------------------------------------------------------------------===//
 
 let Defs = [SP], Uses = [SP] in {
-def ADJCALLSTACKDOWN : PseudoInstXCore<(outs), (ins i32imm:$amt),
-                               "# ADJCALLSTACKDOWN $amt",
-                               [(callseq_start timm:$amt)]>;
+def ADJCALLSTACKDOWN : PseudoInstXCore<(outs), (ins i32imm:$amt, i32imm:$amt2),
+                               "# ADJCALLSTACKDOWN $amt, $amt2",
+                               [(callseq_start timm:$amt, timm:$amt2)]>;
 def ADJCALLSTACKUP : PseudoInstXCore<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "# ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;

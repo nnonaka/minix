@@ -1,5 +1,6 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-n32-S64"
 ; RUN: opt < %s -alignment-from-assumptions -S | FileCheck %s
+; RUN: opt < %s -passes=alignment-from-assumptions -S | FileCheck %s
 
 define i32 @foo(i32* nocapture %a) nounwind uwtable readonly {
 entry:
@@ -7,11 +8,11 @@ entry:
   %maskedptr = and i64 %ptrint, 31
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %0 = load i32* %a, align 4
+  %0 = load i32, i32* %a, align 4
   ret i32 %0
 
 ; CHECK-LABEL: @foo
-; CHECK: load i32* {{[^,]+}}, align 32
+; CHECK: load i32, i32* {{[^,]+}}, align 32
 ; CHECK: ret i32
 }
 
@@ -22,12 +23,12 @@ entry:
   %maskedptr = and i64 %offsetptr, 31
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %arrayidx = getelementptr inbounds i32* %a, i64 2
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 2
+  %0 = load i32, i32* %arrayidx, align 4
   ret i32 %0
 
 ; CHECK-LABEL: @foo2
-; CHECK: load i32* {{[^,]+}}, align 16
+; CHECK: load i32, i32* {{[^,]+}}, align 16
 ; CHECK: ret i32
 }
 
@@ -38,12 +39,12 @@ entry:
   %maskedptr = and i64 %offsetptr, 31
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %arrayidx = getelementptr inbounds i32* %a, i64 -1
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 -1
+  %0 = load i32, i32* %arrayidx, align 4
   ret i32 %0
 
 ; CHECK-LABEL: @foo2a
-; CHECK: load i32* {{[^,]+}}, align 32
+; CHECK: load i32, i32* {{[^,]+}}, align 32
 ; CHECK: ret i32
 }
 
@@ -53,11 +54,11 @@ entry:
   %maskedptr = and i64 %ptrint, 31
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %0 = load i32* %a, align 4
+  %0 = load i32, i32* %a, align 4
   ret i32 %0
 
 ; CHECK-LABEL: @goo
-; CHECK: load i32* {{[^,]+}}, align 32
+; CHECK: load i32, i32* {{[^,]+}}, align 32
 ; CHECK: ret i32
 }
 
@@ -72,8 +73,8 @@ entry:
 for.body:                                         ; preds = %entry, %for.body
   %indvars.iv = phi i64 [ 0, %entry ], [ %indvars.iv.next, %for.body ]
   %r.06 = phi i32 [ 0, %entry ], [ %add, %for.body ]
-  %arrayidx = getelementptr inbounds i32* %a, i64 %indvars.iv
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 %indvars.iv
+  %0 = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %0, %r.06
   %indvars.iv.next = add i64 %indvars.iv, 8
   %1 = trunc i64 %indvars.iv.next to i32
@@ -85,7 +86,7 @@ for.end:                                          ; preds = %for.body
   ret i32 %add.lcssa
 
 ; CHECK-LABEL: @hoo
-; CHECK: load i32* %arrayidx, align 32
+; CHECK: load i32, i32* %arrayidx, align 32
 ; CHECK: ret i32 %add.lcssa
 }
 
@@ -100,8 +101,8 @@ entry:
 for.body:                                         ; preds = %entry, %for.body
   %indvars.iv = phi i64 [ 4, %entry ], [ %indvars.iv.next, %for.body ]
   %r.06 = phi i32 [ 0, %entry ], [ %add, %for.body ]
-  %arrayidx = getelementptr inbounds i32* %a, i64 %indvars.iv
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 %indvars.iv
+  %0 = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %0, %r.06
   %indvars.iv.next = add i64 %indvars.iv, 8
   %1 = trunc i64 %indvars.iv.next to i32
@@ -113,7 +114,7 @@ for.end:                                          ; preds = %for.body
   ret i32 %add.lcssa
 
 ; CHECK-LABEL: @joo
-; CHECK: load i32* %arrayidx, align 16
+; CHECK: load i32, i32* %arrayidx, align 16
 ; CHECK: ret i32 %add.lcssa
 }
 
@@ -128,8 +129,8 @@ entry:
 for.body:                                         ; preds = %entry, %for.body
   %indvars.iv = phi i64 [ 0, %entry ], [ %indvars.iv.next, %for.body ]
   %r.06 = phi i32 [ 0, %entry ], [ %add, %for.body ]
-  %arrayidx = getelementptr inbounds i32* %a, i64 %indvars.iv
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 %indvars.iv
+  %0 = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %0, %r.06
   %indvars.iv.next = add i64 %indvars.iv, 4
   %1 = trunc i64 %indvars.iv.next to i32
@@ -141,7 +142,7 @@ for.end:                                          ; preds = %for.body
   ret i32 %add.lcssa
 
 ; CHECK-LABEL: @koo
-; CHECK: load i32* %arrayidx, align 16
+; CHECK: load i32, i32* %arrayidx, align 16
 ; CHECK: ret i32 %add.lcssa
 }
 
@@ -156,8 +157,8 @@ entry:
 for.body:                                         ; preds = %entry, %for.body
   %indvars.iv = phi i64 [ -4, %entry ], [ %indvars.iv.next, %for.body ]
   %r.06 = phi i32 [ 0, %entry ], [ %add, %for.body ]
-  %arrayidx = getelementptr inbounds i32* %a, i64 %indvars.iv
-  %0 = load i32* %arrayidx, align 4
+  %arrayidx = getelementptr inbounds i32, i32* %a, i64 %indvars.iv
+  %0 = load i32, i32* %arrayidx, align 4
   %add = add nsw i32 %0, %r.06
   %indvars.iv.next = add i64 %indvars.iv, 4
   %1 = trunc i64 %indvars.iv.next to i32
@@ -169,7 +170,7 @@ for.end:                                          ; preds = %for.body
   ret i32 %add.lcssa
 
 ; CHECK-LABEL: @koo2
-; CHECK: load i32* %arrayidx, align 16
+; CHECK: load i32, i32* %arrayidx, align 16
 ; CHECK: ret i32 %add.lcssa
 }
 
@@ -180,11 +181,11 @@ entry:
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
   %0 = bitcast i32* %a to i8*
-  tail call void @llvm.memset.p0i8.i64(i8* %0, i8 0, i64 64, i32 4, i1 false)
+  tail call void @llvm.memset.p0i8.i64(i8* align 4 %0, i8 0, i64 64, i1 false)
   ret i32 undef
 
 ; CHECK-LABEL: @moo
-; CHECK: @llvm.memset.p0i8.i64(i8* %0, i8 0, i64 64, i32 32, i1 false)
+; CHECK: @llvm.memset.p0i8.i64(i8* align 32 %0, i8 0, i64 64, i1 false)
 ; CHECK: ret i32 undef
 }
 
@@ -200,16 +201,16 @@ entry:
   tail call void @llvm.assume(i1 %maskcond4)
   %0 = bitcast i32* %a to i8*
   %1 = bitcast i32* %b to i8*
-  tail call void @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* %1, i64 64, i32 4, i1 false)
+  tail call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %0, i8* align 4 %1, i64 64, i1 false)
   ret i32 undef
 
 ; CHECK-LABEL: @moo2
-; CHECK: @llvm.memcpy.p0i8.p0i8.i64(i8* %0, i8* %1, i64 64, i32 32, i1 false)
+; CHECK: @llvm.memcpy.p0i8.p0i8.i64(i8* align 32 %0, i8* align 128 %1, i64 64, i1 false)
 ; CHECK: ret i32 undef
 }
 
 declare void @llvm.assume(i1) nounwind
 
-declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
-declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1) nounwind
+declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i1) nounwind
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i1) nounwind
 

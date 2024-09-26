@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.182 2015/07/23 08:03:26 mrg Exp $
+#	$NetBSD: Makefile,v 1.203 2019/05/07 10:22:54 hannken Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
@@ -62,9 +62,7 @@ TOOLCHAIN_BITS+= pcc
 .endif
 
 .if !defined(__MINIX)
-.if ${TOOLCHAIN_MISSING} == "no"
-# XXX Eventually, we want to be able to build dbsym and mdsetimage
-# XXX if EXTERNAL_TOOLCHAIN is set.
+.if ${TOOLCHAIN_MISSING} == "no" || defined(EXTERNAL_TOOLCHAIN)
 TOOLCHAIN_BITS+= dbsym mdsetimage
 .endif
 .endif # !defined(__MINIX)
@@ -107,30 +105,30 @@ dependall-binstall: dependall-compat
 SUBDIR=	host-mkdep compat binstall \
 	.WAIT mktemp .WAIT sed .WAIT genassym
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+=  gencat \
+SUBDIR+= cap_mkdb crunchgen ctags gencat hexdump \
 		${LINT_BITS} \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
-SUBDIR+= cat join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
-SUBDIR+= grep
+SUBDIR+= cat rpcgen join lorder m4 mkdep tsort xz-include .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= grep xz-lib pax .WAIT libprop
 
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR += .WAIT texinfo \
 	.WAIT tic \
-	.WAIT pax \
 	.WAIT ${TOOLCHAIN_BITS} \
 	${DTRACE_BITS} \
-		 cksum \
-		file \
-		makefs .WAIT mkcsmapper mkesdb mklocale \
-		.WAIT gpt \
-		.WAIT \
+		asn1_compile cksum compile_et db \
+		file lint1 slc \
+		makefs sortinfo \
+		.WAIT menuc mkcsmapper mkesdb mklocale mknod msgc \
+		.WAIT disklabel gpt \
+		.WAIT paxctl \
 		.WAIT fdisk \
 		.WAIT installboot \
-		pwd_mkdb strfile zic
+		pwd_mkdb strfile vgrind zic
 .endif
-SUBDIR+= stat .WAIT
+SUBDIR+= stat .WAIT xz-bin
 
 .if defined(__MINIX)
 SUBDIR += \
@@ -141,12 +139,19 @@ SUBDIR += \
 SUBDIR+= .WAIT config
 .endif # defined(__MINIX)
 
-.if ${MKLLVM} != "no"
+.if ${MKLLVM} != "no" || ${MKLLVMRT} != "no"
 SUBDIR+= \
 	llvm .WAIT \
-	llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
-	llvm-tblgen llvm-clang-tblgen .WAIT \
-	llvm-include .WAIT \
+	llvm-lib/libLLVMDemangle llvm-lib/libLLVMSupport llvm-lib/libLLVMTableGen .WAIT \
+	llvm-tblgen
+.endif
+.if ${MKLLVM} != "no"
+SUBDIR+= \
+	llvm-clang-tblgen
+.endif
+.if ${MKLLVM} != "no" && !defined(EXTERNAL_TOOLCHAIN)
+SUBDIR+= \
+	.WAIT llvm-include .WAIT \
 	llvm-lib .WAIT \
 	llvm-clang
 . if ${MKLLD} != "no"
@@ -190,6 +195,10 @@ SUBDIR+=	macppc-fixcoff
 SUBDIR+=	powerpc-mkbootimage
 .endif
 
+.if ${MACHINE_CPU} == "arm"
+SUBDIR+=	arm-elf2aout
+.endif
+
 .if ${MACHINE_CPU} == "m68k"
 SUBDIR+=	m68k-elf2aout
 .endif
@@ -230,6 +239,8 @@ SUBDIR+=	elftosb
 .if ${MACHINE} == "evbarm" || ${MACHINE} == "evbmips" || \
     ${MACHINE} == "evbppc" || ${MACHINE} == "sandpoint"
 SUBDIR+=	mkubootimage
+SUBDIR+=	libfdt .WAIT
+SUBDIR+=	dtc
 .endif
 .endif # !defined(__MINIX)
 
@@ -238,7 +249,7 @@ SUBDIR+=	makestrs
 SUBDIR+=	makekeys
 .endif
 
-.endif # TOOLCHAIN_BUILDRUMP
+.endif # TOOLS_BUILDRUMP != no
 
 check_MKTOOLS: .PHONY .NOTMAIN
 .if ${MKTOOLS:Uyes} == "no"

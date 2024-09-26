@@ -21,30 +21,30 @@
 
 namespace llvm {
 
+class AArch64RegisterBankInfo;
+
 class AArch64TargetMachine : public LLVMTargetMachine {
 protected:
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  AArch64Subtarget Subtarget;
   mutable StringMap<std::unique_ptr<AArch64Subtarget>> SubtargetMap;
 
 public:
-  AArch64TargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
-                       Reloc::Model RM, CodeModel::Model CM,
-                       CodeGenOpt::Level OL, bool IsLittleEndian);
+                       Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
+                       CodeGenOpt::Level OL, bool JIT, bool IsLittleEndian);
 
   ~AArch64TargetMachine() override;
-
-  const AArch64Subtarget *getSubtargetImpl() const override {
-    return &Subtarget;
-  }
   const AArch64Subtarget *getSubtargetImpl(const Function &F) const override;
+  // DO NOT IMPLEMENT: There is no such thing as a valid default subtarget,
+  // subtargets are per-function entities based on the target-specific
+  // attributes of each function.
+  const AArch64Subtarget *getSubtargetImpl() const = delete;
 
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
-  /// \brief Register AArch64 analysis passes with a pass manager.
-  void addAnalysisPasses(PassManagerBase &PM) override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   TargetLoweringObjectFile* getObjFileLowering() const override {
     return TLOF.get();
@@ -54,26 +54,28 @@ private:
   bool isLittle;
 };
 
-// AArch64leTargetMachine - AArch64 little endian target machine.
+// AArch64 little endian target machine.
 //
 class AArch64leTargetMachine : public AArch64TargetMachine {
   virtual void anchor();
 public:
-  AArch64leTargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64leTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                          StringRef FS, const TargetOptions &Options,
-                         Reloc::Model RM, CodeModel::Model CM,
-                         CodeGenOpt::Level OL);
+                         Optional<Reloc::Model> RM,
+                         Optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
+                         bool JIT);
 };
 
-// AArch64beTargetMachine - AArch64 big endian target machine.
+// AArch64 big endian target machine.
 //
 class AArch64beTargetMachine : public AArch64TargetMachine {
   virtual void anchor();
 public:
-  AArch64beTargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64beTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                          StringRef FS, const TargetOptions &Options,
-                         Reloc::Model RM, CodeModel::Model CM,
-                         CodeGenOpt::Level OL);
+                         Optional<Reloc::Model> RM,
+                         Optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
+                         bool JIT);
 };
 
 } // end namespace llvm

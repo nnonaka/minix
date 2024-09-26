@@ -1,10 +1,10 @@
-#	$NetBSD: Makefile,v 1.31 2020/04/04 00:47:30 christos Exp $
+#	$NetBSD: Makefile,v 1.37 2023/01/18 12:52:55 christos Exp $
 
 .include <bsd.hostinit.mk>
 
 MODULE=		binutils
 
-GNUHOSTDIST=	${.CURDIR}/../../external/gpl3/binutils/dist
+GNUHOSTDIST=	${.CURDIR}/../../external/gpl3/${EXTERNAL_BINUTILS_SUBDIR}/dist
 
 BRANDING?=	\
 	--with-pkgversion="NetBSD Binutils nb1" \
@@ -17,25 +17,9 @@ BASE_CONFIGURE_ARGS= \
 	--enable-default-execstack=no \
 	${BRANDING}
 
-CONFIGURE_ARGS= --disable-nls \
+CONFIGURE_ARGS=	--disable-nls --disable-werror \
 		--program-transform-name="s,^,${MACHINE_GNU_PLATFORM}-," \
-		--disable-werror \
 		${BASE_CONFIGURE_ARGS}
-
-.if defined(__MINIX) && ! exists(${GNUHOSTDIST}/gas/m68k-parse.c)
-# MINIX: LSC: Make sure we trigger the fetch rule
-.include "${.CURDIR}/../../minix/Makefile.fetchgnu"
-
-${GNUHOSTDIST}/gas/m68k-parse.c: ${fetch_done}
-	@true
-.endif # defined(__MINIX)
-
-build/gas/m68k-parse.c: ${GNUHOSTDIST}/gas/m68k-parse.c
-	@mkdir build 2>/dev/null || true
-	@mkdir build/gas 2>/dev/null || true
-	cat ${GNUHOSTDIST}/gas/m68k-parse.c > ${.TARGET}
-
-.configure_done: build/gas/m68k-parse.c
 
 MAKE_ARGS=	MACHINE= MAKEINFO=${TOOL_MAKEINFO:Q}
 
@@ -46,26 +30,6 @@ ALL_TARGET+=	all-gprof
 INSTALL_TARGET+=install-gprof
 .endif
 
-.if defined(__MINIX) && ${HAVE_GOLD:Uyes} != "no"
-ALL_TARGET+=	all-gold
-INSTALL_TARGET+=install-gold
-
-CONFIGURE_ARGS+=	\
-	--enable-lto \
-	--enable-plugins
-# LSC: Here we use the MK variable, as we have to select the right default
-#      linker. Problem is, when Gold is not seen, USE_BITCODE is forced to
-#      "no".
-.if ${MKBITCODE:Uno} == "yes"
-CONFIGURE_ARGS+= \
-	--enable-ld=yes \
-	--enable-gold=default
-.else
-CONFIGURE_ARGS+= \
-	--enable-ld=default \
-	--enable-gold=yes
-.endif # ${MKBITCODE:Uno} == "yes"
-.endif # defined(__MINIX)
 .include "${.CURDIR}/../Makefile.gnuhost"
 
 CCADDFLAGS=	-I${GNUHOSTDIST}/include  -I${DESTDIR}/usr/include

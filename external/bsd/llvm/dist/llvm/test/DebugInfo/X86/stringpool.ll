@@ -1,24 +1,24 @@
 ; RUN: llc -mtriple=x86_64-unknown-linux-gnu < %s | FileCheck %s --check-prefix=LINUX
 ; RUN: llc -mtriple=x86_64-darwin < %s | FileCheck %s --check-prefix=DARWIN
 
-@yyyy = common global i32 0, align 4
+source_filename = "test/DebugInfo/X86/stringpool.ll"
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!9}
+@yyyy = common global i32 0, align 4, !dbg !0
 
-!0 = !{!"0x11\0012\00clang version 3.1 (trunk 143009)\001\00\000\00\000", !8, !1, !1, !1, !3,  !1} ; [ DW_TAG_compile_unit ]
-!1 = !{}
-!3 = !{!5}
-!5 = !{!"0x34\00yyyy\00yyyy\00\001\000\001", null, !6, !7, i32* @yyyy, null} ; [ DW_TAG_variable ]
-!6 = !{!"0x29", !8} ; [ DW_TAG_file_type ]
-!7 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ]
-!8 = !{!"z.c", !"/home/nicholas"}
+!llvm.dbg.cu = !{!4}
+!llvm.module.flags = !{!7}
 
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "yyyy", scope: null, file: !2, line: 1, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "z.c", directory: "/home/nicholas")
+!3 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!4 = distinct !DICompileUnit(language: DW_LANG_C99, file: !2, producer: "clang version 3.1 (trunk 143009)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !5, retainedTypes: !5, globals: !6, imports: !5)
+!5 = !{}
 ; Verify that "yyyy" ended up in the stringpool.
 ; LINUX: .section .debug_str,"MS",@progbits,1
 ; LINUX: yyyy
 ; DARWIN: .section __DWARF,__debug_str,regular,debug
-; DARWIN: yyyy
+; DARWIN: .asciz "yyyy" ## string offset=[[YYYY:[0-9]+]]
 
 ; Verify that we refer to 'yyyy' with a relocation.
 ; LINUX:      .long   .Linfo_string3          # DW_AT_name
@@ -30,9 +30,8 @@
 ; LINUX-NEXT: .byte   3
 ; LINUX-NEXT: .quad   yyyy
 
-; Verify that we refer to 'yyyy' without a relocation.
-; DARWIN: Lset[[ID:[0-9]+]] = Linfo_string3-Linfo_string ## DW_AT_name
-; DARWIN-NEXT:        .long   Lset[[ID]]
+; Verify that we refer to 'yyyy' with a direct offset.
+; DARWIN:             .long   [[YYYY]]
 ; DARWIN-NEXT:        .long   {{[0-9]+}}              ## DW_AT_type
 ; DARWIN-NEXT:                                        ## DW_AT_external
 ; DARWIN-NEXT:        .byte   1                       ## DW_AT_decl_file
@@ -40,4 +39,5 @@
 ; DARWIN-NEXT:        .byte   9                       ## DW_AT_location
 ; DARWIN-NEXT:        .byte   3
 ; DARWIN-NEXT:        .quad   _yyyy
-!9 = !{i32 1, !"Debug Info Version", i32 2}
+!6 = !{!0}
+!7 = !{i32 1, !"Debug Info Version", i32 3}

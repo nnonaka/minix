@@ -23,25 +23,29 @@ namespace llvm {
 
 class MCAssembler;
 struct MCFixupKindInfo;
-class Target;
 class MCObjectWriter;
+class MCRegisterInfo;
+class Target;
 
 class MipsAsmBackend : public MCAsmBackend {
-  Triple::OSType OSType;
-  bool IsLittle; // Big or little endian
-  bool Is64Bit;  // 32 or 64 bit words
+  Triple TheTriple;
+  bool IsN32;
 
 public:
-  MipsAsmBackend(const Target &T, Triple::OSType _OSType, bool _isLittle,
-                 bool _is64Bit)
-      : MCAsmBackend(), OSType(_OSType), IsLittle(_isLittle),
-        Is64Bit(_is64Bit) {}
+  MipsAsmBackend(const Target &T, const MCRegisterInfo &MRI, const Triple &TT,
+                 StringRef CPU, bool N32)
+      : MCAsmBackend(TT.isLittleEndian() ? support::little : support::big),
+        TheTriple(TT), IsN32(N32) {}
 
-  MCObjectWriter *createObjectWriter(raw_ostream &OS) const override;
+  std::unique_ptr<MCObjectTargetWriter>
+  createObjectTargetWriter() const override;
 
-  void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
-                  uint64_t Value, bool IsPCRel) const override;
+  void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
+                  const MCValue &Target, MutableArrayRef<char> Data,
+                  uint64_t Value, bool IsResolved,
+                  const MCSubtargetInfo *STI) const override;
 
+  Optional<MCFixupKind> getFixupKind(StringRef Name) const override;
   const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;
 
   unsigned getNumFixupKinds() const override {
@@ -55,7 +59,8 @@ public:
   /// relaxation.
   ///
   /// \param Inst - The instruction to test.
-  bool mayNeedRelaxation(const MCInst &Inst) const override {
+  bool mayNeedRelaxation(const MCInst &Inst,
+                         const MCSubtargetInfo &STI) const override {
     return false;
   }
 
@@ -75,16 +80,15 @@ public:
   /// \param Inst - The instruction to relax, which may be the same
   /// as the output.
   /// \param [out] Res On return, the relaxed instruction.
-  void relaxInstruction(const MCInst &Inst, MCInst &Res) const override {}
+  void relaxInstruction(const MCInst &Inst, const MCSubtargetInfo &STI,
+                        MCInst &Res) const override {}
 
   /// @}
 
-  bool writeNopData(uint64_t Count, MCObjectWriter *OW) const override;
+  bool writeNopData(raw_ostream &OS, uint64_t Count) const override;
 
-  void processFixupValue(const MCAssembler &Asm, const MCAsmLayout &Layout,
-                         const MCFixup &Fixup, const MCFragment *DF,
-                         const MCValue &Target, uint64_t &Value,
-                         bool &IsResolved) override;
+  bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
+                             const MCValue &Target) override;
 
 }; // class MipsAsmBackend
 

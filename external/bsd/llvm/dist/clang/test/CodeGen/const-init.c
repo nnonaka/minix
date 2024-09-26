@@ -84,7 +84,7 @@ struct g13_s0 g13[] = {
    { (long) &g12_tmp }
 };
 
-// CHECK: @g14 = global i8* inttoptr (i64 100 to i8*)
+// CHECK: @g14 = global i8* inttoptr (i32 100 to i8*)
 void *g14 = (void*) 100;
 
 // CHECK: @g15 = global i32 -1
@@ -102,7 +102,7 @@ void g18(void) {
   static int *p[] = { &g19 };
 }
 
-// CHECK: @g20.l0 = internal global %struct.g20_s1 { %struct.g20_s0* null, %struct.g20_s0** getelementptr inbounds (%struct.g20_s1* @g20.l0, i32 0, i32 0) }
+// CHECK: @g20.l0 = internal global %struct.g20_s1 { %struct.g20_s0* null, %struct.g20_s0** getelementptr inbounds (%struct.g20_s1, %struct.g20_s1* @g20.l0, i32 0, i32 0) }
 struct g20_s0;
 struct g20_s1 {
   struct g20_s0 *f0, **f1;
@@ -121,7 +121,7 @@ struct g22 {int x;} __attribute((packed));
 struct g23 {char a; short b; char c; struct g22 d;};
 struct g23 g24 = {1,2,3,4};
 
-// CHECK: @g25.g26 = internal global i8* getelementptr inbounds ([4 x i8]* @__func__.g25, i32 0, i32 0)
+// CHECK: @g25.g26 = internal global i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__func__.g25, i32 0, i32 0)
 // CHECK: @__func__.g25 = private unnamed_addr constant [4 x i8] c"g25\00"
 int g25() {
   static const char *g26 = __func__;

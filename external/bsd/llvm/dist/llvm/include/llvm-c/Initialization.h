@@ -16,7 +16,7 @@
 #ifndef LLVM_C_INITIALIZATION_H
 #define LLVM_C_INITIALIZATION_H
 
-#include "llvm-c/Core.h"
+#include "llvm-c/Types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +37,7 @@ void LLVMInitializeScalarOpts(LLVMPassRegistryRef R);
 void LLVMInitializeObjCARCOpts(LLVMPassRegistryRef R);
 void LLVMInitializeVectorization(LLVMPassRegistryRef R);
 void LLVMInitializeInstCombine(LLVMPassRegistryRef R);
+void LLVMInitializeAggressiveInstCombiner(LLVMPassRegistryRef R);
 void LLVMInitializeIPO(LLVMPassRegistryRef R);
 void LLVMInitializeInstrumentation(LLVMPassRegistryRef R);
 void LLVMInitializeAnalysis(LLVMPassRegistryRef R);

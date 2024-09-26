@@ -1,5 +1,5 @@
 ; RUN: llc -mtriple=x86_64-apple-darwin %s -o %t -filetype=obj
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s
+; RUN: llvm-dwarfdump -debug-info %t | FileCheck %s
 
 ; Make sure that structures have a decl file and decl line attached.
 ; CHECK: DW_TAG_structure_type
@@ -7,21 +7,24 @@
 ; CHECK: DW_AT_decl_line
 ; CHECK: DW_TAG_member
 
+source_filename = "test/DebugInfo/X86/struct-loc.ll"
+
 %struct.foo = type { i32 }
 
-@f = common global %struct.foo zeroinitializer, align 4
+@f = common global %struct.foo zeroinitializer, align 4, !dbg !0
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!12}
+!llvm.dbg.cu = !{!7}
+!llvm.module.flags = !{!10}
 
-!0 = !{!"0x11\0012\00clang version 3.1 (trunk 152837) (llvm/trunk 152845)\000\00\000\00\000", !11, !1, !1, !1, !3,  !1} ; [ DW_TAG_compile_unit ]
-!1 = !{}
-!3 = !{!5}
-!5 = !{!"0x34\00f\00f\00\005\000\001", null, !6, !7, %struct.foo* @f, null} ; [ DW_TAG_variable ]
-!6 = !{!"0x29", !11} ; [ DW_TAG_file_type ]
-!7 = !{!"0x13\00foo\001\0032\0032\000\000\000", !11, null, null, !8, null, null, null} ; [ DW_TAG_structure_type ] [foo] [line 1, size 32, align 32, offset 0] [def] [from ]
-!8 = !{!9}
-!9 = !{!"0xd\00a\002\0032\0032\000\000", !11, !7, !10} ; [ DW_TAG_member ]
-!10 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ]
-!11 = !{!"struct_bug.c", !"/Users/echristo/tmp"}
-!12 = !{i32 1, !"Debug Info Version", i32 2}
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "f", scope: null, file: !2, line: 5, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "struct_bug.c", directory: "/Users/echristo/tmp")
+!3 = !DICompositeType(tag: DW_TAG_structure_type, name: "foo", file: !2, line: 1, size: 32, align: 32, elements: !4)
+!4 = !{!5}
+!5 = !DIDerivedType(tag: DW_TAG_member, name: "a", scope: !3, file: !2, line: 2, baseType: !6, size: 32, align: 32)
+!6 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!7 = distinct !DICompileUnit(language: DW_LANG_C99, file: !2, producer: "clang version 3.1 (trunk 152837) (llvm/trunk 152845)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !8, retainedTypes: !8, globals: !9, imports: !8)
+!8 = !{}
+!9 = !{!0}
+!10 = !{i32 1, !"Debug Info Version", i32 3}
+

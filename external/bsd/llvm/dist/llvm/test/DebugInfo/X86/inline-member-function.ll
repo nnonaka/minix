@@ -1,6 +1,6 @@
 ; REQUIRES: object-emission
 
-; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj < %s | llvm-dwarfdump -debug-dump=info - | FileCheck %s
+; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj < %s | llvm-dwarfdump -v -debug-info - | FileCheck %s
 
 ; From source:
 ; struct foo {
@@ -32,65 +32,68 @@
 ; CHECK-NOT: DW_AT_artificial
 ; CHECK: DW_TAG
 
+source_filename = "test/DebugInfo/X86/inline-member-function.ll"
+
 %struct.foo = type { i8 }
 
-@i = global i32 0, align 4
+@i = global i32 0, align 4, !dbg !0
 
 ; Function Attrs: uwtable
-define i32 @main() #0 {
+define i32 @main() #0 !dbg !17 {
 entry:
   %this.addr.i = alloca %struct.foo*, align 8
   %x.addr.i = alloca i32, align 4
   %retval = alloca i32, align 4
   %tmp = alloca %struct.foo, align 1
   store i32 0, i32* %retval
-  %0 = load i32* @i, align 4, !dbg !23
+  %0 = load i32, i32* @i, align 4, !dbg !20
   store %struct.foo* %tmp, %struct.foo** %this.addr.i, align 8
-  call void @llvm.dbg.declare(metadata %struct.foo** %this.addr.i, metadata !24, metadata !{!"0x102"}), !dbg !26
+  call void @llvm.dbg.declare(metadata %struct.foo** %this.addr.i, metadata !21, metadata !24), !dbg !25
   store i32 %0, i32* %x.addr.i, align 4
-  call void @llvm.dbg.declare(metadata i32* %x.addr.i, metadata !27, metadata !{!"0x102"}), !dbg !28
-  %this1.i = load %struct.foo** %this.addr.i
-  %1 = load i32* %x.addr.i, align 4, !dbg !28
-  %add.i = add nsw i32 %1, 2, !dbg !28
-  ret i32 %add.i, !dbg !23
+  call void @llvm.dbg.declare(metadata i32* %x.addr.i, metadata !26, metadata !24), !dbg !27
+  %this1.i = load %struct.foo*, %struct.foo** %this.addr.i
+  %1 = load i32, i32* %x.addr.i, align 4, !dbg !27
+  %add.i = add nsw i32 %1, 2, !dbg !27
+  ret i32 %add.i, !dbg !20
 }
 
 ; Function Attrs: nounwind readnone
+
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 attributes #0 = { uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }
 
-!llvm.dbg.cu = !{!0}
-!llvm.module.flags = !{!20, !21}
-!llvm.ident = !{!22}
+!llvm.dbg.cu = !{!4}
+!llvm.module.flags = !{!14, !15}
+!llvm.ident = !{!16}
 
-!0 = !{!"0x11\004\00clang version 3.5.0 \000\00\000\00\001", !1, !2, !3, !12, !18, !2} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/inline.cpp] [DW_LANG_C_plus_plus]
-!1 = !{!"inline.cpp", !"/tmp/dbginfo"}
-!2 = !{}
-!3 = !{!4}
-!4 = !{!"0x13\00foo\001\008\008\000\000\000", !1, null, null, !5, null, null, !"_ZTS3foo"} ; [ DW_TAG_structure_type ] [foo] [line 1, size 8, align 8, offset 0] [def] [from ]
-!5 = !{!6}
-!6 = !{!"0x2e\00func\00func\00_ZN3foo4funcEi\002\000\000\000\006\00256\000\002", !1, !"_ZTS3foo", !7, null, null, null, i32 0, !11} ; [ DW_TAG_subprogram ] [line 2] [func]
-!7 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !8, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!8 = !{!9, !10, !9}
-!9 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!10 = !{!"0xf\00\000\0064\0064\000\001088", null, null, !"_ZTS3foo"} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [artificial] [from _ZTS3foo]
-!11 = !{i32 786468}
-!12 = !{!13, !17}
-!13 = !{!"0x2e\00main\00main\00\007\000\001\000\006\00256\000\007", !1, !14, !15, null, i32 ()* @main, null, null, !2} ; [ DW_TAG_subprogram ] [line 7] [def] [main]
-!14 = !{!"0x29", !1}         ; [ DW_TAG_file_type ] [/tmp/dbginfo/inline.cpp]
-!15 = !{!"0x15\00\000\000\000\000\000\000", i32 0, null, null, !16, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!16 = !{!9}
-!17 = !{!"0x2e\00func\00func\00_ZN3foo4funcEi\002\000\001\000\006\00256\000\002", !1, !"_ZTS3foo", !7, null, null, null, !6, !2} ; [ DW_TAG_subprogram ] [line 2] [def] [func]
-!18 = !{!19}
-!19 = !{!"0x34\00i\00i\00\005\000\001", null, !14, !9, i32* @i, null} ; [ DW_TAG_variable ] [i] [line 5] [def]
-!20 = !{i32 2, !"Dwarf Version", i32 4}
-!21 = !{i32 1, !"Debug Info Version", i32 2}
-!22 = !{!"clang version 3.5.0 "}
-!23 = !MDLocation(line: 8, scope: !13)
-!24 = !{!"0x101\00this\0016777216\001088", !17, null, !25} ; [ DW_TAG_arg_variable ] [this] [line 0]
-!25 = !{!"0xf\00\000\0064\0064\000\000", null, null, !"_ZTS3foo"} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [from _ZTS3foo]
-!26 = !MDLocation(line: 0, scope: !17, inlinedAt: !23)
-!27 = !{!"0x101\00x\0033554434\000", !17, !14, !9} ; [ DW_TAG_arg_variable ] [x] [line 2]
-!28 = !MDLocation(line: 2, scope: !17, inlinedAt: !23)
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "i", scope: null, file: !2, line: 5, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "inline.cpp", directory: "/tmp/dbginfo")
+!3 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!4 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "clang version 3.5.0 ", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !5, retainedTypes: !6, globals: !13, imports: !5)
+!5 = !{}
+!6 = !{!7}
+!7 = !DICompositeType(tag: DW_TAG_structure_type, name: "foo", file: !2, line: 1, size: 8, align: 8, elements: !8, identifier: "_ZTS3foo")
+!8 = !{!9}
+!9 = !DISubprogram(name: "func", linkageName: "_ZN3foo4funcEi", scope: !7, file: !2, line: 2, type: !10, isLocal: false, isDefinition: false, scopeLine: 2, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false)
+!10 = !DISubroutineType(types: !11)
+!11 = !{!3, !12, !3}
+!12 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !7, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer)
+!13 = !{!0}
+!14 = !{i32 2, !"Dwarf Version", i32 4}
+!15 = !{i32 1, !"Debug Info Version", i32 3}
+!16 = !{!"clang version 3.5.0 "}
+!17 = distinct !DISubprogram(name: "main", scope: !2, file: !2, line: 7, type: !18, isLocal: false, isDefinition: true, scopeLine: 7, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, retainedNodes: !5)
+!18 = !DISubroutineType(types: !19)
+!19 = !{!3}
+!20 = !DILocation(line: 8, scope: !17)
+!21 = !DILocalVariable(name: "this", arg: 1, scope: !22, type: !23, flags: DIFlagArtificial | DIFlagObjectPointer)
+!22 = distinct !DISubprogram(name: "func", linkageName: "_ZN3foo4funcEi", scope: !7, file: !2, line: 2, type: !10, isLocal: false, isDefinition: true, scopeLine: 2, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, declaration: !9, retainedNodes: !5)
+!23 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !7, size: 64, align: 64)
+!24 = !DIExpression()
+!25 = !DILocation(line: 0, scope: !22, inlinedAt: !20)
+!26 = !DILocalVariable(name: "x", arg: 2, scope: !22, file: !2, line: 2, type: !3)
+!27 = !DILocation(line: 2, scope: !22, inlinedAt: !20)
+

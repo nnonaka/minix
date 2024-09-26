@@ -1,4 +1,4 @@
-//=- llvm/CodeGen/AggressiveAntiDepBreaker.h - Anti-Dep Support -*- C++ -*-=//
+//==- llvm/CodeGen/AggressiveAntiDepBreaker.h - Anti-Dep Support -*- C++ -*-==//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,29 +19,35 @@
 
 #include "AntiDepBreaker.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
-#include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/ScheduleDAG.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/Support/Compiler.h"
 #include <map>
+#include <set>
+#include <vector>
 
 namespace llvm {
+
+class MachineBasicBlock;
+class MachineFunction;
+class MachineInstr;
+class MachineOperand;
+class MachineRegisterInfo;
 class RegisterClassInfo;
+class TargetInstrInfo;
+class TargetRegisterClass;
+class TargetRegisterInfo;
 
   /// Contains all the state necessary for anti-dep breaking.
-  class AggressiveAntiDepState {
+class LLVM_LIBRARY_VISIBILITY AggressiveAntiDepState {
   public:
     /// Information about a register reference within a liverange
-    typedef struct {
+    struct RegisterReference {
       /// The registers operand
       MachineOperand *Operand;
+
       /// The register class
       const TargetRegisterClass *RC;
-    } RegisterReference;
+    };
 
   private:
     /// Number of non-virtual target registers (i.e. TRI->getNumRegs()).
@@ -63,11 +69,11 @@ class RegisterClassInfo;
     /// Map registers to all their references within a live range.
     std::multimap<unsigned, RegisterReference> RegRefs;
 
-    /// The index of the most recent kill (proceding bottom-up),
+    /// The index of the most recent kill (proceeding bottom-up),
     /// or ~0u if the register is not live.
     std::vector<unsigned> KillIndices;
 
-    /// The index of the most recent complete def (proceding bottom
+    /// The index of the most recent complete def (proceeding bottom
     /// up), or ~0u if the register is live.
     std::vector<unsigned> DefIndices;
 
@@ -108,9 +114,9 @@ class RegisterClassInfo;
     bool IsLive(unsigned Reg);
   };
 
-
-  class AggressiveAntiDepBreaker : public AntiDepBreaker {
-    MachineFunction& MF;
+  class LLVM_LIBRARY_VISIBILITY AggressiveAntiDepBreaker
+      : public AntiDepBreaker {
+    MachineFunction &MF;
     MachineRegisterInfo &MRI;
     const TargetInstrInfo *TII;
     const TargetRegisterInfo *TRI;
@@ -121,21 +127,20 @@ class RegisterClassInfo;
     BitVector CriticalPathSet;
 
     /// The state used to identify and rename anti-dependence registers.
-    AggressiveAntiDepState *State;
+    AggressiveAntiDepState *State = nullptr;
 
   public:
-    AggressiveAntiDepBreaker(MachineFunction& MFi,
+    AggressiveAntiDepBreaker(MachineFunction &MFi,
                           const RegisterClassInfo &RCI,
                           TargetSubtargetInfo::RegClassVector& CriticalPathRCs);
-    ~AggressiveAntiDepBreaker();
+    ~AggressiveAntiDepBreaker() override;
 
     /// Initialize anti-dep breaking for a new basic block.
     void StartBlock(MachineBasicBlock *BB) override;
 
     /// Identifiy anti-dependencies along the critical path
     /// of the ScheduleDAG and break them by renaming registers.
-    ///
-    unsigned BreakAntiDependencies(const std::vector<SUnit>& SUnits,
+    unsigned BreakAntiDependencies(const std::vector<SUnit> &SUnits,
                                    MachineBasicBlock::iterator Begin,
                                    MachineBasicBlock::iterator End,
                                    unsigned InsertPosIndex,
@@ -143,8 +148,7 @@ class RegisterClassInfo;
 
     /// Update liveness information to account for the current
     /// instruction, which will not be scheduled.
-    ///
-    void Observe(MachineInstr *MI, unsigned Count,
+    void Observe(MachineInstr &MI, unsigned Count,
                  unsigned InsertPosIndex) override;
 
     /// Finish anti-dep breaking for a basic block.
@@ -152,28 +156,29 @@ class RegisterClassInfo;
 
   private:
     /// Keep track of a position in the allocation order for each regclass.
-    typedef std::map<const TargetRegisterClass *, unsigned> RenameOrderType;
+    using RenameOrderType = std::map<const TargetRegisterClass *, unsigned>;
 
     /// Return true if MO represents a register
     /// that is both implicitly used and defined in MI
-    bool IsImplicitDefUse(MachineInstr *MI, MachineOperand& MO);
+    bool IsImplicitDefUse(MachineInstr &MI, MachineOperand &MO);
 
     /// If MI implicitly def/uses a register, then
     /// return that register and all subregisters.
-    void GetPassthruRegs(MachineInstr *MI, std::set<unsigned>& PassthruRegs);
+    void GetPassthruRegs(MachineInstr &MI, std::set<unsigned> &PassthruRegs);
 
     void HandleLastUse(unsigned Reg, unsigned KillIdx, const char *tag,
                        const char *header = nullptr,
                        const char *footer = nullptr);
 
-    void PrescanInstruction(MachineInstr *MI, unsigned Count,
-                            std::set<unsigned>& PassthruRegs);
-    void ScanInstruction(MachineInstr *MI, unsigned Count);
+    void PrescanInstruction(MachineInstr &MI, unsigned Count,
+                            std::set<unsigned> &PassthruRegs);
+    void ScanInstruction(MachineInstr &MI, unsigned Count);
     BitVector GetRenameRegisters(unsigned Reg);
     bool FindSuitableFreeRegisters(unsigned AntiDepGroupIndex,
                                    RenameOrderType& RenameOrder,
                                    std::map<unsigned, unsigned> &RenameMap);
   };
-}
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_LIB_CODEGEN_AGGRESSIVEANTIDEPBREAKER_H

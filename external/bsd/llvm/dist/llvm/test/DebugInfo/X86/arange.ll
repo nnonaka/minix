@@ -1,6 +1,6 @@
 ; REQUIRES: object-emission
 
-; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj -generate-arange-section < %s | llvm-dwarfdump -debug-dump=aranges - | FileCheck %s
+; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj -generate-arange-section < %s | llvm-dwarfdump -debug-aranges - | FileCheck %s
 ; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj -generate-arange-section < %s | llvm-readobj --relocations - | FileCheck --check-prefix=OBJ %s
 
 ; extern int i;
@@ -20,27 +20,30 @@
 ; OBJ: debug_aranges
 ; OBJ-NEXT: R_X86_64_32 .debug_info 0x0
 
+source_filename = "test/DebugInfo/X86/arange.ll"
+
 %struct.foo = type { i8 }
 
-@f = global %struct.foo zeroinitializer, align 1
+@f = global %struct.foo zeroinitializer, align 1, !dbg !0
 @i = external global i32
 
-!llvm.dbg.cu = !{!0}
+!llvm.dbg.cu = !{!9}
 !llvm.module.flags = !{!12, !13}
 !llvm.ident = !{!14}
 
-!0 = !{!"0x11\004\00clang version 3.5 \000\00\000\00\000", !1, !2, !3, !2, !9, !2} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/simple.cpp] [DW_LANG_C_plus_plus]
-!1 = !{!"simple.cpp", !"/tmp/dbginfo"}
-!2 = !{}
-!3 = !{!4}
-!4 = !{!"0x13\00foo<&i>\003\008\008\000\000\000", !1, null, null, !2, null, !5, !"_ZTS3fooIXadL_Z1iEEE"} ; [ DW_TAG_structure_type ] [foo<&i>] [line 3, size 8, align 8, offset 0] [def] [from ]
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
+!1 = !DIGlobalVariable(name: "f", scope: null, file: !2, line: 6, type: !3, isLocal: false, isDefinition: true)
+!2 = !DIFile(filename: "simple.cpp", directory: "/tmp/dbginfo")
+!3 = !DICompositeType(tag: DW_TAG_structure_type, name: "foo<&i>", file: !2, line: 3, size: 8, align: 8, elements: !4, templateParams: !5, identifier: "_ZTS3fooIXadL_Z1iEEE")
+!4 = !{}
 !5 = !{!6}
-!6 = !{!"0x30\00x\000\000", null, !7, i32* @i, null} ; [ DW_TAG_template_value_parameter ]
-!7 = !{!"0xf\00\000\0064\0064\000\000", null, null, !8} ; [ DW_TAG_pointer_type ] [line 0, size 64, align 64, offset 0] [from int]
-!8 = !{!"0x24\00int\000\0032\0032\000\000\005", null, null} ; [ DW_TAG_base_type ] [int] [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-!9 = !{!10}
-!10 = !{!"0x34\00f\00f\00\006\000\001", null, !11, !4, %struct.foo* @f, null} ; [ DW_TAG_variable ] [f] [line 6] [def]
-!11 = !{!"0x29", !1}         ; [ DW_TAG_file_type ] [/tmp/dbginfo/simple.cpp]
+!6 = !DITemplateValueParameter(name: "x", type: !7, value: i32* @i)
+!7 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !8, size: 64, align: 64)
+!8 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+!9 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "clang version 3.5 ", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, retainedTypes: !10, globals: !11, imports: !4)
+!10 = !{!3}
+!11 = !{!0}
 !12 = !{i32 2, !"Dwarf Version", i32 4}
-!13 = !{i32 1, !"Debug Info Version", i32 2}
+!13 = !{i32 1, !"Debug Info Version", i32 3}
 !14 = !{!"clang version 3.5 "}
+

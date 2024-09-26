@@ -78,6 +78,7 @@ public:
         }
       }
       // Pass through.
+      LLVM_FALLTHROUGH;
     case OMF_retain:
     case OMF_release:
       if (E->getReceiverKind() == ObjCMessageExpr::Instance)
@@ -145,22 +146,19 @@ public:
       // when an exception is thrown.
       Pass.TA.replace(RecContainer->getSourceRange(), RecRange);
       std::string str = " = ";
-      str += getNilString(Pass.Ctx);
+      str += getNilString(Pass);
       Pass.TA.insertAfterToken(RecRange.getEnd(), str);
       return true;
     }
 
-    if (!hasSideEffects(rec, Pass.Ctx)) {
-      if (tryRemoving(RecContainer))
-        return true;
-    }
-    Pass.TA.replace(RecContainer->getSourceRange(), RecRange);
+    if (hasSideEffects(rec, Pass.Ctx) || !tryRemoving(RecContainer))
+      Pass.TA.replace(RecContainer->getSourceRange(), RecRange);
 
     return true;
   }
 
 private:
-  /// \brief Checks for idioms where an unused -autorelease is common.
+  /// Checks for idioms where an unused -autorelease is common.
   ///
   /// Returns true for this idiom which is common in property
   /// setters:
@@ -174,11 +172,8 @@ private:
   ///   return var;
   ///
   bool isCommonUnusedAutorelease(ObjCMessageExpr *E) {
-    if (isPlusOneAssignBeforeOrAfterAutorelease(E))
-      return true;
-    if (isReturnedAfterAutorelease(E))
-      return true;
-    return false;
+    return isPlusOneAssignBeforeOrAfterAutorelease(E) ||
+           isReturnedAfterAutorelease(E);
   }
 
   bool isReturnedAfterAutorelease(ObjCMessageExpr *E) {
@@ -225,11 +220,7 @@ private:
     // Check for "RefD = [+1 retained object];".
 
     if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(S)) {
-      if (RefD != getReferencedDecl(Bop->getLHS()))
-        return false;
-      if (isPlusOneAssign(Bop))
-        return true;
-      return false;
+      return (RefD == getReferencedDecl(Bop->getLHS())) && isPlusOneAssign(Bop);
     }
 
     if (DeclStmt *DS = dyn_cast<DeclStmt>(S)) {
@@ -318,7 +309,7 @@ private:
     return nullptr;
   }
 
-  /// \brief Check if the retain/release is due to a GCD/XPC macro that are
+  /// Check if the retain/release is due to a GCD/XPC macro that are
   /// defined as:
   ///
   /// #define dispatch_retain(object) ({ dispatch_object_t _o = (object); _dispatch_object_validate(_o); (void)[_o retain]; })
@@ -359,16 +350,16 @@ private:
       return;
 
     Stmt::child_range StmtExprChild = StmtE->children();
-    if (!StmtExprChild)
+    if (StmtExprChild.begin() == StmtExprChild.end())
       return;
-    CompoundStmt *CompS = dyn_cast_or_null<CompoundStmt>(*StmtExprChild);
+    auto *CompS = dyn_cast_or_null<CompoundStmt>(*StmtExprChild.begin());
     if (!CompS)
       return;
 
     Stmt::child_range CompStmtChild = CompS->children();
-    if (!CompStmtChild)
+    if (CompStmtChild.begin() == CompStmtChild.end())
       return;
-    DeclStmt *DeclS = dyn_cast_or_null<DeclStmt>(*CompStmtChild);
+    auto *DeclS = dyn_cast_or_null<DeclStmt>(*CompStmtChild.begin());
     if (!DeclS)
       return;
     if (!DeclS->isSingleDecl())

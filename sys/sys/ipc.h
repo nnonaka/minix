@@ -135,7 +135,7 @@ __END_DECLS
 	(dst).cgid = (src).cgid; \
 	(dst).mode = (src).mode; \
 	(dst)._seq = (src)._seq; \
-} while (/*CONSTCOND*/ 0);
+} while (/*CONSTCOND*/ 0)
 
 /*
  * Set-up the sysctl routine for COMPAT_50

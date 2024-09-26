@@ -1,9 +1,6 @@
 // PR17239 - The /link option, when inside a response file, should only extend
 // until the end of the response file (and not the entire command line)
 
-// Don't attempt slash switches on msys bash.
-// REQUIRES: shell-preserves-root
-
 // Note: %s must be preceded by -- or bound to another option, otherwise it may
 // be interpreted as a command-line option, e.g. on Mac where %s is commonly
 // under /Users.
@@ -16,7 +13,6 @@
 // be clueless and will emit "argument unused" warnings. If PR17239 is properly
 // fixed, this should not happen because the "/link" option is restricted to
 // consume only remaining args in its response file.
-// ARGS-NOT: warning
 // ARGS-NOT: argument unused during compilation
 // Identify the linker command
 // ARGS: link.exe

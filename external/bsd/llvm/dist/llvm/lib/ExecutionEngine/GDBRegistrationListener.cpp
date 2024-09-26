@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm-c/ExecutionEngine.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/Object/ObjectFile.h"
@@ -69,16 +70,6 @@ struct RegisteredObjectInfo {
                        OwningBinary<ObjectFile> Obj)
     : Size(Size), Entry(Entry), Obj(std::move(Obj)) {}
 
-  RegisteredObjectInfo(RegisteredObjectInfo &&Other)
-    : Size(Other.Size), Entry(Other.Entry), Obj(std::move(Other.Obj)) {}
-
-  RegisteredObjectInfo& operator=(RegisteredObjectInfo &&Other) {
-    Size = Other.Size;
-    Entry = Other.Entry;
-    Obj = std::move(Other.Obj);
-    return *this;
-  }
-
   std::size_t Size;
   jit_code_entry *Entry;
   OwningBinary<ObjectFile> Obj;
@@ -103,7 +94,7 @@ public:
 
   /// Unregisters each object that was previously registered and releases all
   /// internal resources.
-  virtual ~GDBJITRegistrationListener();
+  ~GDBJITRegistrationListener() override;
 
   /// Creates an entry in the JIT registry for the buffer @p Object,
   /// which must contain an object file in executable memory with any
@@ -245,3 +236,8 @@ JITEventListener* JITEventListener::createGDBRegistrationListener() {
 }
 
 } // namespace llvm
+
+LLVMJITEventListenerRef LLVMCreateGDBRegistrationListener(void)
+{
+  return wrap(JITEventListener::createGDBRegistrationListener());
+}

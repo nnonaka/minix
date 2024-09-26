@@ -1,4 +1,4 @@
-/*	$NetBSD: file.h,v 1.79 2015/05/30 20:09:47 joerg Exp $	*/
+/*	$NetBSD: file.h,v 1.85 2019/05/08 13:40:19 isaki Exp $	*/
 
 /*-
  * Copyright (c) 2009 The NetBSD Foundation, Inc.
@@ -66,7 +66,7 @@
 #include <sys/fcntl.h>
 #include <sys/unistd.h>
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(_KMEMUSER)
 #include <sys/queue.h>
 #include <sys/mutex.h>
 #include <sys/condvar.h>
@@ -80,6 +80,7 @@ struct knote;
 struct uvm_object;
 
 struct fileops {
+	const char *fo_name;
 	int	(*fo_read)	(struct file *, off_t *, struct uio *,
 				    kauth_cred_t, int);
 	int	(*fo_write)	(struct file *, off_t *, struct uio *,
@@ -103,6 +104,8 @@ union file_data {
 	struct kqueue *fd_kq;		// DTYPE_KQUEUE
 	void *fd_data;			// DTYPE_MISC
 	struct rnd_ctx *fd_rndctx;	// DTYPE_MISC (rnd)
+	struct audio_file *fd_audioctx;	// DTYPE_MISC (audio)
+	struct pad_softc *fd_pad;	// DTYPE_MISC (pad)
 	int fd_devunit;			// DTYPE_MISC (tap)
 	struct bpf_d *fd_bpf;		// DTYPE_MISC (bpf)
 	struct fcrypt *fd_fcrypt;	// DTYPE_CRYPTO is not used
@@ -115,8 +118,12 @@ union file_data {
  * Kernel file descriptor.  One entry for each open kernel vnode and
  * socket.
  *
- * This structure is exported via the KERN_FILE and KERN_FILE2 sysctl
- * calls.  Only add members to the end, do not delete them.
+ * This structure is exported via the KERN_FILE sysctl.
+ * Only add members to the end, do not delete them.
+ *
+ * Note: new code should not use KERN_FILE; use KERN_FILE2 instead,
+ * which exports struct kinfo_file instead; struct kinfo_file is
+ * declared in sys/sysctl.h and is meant to be ABI-stable.
  */
 struct file {
 	off_t		f_offset;	/* first, is 64-bit */
@@ -144,11 +151,13 @@ struct file {
 #define f_ksem		f_undata.fd_ks
 
 #define f_rndctx	f_undata.fd_rndctx
+#define f_audioctx	f_undata.fd_audioctx
+#define f_pad		f_undata.fd_pad
 #define f_devunit	f_undata.fd_devunit
 #define f_bpf		f_undata.fd_bpf
 #define f_fcrypt	f_undata.fd_fcrypt
 #define f_iscsi		f_undata.fd_iscsi
-#endif
+#endif /* _KERNEL || _KMEMUSER */
 
 /*
  * Descriptor types.

@@ -36,8 +36,8 @@
  *	@(#)ttycom.h	8.1 (Berkeley) 3/28/94
  */
 
-#ifndef	_SYS_TTYCOM_H_
-#define	_SYS_TTYCOM_H_
+#ifndef	_POSIX_SYS_TTYCOM_H_
+#define	_POSIX_SYS_TTYCOM_H_
 
 #include <sys/syslimits.h>
 #include <sys/ioccom.h>
@@ -57,6 +57,18 @@ struct winsize {
 	unsigned short	ws_xpixel;	/* horizontal size, pixels */
 	unsigned short	ws_ypixel;	/* vertical size, pixels */
 };
+#endif /* !_POSIX_SYS_TTYCOM_H_ */
+
+#if defined(_NETBSD_SOURCE) || defined(_SYS_IOCTL_H_)
+
+#ifndef	_NETBSD_SYS_TTYCOM_H_
+#define	_NETBSD_SYS_TTYCOM_H_
+
+/*
+ * The following are not exposed when imported via <termios.h>
+ * when _POSIX_SOURCE (et.al.) is defined (and hence _NETBSD_SOURCE
+ * is not, unless that is added manually.)
+ */
 
 /* ptmget, for /dev/ptm pty getting ioctl TIOCPTMGET, and for TIOCPTSNAME */
 struct ptmget {
@@ -176,4 +188,5 @@ typedef char linedn_t[TTLINEDNAMELEN];
 
 #endif /* defined(__minix) */
 
-#endif /* !_SYS_TTYCOM_H_ */
+#endif /* !_NETBSD_SYS_TTYCOM_H_ */
+#endif /* _NETBSD_SOURCE || _IOCTL_H */

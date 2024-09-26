@@ -120,16 +120,12 @@ __END_DECLS
 #if defined(_KERNEL_OPT)
 #include "opt_compat_freebsd.h"
 #include "opt_compat_sunos.h"
-#include "opt_compat_svr4.h"
 #include "opt_compat_43.h"
-#include "opt_compat_osf1.h"
-#include "opt_compat_ibcs2.h"
 #include "opt_modular.h"
 #endif
 
 #if defined(USE_OLD_TTY) || defined(COMPAT_43) || defined(COMPAT_SUNOS) || \
-    defined(COMPAT_SVR4) || defined(COMPAT_FREEBSD) || defined(COMPAT_OSF1) || \
-    defined(COMPAT_IBCS2) || defined(MODULAR)
+    defined(COMPAT_FREEBSD) || defined(MODULAR)
 #include <sys/ioctl_compat.h>
 #endif /* !defined(__minix) */
 #endif
