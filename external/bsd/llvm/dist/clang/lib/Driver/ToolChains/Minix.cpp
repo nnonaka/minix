@@ -24,19 +24,74 @@ using namespace clang::driver::toolchains;
 using namespace clang;
 using namespace llvm::opt;
 
-void tools::minix::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
-                                           const InputInfo &Output,
-                                           const InputInfoList &Inputs,
-                                           const ArgList &Args,
-                                           const char *LinkingOutput) const {
+void minix::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
+                                     const InputInfo &Output,
+                                     const InputInfoList &Inputs,
+                                     const ArgList &Args,
+                                     const char *LinkingOutput) const {
   claimNoWarnArgs(Args);
   ArgStringList CmdArgs;
-  switch (getToolChain().getArch()) {
 
+  // GNU as needs different flags for creating the correct output format
+  // on architectures with different ABIs or optional feature sets.
+  switch (getToolChain().getArch()) {
   case llvm::Triple::x86:
     CmdArgs.push_back("--32");
     break;
-    
+  case llvm::Triple::arm:
+  case llvm::Triple::armeb:
+  case llvm::Triple::thumb:
+  case llvm::Triple::thumbeb: {
+    StringRef MArch, MCPU;
+    arm::getARMArchCPUFromArgs(Args, MArch, MCPU, /*FromAs*/ true);
+    std::string Arch =
+        arm::getARMTargetCPU(MCPU, MArch, getToolChain().getTriple());
+    CmdArgs.push_back(Args.MakeArgString("-mcpu=" + Arch));
+    break;
+  }
+
+#if 0 /* LSC: Not needed for MINIX but kept to ease comparison with NetBSD. */
+  case llvm::Triple::mips:
+  case llvm::Triple::mipsel:
+  case llvm::Triple::mips64:
+  case llvm::Triple::mips64el: {
+    StringRef CPUName;
+    StringRef ABIName;
+    mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+
+    CmdArgs.push_back("-march");
+    CmdArgs.push_back(CPUName.data());
+
+    CmdArgs.push_back("-mabi");
+    CmdArgs.push_back(mips::getGnuCompatibleMipsABIName(ABIName).data());
+
+    if (getToolChain().getTriple().isLittleEndian())
+      CmdArgs.push_back("-EL");
+    else
+      CmdArgs.push_back("-EB");
+
+    AddAssemblerKPIC(getToolChain(), Args, CmdArgs);
+    break;
+  }
+
+  case llvm::Triple::sparc:
+  case llvm::Triple::sparcel: {
+    CmdArgs.push_back("-32");
+    std::string CPU = getCPUName(Args, getToolChain().getTriple());
+    CmdArgs.push_back(sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
+    AddAssemblerKPIC(getToolChain(), Args, CmdArgs);
+    break;
+  }
+
+  case llvm::Triple::sparcv9: {
+    CmdArgs.push_back("-64");
+    std::string CPU = getCPUName(Args, getToolChain().getTriple());
+    CmdArgs.push_back(sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
+    AddAssemblerKPIC(getToolChain(), Args, CmdArgs);
+    break;
+  }
+#endif /* 0 */
+
   default:
     break;
   }
@@ -49,36 +104,56 @@ void tools::minix::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   for (const auto &II : Inputs)
     CmdArgs.push_back(II.getFilename());
 
-  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("as"));
+  const char *Exec = Args.MakeArgString((getToolChain().GetProgramPath("as")));
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
-void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
-                                 const InputInfo &Output,
-                                 const InputInfoList &Inputs,
-                                 const ArgList &Args,
-                                 const char *LinkingOutput) const {
+void minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
+                                  const InputInfo &Output,
+                                  const InputInfoList &Inputs,
+                                  const ArgList &Args,
+                                  const char *LinkingOutput) const {
   const toolchains::Minix &ToolChain =
     static_cast<const toolchains::Minix &>(getToolChain());
-  const Driver &D = getToolChain().getDriver();
+  const Driver &D = ToolChain.getDriver();
   ArgStringList CmdArgs;
 
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
+  CmdArgs.push_back("--eh-frame-hdr");
+  if (Args.hasArg(options::OPT_static)) {
+    CmdArgs.push_back("-Bstatic");
+    if (Args.hasArg(options::OPT_pie)) {
+      Args.AddAllArgs(CmdArgs, options::OPT_pie);
+      CmdArgs.push_back("--no-dynamic-linker");
+    }
+  } else {
+    if (Args.hasArg(options::OPT_rdynamic))
+      CmdArgs.push_back("-export-dynamic");
+    if (Args.hasArg(options::OPT_shared)) {
+      CmdArgs.push_back("-Bshareable");
+    } else {
+      Args.AddAllArgs(CmdArgs, options::OPT_pie);
+      CmdArgs.push_back("-dynamic-linker");
+      // LSC: Small deviation from the NetBSD version.
+      //      Use the same linker path as gcc.
+      CmdArgs.push_back("/usr/libexec/ld.elf_so");
+    }
+  }
+
   // Many NetBSD architectures support more than one ABI.
   // Determine the correct emulation for ld.
-  switch (getToolChain().getArch()) {
+  switch (ToolChain.getArch()) {
   case llvm::Triple::x86:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf_i386_minix");
-#if 0 /* LSC: Not needed for MINIX but kept to ease comparison with NetBSD. */
-    CmdArgs.push_back("elf_i386");
     break;
+#if 0 /* LSC: Not needed for MINIX but kept to ease comparison with NetBSD. */
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
     CmdArgs.push_back("-m");
-    switch (getToolChain().getTriple().getEnvironment()) {
+    switch (ToolChain.getTriple().getEnvironment()) {
     case llvm::Triple::EABI:
     case llvm::Triple::GNUEABI:
       CmdArgs.push_back("armelf_nbsd_eabi");
@@ -94,9 +169,9 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     break;
   case llvm::Triple::armeb:
   case llvm::Triple::thumbeb:
-    arm::appendEBLinkFlags(Args, CmdArgs, getToolChain().getTriple());
+    arm::appendEBLinkFlags(Args, CmdArgs, ToolChain.getEffectiveTriple());
     CmdArgs.push_back("-m");
-    switch (getToolChain().getTriple().getEnvironment()) {
+    switch (ToolChain.getTriple().getEnvironment()) {
     case llvm::Triple::EABI:
     case llvm::Triple::GNUEABI:
       CmdArgs.push_back("armelfb_nbsd_eabi");
@@ -114,18 +189,18 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips64el:
     if (mips::hasMipsAbiArg(Args, "32")) {
       CmdArgs.push_back("-m");
-      if (getToolChain().getArch() == llvm::Triple::mips64)
+      if (ToolChain.getArch() == llvm::Triple::mips64)
         CmdArgs.push_back("elf32btsmip");
       else
         CmdArgs.push_back("elf32ltsmip");
-   } else if (mips::hasMipsAbiArg(Args, "64")) {
-     CmdArgs.push_back("-m");
-     if (getToolChain().getArch() == llvm::Triple::mips64)
-       CmdArgs.push_back("elf64btsmip");
-     else
-       CmdArgs.push_back("elf64ltsmip");
-   }
-   break;
+    } else if (mips::hasMipsAbiArg(Args, "64")) {
+      CmdArgs.push_back("-m");
+      if (ToolChain.getArch() == llvm::Triple::mips64)
+        CmdArgs.push_back("elf64btsmip");
+      else
+        CmdArgs.push_back("elf64ltsmip");
+    }
+    break;
   case llvm::Triple::ppc:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf32ppc_nbsd");
@@ -151,7 +226,7 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   default:
     break;
   }
-  
+
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
@@ -161,17 +236,17 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
-      CmdArgs.push_back(Args.MakeArgString(
-                              ToolChain.GetFilePath("crt0.o")));
-      CmdArgs.push_back(Args.MakeArgString(
-                              ToolChain.GetFilePath("crti.o")));
-      CmdArgs.push_back(Args.MakeArgString(
-                              ToolChain.GetFilePath("crtbegin.o")));
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crt0.o")));
+    }
+    CmdArgs.push_back(
+        Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
+    if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie)) {
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crtbeginS.o")));
     } else {
-      CmdArgs.push_back(Args.MakeArgString(
-                              ToolChain.GetFilePath("crti.o")));
-      CmdArgs.push_back(Args.MakeArgString(
-                              ToolChain.GetFilePath("crtbeginS.o")));
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crtbegin.o")));
     }
   }
 
@@ -183,15 +258,39 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_Z_Flag);
   Args.AddAllArgs(CmdArgs, options::OPT_r);
 
-
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs, JA);
 
-  getToolChain().addProfileRTLibs(Args, CmdArgs);
+#if 0 /* LSC: Not needed for MINIX, but kept to ease comparison with NetBSD. */
+  unsigned Major, Minor, Micro;
+  ToolChain.getTriple().getOSVersion(Major, Minor, Micro);
+  bool useLibgcc = true;
+  if (Major >= 7 || Major == 0) {
+    switch (ToolChain.getArch()) {
+    case llvm::Triple::aarch64:
+    case llvm::Triple::aarch64_be:
+    case llvm::Triple::arm:
+    case llvm::Triple::armeb:
+    case llvm::Triple::thumb:
+    case llvm::Triple::thumbeb:
+    case llvm::Triple::ppc:
+    case llvm::Triple::ppc64:
+    case llvm::Triple::ppc64le:
+    case llvm::Triple::sparc:
+    case llvm::Triple::sparcv9:
+    case llvm::Triple::x86:
+    case llvm::Triple::x86_64:
+      useLibgcc = false;
+      break;
+    default:
+      break;
+    }
+  }
+#endif /* 0 */
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX()) {
-      if (getToolChain().ShouldLinkCXXStdlib(Args))
-        getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
+      if (ToolChain.ShouldLinkCXXStdlib(Args))
+        ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
       CmdArgs.push_back("-lm");
       
       /* LSC: Hack as lc++ is linked against mthread. */
@@ -220,7 +319,7 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 #endif /* 0 */
   }
 
-#if 0 /* NN: I wonder who write this. */
+#if 0 /* NN: These are not in clang 3.6. I wonder who add. */
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_pthread))
       CmdArgs.push_back("-lpthread");
@@ -244,14 +343,13 @@ void tools::minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   ToolChain.addProfileRTLibs(Args, CmdArgs);
 
-  const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
+  const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
 /// Minix - Minix tool chain which can call as(1) and ld(1) directly.
 
-toolchains::Minix::Minix(const Driver &D, const llvm::Triple &Triple,
-                         const ArgList &Args)
+Minix::Minix(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     : Generic_ELF(D, Triple, Args) {
   if (!Args.hasArg(options::OPT_nostdlib)) {
     // When targeting a 32-bit platform, try the special directory used on
@@ -308,14 +406,12 @@ Tool *Minix::buildAssembler() const {
   return new tools::minix::Assembler(*this);
 }
 
-Tool *Minix::buildLinker() const {
-  return new tools::minix::Linker(*this);
-}
+Tool *Minix::buildLinker() const { return new tools::minix::Linker(*this); }
 
 ToolChain::CXXStdlibType Minix::GetDefaultCXXStdlibType() const {
+#if 0 /* LSC: We only us libcxx by default */
   unsigned Major, Minor, Micro;
   getTriple().getOSVersion(Major, Minor, Micro);
-#if 0 /* LSC: We only us libcxx by default */
   if (Major >= 7 || Major == 0) {
     switch (getArch()) {
     case llvm::Triple::aarch64:

@@ -2,7 +2,7 @@ Cross-compiling memo
 
   Dependency
   
-    # apt install build-essential curl git zlibc zlib1g zlib1g-dev
+    # apt install build-essential curl git zlib1g zlib1g-dev
 
   (old way) Cross-building for x86
 
