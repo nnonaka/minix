@@ -5,7 +5,6 @@ cscope.*
 *~
 *.orig
 *.diff
-*.patch
 *.rej
 *.[1-9].gz
 *.o
