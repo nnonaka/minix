@@ -1,4 +1,4 @@
-/*	$NetBSD: syn.c,v 1.9 2006/10/16 00:07:32 christos Exp $	*/
+/*	$NetBSD: syn.c,v 1.11 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * shell parser (C version)
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: syn.c,v 1.9 2006/10/16 00:07:32 christos Exp $");
+__RCSID("$NetBSD: syn.c,v 1.11 2018/05/08 16:37:59 kamil Exp $");
 #endif
 
 
@@ -85,7 +85,7 @@ static struct op *
 pipeline(cf)
 	int cf;
 {
-	register struct op *t, *p, *tl = NULL;
+	struct op *t, *p, *tl = NULL;
 
 	t = get_command(cf);
 	if (t != NULL) {
@@ -105,8 +105,8 @@ pipeline(cf)
 static struct op *
 andor()
 {
-	register struct op *t, *p;
-	register int c;
+	struct op *t, *p;
+	int c;
 
 	t = pipeline(0);
 	if (t != NULL) {
@@ -124,8 +124,8 @@ static struct op *
 c_list(multi)
 	int multi;
 {
-	register struct op *t = NULL, *p, *tl = NULL;
-	register int c;
+	struct op *t = NULL, *p, *tl = NULL;
+	int c;
 	int have_sep;
 
 	while (1) {
@@ -162,7 +162,7 @@ static struct ioword *
 synio(cf)
 	int cf;
 {
-	register struct ioword *iop;
+	struct ioword *iop;
 	int ishere;
 
 	if (tpeek(cf) != REDIR)
@@ -195,11 +195,11 @@ static struct op *
 nested(type, smark, emark)
 	int type, smark, emark;
 {
-	register struct op *t;
+	struct op *t;
 	struct nesting_state old_nesting;
 
 	nesting_push(&old_nesting, smark);
-	t = c_list(TRUE);
+	t = c_list(true);
 	musthave(emark, KEYWORD|ALIAS);
 	nesting_pop(&old_nesting);
 	return (block(type, t, NOBLOCK, NOWORDS));
@@ -209,8 +209,8 @@ static struct op *
 get_command(cf)
 	int cf;
 {
-	register struct op *t;
-	register int c, iopn = 0, syniocf;
+	struct op *t;
+	int c, iopn = 0, syniocf;
 	struct ioword *iop, **iops;
 	XPtrV args, vars;
 	struct nesting_state old_nesting;
@@ -277,7 +277,7 @@ get_command(cf)
 				ACCEPT;
 				/*(*/
 				musthave(')', 0);
-				t = function_body(XPptrv(args)[0], FALSE);
+				t = function_body(XPptrv(args)[0], false);
 				goto Leave;
 
 			  default:
@@ -336,7 +336,7 @@ get_command(cf)
 	  case SELECT:
 		t = newtp((c == FOR) ? TFOR : TSELECT);
 		musthave(LWORD, ARRAYVAR);
-		if (!is_wdvarname(yylval.cp, TRUE))
+		if (!is_wdvarname(yylval.cp, true))
 			yyerror("%s: bad identifier\n",
 				c == FOR ? "for" : "select");
 		t->str = str_save(ident, ATEMP);
@@ -350,7 +350,7 @@ get_command(cf)
 	  case UNTIL:
 		nesting_push(&old_nesting, c);
 		t = newtp((c == WHILE) ? TWHILE : TUNTIL);
-		t->left = c_list(TRUE);
+		t->left = c_list(true);
 		t->right = dogroup();
 		nesting_pop(&old_nesting);
 		break;
@@ -367,7 +367,7 @@ get_command(cf)
 	  case IF:
 		nesting_push(&old_nesting, c);
 		t = newtp(TIF);
-		t->left = c_list(TRUE);
+		t->left = c_list(true);
 		t->right = thenpart();
 		musthave(FI, KEYWORD|ALIAS);
 		nesting_pop(&old_nesting);
@@ -389,7 +389,7 @@ get_command(cf)
 
 	  case FUNCTION:
 		musthave(LWORD, 0);
-		t = function_body(yylval.cp, TRUE);
+		t = function_body(yylval.cp, true);
 		break;
 	}
 
@@ -425,8 +425,8 @@ get_command(cf)
 static struct op *
 dogroup()
 {
-	register int c;
-	register struct op *list;
+	int c;
+	struct op *list;
 
 	c = token(CONTIN|KEYWORD|ALIAS);
 	/* A {...} can be used instead of do...done for for/select loops
@@ -440,7 +440,7 @@ dogroup()
 		c = '}';
 	else
 		syntaxerr((char *) 0);
-	list = c_list(TRUE);
+	list = c_list(true);
 	musthave(c, KEYWORD|ALIAS);
 	return list;
 }
@@ -448,11 +448,11 @@ dogroup()
 static struct op *
 thenpart()
 {
-	register struct op *t;
+	struct op *t;
 
 	musthave(THEN, KEYWORD|ALIAS);
 	t = newtp(0);
-	t->left = c_list(TRUE);
+	t->left = c_list(true);
 	if (t->left == NULL)
 		syntaxerr((char *) 0);
 	t->right = elsepart();
@@ -462,17 +462,17 @@ thenpart()
 static struct op *
 elsepart()
 {
-	register struct op *t;
+	struct op *t;
 
 	switch (token(KEYWORD|ALIAS|VARASN)) {
 	  case ELSE:
-		if ((t = c_list(TRUE)) == NULL)
+		if ((t = c_list(true)) == NULL)
 			syntaxerr((char *) 0);
 		return (t);
 
 	  case ELIF:
 		t = newtp(TELIF);
-		t->left = c_list(TRUE);
+		t->left = c_list(true);
 		t->right = thenpart();
 		return (t);
 
@@ -485,7 +485,7 @@ elsepart()
 static struct op *
 caselist()
 {
-	register struct op *t, *tl;
+	struct op *t, *tl;
 	int c;
 
 	c = token(CONTIN|KEYWORD|ALIAS);
@@ -512,8 +512,8 @@ static struct op *
 casepart(endtok)
 	int endtok;
 {
-	register struct op *t;
-	register int c;
+	struct op *t;
+	int c;
 	XPtrV ptns;
 
 	XPinit(ptns, 16);
@@ -530,7 +530,7 @@ casepart(endtok)
 	t->vars = (char **) XPclose(ptns);
 	musthave(')', 0);
 
-	t->left = c_list(TRUE);
+	t->left = c_list(true);
 	/* Note: Posix requires the ;; */
 	if ((tpeek(CONTIN|KEYWORD|ALIAS)) != endtok)
 		musthave(BREAK, CONTIN|KEYWORD|ALIAS);
@@ -601,7 +601,7 @@ function_body(name, ksh_func)
 static char **
 wordlist()
 {
-	register int c;
+	int c;
 	XPtrV args;
 
 	XPinit(args, 16);
@@ -634,7 +634,7 @@ block(type, t1, t2, wp)
 	struct op *t1, *t2;
 	char **wp;
 {
-	register struct op *t;
+	struct op *t;
 
 	t = newtp(type);
 	t->left = t1;
@@ -649,48 +649,48 @@ const	struct tokeninfo {
 	short	reserved;
 } tokentab[] = {
 	/* Reserved words */
-	{ "if",		IF,	TRUE },
-	{ "then",	THEN,	TRUE },
-	{ "else",	ELSE,	TRUE },
-	{ "elif",	ELIF,	TRUE },
-	{ "fi",		FI,	TRUE },
-	{ "case",	CASE,	TRUE },
-	{ "esac",	ESAC,	TRUE },
-	{ "for",	FOR,	TRUE },
+	{ "if",		IF,	true },
+	{ "then",	THEN,	true },
+	{ "else",	ELSE,	true },
+	{ "elif",	ELIF,	true },
+	{ "fi",		FI,	true },
+	{ "case",	CASE,	true },
+	{ "esac",	ESAC,	true },
+	{ "for",	FOR,	true },
 #ifdef KSH
-	{ "select",	SELECT,	TRUE },
+	{ "select",	SELECT,	true },
 #endif /* KSH */
-	{ "while",	WHILE,	TRUE },
-	{ "until",	UNTIL,	TRUE },
-	{ "do",		DO,	TRUE },
-	{ "done",	DONE,	TRUE },
-	{ "in",		IN,	TRUE },
-	{ "function",	FUNCTION, TRUE },
-	{ "time",	TIME,	TRUE },
-	{ "{",		'{',	TRUE },
-	{ "}",		'}',	TRUE },
-	{ "!",		BANG,	TRUE },
+	{ "while",	WHILE,	true },
+	{ "until",	UNTIL,	true },
+	{ "do",		DO,	true },
+	{ "done",	DONE,	true },
+	{ "in",		IN,	true },
+	{ "function",	FUNCTION, true },
+	{ "time",	TIME,	true },
+	{ "{",		'{',	true },
+	{ "}",		'}',	true },
+	{ "!",		BANG,	true },
 #ifdef KSH
-	{ "[[",		DBRACKET, TRUE },
+	{ "[[",		DBRACKET, true },
 #endif /* KSH */
 	/* Lexical tokens (0[EOF], LWORD and REDIR handled specially) */
-	{ "&&",		LOGAND,	FALSE },
-	{ "||",		LOGOR,	FALSE },
-	{ ";;",		BREAK,	FALSE },
+	{ "&&",		LOGAND,	false },
+	{ "||",		LOGOR,	false },
+	{ ";;",		BREAK,	false },
 #ifdef KSH
-	{ "((",		MDPAREN, FALSE },
-	{ "|&",		COPROC,	FALSE },
+	{ "((",		MDPAREN, false },
+	{ "|&",		COPROC,	false },
 #endif /* KSH */
 	/* and some special cases... */
-	{ "newline",	'\n',	FALSE },
+	{ "newline",	'\n',	false },
 	{ .name = NULL }
 };
 
 void
 initkeywords()
 {
-	register struct tokeninfo const *tt;
-	register struct tbl *p;
+	struct tokeninfo const *tt;
+	struct tbl *p;
 
 	tinit(&keywords, APERM, 32); /* must be 2^n (currently 20 keywords) */
 	for (tt = tokentab; tt->name; tt++) {
@@ -777,7 +777,7 @@ static struct op *
 newtp(type)
 	int type;
 {
-	register struct op *t;
+	struct op *t;
 
 	t = (struct op *) alloc(sizeof(*t), ATEMP);
 	t->type = type;

@@ -1,4 +1,4 @@
-/*	$NetBSD: expand.h,v 1.19 2012/12/22 20:15:22 dsl Exp $	*/
+/*	$NetBSD: expand.h,v 1.24.2.1 2020/06/07 12:50:17 martin Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -50,24 +50,22 @@ struct arglist {
 /*
  * expandarg() flags
  */
-#define EXP_FULL	0x1	/* perform word splitting & file globbing */
+#define EXP_SPLIT	0x1	/* perform word splitting */
 #define EXP_TILDE	0x2	/* do normal tilde expansion */
-#define	EXP_VARTILDE	0x4	/* expand tildes in an assignment */
-#define	EXP_REDIR	0x8	/* file glob for a redirection (1 match only) */
+#define EXP_VARTILDE	0x4	/* expand tildes in an assignment */
+#define EXP_REDIR	0x8	/* file glob for a redirection (1 match only) */
 #define EXP_CASE	0x10	/* keeps quotes around for CASE pattern */
 #define EXP_IFS_SPLIT	0x20	/* need to record arguments for ifs breakup */
 #define EXP_IN_QUOTES	0x40	/* don't set EXP_IFS_SPLIT again */
+#define EXP_GLOB	0x80	/* perform filename globbing */
+#define EXP_NL		0x100	/* keep CRTNONL in output */
 
+#define EXP_FULL	(EXP_SPLIT | EXP_GLOB)
+#define EXP_QNEEDED	(EXP_GLOB | EXP_CASE | EXP_REDIR)
 
 union node;
+
 void expandhere(union node *, int);
 void expandarg(union node *, struct arglist *, int);
-void expari(int);
-int patmatch(char *, char *, int);
-void rmescapes(char *);
+int rmescapes(char *);
 int casematch(union node *, char *);
-
-/* From arith.y */
-intmax_t arith(const char *);
-void arith_lex_reset(void);
-int yylex(void);

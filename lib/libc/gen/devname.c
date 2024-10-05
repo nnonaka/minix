@@ -107,7 +107,7 @@ devname_ptslookup(dev_t dev, mode_t type, char *path, size_t len)
 		return ENOENT;
 #endif /* __minix */
 
-	rv = snprintf(path, len, "%s%d", _PATH_DEV_PTS + sizeof(_PATH_DEV) - 1,
+	rv = snprintf(path, len, "%s%d", &_PATH_DEV_PTS[sizeof(_PATH_DEV) - 1],
 #ifndef __minix
 	    minor(dev));
 #else /* __minix */

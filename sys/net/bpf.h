@@ -1,4 +1,4 @@
-/*	$NetBSD: bpf.h,v 1.67 2015/09/05 20:01:21 dholland Exp $	*/
+/*	$NetBSD: bpf.h,v 1.74 2019/02/26 10:30:28 msaitoh Exp $	*/
 
 /*
  * Copyright (c) 1990, 1991, 1993
@@ -121,36 +121,48 @@ struct bpf_version {
  * header files.  If your using gcc, we assume that you
  * have run fixincludes so the latter set should work.
  */
-#define BIOCGBLEN	 _IOR('B',102, u_int)
-#define BIOCSBLEN	_IOWR('B',102, u_int)
-#define BIOCSETF	 _IOW('B',103, struct bpf_program)
-#define BIOCFLUSH	  _IO('B',104)
-#define BIOCPROMISC	  _IO('B',105)
-#define BIOCGDLT	 _IOR('B',106, u_int)
-#define BIOCGETIF	 _IOR('B',107, struct ifreq)
-#define BIOCSETIF	 _IOW('B',108, struct ifreq)
+#define BIOCGBLEN	 _IOR('B', 102, u_int)
+#define BIOCSBLEN	_IOWR('B', 102, u_int)
+#define BIOCSETF	 _IOW('B', 103, struct bpf_program)
+#define BIOCFLUSH	  _IO('B', 104)
+#define BIOCPROMISC	  _IO('B', 105)
+#define BIOCGDLT	 _IOR('B', 106, u_int)
+#define BIOCGETIF	 _IOR('B', 107, struct ifreq)
+#define BIOCSETIF	 _IOW('B', 108, struct ifreq)
 #ifdef COMPAT_50
 #include <compat/sys/time.h>
-#define BIOCSORTIMEOUT	 _IOW('B',109, struct timeval50)
-#define BIOCGORTIMEOUT	 _IOR('B',110, struct timeval50)
+#define BIOCSORTIMEOUT	 _IOW('B', 109, struct timeval50)
+#define BIOCGORTIMEOUT	 _IOR('B', 110, struct timeval50)
 #endif
-#define BIOCGSTATS	 _IOR('B',111, struct bpf_stat)
-#define BIOCGSTATSOLD	 _IOR('B',111, struct bpf_stat_old)
-#define BIOCIMMEDIATE	 _IOW('B',112, u_int)
-#define BIOCVERSION	 _IOR('B',113, struct bpf_version)
-#define BIOCSTCPF	 _IOW('B',114, struct bpf_program)
-#define BIOCSUDPF	 _IOW('B',115, struct bpf_program)
-#define BIOCGHDRCMPLT	 _IOR('B',116, u_int)
-#define BIOCSHDRCMPLT	 _IOW('B',117, u_int)
-#define BIOCSDLT	 _IOW('B',118, u_int)
-#define BIOCGDLTLIST	_IOWR('B',119, struct bpf_dltlist)
-#define BIOCGSEESENT	 _IOR('B',120, u_int)
-#define BIOCSSEESENT	 _IOW('B',121, u_int)
-#define BIOCSRTIMEOUT	 _IOW('B',122, struct timeval)
-#define BIOCGRTIMEOUT	 _IOR('B',123, struct timeval)
-#define BIOCGFEEDBACK	 _IOR('B',124, u_int)
-#define BIOCSFEEDBACK	 _IOW('B',125, u_int)
+#define BIOCGSTATS	 _IOR('B', 111, struct bpf_stat)
+#define BIOCGSTATSOLD	 _IOR('B', 111, struct bpf_stat_old)
+#define BIOCIMMEDIATE	 _IOW('B', 112, u_int)
+#define BIOCVERSION	 _IOR('B', 113, struct bpf_version)
+#define BIOCSTCPF	 _IOW('B', 114, struct bpf_program)
+#define BIOCSUDPF	 _IOW('B', 115, struct bpf_program)
+#define BIOCGHDRCMPLT	 _IOR('B', 116, u_int)
+#define BIOCSHDRCMPLT	 _IOW('B', 117, u_int)
+#define BIOCSDLT	 _IOW('B', 118, u_int)
+#define BIOCGDLTLIST	_IOWR('B', 119, struct bpf_dltlist)
+#define BIOCGDIRECTION	 _IOR('B', 120, u_int)
+#define BIOCSDIRECTION	 _IOW('B', 121, u_int)
+#define BIOCSRTIMEOUT	 _IOW('B', 122, struct timeval)
+#define BIOCGRTIMEOUT	 _IOR('B', 123, struct timeval)
+#define BIOCGFEEDBACK	 _IOR('B', 124, u_int)
+#define BIOCSFEEDBACK	 _IOW('B', 125, u_int)
 #define BIOCFEEDBACK     BIOCSFEEDBACK		/* FreeBSD name */
+
+/* Obsolete */
+#define	BIOCGSEESENT	BIOCGDIRECTION
+#define	BIOCSSEESENT	BIOCSDIRECTION
+
+/*
+ * Packet directions.
+ * BPF_D_IN = 0, BPF_D_INOUT =1 for backward compatibility of BIOC[GS]SEESENT.
+ */
+#define	BPF_D_IN	0	/* See incoming packets */
+#define	BPF_D_INOUT	1	/* See incoming and outgoing packets */
+#define	BPF_D_OUT	2	/* See outgoing packets */
 
 /*
  * Structure prepended to each packet. This is "wire" format, so we
@@ -322,6 +334,16 @@ struct bpf_insn {
 };
 
 /*
+ * Auxiliary data, for use when interpreting a filter intended for the
+ * Linux kernel when the kernel rejects the filter (requiring us to
+ * run it in userland).  It contains VLAN tag information.
+ */
+struct bpf_aux_data {
+	u_short vlan_tag_present;
+	u_short vlan_tag;
+};
+
+/*
  * Macros for insn array initializers.
  */
 #define BPF_STMT(code, k) { (uint16_t)(code), 0, 0, k }
@@ -417,87 +439,99 @@ struct bpf_ops {
 	void (*bpf_detach)(struct ifnet *);
 	void (*bpf_change_type)(struct ifnet *, u_int, u_int);
 
-	void (*bpf_tap)(struct bpf_if *, u_char *, u_int);
-	void (*bpf_mtap)(struct bpf_if *, struct mbuf *);
-	void (*bpf_mtap2)(struct bpf_if *, void *, u_int, struct mbuf *);
-	void (*bpf_mtap_af)(struct bpf_if *, uint32_t, struct mbuf *);
+	void (*bpf_mtap)(struct bpf_if *, struct mbuf *, u_int);
+	void (*bpf_mtap2)(struct bpf_if *, void *, u_int, struct mbuf *,
+	    u_int);
+	void (*bpf_mtap_af)(struct bpf_if *, uint32_t, struct mbuf *, u_int);
 	void (*bpf_mtap_sl_in)(struct bpf_if *, u_char *, struct mbuf **);
 	void (*bpf_mtap_sl_out)(struct bpf_if *, u_char *, struct mbuf *);
+
+	void (*bpf_mtap_softint_init)(struct ifnet *);
+	void (*bpf_mtap_softint)(struct ifnet *, struct mbuf *);
 };
 
 extern struct bpf_ops *bpf_ops;
 
-static inline void
+static __inline void
 bpf_attach(struct ifnet *_ifp, u_int _dlt, u_int _hdrlen)
 {
 	bpf_ops->bpf_attach(_ifp, _dlt, _hdrlen, &_ifp->if_bpf);
 }
 
-static inline void
+static __inline void
 bpf_attach2(struct ifnet *_ifp, u_int _dlt, u_int _hdrlen, struct bpf_if **_dp)
 {
 	bpf_ops->bpf_attach(_ifp, _dlt, _hdrlen, _dp);
 }
 
-static inline void
-bpf_tap(struct ifnet *_ifp, u_char *_pkt, u_int _len)
+static __inline void
+bpf_mtap(struct ifnet *_ifp, struct mbuf *_m, u_int _direction)
 {
 	if (_ifp->if_bpf)
-		bpf_ops->bpf_tap(_ifp->if_bpf, _pkt, _len);
+		bpf_ops->bpf_mtap(_ifp->if_bpf, _m, _direction);
 }
 
-static inline void
-bpf_mtap(struct ifnet *_ifp, struct mbuf *_m)
+static __inline void
+bpf_mtap2(struct bpf_if *_bpf, void *_data, u_int _dlen, struct mbuf *_m,
+	u_int _direction)
 {
-	if (_ifp->if_bpf)
-		bpf_ops->bpf_mtap(_ifp->if_bpf, _m);
+	bpf_ops->bpf_mtap2(_bpf, _data, _dlen, _m, _direction);
 }
 
-static inline void
-bpf_mtap2(struct bpf_if *_bpf, void *_data, u_int _dlen, struct mbuf *_m)
-{
-	bpf_ops->bpf_mtap2(_bpf, _data, _dlen, _m);
-}
-
-static inline void
-bpf_mtap3(struct bpf_if *_bpf, struct mbuf *_m)
+static __inline void
+bpf_mtap3(struct bpf_if *_bpf, struct mbuf *_m, u_int _direction)
 {
 	if (_bpf)
-		bpf_ops->bpf_mtap(_bpf, _m);
+		bpf_ops->bpf_mtap(_bpf, _m, _direction);
 }
 
-static inline void
-bpf_mtap_af(struct ifnet *_ifp, uint32_t _af, struct mbuf *_m)
+static __inline void
+bpf_mtap_af(struct ifnet *_ifp, uint32_t _af, struct mbuf *_m,
+    u_int _direction)
 {
 	if (_ifp->if_bpf)
-		bpf_ops->bpf_mtap_af(_ifp->if_bpf, _af, _m);
+		bpf_ops->bpf_mtap_af(_ifp->if_bpf, _af, _m, _direction);
 }
 
-static inline void
+static __inline void
 bpf_change_type(struct ifnet *_ifp, u_int _dlt, u_int _hdrlen)
 {
 	bpf_ops->bpf_change_type(_ifp, _dlt, _hdrlen);
 }
 
-static inline void
+static __inline void
 bpf_detach(struct ifnet *_ifp)
 {
 	bpf_ops->bpf_detach(_ifp);
 }
 
-static inline void
+static __inline void
 bpf_mtap_sl_in(struct ifnet *_ifp, u_char *_hdr, struct mbuf **_m)
 {
 	bpf_ops->bpf_mtap_sl_in(_ifp->if_bpf, _hdr, _m);
 }
 
-static inline void
+static __inline void
 bpf_mtap_sl_out(struct ifnet *_ifp, u_char *_hdr, struct mbuf *_m)
 {
 	if (_ifp->if_bpf)
 		bpf_ops->bpf_mtap_sl_out(_ifp->if_bpf, _hdr, _m);
 }
 
+static __inline void
+bpf_mtap_softint_init(struct ifnet *_ifp)
+{
+
+	bpf_ops->bpf_mtap_softint_init(_ifp);
+}
+
+static __inline void
+bpf_mtap_softint(struct ifnet *_ifp, struct mbuf *_m)
+{
+
+	if (_ifp->if_bpf)
+		bpf_ops->bpf_mtap_softint(_ifp, _m);
+}
 
 void	bpf_setops(void);
 
@@ -521,6 +555,9 @@ void	bpf_jit_freecode(bpfjit_func_t);
 
 int	bpf_validate(const struct bpf_insn *, int);
 u_int	bpf_filter(const struct bpf_insn *, const u_char *, u_int, u_int);
+
+u_int	bpf_filter_with_aux_data(const struct bpf_insn *, const u_char *, u_int, u_int, const struct bpf_aux_data *);
+
 
 __END_DECLS
 

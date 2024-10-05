@@ -90,17 +90,12 @@ main(int argc, char *argv[])
 			nflag = 1;
 			break;
 		case 'd':
-#if !defined(__minix)
 			rflag = 1;
 			tval = parsedate(optarg, NULL, NULL);
 			if (tval == -1) {
 				errx(EXIT_FAILURE,
 				    "%s: Unrecognized date format", optarg);
 			}
-#else
-				errx(EXIT_FAILURE,
-				    "%s: Unrecognized date format", optarg);
-#endif /* !defined(__minix) */
 			break;
 		case 'j':		/* don't set time */
 			jflag = 1;

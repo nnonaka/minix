@@ -1,21 +1,22 @@
-/*	$NetBSD: main.c,v 1.15 2011/10/16 17:12:11 joerg Exp $	*/
+/*	$NetBSD: main.c,v 1.23 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * startup, main loop, environments and error handling
  */
 #include <sys/cdefs.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 #include <locale.h>
+#include <time.h>
 
 #ifndef lint
-__RCSID("$NetBSD: main.c,v 1.15 2011/10/16 17:12:11 joerg Exp $");
+__RCSID("$NetBSD: main.c,v 1.23 2018/05/08 16:37:59 kamil Exp $");
 #endif
 
 
 #define	EXTERN				/* define EXTERNs in sh.h */
 
 #include "sh.h"
-#include "ksh_stat.h"
-#include "ksh_time.h"
 
 extern char **environ;
 
@@ -92,7 +93,7 @@ static const char *const initcoms [] = {
 int
 main(int argc, char *argv[])
 {
-	register int i;
+	int i;
 	int argi;
 	Source *s;
 	struct block *l;
@@ -100,16 +101,6 @@ main(int argc, char *argv[])
 	char **wp;
 	struct env env;
 	pid_t ppid;
-
-#ifdef MEM_DEBUG
-	chmem_set_defaults("ct", 1);
-	/* chmem_push("+c", 1); */
-#endif /* MEM_DEBUG */
-
-#ifdef OS2
-	setmode (0, O_BINARY);
-	setmode (1, O_TEXT);
-#endif
 
 	/* make sure argv[] is sane */
 	if (!*argv) {
@@ -303,18 +294,7 @@ main(int argc, char *argv[])
 			kshname = argv[argi++];
 	} else if (argi < argc && !Flag(FSTDIN)) {
 		s = pushs(SFILE, ATEMP);
-#ifdef OS2
-		/* a bug in os2 extproc shell processing doesn't
-		 * pass full pathnames so we have to search for it.
-		 * This changes the behavior of 'ksh arg' to search
-		 * the users search path but it can't be helped.
-		 */
-		s->file = search(argv[argi++], path, R_OK, (int *) 0);
-		if (!s->file || !*s->file)
-		        s->file = argv[argi - 1];
-#else
 		s->file = argv[argi++];
-#endif /* OS2 */
 		s->u.shf = shf_open(s->file, O_RDONLY, 0, SHF_MAPHI|SHF_CLEXEC);
 		if (s->u.shf == NULL) {
 			exstat = 127; /* POSIX */
@@ -371,30 +351,13 @@ main(int argc, char *argv[])
 	 * user will know why things broke.
 	 */
 	if (!current_wd[0] && Flag(FTALKING))
-		warningf(FALSE, "Cannot determine current working directory");
+		warningf(false, "Cannot determine current working directory");
 
 	if (Flag(FLOGIN)) {
-#ifdef OS2
-		char *profile;
-
-		/* Try to find a profile - first see if $INIT has a value,
-		 * then try /etc/profile.ksh, then c:/usr/etc/profile.ksh.
-		 */
-		if (!Flag(FPRIVILEGED)
-		    && strcmp(profile = substitute("$INIT/profile.ksh", 0),
-			      "/profile.ksh"))
-			include(profile, 0, (char **) 0, 1);
-		else if (include("/etc/profile.ksh", 0, (char **) 0, 1) < 0)
-			include("c:/usr/etc/profile.ksh", 0, (char **) 0, 1);
-		if (!Flag(FPRIVILEGED))
-			include(substitute("$HOME/profile.ksh", 0), 0,
-				(char **) 0, 1);
-#else /* OS2 */
 		include(KSH_SYSTEM_PROFILE, 0, (char **) 0, 1);
 		if (!Flag(FPRIVILEGED))
 			include(substitute("$HOME/.profile", 0), 0,
 				(char **) 0, 1);
-#endif /* OS2 */
 	}
 
 	if (Flag(FPRIVILEGED))
@@ -418,11 +381,9 @@ main(int argc, char *argv[])
 		env_file = substitute(env_file, DOTILDE);
 		if (*env_file != '\0')
 			include(env_file, 0, (char **) 0, 1);
-#ifdef OS2
 		else if (Flag(FTALKING))
 			include(substitute("$HOME/kshrc.ksh", 0), 0,
 				(char **) 0, 1);
-#endif /* OS2 */
 	}
 
 	if (is_restricted(argv[0]) || is_restricted(str_val(global("SHELL"))))
@@ -449,7 +410,7 @@ main(int argc, char *argv[])
 		Flag(FTRACKALL) = 1;	/* set after ENV */
 
 	setlocale(LC_CTYPE, "");
-	shell(s, TRUE);	/* doesn't return */
+	shell(s, true);	/* doesn't return */
 	return 0;
 }
 
@@ -460,7 +421,7 @@ include(name, argc, argv, intr_ok)
 	char **argv;
 	int intr_ok;
 {
-	register Source *volatile s = NULL;
+	Source *volatile s = NULL;
 	struct shf *shf;
 	char **volatile old_argv;
 	volatile int old_argc;
@@ -515,7 +476,7 @@ include(name, argc, argv, intr_ok)
 	s = pushs(SFILE, ATEMP);
 	s->u.shf = shf;
 	s->file = str_save(name, ATEMP);
-	i = shell(s, FALSE);
+	i = shell(s, false);
 	shf_close(s->u.shf);
 	quitenv();
 	if (old_argv) {
@@ -529,12 +490,12 @@ int
 command(comm)
 	const char *comm;
 {
-	register Source *s;
+	Source *s;
 	int r;
 
 	s = pushs(SSTRING, ATEMP);
 	s->start = s->str = comm;
-	r = shell(s, FALSE);
+	r = shell(s, false);
 	afree(s, ATEMP);
 	return r;
 }
@@ -692,7 +653,7 @@ void
 newenv(type)
 	int type;
 {
-	register struct env *ep;
+	struct env *ep;
 
 	ep = (struct env *) alloc(sizeof(*ep), ATEMP);
 	ep->type = type;
@@ -708,8 +669,8 @@ newenv(type)
 void
 quitenv()
 {
-	register struct env *ep = e;
-	register int fd;
+	struct env *ep = e;
+	int fd;
 
 	if (ep->oenv && ep->oenv->loc != ep->loc)
 		popblock();
@@ -745,9 +706,6 @@ quitenv()
 					kill(0, sig);
 				}
 			}
-#ifdef MEM_DEBUG
-			chmem_allfree();
-#endif /* MEM_DEBUG */
 		}
 		exit(exstat);
 	}
@@ -804,44 +762,9 @@ static void
 remove_temps(tp)
 	struct temp *tp;
 {
-#ifdef OS2
-	static struct temp *delayed_remove;
-	struct temp *t, **tprev;
-
-	if (delayed_remove) {
-		for (tprev = &delayed_remove, t = delayed_remove; t; t = *tprev)
-			/* No need to check t->pid here... */
-			if (unlink(t->name) >= 0 || errno == ENOENT) {
-				*tprev = t->next;
-				afree(t, APERM);
-			} else
-				tprev = &t->next;
-	}
-#endif /* OS2 */
-
 	for (; tp != NULL; tp = tp->next)
 		if (tp->pid == procpid) {
-#ifdef OS2
-			/* OS/2 (and dos) do not allow files that are currently
-			 * open to be removed, so we cache it away for future
-			 * removal.
-			 * XXX should only do this if errno
-			 *     is Efile-still-open-can't-remove
-			 *     (but I don't know what that is...)
-			 */
-			if (unlink(tp->name) < 0 && errno != ENOENT) {
-				t = (struct temp *) alloc(
-				    sizeof(struct temp) + strlen(tp->name) + 1,
-				    APERM);
-				memset(t, 0, sizeof(struct temp));
-				t->name = (char *) &t[1];
-				strlcpy(t->name, tp->name, strlen(tp->name) + 1);
-				t->next = delayed_remove;
-				delayed_remove = t;
-			}
-#else /* OS2 */
 			unlink(tp->name);
-#endif /* OS2 */
 		}
 }
 

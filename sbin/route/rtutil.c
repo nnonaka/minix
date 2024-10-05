@@ -1,4 +1,4 @@
-/*	$NetBSD: rtutil.c,v 1.6 2015/03/23 18:33:17 roy Exp $	*/
+/*	$NetBSD: rtutil.c,v 1.10 2017/07/13 08:26:29 manu Exp $	*/
 /*	$OpenBSD: show.c,v 1.1 2006/05/27 19:16:37 claudio Exp $	*/
 
 /*
@@ -33,7 +33,6 @@
 #include <sys/param.h>
 #include <sys/protosw.h>
 #include <sys/socket.h>
-#include <sys/mbuf.h>
 #include <sys/sysctl.h>
 
 #include <net/if.h>
@@ -60,6 +59,11 @@
 #include "prog_ops.h"
 #include "rtutil.h"
 
+/*
+ * Keep to handle ARP/NDP entries (fake routes)
+ * for backward compatibility.
+ */
+#define RTF_LLINFO	0x400
 
 #define PLEN    (LONG_BIT / 4 + 2)
 #define PFKEYV2_CHUNK sizeof(u_int64_t)
@@ -82,14 +86,15 @@ static const struct bits bits[] = {
 	{ RTF_MODIFIED,	'M' },
 	{ RTF_DONE,	'd' }, /* Completed -- for routing messages only */
 	{ RTF_MASK,	'm' }, /* Mask Present -- for routing messages only */
-	{ RTF_CLONING,	'C' },
-	{ RTF_XRESOLVE,	'X' },
+	/* { RTF_CLONING,	'C' }, */
+	{ RTF_CONNECTED, 'C' },
+	/* { RTF_XRESOLVE,	'X' }, */
 	{ RTF_LLINFO,	'L' },
 	{ RTF_STATIC,	'S' },
 	{ RTF_PROTO1,	'1' },
 	{ RTF_PROTO2,	'2' },
 	/* { RTF_PROTO3,	'3' }, */
-	{ RTF_CLONED,	'c' },
+	/* { RTF_CLONED,	'c' }, */
 	/* { RTF_JUMBO,	'J' }, */
 	{ RTF_ANNOUNCE,	'p' },
 	{ RTF_LOCAL, 'l'},
@@ -299,6 +304,8 @@ p_rtentry(struct rt_msghdr *rtm, int flags, int interesting)
 	putchar('\n');
 	if (flags & RT_VFLAG)
 		p_rtrmx(&rtm->rtm_rmx);
+#else
+	putchar('\n');
 #endif
 }
 

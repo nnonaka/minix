@@ -1,5 +1,5 @@
 #! /bin/sh
-#	$NetBSD: mkinit.sh,v 1.5 2008/10/23 20:21:57 apb Exp $
+#	$NetBSD: mkinit.sh,v 1.10 2018/12/05 09:20:18 kre Exp $
 
 # Copyright (c) 2003 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -30,10 +30,61 @@
 
 srcs="$*"
 
+# use of echo in this script is broken
+
+# some echo versions will expand \n in the args, which breaks C
+# Note: this script is a HOST_PROG ... it must run in the
+# build host's environment, with its shell.
+
+# Fortunately, use of echo here is also trivially simplistic,
+# we can easily replace all uses with ...
+
+echo()
+{
+	printf '%s\n' "$1"
+}
+
+# CAUTION: for anyone modifying this script.... use printf
+# rather than echo to output anything at all... then
+# you will avoid being bitten by the simplicity of this function.
+# This was done this way rather than wholesale replacement
+# to avoid unnecessary code churn.
+
+
 nl='
 '
 openparen='('
-backslash='\'
+
+# shells have bugs (including older NetBSD sh) in how \ is
+# used in pattern matching.   So work out what the shell
+# running this script expects.   We could also just use a
+# literal \ in the pattern, which would need to be quoted
+# of course, but then we'd run into a whole host of potential
+# other shell bugs (both with the quoting in the pattern, and
+# with the matching that follows if that works as inended).
+# Far easier, and more reliable, is to just work out what works,
+# and then use it, which more or less mandates using a variable...
+backslash='\\'
+var='abc\'			# dummy test case.
+if [ "$var" = "${var%$backslash}" ]
+then
+	# buggy sh, try the broken way
+	backslash='\'
+	if [ "$var" = "${var%$backslash}" ]
+	then
+		printf >&2 "$0: %s\n" 'No pattern match with \ (broken shell)'
+		exit 1
+	fi
+fi
+# We know we can detect the presence of a trailing \, which is all we need.
+# Now to confirm we will not generate false matches.
+var='abc'
+if [ "$var" != "${var%$backslash}" ]
+then
+	printf >&2 "$0: %s\n" 'Bogus pattern match with \ (broken shell)'
+	exit 1
+fi
+unset var
 
 includes=' "shell.h" "mystring.h" "init.h" '
 defines=
@@ -55,7 +106,7 @@ for src in $srcs; do
 			IFS=' 	'
 			set -- $line
 			# ignore duplicates
-			[ "${includes}" != "${includes%* $2 }" ] && continue
+			[ "${includes}" != "${includes% $2 *}" ] && continue
 			includes="$includes$2 "
 			continue
 			;;
@@ -102,8 +153,11 @@ for src in $srcs; do
 			read -r line
 			[ "$line" != "}" ]
 		do
-			[ -n "$line" -a "$line" = "${line###}" ] &&
-				line="	$line"
+			case "$line" in
+			('')	;;
+			('#'*)	;;
+			(*)	line="	$line";;
+			esac
 			ev="${ev}${line}${nl}"
 		done
 		ev="${ev}	}${nl}"

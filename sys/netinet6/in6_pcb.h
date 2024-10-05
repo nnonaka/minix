@@ -1,4 +1,4 @@
-/*	$NetBSD: in6_pcb.h,v 1.46 2015/05/24 15:43:45 rtr Exp $	*/
+/*	$NetBSD: in6_pcb.h,v 1.50 2018/11/22 04:48:34 knakahara Exp $	*/
 /*	$KAME: in6_pcb.h,v 1.45 2001/02/09 05:59:46 itojun Exp $	*/
 
 /*
@@ -107,6 +107,10 @@ struct	in6pcb {
 #define in6p_faddr	in6p_ip6.ip6_dst
 #define in6p_laddr	in6p_ip6.ip6_src
 
+#define	in6p_lock(in6p)		solock((in6p)->in6p_socket)
+#define	in6p_unlock(in6p)	sounlock((in6p)->in6p_socket)
+#define	in6p_locked(in6p)	solocked((in6p)->in6p_socket)
+
 /* states in inp_state: */
 #define	IN6P_ATTACHED		INP_ATTACHED
 #define	IN6P_BOUND		INP_BOUND
@@ -133,6 +137,8 @@ struct	in6pcb {
 #define IN6P_LOWPORT		0x2000000 /* user wants "low" port binding */
 #define IN6P_ANONPORT		0x4000000 /* port chosen for user */
 #define IN6P_FAITH		0x8000000 /* accept FAITH'ed connections */
+/* XXX should move to an UDP control block */
+#define IN6P_ESPINUDP		INP_ESPINUDP /* ESP over UDP for NAT-T */
 
 #define IN6P_RFC2292		0x40000000 /* RFC2292 */
 #define IN6P_MTU		0x80000000 /* use minimum MTU */
@@ -179,6 +185,8 @@ int	in6_pcbsetport(struct sockaddr_in6 *, struct in6pcb *, struct lwp *);
 
 extern struct rtentry *
 	in6_pcbrtentry(struct in6pcb *);
+extern void
+	in6_pcbrtentry_unref(struct rtentry *, struct in6pcb *);
 extern struct in6pcb *in6_pcblookup_connect(struct inpcbtable *,
 					    const struct in6_addr *, u_int, const struct in6_addr *, u_int, int,
 					    struct vestigial_inpcb *);

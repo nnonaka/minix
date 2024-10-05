@@ -1,9 +1,9 @@
-/*	$NetBSD: conf-end.h,v 1.2 1997/01/12 19:11:43 tls Exp $	*/
+/*	$NetBSD: conf-end.h,v 1.7 2017/06/30 02:38:09 kamil Exp $	*/
 
 /*
  * End of configuration stuff for PD ksh.
  *
- * RCSid: $NetBSD: conf-end.h,v 1.2 1997/01/12 19:11:43 tls Exp $
+ * RCSid: $NetBSD: conf-end.h,v 1.7 2017/06/30 02:38:09 kamil Exp $
  */
 
 #if defined(EMACS) || defined(VI)
@@ -17,36 +17,10 @@
 # define HISTORY
 #endif /* EDIT */
 
-/*
- * if you don't have mmap() you can't use Peter Collinson's history
- * mechanism.  If that is the case, then define EASY_HISTORY
- */
-#if defined(HISTORY) && (!defined(COMPLEX_HISTORY) || !defined(HAVE_MMAP) || !defined(HAVE_FLOCK))
+#if defined(HISTORY) && (!defined(COMPLEX_HISTORY) || !defined(HAVE_FLOCK))
 # undef COMPLEX_HISTORY
 # define EASY_HISTORY			/* sjg's trivial history file */
 #endif
-
-/* Can we safely catch sigchld and wait for processes? */
-#if (defined(HAVE_WAITPID) || defined(HAVE_WAIT3)) \
-    && (defined(POSIX_SIGNALS) || defined(BSD42_SIGNALS))
-# define JOB_SIGS
-#endif
-
-#if !defined(JOB_SIGS) || !(defined(POSIX_PGRP) || defined(BSD_PGRP))
-# undef JOBS /* if no JOB_SIGS, no job control support */
-#endif
-
-/* pdksh assumes system calls return EINTR if a signal happened (this so
- * the signal handler doesn't have to longjmp()).  I don't know if this
- * happens (or can be made to happen) with sigset() et. al. (the bsd41 signal
- * routines), so, the autoconf stuff checks what they do and defines
- * SIGNALS_DONT_INTERRUPT if signals don't interrupt read().
- * If SIGNALS_DONT_INTERRUPT isn't defined and your compiler chokes on this,
- * delete the hash in front of the error (and file a bug report).
- */
-#ifdef SIGNALS_DONT_INTERRUPT
-  # error pdksh needs interruptable system calls.
-#endif /* SIGNALS_DONT_INTERRUPT */
 
 #ifdef HAVE_GCC_FUNC_ATTR
 # define GCC_FUNC_ATTR(x)	__attribute__((x))

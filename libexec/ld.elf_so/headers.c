@@ -1,4 +1,4 @@
-/*	$NetBSD: headers.c,v 1.59 2014/08/26 21:20:05 joerg Exp $	 */
+/*	$NetBSD: headers.c,v 1.65.2.1 2020/03/08 10:22:29 martin Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: headers.c,v 1.59 2014/08/26 21:20:05 joerg Exp $");
+__RCSID("$NetBSD: headers.c,v 1.65.2.1 2020/03/08 10:22:29 martin Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -216,6 +216,7 @@ _rtld_digest_dynamic(const char *execname, Obj_Entry *obj)
 			break;
 
 		case DT_RPATH:
+		case DT_RUNPATH:
 			/*
 		         * We have to wait until later to process this, because
 			 * we might not have gotten the address of the string
@@ -316,7 +317,7 @@ _rtld_digest_dynamic(const char *execname, Obj_Entry *obj)
 #endif
 		case DT_FLAGS_1:
 			obj->z_now =
-			    ((dynp->d_un.d_val & DF_1_BIND_NOW) != 0);
+			    ((dynp->d_un.d_val & DF_1_NOW) != 0);
 			obj->z_nodelete =
 			    ((dynp->d_un.d_val & DF_1_NODELETE) != 0);
 			obj->z_initfirst =
@@ -380,8 +381,9 @@ _rtld_digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry)
 	Obj_Entry      *obj;
 	const Elf_Phdr *phlimit = phdr + phnum;
 	const Elf_Phdr *ph;
-	int             nsegs = 0;
-	Elf_Addr	vaddr;
+	bool            first_seg = true;
+	Elf_Addr        vaddr;
+	size_t          size;
 
 	obj = _rtld_obj_new();
 
@@ -389,9 +391,9 @@ _rtld_digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry)
 		if (ph->p_type != PT_PHDR)
 			continue;
 
-		obj->phdr = (void *)(uintptr_t)ph->p_vaddr;
-		obj->phsize = ph->p_memsz;
 		obj->relocbase = (caddr_t)((uintptr_t)phdr - (uintptr_t)ph->p_vaddr);
+		obj->phdr = phdr; /* Equivalent to relocbase + p_vaddr. */
+		obj->phsize = ph->p_memsz;
 		dbg(("headers: phdr %p (%p) phsize %zu relocbase %p",
 		    obj->phdr, phdr, obj->phsize, obj->relocbase));
 		break;
@@ -409,17 +411,16 @@ _rtld_digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry)
 			break;
 
 		case PT_LOAD:
-			assert(nsegs < 2);
-			if (nsegs == 0) {	/* First load segment */
+			size = round_up(vaddr + ph->p_memsz) - obj->vaddrbase;
+			if (first_seg) {	/* First load segment */
 				obj->vaddrbase = round_down(vaddr);
 				obj->mapbase = (caddr_t)(uintptr_t)obj->vaddrbase;
-				obj->textsize = round_up(vaddr + ph->p_memsz) -
-				    obj->vaddrbase;
+				obj->textsize = size;
+				obj->mapsize = size;
+				first_seg = false;
 			} else {		/* Last load segment */
-				obj->mapsize = round_up(vaddr + ph->p_memsz) -
-				    obj->vaddrbase;
+				obj->mapsize = MAX(obj->mapsize, size);
 			}
-			++nsegs;
 			dbg(("headers: %s %p phsize %" PRImemsz,
 			    "PT_LOAD", (void *)(uintptr_t)vaddr,
 			     ph->p_memsz));
@@ -432,13 +433,25 @@ _rtld_digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry)
 			     ph->p_memsz));
 			break;
 
+#ifdef GNU_RELRO
+		case PT_GNU_RELRO:
+			/* rounding happens later. */
+			obj->relro_page = obj->relocbase + ph->p_vaddr;
+			obj->relro_size = ph->p_memsz;
+			dbg(("headers: %s %p phsize %" PRImemsz,
+			    "PT_GNU_RELRO", (void *)(uintptr_t)vaddr,
+			     ph->p_memsz));
+			break;
+#endif
+
 #if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
 		case PT_TLS:
 			obj->tlsindex = 1;
 			obj->tlssize = ph->p_memsz;
 			obj->tlsalign = ph->p_align;
 			obj->tlsinitsize = ph->p_filesz;
-			obj->tlsinit = (void *)(uintptr_t)ph->p_vaddr;
+			obj->tlsinit = (void *)(obj->relocbase +
+			    (uintptr_t)ph->p_vaddr);
 			dbg(("headers: %s %p phsize %" PRImemsz,
 			    "PT_TLS", (void *)(uintptr_t)vaddr,
 			     ph->p_memsz));
@@ -455,7 +468,6 @@ _rtld_digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry)
 #endif
 		}
 	}
-	assert(nsegs == 2);
 
 	obj->entry = entry;
 	return obj;

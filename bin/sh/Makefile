@@ -3,42 +3,41 @@
 
 .include <bsd.own.mk>
 
-YHEADER=1
 PROG=	sh
-SHSRCS=	alias.c cd.c echo.c error.c eval.c exec.c expand.c \
-	histedit.c input.c jobs.c mail.c main.c memalloc.c miscbltin.c \
-	mystring.c options.c parser.c redir.c show.c trap.c output.c var.c \
-	test.c kill.c syntax.c
-GENSRCS=arith.c arith_lex.c builtins.c init.c nodes.c
-GENHDRS=arith.h builtins.h nodes.h token.h
+SHSRCS=	alias.c arith_token.c arithmetic.c cd.c echo.c error.c eval.c exec.c \
+	expand.c histedit.c input.c jobs.c mail.c main.c memalloc.c \
+	miscbltin.c mystring.c options.c parser.c redir.c show.c trap.c \
+	output.c var.c test.c kill.c syntax.c
+GENSRCS=builtins.c init.c nodes.c
+GENHDRS=builtins.h nodes.h token.h nodenames.h optinit.h
 SRCS=	${SHSRCS} ${GENSRCS}
 
 DPSRCS+=${GENHDRS}
 
-LDADD+=	-ll -ledit -lterminfo
-DPADD+=	${LIBL} ${LIBEDIT} ${LIBTERMINFO}
-
-LFLAGS=	-8	# 8-bit lex scanner for arithmetic
+LDADD+=	-ledit -lterminfo
+DPADD+=	${LIBEDIT} ${LIBTERMINFO}
 
 # Environment for scripts executed during build.
 SCRIPT_ENV= \
 	AWK=${TOOL_AWK:Q} \
+	MKTEMP=${TOOL_MKTEMP:Q} \
 	SED=${TOOL_SED:Q}
 
-# The .depend file can get references to these temporary files
-.OPTIONAL: lex.yy.c y.tab.c
-
-.ifdef CRUNCHEDPROG
-LFLAGS+=-L
-YFLAGS+=-l
-.endif
-
 CPPFLAGS+=-DSHELL -I. -I${.CURDIR}
+CPPFLAGS+= -DUSE_LRAND48
 #XXX: For testing only.
-#CPPFLAGS+=-DDEBUG=2
+#CPPFLAGS+=-DDEBUG=1
 #COPTS+=-g
 #CFLAGS+=-funsigned-char
 #TARGET_CHARFLAG?= -DTARGET_CHAR="unsigned char" -funsigned-char
+
+# Reproducible build parameters ... export into sh for NETBSD_SHELL setting
+.if ${MKREPRO_TIMESTAMP:Uno} != "no"
+BUILD_DATE!=	date -u -r "${MKREPRO_TIMESTAMP}" "+%Y%m%d%H%M%S"
+# These are (should be) equivalent, but the 2nd is easier to understand
+#CPPFLAGS+= -DBUILD_DATE='"${BUILD_DATE:C/([^0]0?)(00)*$/\1/}Z"'
+CPPFLAGS+= -DBUILD_DATE='"${BUILD_DATE:S/00$//:S/00$//:S/00$//}Z"'
+.endif
 
 .ifdef SMALLPROG
 CPPFLAGS+=-DSMALL
@@ -53,8 +52,8 @@ SRCS+=printf.c
 	${NETBSDSRCDIR}/usr.bin/printf \
 	${NETBSDSRCDIR}/bin/kill
 
-CLEANFILES+= ${GENSRCS} ${GENHDRS} y.tab.h
-CLEANFILES+= trace
+CLEANFILES+= ${GENSRCS} ${GENHDRS} sh.html1
+CLEANFILES+= trace.*
 
 token.h: mktokens
 	${_MKTARGET_CREATE}
@@ -76,6 +75,14 @@ nodes.c nodes.h: mknodes.sh nodetypes nodes.c.pat
 	${SCRIPT_ENV} ${HOST_SH} ${.ALLSRC} ${.OBJDIR}
 	[ -f nodes.h ]
 
+nodenames.h: mknodenames.sh nodes.h
+	${_MKTARGET_CREATE}
+	${SCRIPT_ENV} ${HOST_SH} ${.ALLSRC} > ${.TARGET}
+
+optinit.h: mkoptions.sh option.list
+	${_MKTARGET_CREATE}
+	${SCRIPT_ENV} ${HOST_SH} ${.ALLSRC} ${.TARGET} ${.OBJDIR}
+
 .if ${USETOOLS} == "yes"
 NBCOMPATLIB=   -L${TOOLDIR}/lib -lnbcompat
 .endif
@@ -86,6 +93,7 @@ SUBDIR+=USD.doc
 
 COPTS.printf.c = -Wno-format-nonliteral
 COPTS.jobs.c = -Wno-format-nonliteral
+COPTS.var.c = -Wno-format-nonliteral
 
 .include <bsd.prog.mk>
 .include <bsd.subdir.mk>

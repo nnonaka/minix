@@ -1,4 +1,4 @@
-/*	$NetBSD: ping.c,v 1.109 2014/11/29 14:48:42 christos Exp $	*/
+/*	$NetBSD: ping.c,v 1.117 2017/10/02 10:08:11 maya Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -58,7 +58,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ping.c,v 1.109 2014/11/29 14:48:42 christos Exp $");
+__RCSID("$NetBSD: ping.c,v 1.117 2017/10/02 10:08:11 maya Exp $");
 #endif
 
 #include <stdio.h>
@@ -160,6 +160,8 @@ static struct sockaddr_in loc_addr;		/* 127.1 */
 static int datalen;				/* How much data */
 static int phdrlen;
 
+static sigset_t blockmask, enablemask;		/* signal masks */
+
 #ifndef __NetBSD__
 static char *progname;
 #define	getprogname()		(progname)
@@ -179,7 +181,7 @@ static struct {
 #define	opack_icmp	out_pack.o_u.u_icmp
 static struct ip *opack_ip;
 
-static char optspace[MAX_IPOPTLEN];		/* record route space */
+static uint8_t optspace[MAX_IPOPTLEN];		/* record route space */
 static int optlen;
 
 static int npackets;				/* total packets to send */
@@ -210,6 +212,8 @@ __dead static void doit(void);
 static void prefinish(int);
 static void prtsig(int);
 __dead static void finish(int);
+static void blocksignals(void);
+static void enablesignals(void);
 static void summary(int);
 static void pinger(void);
 static void fill(void);
@@ -291,11 +295,17 @@ main(int argc, char *argv[])
 			compat = 1;
 			break;
 		case 'c':
-			npackets = strtol(optarg, &p, 0);
-			if (*p != '\0' || npackets <= 0)
+			l = strtol(optarg, &p, 0);
+			if (*p != '\0' || l <= 0)
 				errx(EXIT_FAILURE,
 				    "Bad/invalid number of packets: %s",
 				    optarg);
+#if INT_MAX < LONG_MAX
+			if (l > INT_MAX)
+				errx(EXIT_FAILURE,
+				    "Too many packets to count: %ld", l);
+#endif
+			npackets = l;
 			break;
 		case 'D':
 			pingflags |= F_DF;
@@ -314,12 +324,27 @@ main(int argc, char *argv[])
 			if (*p != '\0' || interval <= 0)
 				errx(EXIT_FAILURE, "Bad/invalid interval: %s",
 				    optarg);
+			/*
+			 * In order to avoid overflowing the microseconds
+			 * argument of poll() the interval must be less than
+			 * INT_MAX/1000. Limit it to one second less than
+			 * that to be safe.
+			 */
+			if (interval >= INT_MAX/1000.0 - 1.0)
+				errx(EXIT_FAILURE,
+				    "Timing interval %g too large", interval);
 			break;
 		case 'l':
-			preload = strtol(optarg, &p, 0);
-			if (*p != '\0' || preload < 0)
+			l = strtol(optarg, &p, 0);
+			if (*p != '\0' || l < 0)
 				errx(EXIT_FAILURE, "Bad/invalid preload value: "
 				    "%s", optarg);
+#if INT_MAX < LONG_MAX
+			if (l > INT_MAX)
+				errx(EXIT_FAILURE,
+				    "Too many preload packets: %ld", l);
+#endif
+			preload = l;
 			break;
 		case 'n':
 			pingflags |= F_NUMERIC;
@@ -426,7 +451,6 @@ main(int argc, char *argv[])
 
 	if (interval == 0)
 		interval = (pingflags & F_FLOOD) ? FLOOD_INTVL : 1.0;
-#ifndef sgi
 	if (pingflags & F_FLOOD && prog_getuid())
 		errx(EXIT_FAILURE, "Must be superuser to use -f");
 	if (interval < 1.0 && prog_getuid())
@@ -434,8 +458,11 @@ main(int argc, char *argv[])
 		    "ping interval");
 	if (preload > 0 && prog_getuid())
 		errx(EXIT_FAILURE, "Must be superuser to use -l");
-#endif
+
 	sec_to_timespec(interval, &interval_tv);
+	if (interval_tv.tv_sec == 0 && interval_tv.tv_nsec == 0) {
+		errx(EXIT_FAILURE, "Packet interval must be at least 1 ns");
+	}
 
 	if ((pingflags & (F_AUDIBLE|F_FLOOD)) == (F_AUDIBLE|F_FLOOD))
 		warnx("Sorry, no audible output for flood pings");
@@ -669,6 +696,21 @@ main(int argc, char *argv[])
 
 	(void)signal(SIGINT, prefinish);
 
+	/*
+	 * Set up two signal masks:
+	 *    - blockmask blocks the signals we catch
+	 *    - enablemask does not
+	 */
+
+	sigemptyset(&enablemask);
+	sigemptyset(&blockmask);
+	sigaddset(&blockmask, SIGINT);
+#ifdef SIGINFO
+	sigaddset(&blockmask, SIGINFO);
+#else
+	sigaddset(&blockmask, SIGQUIT);
+#endif
+
 #ifdef SIGINFO
 	sa.sa_handler = prtsig;
 	sa.sa_flags = SA_NOKERNINFO;
@@ -679,6 +721,8 @@ main(int argc, char *argv[])
 #endif
 	(void)signal(SIGCONT, prtsig);
 
+	blocksignals();
+
 	/* fire off them quickies */
 	for (i = 0; i < preload; i++) {
 		clock_gettime(CLOCK_MONOTONIC, &now);
@@ -688,7 +732,6 @@ main(int argc, char *argv[])
 	doit();
 	return 0;
 }
-
 
 static void
 doit(void)
@@ -740,9 +783,14 @@ doit(void)
 				break;
 		}
 
+
 		fdmaskp[0].fd = s;
 		fdmaskp[0].events = POLLIN;
+
+		enablesignals();
 		cc = prog_poll(fdmaskp, 1, (int)(sec * 1000));
+		blocksignals();
+
 		if (cc <= 0) {
 			if (cc < 0) {
 				if (errno == EINTR)
@@ -851,6 +899,8 @@ pinger(void)
 #else
 	int i, cc;
 #endif /* !defined(__minix) */
+	double waittime;
+	long numskip;
 
 	opack_icmp.icmp_code = 0;
 	opack_icmp.icmp_seq = htons((u_int16_t)(ntransmitted));
@@ -936,10 +986,32 @@ pinger(void)
 	 * If we are at most 100 ms behind, send extras to get caught up.
 	 * Otherwise, skip packets we were too slow to send.
 	 */
-	if (diffsec(&next_tx, &now) <= interval) {
-		do {
-			timespecadd(&next_tx, &interval_tv, &next_tx);
-		} while (diffsec(&next_tx, &now) < -0.1);
+	waittime = diffsec(&next_tx, &now);
+	if (waittime < -1.0) {
+		/* very behind - forget about being precise */
+		next_tx.tv_sec += (int)(-waittime);
+	} else if (waittime < -0.1) {
+		/* behind - skip a few */
+		if (interval_tv.tv_sec == 0) {
+			numskip = (long)(-waittime / interval_tv.tv_nsec);
+			next_tx.tv_nsec += numskip * interval_tv.tv_nsec;
+			/*
+			 * We can add at most one second's worth, but allow
+			 * for tv_nsec reaching 2 billion just in case FP
+			 * issues strike.
+			 */
+			while (next_tx.tv_nsec >= 1000000000) {
+				next_tx.tv_sec++;
+				next_tx.tv_nsec -= 1000000000;
+			}
+		} else {
+			do {
+				timespecadd(&next_tx, &interval_tv, &next_tx);
+			} while (diffsec(&next_tx, &now) < -0.1);
+		}
+
+	} else if (waittime <= interval) {
+		timespecadd(&next_tx, &interval_tv, &next_tx);
 	}
 
 	if (pingflags & F_FLOOD)
@@ -1225,22 +1297,6 @@ pr_pack(u_char *buf,
 			PR_PACK_SUB();
 			(void)printf("\nNOP");
 			break;
-#ifdef sgi
-		case IPOPT_SECURITY:	/* RFC 1108 RIPSO BSO */
-		case IPOPT_ESO:		/* RFC 1108 RIPSO ESO */
-		case IPOPT_CIPSO:	/* Commercial IPSO */
-			if ((sysconf(_SC_IP_SECOPTS)) > 0) {
-				i = (unsigned)cp[1];
-				hlen -= i - 1;
-				PR_PACK_SUB();
-				(void)printf("\nSEC:");
-				while (i--) {
-					(void)printf(" %02x", *cp++);
-				}
-				cp--;
-				break;
-			}
-#endif
 		default:
 			PR_PACK_SUB();
 			(void)printf("\nunknown option 0x%x", *cp);
@@ -1407,13 +1463,13 @@ prtsig(int dummy)
  * On the first SIGINT, allow any outstanding packets to dribble in
  */
 static void
-prefinish(int dummy)
+prefinish(int sig)
 {
 	if (lastrcvd			/* quit now if caught up */
 	    || nreceived == 0)		/* or if remote is dead */
 		finish(0);
 
-	(void)signal(dummy, finish);	/* do this only the 1st time */
+	(void)signal(sig, finish);	/* do this only the 1st time */
 
 	if (npackets > ntransmitted)	/* let the normal limit work */
 		npackets = ntransmitted;
@@ -1434,6 +1490,22 @@ finish(int dummy)
 
 	summary(1);
 	exit(nreceived > 0 ? 0 : 2);
+}
+
+static void
+blocksignals(void)
+{
+	if (sigprocmask(SIG_SETMASK, &blockmask, NULL) == -1) {
+		err(EXIT_FAILURE, "blocksignals: sigprocmask");
+	}
+}
+
+static void
+enablesignals(void)
+{
+	if (sigprocmask(SIG_SETMASK, &enablemask, NULL) == -1) {
+		err(EXIT_FAILURE, "enablesignals: sigprocmask");
+	}
 }
 
 
@@ -1698,7 +1770,8 @@ pr_iph(struct icmp *icp,
 {
 	int	hlen;
 	u_char	*cp;
-	struct ip ipb, *ip = &ipb;
+	struct ip __aligned(4) ipb;
+	struct ip *ip = &ipb;
 
 	(void) memcpy(ip, icp->icmp_data, sizeof(*ip));
 
@@ -1713,8 +1786,8 @@ pr_iph(struct icmp *icp,
 	(void)printf("  %02x  %02x %04x",
 		     ip->ip_ttl, ip->ip_p, ip->ip_sum);
 	(void)printf(" %15s ",
-		     inet_ntoa(*(struct in_addr *)&ip->ip_src.s_addr));
-	(void)printf(" %s ", inet_ntoa(*(struct in_addr *)&ip->ip_dst.s_addr));
+		     inet_ntoa(*(struct in_addr *)ipb.ip_src.s_addr));
+	(void)printf(" %s ", inet_ntoa(*(struct in_addr *)ipb.ip_dst.s_addr));
 	/* dump any option bytes */
 	while (hlen-- > 20 && cp < (u_char*)icp+cc) {
 		(void)printf("%02x", *cp++);

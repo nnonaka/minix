@@ -1,4 +1,4 @@
-/*	$NetBSD: eval.h,v 1.16 2014/05/31 14:42:18 christos Exp $	*/
+/*	$NetBSD: eval.h,v 1.23 2019/02/04 11:16:41 kre Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -52,6 +52,8 @@ union node;	/* BLETCH for ansi C */
 void evaltree(union node *, int);
 void evalbackcmd(union node *, struct backcmd *);
 
+const char *syspath(void);
+
 /* in_function returns nonzero if we are currently evaluating a function */
 int in_function(void);		/* return non-zero, if evaluating a function */
 
@@ -64,10 +66,23 @@ enum skipstate {
       SKIPFILE		/* return in a dot command */
 };
 
+struct skipsave {
+	enum skipstate state;	/* skipping or not */
+	int count;		/* when break or continue, how many */
+};
+
 enum skipstate current_skipstate(void);
+void save_skipstate(struct skipsave *);
+void restore_skipstate(const struct skipsave *);
 void stop_skipping(void);	/* reset internal skipping state to SKIPNONE */
+int set_dot_funcnest(int);
 
 /*
  * Only for use by reset() in init.c!
  */
 void reset_eval(void);
+
+/* flags in argument to evaltree */
+#define EV_EXIT		0x01	/* exit after evaluating tree */
+#define EV_TESTED	0x02	/* exit status is checked; ignore -e flag */
+#define EV_BACKCMD	0x04	/* command executing within back quotes */

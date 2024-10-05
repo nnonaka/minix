@@ -136,6 +136,7 @@ static void _rtld_objlist_clear(Objlist *);
 static void _rtld_unload_object(sigset_t *, Obj_Entry *, bool);
 static void _rtld_unref_dag(Obj_Entry *);
 static Obj_Entry *_rtld_obj_from_addr(const void *);
+static void _rtld_fill_dl_phdr_info(const Obj_Entry *, struct dl_phdr_info *);
 
 static inline void
 _rtld_call_initfini_function(const Obj_Entry *obj, Elf_Addr func, sigset_t *mask)
@@ -261,6 +262,22 @@ _rtld_call_init_function(Obj_Entry *obj, sigset_t *mask, u_int cur_objgen)
 #endif /* HAVE_INITFINI_ARRAY */
 }
 
+static bool
+_rtld_call_ifunc_functions(sigset_t *mask, Obj_Entry *obj, u_int cur_objgen)
+{
+	if (obj->ifunc_remaining
+#if defined(IFUNC_NONPLT)
+	    || obj->ifunc_remaining_nonplt
+#endif
+	) {
+		_rtld_call_ifunc(obj, mask, cur_objgen);
+		if (_rtld_objgen != cur_objgen) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void
 _rtld_call_init_functions(sigset_t *mask)
 {
@@ -275,7 +292,26 @@ restart:
 	SIMPLEQ_INIT(&initlist);
 	_rtld_initlist_tsort(&initlist, 0);
 
-	/* First pass: objects marked with DF_1_INITFIRST. */
+	/* First pass: objects with IRELATIVE relocations. */
+	SIMPLEQ_FOREACH(elm, &initlist, link) {
+		if (_rtld_call_ifunc_functions(mask, elm->obj, cur_objgen)) {
+			dbg(("restarting init iteration"));
+			_rtld_objlist_clear(&initlist);
+			goto restart;
+		}
+	}
+	/*
+	 * XXX: For historic reasons, init/fini of the main object are called
+	 * from crt0. Don't introduce that mistake for ifunc, so look at
+	 * the head of _rtld_objlist that _rtld_initlist_tsort skipped.
+	 */
+	if (_rtld_call_ifunc_functions(mask, _rtld_objlist, cur_objgen)) {
+		dbg(("restarting init iteration"));
+		_rtld_objlist_clear(&initlist);
+		goto restart;
+	}
+
+	/* Second pass: objects marked with DF_1_INITFIRST. */
 	SIMPLEQ_FOREACH(elm, &initlist, link) {
 		Obj_Entry * const obj = elm->obj;
 		if (obj->z_initfirst) {
@@ -288,7 +324,7 @@ restart:
 		}
 	}
 
-	/* Second pass: all other objects. */
+	/* Third pass: all other objects. */
 	SIMPLEQ_FOREACH(elm, &initlist, link) {
 		_rtld_call_init_function(elm->obj, mask, cur_objgen);
 		if (_rtld_objgen != cur_objgen) {
@@ -311,6 +347,7 @@ restart:
 static void
 _rtld_init(caddr_t mapbase, caddr_t relocbase, const char *execname)
 {
+	const Elf_Ehdr *ehdr;
 
 	/* Conjure up an Obj_Entry structure for the dynamic linker. */
 	_rtld_objself.path = __UNCONST(_rtld_path);
@@ -361,6 +398,10 @@ _rtld_init(caddr_t mapbase, caddr_t relocbase, const char *execname)
 
 	_rtld_debug.r_brk = _rtld_debug_state;
 	_rtld_debug.r_state = RT_CONSISTENT;
+
+	ehdr = (Elf_Ehdr *)mapbase;
+	_rtld_objself.phdr = (Elf_Phdr *)((char *)mapbase + ehdr->e_phoff);
+	_rtld_objself.phsize = ehdr->e_phnum * sizeof(_rtld_objself.phdr[0]);
 }
 
 /*
@@ -656,6 +697,7 @@ _rtld(Elf_Addr *sp, Elf_Addr relocbase)
 	_rtld_objloads++;
 
 	_rtld_linkmap_add(_rtld_objmain);
+	_rtld_objself.path = xstrdup(_rtld_objself.path);
 	_rtld_linkmap_add(&_rtld_objself);
 
 	++_rtld_objmain->refcount;
@@ -734,6 +776,8 @@ _rtld(Elf_Addr *sp, Elf_Addr relocbase)
 	if (real___mainprog_obj)
 		*real___mainprog_obj = _rtld_objmain;
 
+	_rtld_debug_state();	/* say hello to gdb! */
+
 	_rtld_exclusive_enter(&mask);
 
 	dbg(("calling _init functions"));
@@ -749,10 +793,8 @@ _rtld(Elf_Addr *sp, Elf_Addr relocbase)
 	 * of stack.
 	 */
 
-	_rtld_debug_state();	/* say hello to gdb! */
-
 	((void **) osp)[0] = _rtld_exit;
-	((void **) osp)[1] = _rtld_objmain;
+	((void **) osp)[1] = __UNCONST(_rtld_compat_obj);
 	return (Elf_Addr) _rtld_objmain->entry;
 }
 
@@ -813,6 +855,10 @@ _rtld_initlist_tsort(Objlist* list, int rev)
 
 	Obj_Entry* obj;
 
+	/*
+	 * We don't include objmain here (starting from next)
+	 * because csu handles it
+	 */
 	for (obj = _rtld_objlist->next; obj; obj = obj->next) {
 		obj->init_done = 0;
 	}
@@ -1072,10 +1118,17 @@ _rtld_objmain_sym(const char *name)
 }
 
 #ifdef __powerpc__
-static void *
+static __noinline void *
 hackish_return_address(void)
 {
+#if __GNUC_PREREQ__(6,0)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-address"
+#endif
 	return __builtin_return_address(1);
+#if __GNUC_PREREQ__(6,0)
+#pragma GCC diagnostic pop
+#endif
 }
 #endif
 
@@ -1133,6 +1186,20 @@ do_dlsym(void *handle, const char *name, const Ver_Entry *ventry, void *retaddr)
 				    flags, ventry)) != NULL) {
 					defobj = obj;
 					break;
+				}
+			}
+			/*
+			 * Search the dynamic linker itself, and possibly
+			 * resolve the symbol from there if it is not defined
+			 * already or weak. This is how the application links
+			 * to dynamic linker services such as dlopen.
+			 */
+			if (!def || ELF_ST_BIND(def->st_info) == STB_WEAK) {
+				const Elf_Sym *symp = _rtld_symlook_obj(name,
+				    hash, &_rtld_objself, flags, ventry);
+				if (symp != NULL) {
+					def = symp;
+					defobj = &_rtld_objself;
 				}
 			}
 			break;
@@ -1374,6 +1441,26 @@ dlinfo(void *handle, int req, void *v)
 	return 0;
 }
 
+static void
+_rtld_fill_dl_phdr_info(const Obj_Entry *obj, struct dl_phdr_info *phdr_info)
+{
+
+	phdr_info->dlpi_addr = (Elf_Addr)obj->relocbase;
+	/* XXX: wrong but not fixing it yet */
+	phdr_info->dlpi_name = obj->path;
+	phdr_info->dlpi_phdr = obj->phdr;
+	phdr_info->dlpi_phnum = obj->phsize / sizeof(obj->phdr[0]);
+#if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
+	phdr_info->dlpi_tls_modid = obj->tlsindex;
+	phdr_info->dlpi_tls_data = obj->tlsinit;
+#else
+	phdr_info->dlpi_tls_modid = 0;
+	phdr_info->dlpi_tls_data = 0;
+#endif
+	phdr_info->dlpi_adds = _rtld_objloads;
+	phdr_info->dlpi_subs = _rtld_objloads - _rtld_objcount;
+}
+
 __strong_alias(__dl_iterate_phdr,dl_iterate_phdr);
 int
 dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *param)
@@ -1387,21 +1474,7 @@ dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *pa
 	_rtld_shared_enter();
 
 	for (obj = _rtld_objlist;  obj != NULL;  obj = obj->next) {
-		phdr_info.dlpi_addr = (Elf_Addr)obj->relocbase;
-		/* XXX: wrong but not fixing it yet */
-		phdr_info.dlpi_name = SIMPLEQ_FIRST(&obj->names) ?
-		    SIMPLEQ_FIRST(&obj->names)->name : obj->path;
-		phdr_info.dlpi_phdr = obj->phdr;
-		phdr_info.dlpi_phnum = obj->phsize / sizeof(obj->phdr[0]);
-#if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
-		phdr_info.dlpi_tls_modid = obj->tlsindex;
-		phdr_info.dlpi_tls_data = obj->tlsinit;
-#else
-		phdr_info.dlpi_tls_modid = 0;
-		phdr_info.dlpi_tls_data = 0;
-#endif
-		phdr_info.dlpi_adds = _rtld_objloads;
-		phdr_info.dlpi_subs = _rtld_objloads - _rtld_objcount;
+		_rtld_fill_dl_phdr_info(obj, &phdr_info);
 
 		/* XXXlocking: exit point */
 		error = callback(&phdr_info, sizeof(phdr_info), param);
@@ -1409,8 +1482,71 @@ dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *pa
 			break;
 	}
 
+	if (error == 0) {
+		_rtld_fill_dl_phdr_info(&_rtld_objself, &phdr_info);
+
+		/* XXXlocking: exit point */
+		error = callback(&phdr_info, sizeof(phdr_info), param);
+	}
+
 	_rtld_shared_exit();
 	return error;
+}
+
+void
+__dl_cxa_refcount(void *addr, ssize_t delta)
+{
+	sigset_t mask;
+	Obj_Entry *obj;
+
+	if (delta == 0)
+		return;
+
+	dbg(("__dl_cxa_refcount of %p with %zd", addr, delta));
+
+	_rtld_exclusive_enter(&mask);
+	obj = _rtld_obj_from_addr(addr);
+
+	if (obj == NULL) {
+		dbg(("__dl_cxa_refcont: address not found"));
+		_rtld_error("No shared object contains address");
+		_rtld_exclusive_exit(&mask);
+		return;
+	}
+	if (delta > 0 && obj->cxa_refcount > SIZE_MAX - delta)
+		_rtld_error("Reference count overflow");
+	else if (delta < 0 && obj->cxa_refcount < -1 + (size_t)-(delta + 1))
+		_rtld_error("Reference count underflow");
+	else {
+		if (obj->cxa_refcount == 0)
+			++obj->refcount;
+		obj->cxa_refcount += delta;
+		dbg(("new reference count: %zu", obj->cxa_refcount));
+		if (obj->cxa_refcount == 0) {
+			--obj->refcount;
+			if (obj->refcount == 0)
+				_rtld_unload_object(&mask, obj, true);
+		}
+	}
+
+	_rtld_exclusive_exit(&mask);
+}
+
+pid_t __fork(void);
+
+__dso_public pid_t
+__locked_fork(int *my_errno)
+{
+	sigset_t mask;
+	pid_t result;
+
+	_rtld_exclusive_enter(&mask);
+	result = __fork();
+	if (result == -1)
+		*my_errno = errno;
+	_rtld_exclusive_exit(&mask);
+
+	return result;
 }
 
 /*
@@ -1529,6 +1665,7 @@ void _rtld_shared_enter(void) {}
 void _rtld_shared_exit(void) {}
 void _rtld_exclusive_enter(sigset_t *mask) {}
 void _rtld_exclusive_exit(sigset_t *mask) {}
+int _rtld_relro(const Obj_Entry *obj, bool wantmain) {return 0;}
 #else
 #define	RTLD_EXCLUSIVE_MASK	0x80000000U
 static volatile unsigned int _rtld_mutex;
@@ -1654,5 +1791,36 @@ _rtld_exclusive_exit(sigset_t *mask)
 		_lwp_unpark(waiter, __UNVOLATILE(&_rtld_mutex));
 
 	sigprocmask(SIG_SETMASK, mask, NULL);
+}
+
+int
+_rtld_relro(const Obj_Entry *obj, bool wantmain)
+{
+#ifdef GNU_RELRO
+	/*
+	 * If our VM page size is larger than the page size used by the
+	 * linker when laying out the object, we could end up making data
+	 * read-only that is unintended.  Detect and avoid this situation.
+	 * It may mean we are unable to protect everything we'd like, but
+	 * it's better than crashing.
+	 */
+	uintptr_t relro_end = (uintptr_t)obj->relro_page + obj->relro_size;
+	uintptr_t relro_start = round_down((uintptr_t)obj->relro_page);
+	assert(relro_end >= relro_start);
+	size_t relro_size = round_down(relro_end) - relro_start;
+
+	if (relro_size == 0)
+		return 0;
+	if (wantmain != (obj ==_rtld_objmain))
+		return 0;
+
+	dbg(("RELRO %s %p %zx\n", obj->path, (void *)relro_start, relro_size));
+	if (mprotect((void *)relro_start, relro_size, PROT_READ) == -1) {
+		_rtld_error("%s: Cannot enforce relro " "protection: %s",
+		    obj->path, xstrerror(errno));
+		return -1;
+	}
+#endif
+	return 0;
 }
 #endif /* !defined(__minix) */

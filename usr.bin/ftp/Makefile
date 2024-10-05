@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.36 2012/12/21 18:07:36 christos Exp $
+#	$NetBSD: Makefile,v 1.37.12.4 2022/09/12 17:06:56 martin Exp $
 #	from: @(#)Makefile	8.2 (Berkeley) 4/3/94
 
 .include <bsd.own.mk>
@@ -26,7 +26,7 @@ CPPFLAGS+=-DNO_EDITCOMPLETE -DNO_ABOUT -DNO_AUTH -DNO_HELP -DNO_STATUS -DNO_DEBU
 .else
 LDADD+=	-ledit -lterminfo
 DPADD+=	${LIBEDIT} ${LIBTERMINFO}
-.if (${MKCRYPTO} != "no")
+.if (${MKCRYPTO} != "no") && !defined(__MINIX)
 CPPFLAGS+= -DWITH_SSL
 SRCS+=ssl.c
 LDADD+= -lssl -lcrypto
@@ -40,5 +40,7 @@ CPPFLAGS+= -DINET6
 
 cmds.o fetch.o: version.h
 main.o:	ftp_var.h
+
+CWARNFLAGS.gcc+=	${GCC_NO_FORMAT_OVERFLOW}
 
 .include <bsd.prog.mk>

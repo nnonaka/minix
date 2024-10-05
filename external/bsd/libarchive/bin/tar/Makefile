@@ -15,5 +15,6 @@ tar.1: ${LIBARCHIVEDIR}/tar/bsdtar.1
 SYMLINKS+=${BINDIR}/tar /usr/bin/tar
 
 COPTS.read.c += -Wno-format-nonliteral
+COPTS.util.c += -Wno-format-nonliteral
 
 .include <bsd.prog.mk>

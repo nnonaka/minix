@@ -1,4 +1,4 @@
-/*	$NetBSD: eval.c,v 1.15 2013/10/18 19:53:34 christos Exp $	*/
+/*	$NetBSD: eval.c,v 1.25 2018/06/12 14:13:55 kamil Exp $	*/
 
 /*
  * Expansion - quoting, separation, substitution, globbing
@@ -6,15 +6,15 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: eval.c,v 1.15 2013/10/18 19:53:34 christos Exp $");
+__RCSID("$NetBSD: eval.c,v 1.25 2018/06/12 14:13:55 kamil Exp $");
 #endif
 
+#include <sys/stat.h>
 #include <stdint.h>
 #include <pwd.h>
 
 #include "sh.h"
 #include "ksh_dir.h"
-#include "ksh_stat.h"
 
 /*
  * string expansion
@@ -50,7 +50,7 @@ typedef struct Expand {
 static	int	varsub ARGS((Expand *xp, char *sp, char *word, int *stypep, int *slenp));
 static	int	comsub ARGS((Expand *xp, char *cp));
 static	char   *trimsub ARGS((char *str, char *pat, int how));
-static	void	glob ARGS((char *cp, XPtrV *wp, int markdirs));
+static	void	ksh_glob ARGS((char *cp, XPtrV *wp, int markdirs));
 static	void	globit ARGS((XString *xs, char **xpp, char *sp, XPtrV *wp,
 			     int check));
 static char	*maybe_expand_tilde ARGS((char *p, XString *dsp, char **dpp,
@@ -86,7 +86,7 @@ substitute(cp, f)
  */
 char **
 eval(ap, f)
-	register char **ap;
+	char **ap;
 	int f;
 {
 	XPtrV w;
@@ -95,17 +95,10 @@ eval(ap, f)
 		return ap;
 	XPinit(w, 32);
 	XPput(w, NULL);		/* space for shell name */
-#ifdef	SHARPBANG
-	XPput(w, NULL);		/* and space for one arg */
-#endif
 	while (*ap != NULL)
 		expand(*ap++, &w, f);
 	XPput(w, NULL);
-#ifdef	SHARPBANG
-	return (char **) XPclose(w) + 2;
-#else
 	return (char **) XPclose(w) + 1;
-#endif
 }
 
 /*
@@ -131,7 +124,7 @@ evalstr(cp, f)
  */
 char *
 evalonestr(cp, f)
-	register char *cp;
+	char *cp;
 	int f;
 {
 	XPtrV w;
@@ -167,20 +160,21 @@ typedef struct SubType {
 void
 expand(cp, wp, f)
 	char *cp;		/* input word */
-	register XPtrV *wp;	/* output words */
+	XPtrV *wp;		/* output words */
 	int f;			/* DO* flags */
 {
-	register int UNINITIALIZED(c);
-	register int type;	/* expansion type */
-	register int quote = 0;	/* quoted */
+	int UNINITIALIZED(c);
+	int type;		/* expansion type */
+	int quote = 0;		/* quoted */
 	XString ds;		/* destination string */
-	register char *dp, *sp;	/* dest., source */
+	char *dp, *sp;		/* dest., source */
 	int fdo, word;		/* second pass flags; have word */
 	int doblank;		/* field splitting of parameter/command subst */
 	Expand x;		/* expansion variables */
 	SubType st_head, *st;
 	int UNINITIALIZED(newlines); /* For trailing newlines in COMSUB */
-	int saw_eq, tilde_ok;
+	int saw_eq;
+	unsigned int tilde_ok;
 	int make_magic;
 	size_t len;
 
@@ -345,7 +339,7 @@ expand(cp, wp, f)
 						 * expected)
 						 */
 						*dp++ = MAGIC;
-						*dp++ = '@' + 0x80;
+						*dp++ = (char)('@' + 0x80);
 						break;
 					  case '=':
 						/* Enabling tilde expansion
@@ -585,7 +579,7 @@ expand(cp, wp, f)
 				else
 #endif /* BRACE_EXPAND */
 				if (fdo & DOGLOB)
-					glob(p, wp, f & DOMARKDIRS);
+					ksh_glob(p, wp, f & DOMARKDIRS);
 				else if ((f & DOPAT) || !(fdo & DOMAGIC_))
 					XPput(*wp, p);
 				else
@@ -851,11 +845,11 @@ varsub(xp, sp, word, stypep, slenp)
  */
 static int
 comsub(xp, cp)
-	register Expand *xp;
+	Expand *xp;
 	char *cp;
 {
 	Source *s, *sold;
-	register struct op *t;
+	struct op *t;
 	struct shf *shf;
 
 	s = pushs(SSTRING, ATEMP);
@@ -870,7 +864,7 @@ comsub(xp, cp)
 
 	if (t != NULL && t->type == TCOM && /* $(<file) */
 	    *t->args == NULL && *t->vars == NULL && t->ioact != NULL) {
-		register struct ioword *io = *t->ioact;
+		struct ioword *io = *t->ioact;
 		char *name;
 
 		if ((io->flag&IOTYPE) != IOREAD)
@@ -887,7 +881,7 @@ comsub(xp, cp)
 		shf = shf_fdopen(pv[0], SHF_RD, (struct shf *) 0);
 		ofd1 = savefd(1, 0);	/* fd 1 may be closed... */
 		if (pv[1] != 1) {
-			ksh_dup2(pv[1], 1, FALSE);
+			ksh_dup2(pv[1], 1, false);
 			close(pv[1]);
 		}
 		execute(t, XFORK|XXCOM|XPIPEO);
@@ -906,18 +900,18 @@ comsub(xp, cp)
 
 static char *
 trimsub(str, pat, how)
-	register char *str;
+	char *str;
 	char *pat;
 	int how;
 {
-	register char *end = strchr(str, 0);
-	register char *p, c;
+	char *end = strchr(str, 0);
+	char *p, c;
 
 	switch (how&0xff) {	/* UCHAR_MAX maybe? */
 	  case '#':		/* shortest at beginning */
 		for (p = str; p <= end; p++) {
 			c = *p; *p = '\0';
-			if (gmatch(str, pat, FALSE)) {
+			if (gmatch(str, pat, false)) {
 				*p = c;
 				return p;
 			}
@@ -927,7 +921,7 @@ trimsub(str, pat, how)
 	  case '#'|0x80:	/* longest match at beginning */
 		for (p = end; p >= str; p--) {
 			c = *p; *p = '\0';
-			if (gmatch(str, pat, FALSE)) {
+			if (gmatch(str, pat, false)) {
 				*p = c;
 				return p;
 			}
@@ -936,13 +930,13 @@ trimsub(str, pat, how)
 		break;
 	  case '%':		/* shortest match at end */
 		for (p = end; p >= str; p--) {
-			if (gmatch(p, pat, FALSE))
+			if (gmatch(p, pat, false))
 				return str_nsave(str, p - str, ATEMP);
 		}
 		break;
 	  case '%'|0x80:	/* longest match at end */
 		for (p = str; p <= end; p++) {
-			if (gmatch(p, pat, FALSE))
+			if (gmatch(p, pat, false))
 				return str_nsave(str, p - str, ATEMP);
 		}
 		break;
@@ -952,15 +946,15 @@ trimsub(str, pat, how)
 }
 
 /*
- * glob
+ * ksh_glob
  * Name derived from V6's /etc/glob, the program that expanded filenames.
  */
 
 /* XXX cp not const 'cause slashes are temporarily replaced with nulls... */
 static void
-glob(cp, wp, markdirs)
+ksh_glob(cp, wp, markdirs)
 	char *cp;
-	register XPtrV *wp;
+	XPtrV *wp;
 	int markdirs;
 {
 	int oldsize = XPsize(*wp);
@@ -1002,10 +996,10 @@ globit(xs, xpp, sp, wp, check)
 	XString *xs;		/* dest string */
 	char **xpp;		/* ptr to dest end */
 	char *sp;		/* source path */
-	register XPtrV *wp;	/* output list */
+	XPtrV *wp;		/* output list */
 	int check;		/* GF_* flags */
 {
-	register char *np;	/* next source component */
+	char *np;		/* next source component */
 	char *xp = *xpp;
 	char *se;
 	char odirsep;
@@ -1062,15 +1056,7 @@ globit(xs, xpp, sp, wp, check)
 				*xp = '\0';
 			}
 		}
-#ifdef OS2 /* Done this way to avoid bug in gcc 2.7.2... */
-    /* Ugly kludge required for command
-     * completion - see how search_access()
-     * is implemented for OS/2...
-     */
-# define KLUDGE_VAL	4
-#else /* OS2 */
 # define KLUDGE_VAL	0
-#endif /* OS2 */
 		XPput(*wp, str_nsave(Xstring(*xs, xp), Xlength(*xs, xp)
 			+ KLUDGE_VAL, ATEMP));
 		return;
@@ -1121,7 +1107,7 @@ globit(xs, xpp, sp, wp, check)
 		while ((d = readdir(dirp)) != NULL) {
 			name = d->d_name;
 			if ((*name == '.' && *sp != '.')
-			    || !gmatch(name, sp, TRUE))
+			    || !gmatch(name, sp, true))
 				continue;
 
 			len = NLENGTH(d) + 1;
@@ -1292,14 +1278,10 @@ static char *
 homedir(name)
 	char *name;
 {
-	register struct tbl *ap;
+	struct tbl *ap;
 
 	ap = tenter(&homedirs, name, hash(name));
 	if (!(ap->flag & ISSET)) {
-#ifdef OS2
-		/* No usernames in OS2 - punt */
-		return NULL;
-#else /* OS2 */
 		struct passwd *pw;
 		size_t n;
 
@@ -1315,7 +1297,6 @@ homedir(name)
 			ap->val.s = str_save(pw->pw_dir, APERM);
 		}
 		ap->flag |= DEFINED|ISSET|ALLOC;
-#endif /* OS2 */
 	}
 	return ap->val.s;
 }
@@ -1360,7 +1341,7 @@ alt_expand(wp, start, exp_start, end, fdo)
 		 * expansion. }
 		 */
 		if (fdo & DOGLOB)
-			glob(start, wp, fdo & DOMARKDIRS);
+			ksh_glob(start, wp, fdo & DOMARKDIRS);
 		else
 			XPput(*wp, debunk(start, start, end - start));
 		return;

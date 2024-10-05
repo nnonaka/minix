@@ -1,4 +1,4 @@
-/*	$NetBSD: input.h,v 1.15 2003/08/07 09:05:33 agc Exp $	*/
+/*	$NetBSD: input.h,v 1.21 2018/08/19 23:50:27 kre Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -43,19 +43,26 @@
  */
 extern int plinno;
 extern int parsenleft;		/* number of characters left in input buffer */
-extern char *parsenextc;	/* next character in input buffer */
+extern const char *parsenextc;	/* next character in input buffer */
 extern int init_editline;	/* 0 == not setup, 1 == OK, -1 == failed */
+extern int whichprompt;		/* 1 ==> PS1, 2 ==> PS2 */
+
+struct alias;
+struct parsefile;
 
 char *pfgets(char *, int);
 int pgetc(void);
 int preadbuffer(void);
+int at_eof(void);
 void pungetc(void);
-void pushstring(char *, int, void *);
+void pushstring(const char *, int, struct alias *);
 void popstring(void);
 void setinputfile(const char *, int);
 void setinputfd(int, int);
-void setinputstring(char *, int);
+void setinputstring(char *, int, int);
 void popfile(void);
+struct parsefile *getcurrentfile(void);
+void popfilesupto(struct parsefile *);
 void popallfiles(void);
 void closescript(int);
 

@@ -1,128 +1,29 @@
-/*	$NetBSD: sh.h,v 1.7 2005/06/26 19:09:00 christos Exp $	*/
+/*	$NetBSD: sh.h,v 1.35 2017/06/30 04:44:46 kamil Exp $	*/
 
 /*
  * Public Domain Bourne/Korn shell
  */
 
-/* $Id: sh.h,v 1.7 2005/06/26 19:09:00 christos Exp $ */
+/* $Id: sh.h,v 1.35 2017/06/30 04:44:46 kamil Exp $ */
 
 #include "config.h"	/* system and option configuration info */
 
-#ifdef HAVE_PROTOTYPES
-# define	ARGS(args)	args	/* prototype declaration */
-#else
-# define	ARGS(args)	()	/* K&R declaration */
-#endif
+#define	ARGS(args)	args	/* prototype declaration */
 
 /* Start of common headers */
 
 #include <stdio.h>
 #include <sys/types.h>
 #include <setjmp.h>
-#ifdef HAVE_STDDEF_H
-# include <stddef.h>
-#endif
-
-#ifdef HAVE_STDLIB_H
-# include <stdlib.h>
-#else
-/* just a useful subset of what stdlib.h would have */
-extern char * getenv  ARGS((const char *));
-extern void * malloc  ARGS((size_t));
-extern void * realloc ARGS((void *, size_t));
-extern int    free    ARGS((void *));
-extern int    exit    ARGS((int));
-extern int    rand    ARGS((void));
-extern void   srand   ARGS((unsigned int));
-extern int    atoi    ARGS((const char *));
-#endif /* HAVE_STDLIB_H */
-
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#else
-/* just a useful subset of what unistd.h would have */
-extern int access ARGS((const char *, int));
-extern int open ARGS((const char *, int, ...));
-extern int creat ARGS((const char *, mode_t));
-extern int read ARGS((int, char *, unsigned));
-extern int write ARGS((int, const char *, unsigned));
-extern off_t lseek ARGS((int, off_t, int));
-extern int close ARGS((int));
-extern int pipe ARGS((int []));
-extern int dup2 ARGS((int, int));
-extern int unlink ARGS((const char *));
-extern int fork ARGS((void));
-extern int execve ARGS((const char *, char * const[], char * const[]));
-extern int chdir ARGS((const char *));
-extern int kill ARGS((pid_t, int));
-extern char *getcwd();	/* no ARGS here - differs on different machines */
-extern int geteuid ARGS((void));
-extern int readlink ARGS((const char *, char *, int));
-extern int getegid ARGS((void));
-extern int getpid ARGS((void));
-extern int getppid ARGS((void));
-extern unsigned int sleep ARGS((unsigned int));
-extern int isatty ARGS((int));
-# ifdef POSIX_PGRP
-extern int getpgrp ARGS((void));
-extern int setpgid ARGS((pid_t, pid_t));
-# endif /* POSIX_PGRP */
-# ifdef BSD_PGRP
-extern int getpgrp ARGS((pid_t));
-extern int setpgrp ARGS((pid_t, pid_t));
-# endif /* BSD_PGRP */
-# ifdef SYSV_PGRP
-extern int getpgrp ARGS((void));
-extern int setpgrp ARGS((void));
-# endif /* SYSV_PGRP */
-#endif /* HAVE_UNISTD_H */
-
-#ifdef HAVE_STRING_H
-# include <string.h>
-#else
-# include <strings.h>
-# define strchr index
-# define strrchr rindex
-#endif /* HAVE_STRING_H */
-#ifndef HAVE_STRSTR
-char *strstr ARGS((const char *s, const char *p));
-#endif /* HAVE_STRSTR */
-#ifndef HAVE_STRCASECMP
-int strcasecmp ARGS((const char *s1, const char *s2));
-int strncasecmp ARGS((const char *s1, const char *s2, int n));
-#endif /* HAVE_STRCASECMP */
-
-#ifdef HAVE_MEMORY_H
-# include <memory.h>
-#endif
-#ifndef HAVE_MEMSET
-# define memcpy(d, s, n)	bcopy(s, d, n)
-# define memcmp(s1, s2, n)	bcmp(s1, s2, n)
-void *memset ARGS((void *d, int c, size_t n));
-#endif /* HAVE_MEMSET */
-#ifndef HAVE_MEMMOVE
-# ifdef HAVE_BCOPY
-#  define memmove(d, s, n)	bcopy(s, d, n)
-# else
-void *memmove ARGS((void *d, const void *s, size_t n));
-# endif
-#endif /* HAVE_MEMMOVE */
-
-#ifdef HAVE_PROTOTYPES
-# include <stdarg.h>
-# define SH_VA_START(va, argn) va_start(va, argn)
-#else
-# include <varargs.h>
-# define SH_VA_START(va, argn) va_start(va)
-#endif /* HAVE_PROTOTYPES */
-
+#include <stddef.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdarg.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
 
-#ifdef HAVE_FCNTL_H
-# include <fcntl.h>
-#else
-# include <sys/file.h>
-#endif /* HAVE_FCNTL_H */
 #ifndef O_ACCMODE
 # define O_ACCMODE	(O_RDONLY|O_WRONLY|O_RDWR)
 #endif /* !O_ACCMODE */
@@ -146,12 +47,7 @@ void *memmove ARGS((void *d, const void *s, size_t n));
 # endif /* L_SET */
 #endif /* !SEEK_SET */
 
-/* Some machines (eg, FreeBSD 1.1.5) define CLK_TCK in limits.h
- * (ksh_limval.h assumes limits has been included, if available)
- */
-#ifdef HAVE_LIMITS_H
-# include <limits.h>
-#endif /* HAVE_LIMITS_H */
+#include <limits.h>
 
 #include <signal.h>
 #ifdef	NSIG
@@ -181,10 +77,6 @@ void *memmove ARGS((void *d, const void *s, size_t n));
 
 typedef	RETSIGTYPE (*handler_t) ARGS((int));	/* signal handler */
 
-#ifdef USE_FAKE_SIGACT
-# include "sigact.h"			/* use sjg's fake sigaction() */
-#endif
-
 #ifdef HAVE_PATHS_H
 # include <paths.h>
 #endif /* HAVE_PATHS_H */
@@ -194,30 +86,9 @@ typedef	RETSIGTYPE (*handler_t) ARGS((int));	/* signal handler */
 # define DEFAULT__PATH DEFAULT_PATH
 #endif /* _PATH_DEFPATH */
 
-#ifndef offsetof
-# define offsetof(type,id) ((size_t)&((type*)NULL)->id)
-#endif
-
 #ifndef HAVE_KILLPG
 # define killpg(p, s)	kill(-(p), (s))
 #endif /* !HAVE_KILLPG */
-
-/* Special cases for execve(2) */
-#ifdef OS2
-extern int ksh_execve(char *cmd, char **args, char **env, int flags);
-#else /* OS2 */
-# if defined(OS_ISC) && defined(_POSIX_SOURCE)
-/* Kludge for ISC 3.2 (and other versions?) so programs will run correctly.  */
-#  define ksh_execve(p, av, ev, flags) \
-				do { \
-					__setostype(0); \
-					execve(p, av, ev); \
-					__setostype(1); \
-				} while (0)
-# else /* OS_ISC && _POSIX */
-#  define ksh_execve(p, av, ev, flags)	execve(p, av, ev)
-# endif /* OS_ISC && _POSIX */
-#endif /* OS2 */
 
 /* this is a hang-over from older versions of the os2 port */
 #define ksh_dupbase(fd, base) fcntl(fd, F_DUPFD, base)
@@ -237,24 +108,6 @@ extern int ksh_execve(char *cmd, char **args, char **env, int flags);
 # define ksh_jmp_buf		jmp_buf
 #endif /* HAVE_SIGSETJMP */
 
-#ifndef HAVE_DUP2
-extern int dup2 ARGS((int, int));
-#endif /* !HAVE_DUP2 */
-
-/* Find a integer type that is at least 32 bits (or die) - SIZEOF_* defined
- * by autoconf (assumes an 8 bit byte, but I'm not concerned).
- * NOTE: INT32 may end up being more than 32 bits.
- */
-#if SIZEOF_INT >= 4
-# define INT32	int
-#else /* SIZEOF_INT */
-# if SIZEOF_LONG >= 4
-#  define INT32	long
-# else /* SIZEOF_LONG */
-   #error cannot find 32 bit type...
-# endif /* SIZEOF_LONG */
-#endif /* SIZEOF_INT */
-
 /* end of common headers */
 
 /* Stop gcc and lint from complaining about possibly uninitialized variables */
@@ -273,19 +126,10 @@ extern int dup2 ARGS((int, int));
 # define EXTERN_DEFINED
 #endif
 
-#ifdef OS2
-# define inDOS() (!(_emx_env & 0x200))
-#endif
-
 #ifndef EXECSHELL
 /* shell to exec scripts (see also $SHELL initialization in main.c) */
-# ifdef OS2
-#  define EXECSHELL	(inDOS() ? "c:\\command.com" : "c:\\os2\\cmd.exe")
-#  define EXECSHELL_STR	(inDOS() ? "COMSPEC" : "OS2_SHELL")
-# else /* OS2 */
 #  define EXECSHELL	"/bin/sh"
 #  define EXECSHELL_STR	"EXECSHELL"
-# endif /* OS2 */
 #endif
 
 /* ISABSPATH() means path is fully and completely specified,
@@ -296,59 +140,26 @@ extern int dup2 ARGS((int, int));
  * unix		/foo		yes		yes		no
  * unix		foo		no		no		yes
  * unix		../foo		no		no		yes
- * os2+cyg	a:/foo		yes		yes		no
- * os2+cyg	a:foo		no		no		no
- * os2+cyg	/foo		no		yes		no
- * os2+cyg	foo		no		no		yes
- * os2+cyg	../foo		no		no		yes
- * cyg 		//foo		yes		yes		no
  */
-#ifdef OS2
-# define PATHSEP        ';'
-# define DIRSEP         '/'	/* even though \ is native */
-# define DIRSEPSTR      "\\"
-# define ISDIRSEP(c)    ((c) == '\\' || (c) == '/')
-# define ISABSPATH(s)	(((s)[0] && (s)[1] == ':' && ISDIRSEP((s)[2])))
-# define ISROOTEDPATH(s) (ISDIRSEP((s)[0]) || ISABSPATH(s))
-# define ISRELPATH(s)	(!(s)[0] || ((s)[1] != ':' && !ISDIRSEP((s)[0])))
-# define FILECHCONV(c)	(isascii(c) && isupper(c) ? tolower(c) : c)
-# define FILECMP(s1, s2) stricmp(s1, s2)
-# define FILENCMP(s1, s2, n) strnicmp(s1, s2, n)
-extern char *ksh_strchr_dirsep(const char *path);
-extern char *ksh_strrchr_dirsep(const char *path);
-# define chdir          _chdir2
-# define getcwd         _getcwd2
-#else
 # define PATHSEP        ':'
 # define DIRSEP         '/'
 # define DIRSEPSTR      "/"
 # define ISDIRSEP(c)    ((c) == '/')
-#ifdef __CYGWIN__
-#  define ISABSPATH(s) \
-       (((s)[0] && (s)[1] == ':' && ISDIRSEP((s)[2])) || ISDIRSEP((s)[0]))
-#  define ISRELPATH(s) (!(s)[0] || ((s)[1] != ':' && !ISDIRSEP((s)[0])))
-#else /* __CYGWIN__ */
 # define ISABSPATH(s)	ISDIRSEP((s)[0])
 # define ISRELPATH(s)	(!ISABSPATH(s))
-#endif /* __CYGWIN__ */
 # define ISROOTEDPATH(s) ISABSPATH(s)
 # define FILECHCONV(c)	c
 # define FILECMP(s1, s2) strcmp(s1, s2)
 # define FILENCMP(s1, s2, n) strncmp(s1, s2, n)
 # define ksh_strchr_dirsep(p)   strchr(p, DIRSEP)
 # define ksh_strrchr_dirsep(p)  strrchr(p, DIRSEP)
-#endif
-
-typedef int bool_t;
-#define	FALSE	0
-#define	TRUE	1
 
 #define	NELEM(a) (sizeof(a) / sizeof((a)[0]))
 #define	sizeofN(type, n) (sizeof(type) * (n))
 #define	BIT(i)	(1<<(i))	/* define bit in flag */
 
 /* Table flag type - needs > 16 and < 32 bits */
-typedef INT32 Tflag;
+typedef int_least32_t Tflag;
 
 #define	NUFILE	32		/* Number of user-accessible files */
 #define	FDBASE	10		/* First file usable by Shell */
@@ -386,10 +197,6 @@ typedef struct Area {
 EXTERN	Area	aperm;		/* permanent object space */
 #define	APERM	&aperm
 #define	ATEMP	&e->area
-
-#ifdef MEM_DEBUG
-# include "chmem.h" /* a debugging front end for malloc et. al. */
-#endif /* MEM_DEBUG */
 
 #ifdef KSH_DEBUG
 # define kshdebug_init()	kshdebug_init_()
@@ -587,10 +394,7 @@ typedef struct trap {
 EXTERN	int volatile trap;	/* traps pending? */
 EXTERN	int volatile intrsig;	/* pending trap interrupts executing command */
 EXTERN	int volatile fatal_trap;/* received a fatal signal */
-#ifndef FROM_TRAP_C
-/* Kludge to avoid bogus re-declaration of sigtraps[] error on AIX 3.2.5 */
 extern	Trap	sigtraps[SIGNALS+1];
-#endif /* !FROM_TRAP_C */
 
 #ifdef KSH
 /*
@@ -659,7 +463,7 @@ EXTERN Getopt user_opt;		/* parsing state for getopts builtin command */
 #ifdef KSH
 /* This for co-processes */
 
-typedef INT32 Coproc_id; /* something that won't (realisticly) wrap */
+typedef int_least32_t Coproc_id; /* something that won't (realisticly) wrap */
 struct coproc {
 	int	read;		/* pipe from co-process's stdout */
 	int	readw;		/* other side of read (saved temporarily) */
@@ -672,9 +476,7 @@ EXTERN struct coproc coproc;
 #endif /* KSH */
 
 /* Used in jobs.c and by coprocess stuff in exec.c */
-#ifdef JOB_SIGS
 EXTERN sigset_t		sm_default, sm_sigchld;
-#endif /* JOB_SIGS */
 
 extern char ksh_version[];
 
@@ -709,11 +511,7 @@ EXTERN	int	x_cols I__(80);	/* tty columns */
 
 /* Determine the location of the system (common) profile */
 #ifndef KSH_SYSTEM_PROFILE
-# ifdef __NeXT
-#  define KSH_SYSTEM_PROFILE "/etc/profile.std"
-# else /* __NeXT */
-#  define KSH_SYSTEM_PROFILE "/etc/profile"
-# endif /* __NeXT */
+# define KSH_SYSTEM_PROFILE "/etc/profile"
 #endif /* KSH_SYSTEM_PROFILE */
 
 /* Used by v_evaluate() and setstr() to control action when error occurs */

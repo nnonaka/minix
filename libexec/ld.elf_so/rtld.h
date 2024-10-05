@@ -1,4 +1,4 @@
-/*	$NetBSD: rtld.h,v 1.124 2014/09/19 17:43:33 matt Exp $	 */
+/*	$NetBSD: rtld.h,v 1.136.2.1 2020/05/13 18:08:38 martin Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -136,20 +136,11 @@ typedef struct _rtld_library_xform_t {
  *
  * Items marked with "(%)" are dynamically allocated, and must be freed
  * when the structure is destroyed.
- *
- * The layout of this structure needs to be preserved because pre-2.0 binaries
- * hard-coded the location of dlopen() and friends.
  */
-
-#define RTLD_MAGIC	0xd550b87a
-#define RTLD_VERSION	1
 
 typedef void (*fptr_t)(void);
 
 typedef struct Struct_Obj_Entry {
-	Elf32_Word      magic;		/* Magic number (sanity check) */
-	Elf32_Word      version;	/* Version number of struct format */
-
 	struct Struct_Obj_Entry *next;
 	char           *path;		/* Pathname of underlying file (%) */
 	int             refcount;
@@ -195,18 +186,6 @@ typedef struct Struct_Obj_Entry {
 
 	Elf_Addr	init;		/* Initialization function to call */
 	Elf_Addr	fini;		/* Termination function to call */
-
-	/*
-	 * BACKWARDS COMPAT Entry points for dlopen() and friends.
-	 *
-	 * DO NOT MOVE OR ADD TO THE LIST
-	 *
-	 */
-	void           *(*dlopen)(const char *, int);
-	void           *(*dlsym)(void *, const char *);
-	char           *(*dlerror)(void);
-	int             (*dlclose)(void *);
-	int             (*dladdr)(const void *, Dl_info *);
 
 	u_int32_t	mainprog:1,	/* True if this is the main program */
 	        	rtld:1,		/* True if this is the dynamic linker */
@@ -276,6 +255,12 @@ typedef struct Struct_Obj_Entry {
 	size_t		tlsalign;	/* Needed alignment for static TLS */
 #endif
 
+#ifdef GNU_RELRO
+	/* relocation readonly */
+	void		*relro_page;
+	size_t		relro_size;
+#endif
+
 	/* symbol versioning */
 	const Elf_Verneed *verneed;	/* Required versions. */
 	Elf_Word	verneednum;	/* Number of entries in verneed table */
@@ -292,6 +277,15 @@ typedef struct Struct_Obj_Entry {
 	size_t		init_arraysz;	/* # of entries in it */
 	Elf_Addr	*fini_array;	/* start of fini array */
 	size_t		fini_arraysz;	/* # of entries in it */
+	/* IRELATIVE relocations */
+	size_t		ifunc_remaining;
+#if defined(__sparc__) || defined(__powerpc__) || defined(__arm__) || \
+    defined(__i386__) || defined(__x86_64__)
+#define IFUNC_NONPLT
+	/* On SPARC, the PLT variant is called JMP_IREL and counted above. */
+	size_t		ifunc_remaining_nonplt;
+#endif
+	size_t		cxa_refcount;	/* For TLS destructors. */
 #ifdef __ARM_EABI__
 	void		*exidx_start;
 	size_t		exidx_sz;
@@ -313,6 +307,7 @@ extern Obj_Entry *_rtld_objlist;
 extern Obj_Entry **_rtld_objtail;
 extern u_int _rtld_objcount;
 extern u_int _rtld_objloads;
+extern const uintptr_t _rtld_compat_obj[];
 extern Obj_Entry *_rtld_objmain;
 extern Obj_Entry _rtld_objself;
 extern Search_Path *_rtld_paths;
@@ -321,6 +316,7 @@ extern bool _rtld_trust;
 extern Objlist _rtld_list_global;
 extern Objlist _rtld_list_main;
 extern Elf_Sym _rtld_sym_zero;
+extern u_int _rtld_objgen;
 
 #define	RTLD_MODEMASK 0x3
 
@@ -339,8 +335,6 @@ extern Elf_Sym _rtld_sym_zero;
 #define	RTLD_STATIC_TLS_RESERVATION	64
 
 /* rtld.c */
-
-/* We export these symbols using _rtld_symbol_lookup and is_exported. */
 __dso_public char *dlerror(void);
 __dso_public void *dlopen(const char *, int);
 __dso_public void *dlsym(void *, const char *);
@@ -351,6 +345,9 @@ __dso_public int dl_iterate_phdr(int (*)(struct dl_phdr_info *, size_t, void *),
     void *);
 
 __dso_public void *_dlauxinfo(void) __pure;
+__dso_public void __dl_cxa_refcount(void *addr, ssize_t delta);
+
+__dso_public pid_t __locked_fork(int *);
 
 #if defined(__ARM_EABI__) && !defined(__ARM_DWARF_EH__)
 /*
@@ -377,6 +374,8 @@ void _rtld_shared_exit(void);
 void _rtld_exclusive_enter(sigset_t *);
 void _rtld_exclusive_exit(sigset_t *);
 
+int _rtld_relro(const Obj_Entry *, bool);
+
 /* expand.c */
 size_t _rtld_expand_path(char *, size_t, const char *, const char *,\
     const char *);
@@ -401,10 +400,13 @@ int _rtld_sysctl(const char *, void *, size_t *);
 int _rtld_do_copy_relocations(const Obj_Entry *);
 int _rtld_relocate_objects(Obj_Entry *, bool);
 int _rtld_relocate_nonplt_objects(Obj_Entry *);
-int _rtld_relocate_plt_lazy(const Obj_Entry *);
+int _rtld_relocate_plt_lazy(Obj_Entry *);
 int _rtld_relocate_plt_objects(const Obj_Entry *);
 void _rtld_setup_pltgot(const Obj_Entry *);
 Elf_Addr _rtld_resolve_ifunc(const Obj_Entry *, const Elf_Sym *);
+Elf_Addr _rtld_resolve_ifunc2(const Obj_Entry *, Elf_Addr);
+
+void _rtld_call_ifunc(Obj_Entry *, sigset_t *, u_int);
 
 /* search.c */
 Obj_Entry *_rtld_load_library(const char *, const Obj_Entry *, int);
@@ -425,9 +427,6 @@ const Elf_Sym *_rtld_symlook_default(const char *, unsigned long,
 const Elf_Sym *_rtld_symlook_needed(const char *, unsigned long,
     const Needed_Entry *, const Obj_Entry **, u_int, const Ver_Entry *,
     DoneList *, DoneList *);
-#ifdef COMBRELOC
-void _rtld_combreloc_reset(const Obj_Entry *);
-#endif
 
 /* symver.c */
 void _rtld_object_add_name(Obj_Entry *, const char *);

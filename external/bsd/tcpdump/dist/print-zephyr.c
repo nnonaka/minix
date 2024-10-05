@@ -22,40 +22,41 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-zephyr.c,v 1.5 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: print-zephyr.c,v 1.8 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
+/* \summary: Zephyr printer */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include "interface.h"
+#include "netdissect.h"
 
 struct z_packet {
-    char *version;
+    const char *version;
     int numfields;
     int kind;
-    char *uid;
+    const char *uid;
     int port;
     int auth;
     int authlen;
-    char *authdata;
-    char *class;
-    char *inst;
-    char *opcode;
-    char *sender;
+    const char *authdata;
+    const char *class;
+    const char *inst;
+    const char *opcode;
+    const char *sender;
     const char *recipient;
-    char *format;
+    const char *format;
     int cksum;
     int multi;
-    char *multi_uid;
+    const char *multi_uid;
     /* Other fields follow here.. */
 };
 
@@ -80,35 +81,46 @@ static const struct tok z_types[] = {
     { Z_PACKET_SERVACK,		"serv-ack" },
     { Z_PACKET_SERVNAK,		"serv-nak" },
     { Z_PACKET_CLIENTACK,	"client-ack" },
-    { Z_PACKET_STAT,		"stat" }
+    { Z_PACKET_STAT,		"stat" },
+    { 0,			NULL }
 };
 
 static char z_buf[256];
 
-static char *
-parse_field(netdissect_options *ndo, char **pptr, int *len)
+static const char *
+parse_field(netdissect_options *ndo, const char **pptr, int *len, int *truncated)
 {
-    char *s;
+    const char *s;
 
-    if (*len <= 0 || !pptr || !*pptr)
-	return NULL;
-    if (*pptr > (char *) ndo->ndo_snapend)
-	return NULL;
-
+    /* Start of string */
     s = *pptr;
-    while (*pptr <= (char *) ndo->ndo_snapend && *len >= 0 && **pptr) {
+    /* Scan for the NUL terminator */
+    for (;;) {
+	if (*len == 0) {
+	    /* Ran out of packet data without finding it */
+	    return NULL;
+	}
+	if (!ND_TTEST(**pptr)) {
+	    /* Ran out of captured data without finding it */
+	    *truncated = 1;
+	    return NULL;
+	}
+	if (**pptr == '\0') {
+	    /* Found it */
+	    break;
+	}
+	/* Keep scanning */
 	(*pptr)++;
 	(*len)--;
     }
+    /* Skip the NUL terminator */
     (*pptr)++;
     (*len)--;
-    if (*len < 0 || *pptr > (char *) ndo->ndo_snapend)
-	return NULL;
     return s;
 }
 
 static const char *
-z_triple(char *class, char *inst, const char *recipient)
+z_triple(const char *class, const char *inst, const char *recipient)
 {
     if (!*recipient)
 	recipient = "*";
@@ -118,15 +130,17 @@ z_triple(char *class, char *inst, const char *recipient)
 }
 
 static const char *
-str_to_lower(char *string)
+str_to_lower(const char *string)
 {
+    char *zb_string;
+
     strncpy(z_buf, string, sizeof(z_buf));
     z_buf[sizeof(z_buf)-1] = '\0';
 
-    string = z_buf;
-    while (*string) {
-	*string = tolower((unsigned char)(*string));
-	string++;
+    zb_string = z_buf;
+    while (*zb_string) {
+	*zb_string = tolower((unsigned char)(*zb_string));
+	zb_string++;
     }
 
     return z_buf;
@@ -136,10 +150,11 @@ void
 zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
 {
     struct z_packet z;
-    char *parse = (char *) cp;
+    const char *parse = (const char *) cp;
     int parselen = length;
-    char *s;
+    const char *s;
     int lose = 0;
+    int truncated = 0;
 
     /* squelch compiler warnings */
 
@@ -152,8 +167,9 @@ zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
 
     memset(&z, 0, sizeof(z));	/* XXX gcc */
 
-#define PARSE_STRING				\
-	s = parse_field(ndo, &parse, &parselen);	\
+#define PARSE_STRING						\
+	s = parse_field(ndo, &parse, &parselen, &truncated);	\
+	if (truncated) goto trunc;				\
 	if (!s) lose = 1;
 
 #define PARSE_FIELD_INT(field)			\
@@ -186,10 +202,8 @@ zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
     PARSE_FIELD_INT(z.multi);
     PARSE_FIELD_STR(z.multi_uid);
 
-    if (lose) {
-	ND_PRINT((ndo, " [|zephyr] (%d)", length));
-	return;
-    }
+    if (lose)
+        goto trunc;
 
     ND_PRINT((ndo, " zephyr"));
     if (strncmp(z.version+4, "0.2", 3)) {
@@ -200,7 +214,7 @@ zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
     ND_PRINT((ndo, " %s", tok2str(z_types, "type %d", z.kind)));
     if (z.kind == Z_PACKET_SERVACK) {
 	/* Initialization to silence warnings */
-	char *ackdata = NULL;
+	const char *ackdata = NULL;
 	PARSE_FIELD_STR(ackdata);
 	if (!lose && strcmp(ackdata, "SENT"))
 	    ND_PRINT((ndo, "/%s", str_to_lower(ackdata)));
@@ -233,7 +247,7 @@ zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
 								   "-nodefs"));
 		if (z.kind != Z_PACKET_SERVACK) {
 		    /* Initialization to silence warnings */
-		    char *c = NULL, *i = NULL, *r = NULL;
+		    const char *c = NULL, *i = NULL, *r = NULL;
 		    PARSE_FIELD_STR(c);
 		    PARSE_FIELD_STR(i);
 		    PARSE_FIELD_STR(r);
@@ -321,4 +335,9 @@ zephyr_print(netdissect_options *ndo, const u_char *cp, int length)
     ND_PRINT((ndo, " to %s", z_triple(z.class, z.inst, z.recipient)));
     if (*z.opcode)
 	ND_PRINT((ndo, " op %s", z.opcode));
+    return;
+
+trunc:
+    ND_PRINT((ndo, " [|zephyr] (%d)", length));
+    return;
 }

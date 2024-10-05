@@ -1,4 +1,4 @@
-.\"	$NetBSD: sysconf.3,v 1.44 2015/08/20 11:05:39 wiz Exp $
+.\"	$NetBSD: sysconf.3,v 1.51 2016/08/03 12:40:42 ryoon Exp $
 .\"
 .\" Copyright (c) 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)sysconf.3	8.3 (Berkeley) 4/19/94
 .\"
-.Dd August 20, 2015
+.Dd August 3, 2016
 .Dt SYSCONF 3
 .Os
 .Sh NAME
@@ -149,6 +149,9 @@ and its
 Semaphores
 option to which the system attempts to conform,
 otherwise \-1.
+.It Li _SC_SEM_NSEMS_MAX
+The maximum number of semaphores that one process can have open at a time,
+otherwise \-1.
 .It Li _SC_SHELL
 Return 1 if
 .Tn POSIX
@@ -175,12 +178,23 @@ and its
 Threads
 option to which the system attempts to conform,
 otherwise \-1.
+.It Li _SC_THREAD_PRIO_PROTECT
+System supports the priority ceiling protocol for POSIX threads.
 .It Li _SC_TIMERS
 The version of
 .St -p1003.1
 and its
 Timers
 option to which the system attempts to conform,
+otherwise \-1.
+.It Li _SC_CPUTIME
+The clockID CLOCK_PROCESS_CPUTIME_ID is supported,
+otherwise \-1.
+.It Li _SC_THREAD_CPUTIME
+The clockID CLOCK_THREAD_CPUTIME_ID is supported,
+otherwise \-1.
+.It Li _SC_DELAYTIMER_MAX
+The maximum number of overrun for a specific timer,
 otherwise \-1.
 .It Li _SC_TZNAME_MAX
 The minimum maximum number of types supported for the name of a
@@ -280,6 +294,11 @@ The number of processors online (capable of running processes).
 The amount of physical memory on the system in
 .Li _SC_PAGESIZE
 bytes.
+.It Li _SC_TIMER_MAX
+The number of timers available for
+.Xr timer_create 2 .
+This is also known as
+.Dv _POSIX_TIMER_MAX .
 .El
 .Sh RETURN VALUES
 If the call to

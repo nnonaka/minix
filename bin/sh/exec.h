@@ -1,4 +1,4 @@
-/*	$NetBSD: exec.h,v 1.23 2012/03/15 02:02:20 joerg Exp $	*/
+/*	$NetBSD: exec.h,v 1.27 2018/06/22 11:04:55 kre Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -43,11 +43,13 @@
 
 
 struct cmdentry {
-	int cmdtype;
+	short cmdtype;
+	short lno_frel;		/* for functions: Line numbers count from 1 */
+	int lineno;		/* for functions: Abs line number of defn */
 	union param {
 		int index;
 		int (*bltin)(int, char**);
-		union node *func;
+		struct funcdef *func;
 	} u;
 };
 
@@ -62,7 +64,7 @@ struct cmdentry {
 extern const char *pathopt;	/* set by padvance */
 
 void shellexec(char **, char **, const char *, int, int) __dead;
-char *padvance(const char **, const char *);
+char *padvance(const char **, const char *, int);
 void find_command(char *, struct cmdentry *, int, const char *);
 int (*find_builtin(char *))(int, char **);
 int (*find_splbltin(char *))(int, char **);
@@ -70,7 +72,7 @@ void hashcd(void);
 void changepath(const char *);
 void deletefuncs(void);
 void getcmdentry(char *, struct cmdentry *);
-void addcmdentry(char *, struct cmdentry *);
-void defun(char *, union node *);
+union node;
+void defun(char *, union node *, int);
 int unsetfunc(char *);
 void hash_special_builtins(void);

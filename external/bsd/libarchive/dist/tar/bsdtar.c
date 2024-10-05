@@ -648,7 +648,7 @@ only_mode(struct bsdtar *bsdtar, const char *opt, const char *valid_modes)
 }
 
 
-void
+_Noreturn void
 usage(void)
 {
 	const char	*p;
@@ -663,7 +663,7 @@ usage(void)
 	exit(1);
 }
 
-static void
+_Noreturn static void
 version(void)
 {
 	printf("bsdtar %s - %s\n",
@@ -707,7 +707,7 @@ static const char *long_help_msg =
  * if (tar --help 2>&1 | grep bsdtar >/dev/null 2>&1 ) then \
  *          echo bsdtar; else echo not bsdtar; fi
  */
-static void
+_Noreturn static void
 long_help(void)
 {
 	const char	*prog;

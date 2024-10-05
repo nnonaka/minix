@@ -1,4 +1,4 @@
-/*	$NetBSD: tls.c,v 1.10 2014/12/14 23:49:17 chs Exp $	*/
+/*	$NetBSD: tls.c,v 1.12.2.1 2019/11/26 08:12:26 martin Exp $	*/
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -29,11 +29,13 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: tls.c,v 1.10 2014/12/14 23:49:17 chs Exp $");
+__RCSID("$NetBSD: tls.c,v 1.12.2.1 2019/11/26 08:12:26 martin Exp $");
 
 #include <sys/param.h>
 #include <sys/ucontext.h>
 #include <lwp.h>
+#include <stdalign.h>
+#include <stddef.h>
 #include <string.h>
 #include "debug.h"
 #include "rtld.h"
@@ -99,7 +101,7 @@ _rtld_tls_initial_allocation(void)
 
 #ifndef __HAVE_TLS_VARIANT_I
 	_rtld_tls_static_space = roundup2(_rtld_tls_static_space,
-	    sizeof(void *));
+	    alignof(max_align_t));
 #endif
 	dbg(("_rtld_tls_static_space %zu", _rtld_tls_static_space));
 
@@ -134,7 +136,7 @@ _rtld_tls_allocate_locked(void)
 	SET_DTV_GENERATION(tcb->tcb_dtv, _rtld_tls_dtv_generation);
 
 	for (obj = _rtld_objlist; obj != NULL; obj = obj->next) {
-		if (obj->tlsinitsize && obj->tls_done) {
+		if (obj->tls_done) {
 #ifdef __HAVE_TLS_VARIANT_I
 			q = p + obj->tlsoffset;
 #else
@@ -142,7 +144,8 @@ _rtld_tls_allocate_locked(void)
 #endif
 			dbg(("obj %p dtv %p tlsoffset %zu",
 			    obj, q, obj->tlsoffset));
-			memcpy(q, obj->tlsinit, obj->tlsinitsize);
+			if (obj->tlsinitsize)
+				memcpy(q, obj->tlsinit, obj->tlsinitsize);
 			tcb->tcb_dtv[obj->tlsindex] = q;
 		}
 	}
@@ -167,21 +170,25 @@ void
 _rtld_tls_free(struct tls_tcb *tcb)
 {
 	size_t i, max_index;
-	uint8_t *p;
+	uint8_t *p, *p_end;
 	sigset_t mask;
 
 	_rtld_exclusive_enter(&mask);
-
-	max_index = DTV_MAX_INDEX(tcb->tcb_dtv);
-	for (i = 1; i <= max_index; ++i)
-		xfree(tcb->tcb_dtv[i]);
-	xfree(tcb->tcb_dtv - 1);
 
 #ifdef __HAVE_TLS_VARIANT_I
 	p = (uint8_t *)tcb;
 #else
 	p = (uint8_t *)tcb - _rtld_tls_static_space;
 #endif
+	p_end = p + _rtld_tls_static_space;
+
+	max_index = DTV_MAX_INDEX(tcb->tcb_dtv);
+	for (i = 1; i <= max_index; ++i) {
+		if ((uint8_t *)tcb->tcb_dtv[i] < p ||
+		    (uint8_t *)tcb->tcb_dtv[i] >= p_end)
+			xfree(tcb->tcb_dtv[i]);
+	}
+	xfree(tcb->tcb_dtv - 1);
 	xfree(p);
 
 	_rtld_exclusive_exit(&mask);
@@ -271,7 +278,7 @@ _rtld_tls_offset_free(Obj_Entry *obj)
 	return;
 }
 
-#ifdef __HAVE_COMMON___TLS_GET_ADDR
+#if defined(__HAVE_COMMON___TLS_GET_ADDR) && defined(RTLD_LOADER)
 /*
  * The fast path is access to an already allocated DTV entry.
  * This checks the current limit and the entry without needing any

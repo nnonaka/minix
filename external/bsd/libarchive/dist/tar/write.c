@@ -99,7 +99,7 @@ __FBSDID("$FreeBSD: src/usr.bin/tar/write.c,v 1.79 2008/11/27 05:49:52 kientzle 
 #define O_BINARY 0
 #endif
 
-static const char * const NO_NAME = "(noname)";
+//static const char * const NO_NAME = "(noname)";
 
 struct archive_dir_entry {
 	struct archive_dir_entry	*next;

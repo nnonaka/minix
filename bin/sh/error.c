@@ -1,4 +1,4 @@
-/*	$NetBSD: error.c,v 1.38 2012/03/15 02:02:20 joerg Exp $	*/
+/*	$NetBSD: error.c,v 1.43 2019/02/04 11:16:41 kre Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)error.c	8.2 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: error.c,v 1.38 2012/03/15 02:02:20 joerg Exp $");
+__RCSID("$NetBSD: error.c,v 1.43 2019/02/04 11:16:41 kre Exp $");
 #endif
 #endif /* not lint */
 
@@ -69,6 +69,9 @@ struct jmploc *handler;
 int exception;
 volatile int suppressint;
 volatile int intpending;
+volatile int errors_suppressed;
+const char * volatile currentcontext;
+
 
 
 static void exverror(int, const char *, va_list) __dead;
@@ -82,6 +85,7 @@ static void exverror(int, const char *, va_list) __dead;
 void
 exraise(int e)
 {
+	CTRACE(DBG_ERRS, ("exraise(%d)\n", e));
 	if (handler == NULL)
 		abort();
 	exception = e;
@@ -129,12 +133,19 @@ exvwarning(int sv_errno, const char *msg, va_list ap)
 	 *	printf '%d %d %d\n' 1 a 2
 	 * both generate sensible text when stdout and stderr are merged.
 	 */
-	if (output.nextc != output.buf && output.nextc[-1] == '\n')
+	if (output.buf != NULL && output.nextc != output.buf &&
+	    output.nextc[-1] == '\n')
 		flushout(&output);
+
+	if (errors_suppressed)
+		return;
+
 	if (commandname)
 		outfmt(&errout, "%s: ", commandname);
 	else
 		outfmt(&errout, "%s: ", getprogname());
+	if (currentcontext != NULL)
+		outfmt(&errout, "%s: ", currentcontext);
 	if (msg != NULL) {
 		doformat(&errout, msg, ap);
 		if (sv_errno >= 0)
@@ -159,11 +170,12 @@ exverror(int cond, const char *msg, va_list ap)
 
 #ifdef DEBUG
 	if (msg) {
-		TRACE(("exverror(%d, \"", cond));
-		TRACEV((msg, ap));
-		TRACE(("\") pid=%d\n", getpid()));
+		CTRACE(DBG_ERRS, ("exverror(%d, \"", cond));
+		CTRACEV(DBG_ERRS, (msg, ap));
+		CTRACE(DBG_ERRS, ("\") pid=%d\n", getpid()));
 	} else
-		TRACE(("exverror(%d, NULL) pid=%d\n", cond, getpid()));
+		CTRACE(DBG_ERRS, ("exverror(%d, NULL) pid=%d\n", cond,
+		    getpid()));
 #endif
 	if (msg)
 		exvwarning(-1, msg, ap);
@@ -179,6 +191,11 @@ error(const char *msg, ...)
 {
 	va_list ap;
 
+	/*
+	 * On error, we certainly never want exit(0)...
+	 */
+	if (exerrno == 0)
+		exerrno = 1;
 	va_start(ap, msg);
 	exverror(EXERROR, msg, ap);
 	/* NOTREACHED */

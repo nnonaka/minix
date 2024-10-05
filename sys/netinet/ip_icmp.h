@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_icmp.h,v 1.34 2015/02/18 17:00:15 christos Exp $	*/
+/*	$NetBSD: ip_icmp.h,v 1.40 2018/09/14 05:09:51 maxv Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -34,7 +34,6 @@
 #ifndef _NETINET_IP_ICMP_H_
 #define _NETINET_IP_ICMP_H_
 
-
 /*
  * Interface Control Message Protocol Definitions.
  * Per RFC 792, September 1981.
@@ -44,69 +43,122 @@
  * Internal of an ICMP Router Advertisement
  */
 struct icmp_ra_addr {
-	u_int32_t ira_addr;
-	u_int32_t ira_preference;
+	uint32_t ira_addr;
+	uint32_t ira_preference;
 } __packed;
 
 /*
  * Structure of an icmp header.
  */
 struct icmp {
-	u_int8_t  icmp_type;		/* type of message, see below */
-	u_int8_t  icmp_code;		/* type sub code */
-	u_int16_t icmp_cksum;		/* ones complement cksum of struct */
-	union {
-		u_int8_t  ih_pptr;		/* ICMP_PARAMPROB */
-		struct in_addr ih_gwaddr;	/* ICMP_REDIRECT */
-		struct ih_idseq {
-			  n_short icd_id;
-			  n_short icd_seq;
-		} ih_idseq __packed;
-		int32_t	  ih_void;
+	uint8_t  icmp_type;		/* type of message, see below */
+	uint8_t  icmp_code;		/* type sub code */
+	uint16_t icmp_cksum;		/* ones complement cksum of struct */
 
-		/* ICMP_UNREACH_NEEDFRAG -- Path MTU Discovery (RFC1191) */
+	union {
+		int32_t ih_void;
+
+		/* Extended Header (RFC4884) */
+		struct ih_exthdr {
+			uint8_t iex_void1;
+			uint8_t iex_length;
+			uint16_t iex_void2;
+		} ih_exthdr __packed;
+
+		/* ICMP_PARAMPROB */
+		uint8_t ih_pptr;
+
+		/* ICMP_REDIRECT */
+		struct in_addr ih_gwaddr;
+
+		/* ICMP_ECHO and friends */
+		struct ih_idseq {
+			uint16_t icd_id;
+			uint16_t icd_seq;
+		} ih_idseq __packed;
+
+		/* ICMP_UNREACH_NEEDFRAG (Path MTU Discovery, RFC1191) */
 		struct ih_pmtu {
-			  n_short ipm_void;
-			  n_short ipm_nextmtu;
+			uint16_t ipm_void;
+			uint16_t ipm_nextmtu;
 		} ih_pmtu __packed;
+
+		/* ICMP_ROUTERADVERT */
 		struct ih_rtradv {
-			u_int8_t irt_num_addrs;
-			u_int8_t irt_wpa;
-			u_int16_t irt_lifetime;
+			uint8_t irt_num_addrs;
+			uint8_t irt_wpa;
+			uint16_t irt_lifetime;
 		} ih_rtradv __packed;
 	} icmp_hun /* XXX __packed ??? */;
-#define icmp_pptr	  icmp_hun.ih_pptr
-#define icmp_gwaddr	  icmp_hun.ih_gwaddr
-#define icmp_id		  icmp_hun.ih_idseq.icd_id
-#define icmp_seq	  icmp_hun.ih_idseq.icd_seq
-#define icmp_void	  icmp_hun.ih_void
-#define icmp_pmvoid	  icmp_hun.ih_pmtu.ipm_void
-#define icmp_nextmtu	  icmp_hun.ih_pmtu.ipm_nextmtu
-#define icmp_num_addrs	  icmp_hun.ih_rtradv.irt_num_addrs
-#define icmp_wpa	  icmp_hun.ih_rtradv.irt_wpa
-#define icmp_lifetime	  icmp_hun.ih_rtradv.irt_lifetime
+
+#define icmp_pptr	icmp_hun.ih_pptr
+#define icmp_gwaddr	icmp_hun.ih_gwaddr
+#define icmp_id		icmp_hun.ih_idseq.icd_id
+#define icmp_seq	icmp_hun.ih_idseq.icd_seq
+#define icmp_void	icmp_hun.ih_void
+#define icmp_pmvoid	icmp_hun.ih_pmtu.ipm_void
+#define icmp_nextmtu	icmp_hun.ih_pmtu.ipm_nextmtu
+#define icmp_num_addrs	icmp_hun.ih_rtradv.irt_num_addrs
+#define icmp_wpa	icmp_hun.ih_rtradv.irt_wpa
+#define icmp_lifetime	icmp_hun.ih_rtradv.irt_lifetime
+
 	union {
+		/* ICMP_TSTAMP and friends */
 		struct id_ts {
-			  n_time its_otime;
-			  n_time its_rtime;
-			  n_time its_ttime;
+			uint32_t its_otime;
+			uint32_t its_rtime;
+			uint32_t its_ttime;
 		} id_ts __packed;
-		struct id_ip  {
-			  struct ip idi_ip;
-			  /* options and then 64 bits of data */
+
+		struct id_ip {
+			struct ip idi_ip;
+			/* options and then 64 bits of data */
 		} id_ip /* XXX: __packed ??? */;
+
+		/* ICMP_ROUTERADVERT */
 		struct icmp_ra_addr id_radv;
-		u_int32_t id_mask;
-		int8_t	  id_data[1];
+
+		/* ICMP_MASKREQ and friends */
+		uint32_t id_mask;
+
+		int8_t id_data[1];
 	} icmp_dun /* XXX __packed ??? */;
-#define icmp_otime	  icmp_dun.id_ts.its_otime
-#define icmp_rtime	  icmp_dun.id_ts.its_rtime
-#define icmp_ttime	  icmp_dun.id_ts.its_ttime
-#define icmp_ip		  icmp_dun.id_ip.idi_ip
-#define icmp_radv	  icmp_dun.id_mask
-#define icmp_mask	  icmp_dun.id_mask
-#define icmp_data	  icmp_dun.id_data
+
+#define icmp_otime	icmp_dun.id_ts.its_otime
+#define icmp_rtime	icmp_dun.id_ts.its_rtime
+#define icmp_ttime	icmp_dun.id_ts.its_ttime
+#define icmp_ip		icmp_dun.id_ip.idi_ip
+#define icmp_radv	icmp_dun.id_radv
+#define icmp_mask	icmp_dun.id_mask
+#define icmp_data	icmp_dun.id_data
 };
+
+#define ICMP_EXT_VERSION	2
+#define ICMP_EXT_OFFSET		128
+
+/*
+ * ICMP Extension Structure Header (RFC4884).
+ */
+struct icmp_ext_hdr {
+#if BYTE_ORDER == BIG_ENDIAN
+	uint8_t version:4;
+	uint8_t rsvd1:4;
+#else
+	uint8_t rsvd1:4;
+	uint8_t version:4;
+#endif
+	uint8_t rsvd2;
+	uint16_t checksum;
+} __packed;
+
+/*
+ * ICMP Extension Object Header (RFC4884).
+ */
+struct icmp_ext_obj_hdr {
+	uint16_t length;
+	uint8_t class_num;
+	uint8_t c_type;
+} __packed;
 
 /*
  * Lower bounds on packet lengths for various types.
@@ -117,9 +169,9 @@ struct icmp {
  * ip header length.
  */
 #define ICMP_MINLEN	8				/* abs minimum */
-#define ICMP_TSLEN	(8 + 3 * sizeof (n_time))	/* timestamp */
+#define ICMP_TSLEN	(8 + 3 * sizeof(uint32_t))	/* timestamp */
 #define ICMP_MASKLEN	12				/* address mask */
-#define ICMP_ADVLENMIN	(8 + sizeof (struct ip) + 8)	/* min */
+#define ICMP_ADVLENMIN	(8 + sizeof(struct ip) + 8)	/* min */
 #define ICMP_ADVLEN(p)	(8 + ((p)->icmp_ip.ip_hl << 2) + 8)
 	/* N.B.: must separately check that ip_hl >= 5 */
 
@@ -238,17 +290,16 @@ static const char *icmp_code_photuris[] = {
 	(type) == ICMP_MASKREQ || (type) == ICMP_MASKREPLY)
 
 #ifdef _KERNEL
-void	icmp_error(struct mbuf *, int, int, n_long, int);
-void	icmp_mtudisc(struct icmp *, struct in_addr);
-void	icmp_input(struct mbuf *, ...);
-void	icmp_init(void);
-void	icmp_reflect(struct mbuf *);
-void	icmp_send(struct mbuf *, struct mbuf *);
-int	icmp_sysctl(int *, u_int, void *, size_t *, void *, size_t);
+void icmp_error(struct mbuf *, int, int, n_long, int);
+void icmp_mtudisc(struct icmp *, struct in_addr);
+void icmp_input(struct mbuf *, int, int);
+void icmp_init(void);
+void icmp_reflect(struct mbuf *);
 
-void	icmp_mtudisc_callback_register(void (*)(struct in_addr));
-int	icmp_ratelimit(const struct in_addr *, const int, const int);
+void icmp_mtudisc_callback_register(void (*)(struct in_addr));
+int icmp_ratelimit(const struct in_addr *, const int, const int);
+void icmp_mtudisc_lock(void);
+void icmp_mtudisc_unlock(void);
 #endif
-
 
 #endif /* !_NETINET_IP_ICMP_H_ */

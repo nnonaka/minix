@@ -53,7 +53,7 @@ static void bread(FILE *f, char *name, void *buf, size_t len)
 	}
 }
 
-static void readblock(off_t blk, char *buf, int block_size)
+static void readblock(off_t blk, uint8_t *buf, int block_size)
 /* For rawfs, so that it can read blocks. */
 {
 	int n;
@@ -68,7 +68,7 @@ static void readblock(off_t blk, char *buf, int block_size)
 	}
 }
 
-static void writeblock(off_t blk, const char *buf, int block_size)
+static void writeblock(off_t blk, const uint8_t *buf, int block_size)
 /* Add a function to write blocks for local use. */
 {
 	if (lseek(rawfd, blk * block_size, SEEK_SET) < 0
@@ -88,7 +88,7 @@ void install_master(const char *device, char *masterboot, char **guide)
 {
 	FILE *masf;
 	unsigned long size;
-	static char buf[BOOT_BLOCK_SIZE];
+	static uint8_t buf[BOOT_BLOCK_SIZE];
 
 	/* Open device. */
 	if ((rawfd= open(rawdev= device, O_RDWR)) < 0) fatal(device);

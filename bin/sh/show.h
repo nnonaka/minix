@@ -1,4 +1,4 @@
-/*	$NetBSD: show.h,v 1.7 2003/08/07 09:05:38 agc Exp $	*/
+/*	$NetBSD: show.h,v 1.11 2017/06/30 23:00:40 kre Exp $	*/
 
 /*-
  * Copyright (c) 1995
@@ -33,12 +33,13 @@
 
 #include <stdarg.h>
 
+#ifdef DEBUG
 union node;
 void showtree(union node *);
 void trace(const char *, ...);
 void tracev(const char *, va_list);
 void trargs(char **);
-#ifdef DEBUG
+void trargstr(union node *);
 void trputc(int);
 void trputs(const char *);
 void opentrace(void);

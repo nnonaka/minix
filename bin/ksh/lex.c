@@ -1,4 +1,4 @@
-/*	$NetBSD: lex.c,v 1.15 2011/10/16 17:12:11 joerg Exp $	*/
+/*	$NetBSD: lex.c,v 1.23 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * lexical analysis and source input
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: lex.c,v 1.15 2011/10/16 17:12:11 joerg Exp $");
+__RCSID("$NetBSD: lex.c,v 1.23 2018/05/08 16:37:59 kamil Exp $");
 #endif
 
 
@@ -108,9 +108,9 @@ yylex(cf)
 {
 	Lex_state states[STATE_BSIZE], *statep;
 	State_info state_info;
-	register int c, state;
+	int c, state;
 	XString ws;		/* expandable output word */
-	register char *wp;	/* output word pointer */
+	char *wp;		/* output word pointer */
 	char *sp, *dp;
 	int c2;
 
@@ -170,7 +170,7 @@ yylex(cf)
 		  case SBASE:
 			if (c == '[' && (cf & (VARASN|ARRAYVAR))) {
 				*wp = EOS; /* temporary */
-				if (is_wdvarname(Xstring(ws, wp), FALSE))
+				if (is_wdvarname(Xstring(ws, wp), false))
 				{
 					char *p, *tmp;
 
@@ -220,12 +220,6 @@ yylex(cf)
 			switch (c) {
 			  case '\\':
 				c = getsc();
-#ifdef OS2
-				if (isalnum((unsigned char)c)) {
-					*wp++ = CHAR, *wp++ = '\\';
-					*wp++ = CHAR, *wp++ = c;
-				} else
-#endif
 				if (c) /* trailing \ is lost */
 					*wp++ = QCHAR, *wp++ = c;
 				break;
@@ -740,16 +734,16 @@ Done:
 		int h = hash(ident);
 
 		/* { */
-		if ((cf & KEYWORD) && (p = tsearch(&keywords, ident, h))
+		if ((cf & KEYWORD) && (p = mytsearch(&keywords, ident, h))
 		    && (!(cf & ESACONLY) || p->val.i == ESAC || p->val.i == '}'))
 		{
 			afree(yylval.cp, ATEMP);
 			return p->val.i;
 		}
-		if ((cf & ALIAS) && (p = tsearch(&aliases, ident, h))
+		if ((cf & ALIAS) && (p = mytsearch(&aliases, ident, h))
 		    && (p->flag & ISSET))
 		{
-			register Source *s;
+			Source *s;
 
 			for (s = source; s->type == SALIAS; s = s->next)
 				if (s->u.tblp == p)
@@ -771,7 +765,7 @@ Done:
 static void
 gethere()
 {
-	register struct ioword **p;
+	struct ioword **p;
 
 	for (p = heres; p < herep; p++)
 		readhere(*p);
@@ -786,7 +780,7 @@ static void
 readhere(iop)
 	struct ioword *iop;
 {
-	register int c;
+	int c;
 	char *volatile eof;
 	char *eofp;
 	int skiptabs;
@@ -842,13 +836,7 @@ readhere(iop)
 }
 
 void
-#ifdef HAVE_PROTOTYPES
 yyerror(const char *fmt, ...)
-#else
-yyerror(fmt, va_alist)
-	const char *fmt;
-	va_dcl
-#endif
 {
 	va_list va;
 
@@ -857,8 +845,8 @@ yyerror(fmt, va_alist)
 		source = source->next;
 	source->str = null;	/* zap pending input */
 
-	error_prefix(TRUE);
-	SH_VA_START(va, fmt);
+	error_prefix(true);
+	va_start(va, fmt);
 	shf_vfprintf(shl_out, fmt, va);
 	va_end(va);
 	errorf("%s", null);
@@ -873,7 +861,7 @@ pushs(type, areap)
 	int type;
 	Area *areap;
 {
-	register Source *s;
+	Source *s;
 
 	s = (Source *) alloc(sizeof(Source), areap);
 	s->type = type;
@@ -896,8 +884,8 @@ pushs(type, areap)
 static int
 getsc__()
 {
-	register Source *s = source;
-	register int c;
+	Source *s = source;
+	int c;
 
 	while ((c = *s->str++) == 0) {
 		s->str = NULL;		/* return 0 for EOF by default */

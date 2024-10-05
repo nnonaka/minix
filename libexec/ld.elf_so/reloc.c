@@ -73,6 +73,22 @@ _rtld_do_copy_relocation(const Obj_Entry *dstobj, const Elf_Rela *rela)
 	const Elf_Sym  *srcsym = NULL;
 	Obj_Entry      *srcobj;
 
+	if (__predict_false(size == 0)) {
+#if defined(__powerpc__) && !defined(__LP64) /* PR port-macppc/47464 */
+		if (strcmp(name, "_SDA_BASE_") == 0
+		    || strcmp(name, "_SDA2_BASE_") == 0)
+		{
+			rdbg(("COPY %s %s --> ignoring old binutils bug",
+			      dstobj->path, name));
+			return 0;
+		}
+#endif
+#if 0 /* shall we warn? */
+		xwarnx("%s: zero size COPY relocation for \"%s\"",
+		       dstobj->path, name);
+#endif
+	}
+
 	for (srcobj = dstobj->next; srcobj != NULL; srcobj = srcobj->next) {
 		srcsym = _rtld_symlook_obj(name, hash, srcobj, 0,
 		    _rtld_fetch_ventry(dstobj, ELF_R_SYM(rela->r_info)));
@@ -86,10 +102,10 @@ _rtld_do_copy_relocation(const Obj_Entry *dstobj, const Elf_Rela *rela)
 		return (-1);
 	}
 	srcaddr = (const void *)(srcobj->relocbase + srcsym->st_value);
-	(void)memcpy(dstaddr, srcaddr, size);
 	rdbg(("COPY %s %s %s --> src=%p dst=%p size %ld",
 	    dstobj->path, srcobj->path, name, srcaddr,
 	    (void *)dstaddr, (long)size));
+	(void)memcpy(dstaddr, srcaddr, size);
 	return (0);
 }
 #endif /* RTLD_INHIBIT_COPY_RELOCS */
@@ -133,6 +149,10 @@ _rtld_do_copy_relocations(const Obj_Entry *dstobj)
 			}
 		}
 	}
+#ifdef GNU_RELRO
+	if (_rtld_relro(dstobj, true) == -1)
+		return -1;
+#endif
 #endif /* RTLD_INHIBIT_COPY_RELOCS */
 
 	return (0);
@@ -171,12 +191,13 @@ _rtld_relocate_objects(Obj_Entry *first, bool bind_now)
 
 #if !defined(__minix)
 		if (obj->textrel) {
+			xwarnx("%s: text relocations", obj->path);
 			/*
 			 * There are relocations to the write-protected text
 			 * segment.
 			 */
 			if (mprotect(obj->mapbase, obj->textsize,
-				PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+				PROT_READ | PROT_WRITE) == -1) {
 				_rtld_error("%s: Cannot write-enable text "
 				    "segment: %s", obj->path, xstrerror(errno));
 				return -1;
@@ -207,27 +228,15 @@ _rtld_relocate_objects(Obj_Entry *first, bool bind_now)
 		if (!ok)
 			return -1;
 
-		/* Set some sanity-checking numbers in the Obj_Entry. */
-		obj->magic = RTLD_MAGIC;
-		obj->version = RTLD_VERSION;
-
-		/*
-		 * Fill in the backwards compatibility dynamic linker entry points.
-		 *
-		 * DO NOT ADD TO THIS LIST
-		 */
-		obj->dlopen = dlopen;
-		obj->dlsym = dlsym;
-		obj->dlerror = dlerror;
-		obj->dlclose = dlclose;
-		obj->dladdr = dladdr;
-
 		dbg(("fixing up PLTGOT"));
 		/* Set the special PLTGOT entries. */
 		if (obj->pltgot != NULL)
 			_rtld_setup_pltgot(obj);
+#ifdef GNU_RELRO
+		if (_rtld_relro(obj, false) == -1)
+			return -1;
+#endif
 	}
-
 	return 0;
 }
 
@@ -237,9 +246,108 @@ _rtld_resolve_ifunc(const Obj_Entry *obj, const Elf_Sym *def)
 	Elf_Addr target;
 
 	_rtld_shared_exit();
-	target = _rtld_call_function_addr(obj,
+	target = _rtld_resolve_ifunc2(obj,
 	    (Elf_Addr)obj->relocbase + def->st_value);
 	_rtld_shared_enter();
+	return target;
+}
+
+Elf_Addr
+_rtld_resolve_ifunc2(const Obj_Entry *obj, Elf_Addr addr)
+{
+	Elf_Addr target;
+
+	target = _rtld_call_function_addr(obj, addr);
 
 	return target;
 }
+
+#ifdef RTLD_COMMON_CALL_IFUNC_RELA
+#  ifdef __sparc__
+#  include <machine/elf_support.h>
+#  endif
+
+void
+_rtld_call_ifunc(Obj_Entry *obj, sigset_t *mask, u_int cur_objgen)
+{
+	const Elf_Rela *rela;
+	Elf_Addr *where;
+#ifdef __sparc__
+	Elf_Word *where2;
+#endif
+	Elf_Addr target;
+
+	while (obj->ifunc_remaining > 0 && _rtld_objgen == cur_objgen) {
+		rela = obj->pltrelalim - obj->ifunc_remaining--;
+#ifdef __sparc__
+#define PLT_IRELATIVE R_TYPE(JMP_IREL)
+#else
+#define PLT_IRELATIVE R_TYPE(IRELATIVE)
+#endif
+		if (ELF_R_TYPE(rela->r_info) != PLT_IRELATIVE)
+			continue;
+#ifdef __sparc__
+		where2 = (Elf_Word *)(obj->relocbase + rela->r_offset);
+#else
+		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
+#endif
+		target = (Elf_Addr)(obj->relocbase + rela->r_addend);
+		_rtld_exclusive_exit(mask);
+		target = _rtld_resolve_ifunc2(obj, target);
+		_rtld_exclusive_enter(mask);
+#ifdef __sparc__
+		sparc_write_branch(where2 + 1, (void *)target);
+#else
+		if (*where != target)
+			*where = target;
+#endif
+	}
+
+	while (obj->ifunc_remaining_nonplt > 0 && _rtld_objgen == cur_objgen) {
+		rela = obj->relalim - obj->ifunc_remaining_nonplt--;
+		if (ELF_R_TYPE(rela->r_info) != R_TYPE(IRELATIVE))
+			continue;
+		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
+		target = (Elf_Addr)(obj->relocbase + rela->r_addend);
+		_rtld_exclusive_exit(mask);
+		target = _rtld_resolve_ifunc2(obj, target);
+		_rtld_exclusive_enter(mask);
+		if (*where != target)
+			*where = target;
+	}
+}
+#endif
+
+#ifdef RTLD_COMMON_CALL_IFUNC_REL
+void
+_rtld_call_ifunc(Obj_Entry *obj, sigset_t *mask, u_int cur_objgen)
+{
+	const Elf_Rel *rel;
+	Elf_Addr *where, target;
+
+	while (obj->ifunc_remaining > 0 && _rtld_objgen == cur_objgen) {
+		rel = obj->pltrellim - obj->ifunc_remaining;
+		--obj->ifunc_remaining;
+		if (ELF_R_TYPE(rel->r_info) == R_TYPE(IRELATIVE)) {
+			where = (Elf_Addr *)(obj->relocbase + rel->r_offset);
+			_rtld_exclusive_exit(mask);
+			target = _rtld_resolve_ifunc2(obj, *where);
+			_rtld_exclusive_enter(mask);
+			if (*where != target)
+				*where = target;
+		}
+	}
+
+	while (obj->ifunc_remaining_nonplt > 0 && _rtld_objgen == cur_objgen) {
+		rel = obj->rellim - obj->ifunc_remaining_nonplt--;
+		if (ELF_R_TYPE(rel->r_info) == R_TYPE(IRELATIVE)) {
+			where = (Elf_Addr *)(obj->relocbase + rel->r_offset);
+			_rtld_exclusive_exit(mask);
+			target = _rtld_resolve_ifunc2(obj, *where);
+			_rtld_exclusive_enter(mask);
+			if (*where != target)
+				*where = target;
+		}
+	}
+}
+#endif

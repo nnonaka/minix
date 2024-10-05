@@ -1,4 +1,4 @@
-.\" $NetBSD: sha2.3,v 1.5 2009/05/26 08:04:12 joerg Exp $
+.\" $NetBSD: sha2.3,v 1.9 2018/10/09 11:36:35 kamil Exp $
 .\"	$OpenBSD: sha2.3,v 1.11 2004/06/22 01:57:29 jfb Exp $
 .\"
 .\" Copyright (c) 2003, 2004 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -21,19 +21,42 @@
 .\"
 .\" See http://www.nist.gov/sha/ for the detailed standard
 .\"
-.Dd May 20, 2009
+.Dd October 9, 2018
 .Dt SHA2 3
 .Os
 .Sh NAME
+.Nm SHA224_Init ,
+.Nm SHA224_Update ,
+.Nm SHA224_Final ,
+.Nm SHA224_Transform ,
+.Nm SHA224_End ,
+.Nm SHA224_File ,
+.Nm SHA224_FileChunk ,
+.Nm SHA224_Data ,
 .Nm SHA256_Init ,
 .Nm SHA256_Update ,
-.Nm SHA256_Pad ,
 .Nm SHA256_Final ,
 .Nm SHA256_Transform ,
 .Nm SHA256_End ,
 .Nm SHA256_File ,
 .Nm SHA256_FileChunk ,
-.Nm SHA256_Data
+.Nm SHA256_Data ,
+.Nm SHA384_Init ,
+.Nm SHA384_Update ,
+.Nm SHA384_Final ,
+.Nm SHA384_Transform ,
+.Nm SHA384_End ,
+.Nm SHA384_File ,
+.Nm SHA384_FileChunk ,
+.Nm SHA384_Data ,
+.Nm SHA512_Init ,
+.Nm SHA512_Update ,
+.Nm SHA512_Final ,
+.Nm SHA512_Transform ,
+.Nm SHA512_End ,
+.Nm SHA512_File ,
+.Nm SHA512_FileChunk ,
+.Nm SHA512_Data
 .Nd calculate the NIST Secure Hash Standard (version 2)
 .Sh SYNOPSIS
 .In sys/types.h
@@ -42,8 +65,6 @@
 .Fn SHA224_Init "SHA224_CTX *context"
 .Ft void
 .Fn SHA224_Update "SHA224_CTX *context" "const uint8_t *data" "size_t len"
-.Ft void
-.Fn SHA224_Pad "SHA224_CTX *context"
 .Ft void
 .Fn SHA224_Final "uint8_t digest[SHA224_DIGEST_LENGTH]" "SHA224_CTX *context"
 .Ft void
@@ -61,8 +82,6 @@
 .Ft void
 .Fn SHA256_Update "SHA256_CTX *context" "const uint8_t *data" "size_t len"
 .Ft void
-.Fn SHA256_Pad "SHA256_CTX *context"
-.Ft void
 .Fn SHA256_Final "uint8_t digest[SHA256_DIGEST_LENGTH]" "SHA256_CTX *context"
 .Ft void
 .Fn SHA256_Transform "uint32_t state[8]" "const uint8_t buffer[SHA256_BLOCK_LENGTH]"
@@ -79,8 +98,6 @@
 .Ft void
 .Fn SHA384_Update "SHA384_CTX *context" "const uint8_t *data" "size_t len"
 .Ft void
-.Fn SHA384_Pad "SHA384_CTX *context"
-.Ft void
 .Fn SHA384_Final "uint8_t digest[SHA384_DIGEST_LENGTH]" "SHA384_CTX *context"
 .Ft void
 .Fn SHA384_Transform "uint64_t state[8]" "const uint8_t buffer[SHA384_BLOCK_LENGTH]"
@@ -96,8 +113,6 @@
 .Fn SHA512_Init "SHA512_CTX *context"
 .Ft void
 .Fn SHA512_Update "SHA512_CTX *context" "const uint8_t *data" "size_t len"
-.Ft void
-.Fn SHA512_Pad "SHA512_CTX *context"
 .Ft void
 .Fn SHA512_Final "uint8_t digest[SHA512_DIGEST_LENGTH]" "SHA512_CTX *context"
 .Ft void
@@ -152,13 +167,6 @@ and stores a message digest in the
 parameter.
 .Pp
 The
-.Fn SHA256_Pad
-function can be used to apply padding to the message digest as in
-.Fn SHA256_Final ,
-but the current context can still be used with
-.Fn SHA256_Update .
-.Pp
-The
 .Fn SHA256_Transform
 function is used by
 .Fn SHA256_Update
@@ -176,9 +184,8 @@ The
 .Fn SHA256_End
 function is a front end for
 .Fn SHA256_Final
-which converts the digest into an
-.Tn ASCII
-representation of the digest in hexadecimal.
+which converts the digest into an ASCII representation of the digest
+in hexadecimal.
 .Pp
 The
 .Fn SHA256_File
@@ -250,13 +257,13 @@ int n;
 
 buf = "abc";
 n = strlen(buf);
-SHA256_Init(\*[Am]ctx);
-SHA256_Update(\*[Am]ctx, (uint8_t *)buf, n);
-SHA256_Final(results, \*[Am]ctx);
+SHA256_Init(&ctx);
+SHA256_Update(&ctx, (uint8_t *)buf, n);
+SHA256_Final(results, &ctx);
 
 /* Print the digest as one long hex value */
 printf("0x");
-for (n = 0; n \*[Lt] SHA256_DIGEST_LENGTH; n++)
+for (n = 0; n < SHA256_DIGEST_LENGTH; n++)
 	printf("%02x", results[n]);
 putchar('\en');
 .Ed
@@ -285,7 +292,9 @@ The SHA2 functions appeared in
 and
 .Nx 3.0 .
 .Sh AUTHORS
-This implementation of the SHA functions was written by Aaron D. Gifford.
+.An -nosplit
+This implementation of the SHA functions was written by
+.An Aaron D. Gifford .
 .Pp
 The
 .Fn SHA256_End ,
@@ -293,7 +302,8 @@ The
 .Fn SHA256_FileChunk ,
 and
 .Fn SHA256_Data
-helper functions are derived from code written by Poul-Henning Kamp.
+helper functions are derived from code written by
+.An Poul-Henning Kamp .
 .Sh CAVEATS
 This implementation of the Secure Hash Standard has not been validated by
 NIST and as such is not in official compliance with the standard.

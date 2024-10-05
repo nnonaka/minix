@@ -1,0 +1,10 @@
+#	$NetBSD: Makefile.syscall,v 1.4 2019/03/25 19:24:30 maxv Exp $
+
+.if !definef(__MINIX)
+SUBDIR	=	aoutm68k freebsd linux linux32 netbsd32
+SUBDIR +=	sunos sunos32 ultrix
+.else
+SUBDIR	=	netbsd32
+.endif
+
+.include <bsd.subdir.mk>

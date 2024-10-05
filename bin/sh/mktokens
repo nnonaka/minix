@@ -1,5 +1,5 @@
 #!/bin/sh -
-#	$NetBSD: mktokens,v 1.12 2008/10/25 22:18:15 apb Exp $
+#	$NetBSD: mktokens,v 1.14 2017/07/26 03:46:54 kre Exp $
 #
 # Copyright (c) 1991, 1993
 #	The Regents of the University of California.  All rights reserved.
@@ -40,6 +40,9 @@
 # token marks the end of a list.  The third column is the name to print in
 # error messages.
 
+# Note that all the keyword tokens come after TWORD, and all the others
+# come before it.   We rely upon that relationship - keep it!
+
 cat > /tmp/ka$$ <<\!
 TEOF	1	end of file
 TNL	0	newline
@@ -51,6 +54,7 @@ TPIPE	0	"|"
 TLP	0	"("
 TRP	1	")"
 TENDCASE 1	";;"
+TCASEFALL 1	";&"
 TENDBQUOTE 1	"`"
 TREDIR	0	redirection
 TWORD	0	word
@@ -86,7 +90,7 @@ ${SED} -e 's/"/\\"/g' \
 echo '};
 '
 ${SED} 's/"//g' /tmp/ka$$ | ${AWK} '
-/TIF/{print "#define KWDOFFSET " NR-1; print ""; 
+/TWORD/{print "#define KWDOFFSET " NR; print ""; 
       print "const char *const parsekwd[] = {"}
 /TIF/,/neverfound/{print "	\"" $3 "\","}'
 echo '	0

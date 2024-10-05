@@ -1,4 +1,4 @@
-/*	$NetBSD: var.h,v 1.26 2015/05/26 21:35:15 christos Exp $	*/
+/*	$NetBSD: var.h,v 1.38 2018/12/04 14:03:30 kre Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,29 +34,41 @@
  *	@(#)var.h	8.2 (Berkeley) 5/4/95
  */
 
+#ifndef	VUNSET		/* double include protection */
 /*
  * Shell variables.
  */
 
 /* flags */
-#define VEXPORT		0x01	/* variable is exported */
-#define VREADONLY	0x02	/* variable cannot be modified */
-#define VSTRFIXED	0x04	/* variable struct is statically allocated */
-#define VTEXTFIXED	0x08	/* text is statically allocated */
-#define VSTACK		0x10	/* text is allocated on the stack */
-#define VUNSET		0x20	/* the variable is not set */
-#define VNOFUNC		0x40	/* don't call the callback function */
-#define VNOSET		0x80	/* do not set variable - just readonly test */
+#define VUNSET		0x0001	/* the variable is not set */
+#define VEXPORT		0x0002	/* variable is exported */
+#define VREADONLY	0x0004	/* variable cannot be modified */
+#define VNOEXPORT	0x0008	/* variable may not be exported */
 
+#define VSTRFIXED	0x0010	/* variable struct is statically allocated */
+#define VTEXTFIXED	0x0020	/* text is statically allocated */
+#define VSTACK		0x0040	/* text is allocated on the stack */
+#define VNOFUNC		0x0100	/* don't call the callback function */
+#define VFUNCREF	0x0200	/* the function is called on ref, not set */
+
+#define VSPECIAL	0x1000	/* magic properties not lost when set */
+#define VDOEXPORT	0x2000	/* obey VEXPORT even if VNOEXPORT */
+#define VNOSET		0x4000	/* do not set variable - just readonly test */
+#define VNOERROR	0x8000	/* be quiet if set fails (no error msg) */
+
+struct var;
+
+union var_func_union {		/* function to be called when:  */
+	void (*set_func)(const char *);		/* variable gets set/unset */
+	char*(*ref_func)(struct var *);		/* variable is referenced */
+};
 
 struct var {
 	struct var *next;		/* next entry in hash list */
 	int flags;			/* flags are defined above */
 	char *text;			/* name=value */
 	int name_len;			/* length of name */
-	void (*func)(const char *);
-					/* function to be called when  */
-					/* the variable gets set/unset */
+	union var_func_union v_u;	/* function to apply (sometimes) */
 };
 
 
@@ -65,26 +77,35 @@ struct localvar {
 	struct var *vp;			/* the variable that was made local */
 	int flags;			/* saved flags */
 	char *text;			/* saved text */
+	union var_func_union v_u;	/* saved function */
 };
 
 
 extern struct localvar *localvars;
 
-#if ATTY
-extern struct var vatty;
-#endif
 extern struct var vifs;
+extern char ifs_default[];
 extern struct var vmail;
 extern struct var vmpath;
 extern struct var vpath;
 extern struct var vps1;
 extern struct var vps2;
 extern struct var vps4;
+extern struct var line_num;
 #ifndef SMALL
+extern struct var editrc;
 extern struct var vterm;
 extern struct var vtermcap;
 extern struct var vhistsize;
+extern struct var ps_lit;
+extern struct var euname;
+extern struct var random_num;
+extern intmax_t sh_start_time;
 #endif
+
+extern int line_number;
+extern int funclinebase;
+extern int funclineabs;
 
 /*
  * The following macros access the values of the above variables.
@@ -92,8 +113,8 @@ extern struct var vhistsize;
  * for unset variables.
  */
 
-#define ifsval()	(vifs.text + 4)
 #define ifsset()	((vifs.flags & VUNSET) == 0)
+#define ifsval()	(ifsset() ? (vifs.text + 4) : ifs_default)
 #define mailval()	(vmail.text + 5)
 #define mpathval()	(vmpath.text + 9)
 #define pathval()	(vpath.text + 5)
@@ -106,9 +127,6 @@ extern struct var vhistsize;
 #define termval()	(vterm.text + 5)
 #endif
 
-#if ATTY
-#define attyset()	((vatty.flags & VUNSET) == 0)
-#endif
 #define mpathset()	((vmpath.flags & VUNSET) == 0)
 
 void initvar(void);
@@ -120,7 +138,7 @@ char *lookupvar(const char *);
 char *bltinlookup(const char *, int);
 char **environment(void);
 void shprocvar(void);
-int showvars(const char *, int, int);
+int showvars(const char *, int, int, const char *);
 void mklocal(const char *, int);
 void listmklocal(struct strlist *, int);
 void poplocalvars(void);
@@ -128,3 +146,6 @@ int unsetvar(const char *, int);
 void choose_ps1(void);
 int setvarsafe(const char *, const char *, int);
 void print_quoted(const char *);
+int validname(const char *, int, int *);
+
+#endif

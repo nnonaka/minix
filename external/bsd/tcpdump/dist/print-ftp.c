@@ -11,16 +11,18 @@
  * FOR A PARTICULAR PURPOSE.
  */
 
+#include <sys/cdefs.h>
 #ifndef lint
-static const char rcsid[] _U_ =
-    "@(#) Header";
+__RCSID("$NetBSD: print-ftp.c,v 1.3 2017/02/05 04:05:05 spz Exp $");
 #endif
+
+/* \summary: File Transfer Protocol (FTP) printer */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,4 +1,4 @@
-/*	$NetBSD: fts.c,v 1.48 2015/01/29 15:55:21 manu Exp $	*/
+/*	$NetBSD: fts.c,v 1.49 2016/05/31 07:49:09 pgoyette Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993, 1994
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)fts.c	8.6 (Berkeley) 8/14/94";
 #else
-__RCSID("$NetBSD: fts.c,v 1.48 2015/01/29 15:55:21 manu Exp $");
+__RCSID("$NetBSD: fts.c,v 1.49 2016/05/31 07:49:09 pgoyette Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -133,9 +133,8 @@ fts_open(char * const *argv, int options,
 	}
 
 	/* Allocate/initialize the stream */
-	if ((sp = malloc(sizeof(FTS))) == NULL)
+	if ((sp = calloc(1, sizeof(FTS))) == NULL)
 		return (NULL);
-	memset(sp, 0, sizeof(FTS));
 	sp->fts_compar = compar;
 	sp->fts_options = options;
 
@@ -1208,14 +1207,6 @@ fts_maxarglen(char * const *argv)
 	return (max + 1);
 }
 
-#if defined(__minix)
-#if ! HAVE_NBTOOL_CONFIG_H
-#include <minix/dmap.h>
-#else
-#define NONE_MAJOR 0
-#endif
-#endif /* defined(__minix) */
-
 /*
  * Change to dir specified by fd or p->fts_accpath without getting
  * tricked by someone changing the world out from underneath us.
@@ -1236,22 +1227,7 @@ fts_safe_changedir(const FTS *sp, const FTSENT *p, int fd, const char *path)
 	if (fstat(fd, &sb) == -1)
 		goto bail;
 
-#if defined(__minix)
-	/*
-	 * Skip the safety check on file systems where inodes are not static.
-	 * On such file systems, a file may legitimately be assigned a new
-	 * inode number due to being deleted and regenerated while we are
-	 * running.  This behavior is not POSIX compliant, but necessary for
-	 * certain types of file systems.  Currently, we assume that this
-	 * applies to all (and only) file systems that are not device backed.
-	 * In the future, we may have to obtain an appropriate flag through
-	 * statvfs(3) instead.
-	 */
-	if ((sb.st_ino != p->fts_ino || sb.st_dev != p->fts_dev)
-		&& major(sb.st_dev) != NONE_MAJOR) {
-#else
 	if (sb.st_ino != p->fts_ino || sb.st_dev != p->fts_dev) {
-#endif /*  defined(__minix) */
 		errno = ENOENT;
 		goto bail;
 	}

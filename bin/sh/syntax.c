@@ -1,7 +1,7 @@
-/*	$NetBSD: syntax.c,v 1.3 2012/03/28 20:11:25 christos Exp $	*/
+/*	$NetBSD: syntax.c,v 1.8 2019/02/04 09:56:48 kre Exp $	*/
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: syntax.c,v 1.3 2012/03/28 20:11:25 christos Exp $");
+__RCSID("$NetBSD: syntax.c,v 1.8 2019/02/04 09:56:48 kre Exp $");
 
 #include <limits.h>
 #include "shell.h"
@@ -12,13 +12,14 @@ __RCSID("$NetBSD: syntax.c,v 1.3 2012/03/28 20:11:25 christos Exp $");
 #error initialisation assumes 'CWORD' is zero
 #endif
 
-#define ndx(ch) (ch + 1 - CHAR_MIN)
+#define ndx(ch) (ch + 2 - CHAR_MIN)
 #define set(ch, val) [ndx(ch)] = val,
 #define set_range(s, e, val) [ndx(s) ... ndx(e)] = val,
 
 /* syntax table used when not in quotes */
-const char basesyntax[257] = { CEOF,
+const char basesyntax[258] = { CFAKE, CEOF,
     set_range(CTL_FIRST, CTL_LAST, CCTL)
+/* Note code assumes that only the above are CCTL in basesyntax */
     set('\n', CNL)
     set('\\', CBACK)
     set('\'', CSQUOTE)
@@ -38,7 +39,7 @@ const char basesyntax[257] = { CEOF,
 };
 
 /* syntax table used when in double quotes */
-const char dqsyntax[257] = { CEOF,
+const char dqsyntax[258] = { CFAKE, CEOF,
     set_range(CTL_FIRST, CTL_LAST, CCTL)
     set('\n', CNL)
     set('\\', CBACK)
@@ -46,7 +47,7 @@ const char dqsyntax[257] = { CEOF,
     set('`', CBQUOTE)
     set('$', CVAR)
     set('}', CENDVAR)
-    /* ':/' for tilde expansion, '-' for [a\-x] pattern ranges */
+    /* ':/' for tilde expansion, '-]' for [a\-x] pattern ranges */
     set('!', CCTL)
     set('*', CCTL)
     set('?', CCTL)
@@ -56,14 +57,17 @@ const char dqsyntax[257] = { CEOF,
     set(':', CCTL)
     set('/', CCTL)
     set('-', CCTL)
+    set(']', CCTL)
 };
 
 /* syntax table used when in single quotes */
-const char sqsyntax[257] = { CEOF,
+const char sqsyntax[258] = { CFAKE, CEOF,
+/* CCTL includes anything that might perhaps need to be escaped if quoted */
     set_range(CTL_FIRST, CTL_LAST, CCTL)
     set('\n', CNL)
     set('\'', CSQUOTE)
-    /* ':/' for tilde expansion, '-' for [a\-x] pattern ranges */
+    set('\\', CSBACK)
+    /* ':/' for tilde expansion, '-]' for [a\-x] pattern ranges */
     set('!', CCTL)
     set('*', CCTL)
     set('?', CCTL)
@@ -73,10 +77,11 @@ const char sqsyntax[257] = { CEOF,
     set(':', CCTL)
     set('/', CCTL)
     set('-', CCTL)
+    set(']', CCTL)
 };
 
 /* syntax table used when in arithmetic */
-const char arisyntax[257] = { CEOF,
+const char arisyntax[258] = { CFAKE, CEOF,
     set_range(CTL_FIRST, CTL_LAST, CCTL)
     set('\n', CNL)
     set('\\', CBACK)
@@ -90,7 +95,7 @@ const char arisyntax[257] = { CEOF,
 };
 
 /* character classification table */
-const char is_type[257] = { 0,
+const char is_type[258] = { 0, 0,
     set_range('0', '9', ISDIGIT)
     set_range('a', 'z', ISLOWER)
     set_range('A', 'Z', ISUPPER)
@@ -102,4 +107,7 @@ const char is_type[257] = { 0,
     set('-', ISSPECL)
     set('*', ISSPECL)
     set('@', ISSPECL)
+    set(' ', ISSPACE)
+    set('\t', ISSPACE)
+    set('\n', ISSPACE)
 };

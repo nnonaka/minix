@@ -1,4 +1,4 @@
-/*	$NetBSD: evboards.h,v 1.2 2019/09/19 01:25:29 thorpej Exp $	*/
+/*	$NetBSD: evboards.h,v 1.1.4.1 2019/09/22 10:20:16 martin Exp $	*/
 
 /*-
  * Copyright (c) 2019 The NetBSD Foundation, Inc.

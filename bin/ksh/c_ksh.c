@@ -1,4 +1,4 @@
-/*	$NetBSD: c_ksh.c,v 1.18 2011/10/16 17:12:11 joerg Exp $	*/
+/*	$NetBSD: c_ksh.c,v 1.29 2018/06/03 12:18:29 kamil Exp $	*/
 
 /*
  * built-in Korn commands: c_*
@@ -6,16 +6,13 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: c_ksh.c,v 1.18 2011/10/16 17:12:11 joerg Exp $");
+__RCSID("$NetBSD: c_ksh.c,v 1.29 2018/06/03 12:18:29 kamil Exp $");
 #endif
 
-#include "sh.h"
-#include "ksh_stat.h"
+#include <sys/stat.h>
 #include <ctype.h>
 
-#ifdef __CYGWIN__
-#include <sys/cygwin.h>
-#endif /* __CYGWIN__ */
+#include "sh.h"
 
 int
 c_cd(wp)
@@ -145,15 +142,7 @@ c_cd(wp)
 		setstr(oldpwd_s, current_wd, KSH_RETURN_ERROR);
 
 	if (!ISABSPATH(Xstring(xs, xp))) {
-#ifdef OS2
-		/* simplify_path() doesn't know about os/2's drive contexts,
-		 * so it can't set current_wd when changing to a:foo.
-		 * Handle this by calling getcwd()...
-		 */
-		pwd = ksh_get_wd((char *) 0, 0);
-#else /* OS2 */
 		pwd = (char *) 0;
-#endif /* OS2 */
 	} else
 #ifdef S_ISLNK
 	if (!physical || !(pwd = get_phys_path(Xstring(xs, xp))))
@@ -162,12 +151,7 @@ c_cd(wp)
 
 	/* Set PWD */
 	if (pwd) {
-#ifdef __CYGWIN__
-		char ptmp[PATH];  /* larger than MAX_PATH */
-		cygwin_conv_to_full_posix_path(pwd, ptmp);
-#else /* __CYGWIN__ */
 		char *ptmp = pwd;
-#endif /* __CYGWIN__ */
 		set_current_wd(ptmp);
 		/* Ignore failure (happens if readonly or integer) */
 		setstr(pwd_s, ptmp, KSH_RETURN_ERROR);
@@ -241,7 +225,6 @@ c_print(wp)
 #define PO_PMINUSMINUS	BIT(2)	/* print a -- argument */
 #define PO_HIST		BIT(3)	/* print to history instead of stdout */
 #define PO_COPROC	BIT(4)	/* printing to coprocess: block SIGPIPE */
-#define PO_FSLASH	BIT(5)  /* swap slash for backslash (for os2 ) */
 	int fd = 1;
 	int flags = PO_EXPAND|PO_NL;
 	char *s;
@@ -282,11 +265,7 @@ c_print(wp)
 		}
 	} else {
 		int optc;
-#if OS2
-		const char *options = "Rnpfrsu,"; /* added f flag */
-#else
 		const char *options = "Rnprsu,";
-#endif
 		while ((optc = ksh_getopt(wp, &builtin_opt, options)) != EOF)
 			switch (optc) {
 			  case 'R': /* fake BSD echo command */
@@ -297,11 +276,6 @@ c_print(wp)
 			  case 'e':
 				flags |= PO_EXPAND;
 				break;
-#ifdef OS2
-			  case 'f':
-				flags |= PO_FSLASH;
-				break;
-#endif
 			  case 'n':
 				flags &= ~PO_NL;
 				break;
@@ -343,23 +317,16 @@ c_print(wp)
 	Xinit(xs, xp, 128, ATEMP);
 
 	while (*wp != NULL) {
-		register int c;
+		int c;
 		s = *wp;
 		while ((c = *s++) != '\0') {
 			Xcheck(xs, xp);
-#ifdef OS2
-			if ((flags & PO_FSLASH) && c == '\\')
-				if (*s == '\\')
-					*s++;
-				else
-					c = '/';
-#endif /* OS2 */
 			if ((flags & PO_EXPAND) && c == '\\') {
 				int i;
 
 				switch ((c = *s++)) {
 				/* Oddly enough, \007 seems more portable than
-				 * \a (due to HP-UX cc, Ultrix cc, old pcc's,
+				 * \a (due to old pcc's,
 				 * etc.).
 				 */
 				case 'a': c = '\007'; break;
@@ -503,9 +470,9 @@ c_whence(wp)
 	while ((vflag || ret == 0) && (id = *wp++) != NULL) {
 		tp = NULL;
 		if ((iam_whence || vflag) && !pflag)
-			tp = tsearch(&keywords, id, hash(id));
+			tp = mytsearch(&keywords, id, hash(id));
 		if (!tp && !pflag) {
-			tp = tsearch(&aliases, id, hash(id));
+			tp = mytsearch(&aliases, id, hash(id));
 			if (tp && !(tp->flag & ISSET))
 				tp = NULL;
 		}
@@ -750,7 +717,7 @@ c_typeset(wp)
 		for (i = builtin_opt.optind; wp[i]; i++) {
 			if (func) {
 				f = findfunc(wp[i], hash(wp[i]),
-					     (fset&UCASEV_AL) ? TRUE : FALSE);
+					     (fset&UCASEV_AL) ? true : false);
 				if (!f) {
 					/* at&t ksh does ++rval: bogus */
 					rval = 1;
@@ -979,7 +946,7 @@ c_alias(wp)
 			alias = str_nsave(alias, val++ - alias, ATEMP);
 		h = hash(alias);
 		if (val == NULL && !tflag && !xflag) {
-			ap = tsearch(t, alias, h);
+			ap = mytsearch(t, alias, h);
 			if (ap != NULL && (ap->flag&ISSET)) {
 				if (pflag)
 					shf_puts("alias ", shl_stdout);
@@ -1028,8 +995,8 @@ int
 c_unalias(wp)
 	char **wp;
 {
-	register struct table *t = &aliases;
-	register struct tbl *ap;
+	struct table *t = &aliases;
+	struct tbl *ap;
 	int rv = 0, all = 0;
 	int optc;
 
@@ -1050,7 +1017,7 @@ c_unalias(wp)
 	wp += builtin_opt.optind;
 
 	for (; *wp != NULL; wp++) {
-		ap = tsearch(t, *wp, hash(*wp));
+		ap = mytsearch(t, *wp, hash(*wp));
 		if (ap == NULL) {
 			rv = 1;	/* POSIX */
 			continue;
@@ -1065,7 +1032,7 @@ c_unalias(wp)
 	if (all) {
 		struct tstate ts;
 
-		for (twalk(&ts, t); (ap = tnext(&ts)); ) {
+		for (ksh_twalk(&ts, t); (ap = tnext(&ts)); ) {
 			if (ap->flag&ALLOC) {
 				ap->flag &= ~(ALLOC|ISSET);
 				afree((void*)ap->val.s, APERM);
@@ -1206,7 +1173,7 @@ c_kill(wp)
 	/* assume old style options if -digits or -UPPERCASE */
 	if ((p = wp[1]) && *p == '-'
 	    && (digit(p[1]) || isupper((unsigned char)p[1]))) {
-		if (!(t = gettrap(p + 1, TRUE))) {
+		if (!(t = gettrap(p + 1, true))) {
 			bi_errorf("bad signal `%s'", p + 1);
 			return 1;
 		}
@@ -1220,7 +1187,7 @@ c_kill(wp)
 				lflag = 1;
 				break;
 			  case 's':
-				if (!(t = gettrap(builtin_opt.optarg, TRUE))) {
+				if (!(t = gettrap(builtin_opt.optarg, true))) {
 					bi_errorf("bad signal `%s'",
 						builtin_opt.optarg);
 					return 1;
@@ -1344,7 +1311,7 @@ c_getopts(wp)
 		bi_errorf("missing name argument");
 		return 1;
 	}
-	if (!*var || *skip_varname(var, TRUE)) {
+	if (!*var || *skip_varname(var, true)) {
 		bi_errorf("%s: is not an identifier", var);
 		return 1;
 	}
@@ -1422,7 +1389,7 @@ c_bind(wp)
 	char **wp;
 {
 	int rv = 0, macro = 0, list = 0;
-	register char *cp;
+	char *cp;
 	int optc;
 
 	while ((optc = ksh_getopt(wp, &builtin_opt, "lm")) != EOF)

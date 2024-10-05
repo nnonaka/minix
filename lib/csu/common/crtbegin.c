@@ -39,6 +39,8 @@ __weakref_visible void Jv_RegisterClasses(const fptr_t *)
 	__weak_reference(_Jv_RegisterClasses);
 
 #if !defined(HAVE_INITFINI_ARRAY)
+extern __dso_hidden const fptr_t __CTOR_LIST__start __asm("__CTOR_LIST__");
+
 __dso_hidden const fptr_t __aligned(sizeof(void *)) __CTOR_LIST__[] __section(".ctors") = {
 	(fptr_t) -1,
 };
@@ -55,11 +57,7 @@ __dso_hidden void *__dso_handle;
 #endif
 
 #if !defined(__ARM_EABI__) || defined(__ARM_DWARF_EH__)
-__dso_hidden
-#if !defined(__mips__)
-	const
-#endif
-	long __EH_FRAME_LIST__[0] __section(".eh_frame");
+__dso_hidden const long __EH_FRAME_LIST__[0] __section(".eh_frame");
 
 __weakref_visible void register_frame_info(const void *, const void *)
 	__weak_reference(__register_frame_info);
@@ -90,7 +88,7 @@ __do_global_ctors_aux(void)
 		Jv_RegisterClasses(__JCR_LIST__);
 
 #if !defined(HAVE_INITFINI_ARRAY)
-	for (const fptr_t *p = __CTOR_LIST_END__; p > __CTOR_LIST__ + 1; ) {
+	for (const fptr_t *p = __CTOR_LIST_END__; p > &__CTOR_LIST__start + 1; ) {
 		(*(*--p))();
 	}
 #endif
@@ -98,6 +96,8 @@ __do_global_ctors_aux(void)
 
 #if !defined(__ARM_EABI__) || defined(SHARED) || defined(__ARM_DWARF_EH__)
 #if !defined(HAVE_INITFINI_ARRAY)
+extern __dso_hidden const fptr_t __DTOR_LIST__start __asm("__DTOR_LIST__");
+
 __dso_hidden const fptr_t __aligned(sizeof(void *)) __DTOR_LIST__[] __section(".dtors") = {
 	(fptr_t) -1,
 };
@@ -122,7 +122,7 @@ __do_global_dtors_aux(void)
 #endif
 
 #if !defined(HAVE_INITFINI_ARRAY)
-	for (const fptr_t *p = __DTOR_LIST__ + 1; p < __DTOR_LIST_END__; ) {
+	for (const fptr_t *p = &__DTOR_LIST__start + 1; p < __DTOR_LIST_END__; ) {
 		(*(*p++))();
 	}
 #endif

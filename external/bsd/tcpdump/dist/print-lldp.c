@@ -12,28 +12,27 @@
  * LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
  * FOR A PARTICULAR PURPOSE.
  *
- * support for the IEEE Link Discovery Protocol as per 802.1AB
- *
- * Original code by Hannes Gredler (hannes@juniper.net)
+ * Original code by Hannes Gredler (hannes@gredler.at)
  * IEEE and TIA extensions by Carles Kishimoto <carles.kishimoto@gmail.com>
  * DCBX extensions by Kaladhar Musunuru <kaladharm@sourceforge.net>
  */
 
+/* \summary: IEEE 802.1ab Link Layer Discovery Protocol (LLDP) printer */
+
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-lldp.c,v 1.6 2015/03/31 21:59:35 christos Exp $");
+__RCSID("$NetBSD: print-lldp.c,v 1.9 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
 #include <stdio.h>
 
-#include "interface.h"
+#include "netdissect.h"
 #include "extract.h"
 #include "addrtoname.h"
 #include "af.h"
@@ -596,6 +595,7 @@ static const struct tok lldp_evb_mode_values[]={
     { LLDP_EVB_MODE_EVB_BRIDGE, "EVB Bridge"},
     { LLDP_EVB_MODE_EVB_STATION, "EVB Staion"},
     { LLDP_EVB_MODE_RESERVED, "Reserved for future Standardization"},
+    { 0, NULL},
 };
 
 #define NO_OF_BITS 8
@@ -606,6 +606,14 @@ static const struct tok lldp_evb_mode_values[]={
 #define LLDP_PRIVATE_8021_SUBTYPE_APPLICATION_PRIORITY_MIN_LENGTH 5
 #define LLDP_PRIVATE_8021_SUBTYPE_EVB_LENGTH                      9
 #define LLDP_PRIVATE_8021_SUBTYPE_CDCP_MIN_LENGTH                 8
+
+#define LLDP_IANA_SUBTYPE_MUDURL 1
+
+static const struct tok lldp_iana_subtype_values[] =   {
+    { LLDP_IANA_SUBTYPE_MUDURL, "MUD-URL" },
+    { 0, NULL }
+};
+
 
 static void
 print_ets_priority_assignment_table(netdissect_options *ndo,
@@ -648,7 +656,7 @@ lldp_private_8021_print(netdissect_options *ndo,
     int subtype, hexdump = FALSE;
     u_int sublen;
     u_int tval;
-    uint8_t i;
+    u_int i;
 
     if (tlv_len < 4) {
         return hexdump;
@@ -784,9 +792,9 @@ lldp_private_8021_print(netdissect_options *ndo,
         ND_PRINT((ndo, "\n\t    Application Priority Table"));
         while(i<sublen) {
         	tval=*(tptr+i+5);
-        	ND_PRINT((ndo, "\n\t      Priority: %d, RES: %d, Sel: %d",
-        		 tval >> 5, (tval >> 3) & 0x03, (tval & 0x07)));
-        	ND_PRINT((ndo, "Protocol ID: %d", EXTRACT_16BITS(tptr + i + 5)));
+        	ND_PRINT((ndo, "\n\t      Priority: %u, RES: %u, Sel: %u, Protocol ID: %u",
+        		 tval >> 5, (tval >> 3) & 0x03, (tval & 0x07),
+        		 EXTRACT_16BITS(tptr + i + 5)));
         	i=i+3;
         }
         break;
@@ -895,6 +903,9 @@ lldp_private_8023_print(netdissect_options *ndo,
         break;
 
     case LLDP_PRIVATE_8023_SUBTYPE_MTU:
+        if (tlv_len < 6) {
+            return hexdump;
+        }
         ND_PRINT((ndo, "\n\t    MTU size %u", EXTRACT_16BITS(tptr + 4)));
         break;
 
@@ -919,6 +930,40 @@ lldp_extract_latlon(const u_char *tptr)
 
     return latlon;
 }
+
+/* objects defined in IANA subtype 00 00 5e
+ * (right now there is only one)
+ */
+
+
+static int
+lldp_private_iana_print(netdissect_options *ndo,
+                        const u_char *tptr, u_int tlv_len)
+{
+    int subtype, hexdump = FALSE;
+
+    if (tlv_len < 8) {
+        return hexdump;
+    }
+    subtype = *(tptr+3);
+
+    ND_PRINT((ndo, "\n\t  %s Subtype (%u)",
+           tok2str(lldp_iana_subtype_values, "unknown", subtype),
+           subtype));
+
+    switch (subtype) {
+    case LLDP_IANA_SUBTYPE_MUDURL:
+        ND_PRINT((ndo, "\n\t  MUD-URL="));
+        (void)fn_printn(ndo, tptr+4, tlv_len-4, NULL);
+        break;
+    default:
+        hexdump=TRUE;
+    }
+
+    return hexdump;
+}
+
+
 
 /*
  * Print private TIA extensions.
@@ -1284,15 +1329,15 @@ lldp_network_addr_print(netdissect_options *ndo, const u_char *tptr, u_int len)
     case AFNUM_INET:
         if (len < 4)
           return NULL;
+        /* This cannot be assigned to ipaddr_string(), which is a macro. */
         pfunc = getname;
         break;
-#ifdef INET6
     case AFNUM_INET6:
         if (len < 16)
           return NULL;
+        /* This cannot be assigned to ip6addr_string(), which is a macro. */
         pfunc = getname6;
         break;
-#endif
     case AFNUM_802:
         if (len < 6)
           return NULL;
@@ -1364,7 +1409,7 @@ lldp_mgmt_addr_tlv_print(netdissect_options *ndo,
     if (tlen) {
         oid_len = *tptr;
 
-        if (tlen < oid_len) {
+        if (tlen < 1U + oid_len) {
             return 0;
         }
         if (oid_len) {
@@ -1578,6 +1623,9 @@ lldp_print(netdissect_options *ndo,
                     break;
                 case OUI_IEEE_8023_PRIVATE:
                     hexdump = lldp_private_8023_print(ndo, tptr, tlv_len);
+                    break;
+		case OUI_IANA:
+                    hexdump = lldp_private_iana_print(ndo, tptr, tlv_len);
                     break;
                 case OUI_TIA:
                     hexdump = lldp_private_tia_print(ndo, tptr, tlv_len);

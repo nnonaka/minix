@@ -1,4 +1,4 @@
-/*	$NetBSD: misc.c,v 1.15 2011/10/16 17:12:11 joerg Exp $	*/
+/*	$NetBSD: misc.c,v 1.24 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * Miscellaneous functions
@@ -6,15 +6,13 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: misc.c,v 1.15 2011/10/16 17:12:11 joerg Exp $");
+__RCSID("$NetBSD: misc.c,v 1.24 2018/05/08 16:37:59 kamil Exp $");
 #endif
 
 
 #include "sh.h"
 #include <ctype.h>	/* for FILECHCONV */
-#ifdef HAVE_LIMITS_H
-# include <limits.h>
-#endif
+#include <limits.h>
 
 #ifndef UCHAR_MAX
 # define UCHAR_MAX	0xFF
@@ -32,10 +30,10 @@ static const unsigned char *cclass ARGS((const unsigned char *p, int sub));
  */
 void
 setctypes(s, t)
-	register const char *s;
-	register int t;
+	const char *s;
+	int t;
 {
-	register int i;
+	int i;
 
 	if (t & C_IFS) {
 		for (i = 0; i < UCHAR_MAX+1; i++)
@@ -49,7 +47,7 @@ setctypes(s, t)
 void
 initctypes()
 {
-	register int c;
+	int c;
 
 	for (c = 'a'; c <= 'z'; c++)
 		ctypes[c] |= C_ALPHA;
@@ -69,10 +67,10 @@ initctypes()
 
 char *
 ulton(n, base)
-	register unsigned long n;
+	unsigned long n;
 	int base;
 {
-	register char *p;
+	char *p;
 	static char buf [20];
 
 	p = &buf[sizeof(buf)];
@@ -86,7 +84,7 @@ ulton(n, base)
 
 char *
 str_save(s, ap)
-	register const char *s;
+	const char *s;
 	Area *ap;
 {
 	size_t len;
@@ -106,7 +104,7 @@ str_save(s, ap)
  */
 char *
 str_nsave(s, n, ap)
-	register const char *s;
+	const char *s;
 	int n;
 	Area *ap;
 {
@@ -274,7 +272,7 @@ getoptions()
 {
 	size_t i;
 	char m[(int) FNFLAGS + 1];
-	register char *cp = m;
+	char *cp = m;
 
 	for (i = 0; i < NELEM(goptions); i++)
 		if (goptions[i].c && Flag(i))
@@ -323,14 +321,10 @@ change_flag(f, what, newval)
 #endif /* EDIT */
 	/* Turning off -p? */
 	if (f == FPRIVILEGED && oldval && !newval) {
-#ifdef OS2
-		;
-#else /* OS2 */
 		seteuid(ksheuid = getuid());
 		setuid(ksheuid);
 		setegid(getgid());
 		setgid(getgid());
-#endif /* OS2 */
 	} else if (f == FPOSIX && newval) {
 #ifdef BRACE_EXPAND
 		Flag(FBRACEEXPAND) = 0
@@ -467,7 +461,7 @@ parse_args(argv, what, setargsp)
 		*setargsp = !arrayset && ((go.info & GI_MINUSMINUS)
 					  || argv[go.optind]);
 
-	if (arrayset && (!*array || *skip_varname(array, FALSE))) {
+	if (arrayset && (!*array || *skip_varname(array, false))) {
 		bi_errorf("%s: is not an identifier", array);
 		return -1;
 	}
@@ -631,46 +625,50 @@ do_gmatch(s, se, p, pe, isfile)
 	const unsigned char *se, *pe;
 	int isfile;
 {
-	register int sc, pc;
+	int sc, pc;
 	const unsigned char *prest, *psub, *pnext;
 	const unsigned char *srest;
+	const unsigned char *sNext, *pNext, *sStart;
 
 	if (s == NULL || p == NULL)
 		return 0;
-	while (p < pe) {
-		pc = *p++;
+	sNext = sStart = s;
+	pNext = p;
+	while (p < pe || s < se) {
+		pc = *p;
 		sc = s < se ? *s : '\0';
-		s++;
 		if (isfile) {
 			sc = FILECHCONV((unsigned char)sc);
 			pc = FILECHCONV((unsigned char)pc);
 		}
 		if (!ISMAGIC(pc)) {
 			if (sc != pc)
-				return 0;
+				goto backtrack;
+			p++;
+			s++;
 			continue;
-		}
-		switch (*p++) {
+		} else
+			pc = *++p;
+		switch (pc) {
 		  case '[':
+			p++;
+			s++;
 			if (sc == 0 || (p = cclass(p, sc)) == NULL)
-				return 0;
-			break;
+				break;
+			continue;
 
 		  case '?':
 			if (sc == 0)
-				return 0;
-			break;
+				break;
+			p++;
+			s++;
+			continue;
 
 		  case '*':
-			if (p == pe)
-				return 1;
-			s--;
-			do {
-				if (do_gmatch(s, se, p, pe, isfile))
-					return 1;
-			} while (s++ < se);
-			return 0;
-
+			pNext = p - 1;
+			sNext = s + 1;
+			p++;
+			continue;
 		  /*
 		   * [*+?@!](pattern|pattern|..)
 		   *
@@ -678,9 +676,8 @@ do_gmatch(s, se, p, pe, isfile)
 		   */
 		  case 0x80|'+': /* matches one or more times */
 		  case 0x80|'*': /* matches zero or more times */
-			if (!(prest = pat_scan(p, pe, 0)))
+			if (!(prest = pat_scan(++p, pe, 0)))
 				return 0;
-			s--;
 			/* take care of zero matches */
 			if (p[-1] == (0x80 | '*')
 			    && do_gmatch(s, se, prest, pe, isfile))
@@ -705,9 +702,8 @@ do_gmatch(s, se, p, pe, isfile)
 		  case 0x80|'?': /* matches zero or once */
 		  case 0x80|'@': /* matches one of the patterns */
 		  case 0x80|' ': /* simile for @ */
-			if (!(prest = pat_scan(p, pe, 0)))
+			if (!(prest = pat_scan(++p, pe, 0)))
 				return 0;
-			s--;
 			/* Take care of zero matches */
 			if (p[-1] == (0x80 | '?')
 			    && do_gmatch(s, se, prest, pe, isfile))
@@ -728,9 +724,8 @@ do_gmatch(s, se, p, pe, isfile)
 			return 0;
 
 		  case 0x80|'!': /* matches none of the patterns */
-			if (!(prest = pat_scan(p, pe, 0)))
+			if (!(prest = pat_scan(++p, pe, 0)))
 				return 0;
-			s--;
 			for (srest = s; srest <= se; srest++) {
 				int matched = 0;
 
@@ -752,20 +747,28 @@ do_gmatch(s, se, p, pe, isfile)
 			return 0;
 
 		  default:
-			if (sc != p[-1])
-				return 0;
-			break;
+			if (sc != pc)
+				break;
+			p++;
+			s++;
+			continue;
 		}
+backtrack:	if (sNext != sStart && sNext <= se) {
+			p = pNext;
+			s = sNext;
+			continue;
+		}
+		return 0;
 	}
-	return s == se;
+	return 1;
 }
 
 static const unsigned char *
 cclass(p, sub)
 	const unsigned char *p;
-	register int sub;
+	int sub;
 {
-	register int c, d, not, found = 0;
+	int c, d, not, found = 0;
 	const unsigned char *orig_p = p;
 
 	if ((not = (ISMAGIC(*p) && *++p == NOT)))
@@ -845,10 +848,10 @@ qsortp(base, n, f)
 }
 
 #define	swap2(a, b)	{\
-	register void *t; t = *(a); *(a) = *(b); *(b) = t;\
+	void *t; t = *(a); *(a) = *(b); *(b) = t;\
 }
 #define	swap3(a, b, c)	{\
-	register void *t; t = *(a); *(a) = *(c); *(c) = *(b); *(b) = t;\
+	void *t; t = *(a); *(a) = *(c); *(c) = *(b); *(b) = t;\
 }
 
 static void
@@ -856,8 +859,8 @@ qsort1(base, lim, f)
 	void **base, **lim;
 	int (*f) ARGS((void *, void *));
 {
-	register void **i, **j;
-	register void **lptr, **hptr;
+	void **i, **j;
+	void **lptr, **hptr;
 	size_t n;
 	int c;
 
@@ -1007,7 +1010,7 @@ ksh_getopt(argv, go, options)
 			go->buf[0] = c;
 			go->optarg = go->buf;
 		} else {
-			warningf(TRUE, "%s%s-%c: unknown option",
+			warningf(true, "%s%s-%c: unknown option",
 				(go->flags & GF_NONAME) ? "" : argv[0],
 				(go->flags & GF_NONAME) ? "" : ": ", c);
 			if (go->flags & GF_ERROR)
@@ -1033,7 +1036,7 @@ ksh_getopt(argv, go, options)
 				go->optarg = go->buf;
 				return ':';
 			}
-			warningf(TRUE, "%s%s-`%c' requires argument",
+			warningf(true, "%s%s-`%c' requires argument",
 				(go->flags & GF_NONAME) ? "" : argv[0],
 				(go->flags & GF_NONAME) ? "" : ": ", c);
 			if (go->flags & GF_ERROR)
@@ -1279,25 +1282,6 @@ reset_nonblock(fd)
 # define MAXPATHLEN PATH
 #endif /* MAXPATHLEN */
 
-#ifdef HPUX_GETWD_BUG
-# include "ksh_dir.h"
-
-/*
- * Work around bug in hpux 10.x C library - getwd/getcwd dump core
- * if current directory is not readable.  Done in macro 'cause code
- * is needed in GETWD and GETCWD cases.
- */
-# define HPUX_GETWD_BUG_CODE \
-	{ \
-	    DIR *d = ksh_opendir("."); \
-	    if (!d) \
-		return (char *) 0; \
-	    closedir(d); \
-	}
-#else /* HPUX_GETWD_BUG */
-# define HPUX_GETWD_BUG_CODE
-#endif /* HPUX_GETWD_BUG */
-
 /* Like getcwd(), except bsize is ignored if buf is 0 (MAXPATHLEN is used) */
 char *
 ksh_get_wd(buf, bsize)
@@ -1307,9 +1291,6 @@ ksh_get_wd(buf, bsize)
 #ifdef HAVE_GETCWD
 	char *b;
 	char *ret;
-
-	/* Before memory allocated */
-	HPUX_GETWD_BUG_CODE
 
 	/* Assume getcwd() available */
 	if (!buf) {
@@ -1332,9 +1313,6 @@ ksh_get_wd(buf, bsize)
 	extern char *getwd ARGS((char *));
 	char *b;
 	int len;
-
-	/* Before memory allocated */
-	HPUX_GETWD_BUG_CODE
 
 	if (buf && bsize > MAXPATHLEN)
 		b = buf;

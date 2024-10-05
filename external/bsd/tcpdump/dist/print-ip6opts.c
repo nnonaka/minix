@@ -29,22 +29,22 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-ip6opts.c,v 1.4 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: print-ip6opts.c,v 1.7 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
+/* \summary: IPv6 header option printer */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#ifdef INET6
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
-#include "ip6.h"
-
-#include "interface.h"
+#include "netdissect.h"
 #include "addrtoname.h"
 #include "extract.h"
+
+#include "ip6.h"
 
 static void
 ip6_sopt_print(netdissect_options *ndo, const u_char *bp, int len)
@@ -178,7 +178,7 @@ trunc:
 int
 hbhopt_print(netdissect_options *ndo, register const u_char *bp)
 {
-    const struct ip6_hbh *dp = (struct ip6_hbh *)bp;
+    const struct ip6_hbh *dp = (const struct ip6_hbh *)bp;
     int hbhlen = 0;
 
     ND_TCHECK(dp->ip6h_len);
@@ -198,7 +198,7 @@ hbhopt_print(netdissect_options *ndo, register const u_char *bp)
 int
 dstopt_print(netdissect_options *ndo, register const u_char *bp)
 {
-    const struct ip6_dest *dp = (struct ip6_dest *)bp;
+    const struct ip6_dest *dp = (const struct ip6_dest *)bp;
     int dstoptlen = 0;
 
     ND_TCHECK(dp->ip6d_len);
@@ -216,4 +216,3 @@ dstopt_print(netdissect_options *ndo, register const u_char *bp)
     ND_PRINT((ndo, "[|DSTOPT]"));
     return(-1);
 }
-#endif /* INET6 */

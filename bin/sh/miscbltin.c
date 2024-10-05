@@ -1,4 +1,4 @@
-/*	$NetBSD: miscbltin.c,v 1.43 2015/05/09 13:28:55 christos Exp $	*/
+/*	$NetBSD: miscbltin.c,v 1.44.12.1 2022/10/27 16:14:42 martin Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)miscbltin.c	8.4 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: miscbltin.c,v 1.43 2015/05/09 13:28:55 christos Exp $");
+__RCSID("$NetBSD: miscbltin.c,v 1.44.12.1 2022/10/27 16:14:42 martin Exp $");
 #endif
 #endif /* not lint */
 
@@ -99,6 +99,7 @@ readcmd(int argc, char **argv)
 	int i;
 	int is_ifs;
 	int saveall = 0;
+	ptrdiff_t wordlen = 0;
 
 	rflag = 0;
 	prompt = NULL;
@@ -109,13 +110,14 @@ readcmd(int argc, char **argv)
 			rflag = 1;
 	}
 
+	if (*(ap = argptr) == NULL)
+		error("variable name required\n"
+			"Usage: read [-r] [-p prompt] var...");
+
 	if (prompt && isatty(0)) {
 		out2str(prompt);
 		flushall();
 	}
-
-	if (*(ap = argptr) == NULL)
-		error("arg count");
 
 	if ((ifs = bltinlookup("IFS", 1)) == NULL)
 		ifs = " \t\n";
@@ -136,7 +138,7 @@ readcmd(int argc, char **argv)
 				break;
 			}
 			if (c != '\n')
-				STPUTC(c, p);
+				goto wdch;
 			continue;
 		}
 		if (c == '\n')
@@ -163,12 +165,14 @@ readcmd(int argc, char **argv)
 		}
 
 		if (is_ifs == 0) {
+  wdch:;
 			/* append this character to the current variable */
 			startword = 0;
 			if (saveall)
 				/* Not just a spare terminator */
 				saveall++;
 			STPUTC(c, p);
+			wordlen = p - stackblock();
 			continue;
 		}
 
@@ -186,11 +190,12 @@ readcmd(int argc, char **argv)
 		setvar(*ap, stackblock(), 0);
 		ap++;
 		STARTSTACKSTR(p);
+		wordlen = 0;
 	}
 	STACKSTRNUL(p);
 
 	/* Remove trailing IFS chars */
-	for (; stackblock() <= --p; *p = 0) {
+	for (; stackblock() + wordlen <= --p; *p = 0) {
 		if (!strchr(ifs, *p))
 			break;
 		if (strchr(" \t\n", *p))
@@ -321,7 +326,7 @@ static const struct limits limits[] = {
 #ifdef RLIMIT_STACK
 	{ "stack",	"kbytes",	RLIMIT_STACK,	1024, 's' },
 #endif
-#ifdef  RLIMIT_CORE
+#ifdef RLIMIT_CORE
 	{ "coredump",	"blocks",	RLIMIT_CORE,	 512, 'c' },
 #endif
 #ifdef RLIMIT_RSS

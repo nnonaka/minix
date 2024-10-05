@@ -1,4 +1,4 @@
-/*	$NetBSD: ttycom.h,v 1.2 2012/10/19 17:16:55 apb Exp $	*/
+/*	$NetBSD: ttycom.h,v 1.5 2019/06/27 01:58:49 christos Exp $	*/
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -34,11 +34,12 @@
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
-#include "opt_compat_netbsd32.h"
 #endif
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+
+struct tty;
 
 #ifdef COMPAT_60
 
@@ -62,5 +63,11 @@ int compat_60_ptmioctl(dev_t, u_long, void *, int, struct lwp *);
 #endif
 
 #endif /* COMPAT_60 */
+
+#ifdef COMPAT_43
+#ifdef _KERNEL
+int compat_43_ttioctl(struct tty *, u_long, void *, int, struct lwp *);
+#endif
+#endif
 
 #endif /* !_COMPAT_SYS_TTYCOM_H_ */

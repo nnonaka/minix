@@ -1,4 +1,4 @@
-/*	$NetBSD: mail.c,v 1.5 2006/01/15 18:16:30 jschauma Exp $	*/
+/*	$NetBSD: mail.c,v 1.9 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * Mailbox checking code by Robert J. Gibson, adapted for PD ksh by
@@ -7,16 +7,17 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: mail.c,v 1.5 2006/01/15 18:16:30 jschauma Exp $");
+__RCSID("$NetBSD: mail.c,v 1.9 2018/05/08 16:37:59 kamil Exp $");
 #endif
-
 
 #include "config.h"
 
 #ifdef KSH
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <time.h>
+
 #include "sh.h"
-#include "ksh_stat.h"
-#include "ksh_time.h"
 
 #define MBMESSAGE	"You have mail in $_"
 
@@ -45,7 +46,7 @@ static void     mprintit    ARGS((mbox_t *mbp));
 void
 mcheck()
 {
-	register mbox_t	*mbp;
+	mbox_t	*mbp;
 	time_t		 now;
 	struct tbl	*vp;
 	struct stat	 stbuf;
@@ -95,7 +96,7 @@ mcset(interval)
 
 void
 mbset(p)
-	register char	*p;
+	char	*p;
 {
 	struct stat	stbuf;
 
@@ -114,10 +115,10 @@ mbset(p)
 
 void
 mpset(mptoparse)
-	register char	*mptoparse;
+	char	*mptoparse;
 {
-	register mbox_t	*mbp;
-	register char	*mpath, *mmsg, *mval;
+	mbox_t	*mbp;
+	char	*mpath, *mmsg, *mval;
 	char *p;
 
 	munset( mplist );
@@ -154,9 +155,9 @@ mpset(mptoparse)
 
 static void
 munset(mlist)
-register mbox_t	*mlist;
+mbox_t	*mlist;
 {
-	register mbox_t	*mbp;
+	mbox_t	*mbp;
 
 	while (mlist != NULL) {
 		mbp = mlist;
@@ -173,7 +174,7 @@ mballoc(p, m)
 	char	*m;
 {
 	struct stat	stbuf;
-	register mbox_t	*mbp;
+	mbox_t	*mbp;
 
 	mbp = (mbox_t *)alloc(sizeof(mbox_t), APERM);
 	mbp->mb_next = NULL;
@@ -193,7 +194,7 @@ mbox_t	*mbp;
 	struct tbl	*vp;
 
 	/* Ignore setstr errors here (arbitrary) */
-	setstr((vp = local("_", FALSE)), mbp->mb_path, KSH_RETURN_ERROR);
+	setstr((vp = local("_", false)), mbp->mb_path, KSH_RETURN_ERROR);
 
 	shellf("%s\n", substitute(mbp->mb_msg ? mbp->mb_msg : MBMESSAGE, 0));
 

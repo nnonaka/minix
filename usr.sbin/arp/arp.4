@@ -1,4 +1,4 @@
-.\"	$NetBSD: arp.4,v 1.10 2003/09/07 16:22:24 wiz Exp $
+.\"	$NetBSD: arp.4,v 1.14 2016/10/16 05:32:30 wiz Exp $
 .\"
 .\" Copyright (c) 1985, 1986, 1988, 1994
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	from: @(#)arp4.4	6.5 (Berkeley) 4/18/94
 .\"
-.Dd April 18, 1994
+.Dd October 12, 2016
 .Dt ARP 4
 .Os
 .Sh NAME
@@ -63,22 +63,10 @@ for a non-responding destination host, and
 .Er EHOSTUNREACH
 for a non-responding router.
 .Pp
-The ARP cache is stored in the system routing table as
-dynamically-created host routes.
-The route to a directly-attached Ethernet network is installed as a
-.Dq cloning
-route (one with the
-.Dv RTF_CLONING
-flag set),
-causing routes to individual hosts on that network to be created on
-demand.
-These routes time out periodically (normally 20 minutes after validated;
+Each ARP cache entry is stored in a network interface which a response
+of ARP comes in.
+ARP cache entires time out periodically (normally 20 minutes after validated;
 entries are not validated when not in use).
-An entry for a host which is not responding is a
-.Dq reject
-route (one with the
-.Dv RTF_REJECT
-flag set).
 .Pp
 ARP entries may be added, deleted or changed with the
 .Xr arp 8
@@ -92,16 +80,32 @@ as if it were the target of the request.
 In the past,
 ARP was used to negotiate the use of a trailer encapsulation.
 This is no longer supported.
-.Pp
-ARP watches passively for hosts impersonating the local host (i.e. a host
-which responds to an ARP mapping request for the local host's address).
 .Sh DIAGNOSTICS
 .Bl -diag
-.It "duplicate IP address %x sent from ethernet address %x:%x:%x:%x:%x:%x."
-ARP has discovered another host on the local network which responds to
-mapping requests for its own Internet address with a different Ethernet
-address, generally indicating that two hosts are attempting to use the
-same Internet address.
+ARP implements Address Conflict Detection.
+When an address is first added to the host, it is marked tentative and
+ARP probes the network to discover if another host has the address.
+If another host replies with the same address, then the local address is
+marked duplicate and the host will not use it.
+Otherwise the tentative
+mark is removed and the host can start using the address.
+.Pp
+ARP will defend the host's active address when a conflicting message is
+received.
+However, if another conflicting message for the address is found within
+a 10 second period, then the address is marked duplicate and the host will
+stop using it.
+.Pp
+For some systems such as a router or a server,
+it is desirable never to give up an assigned address.
+This can be achieved by setting the
+.Xr sysctl 7
+variable
+.Dv net.inet.ip_dad_count
+to 0.
+.Pp
+In all of the above cases, ARP will log diagnostic messages which include
+the hardware address of the conflicting host.
 .El
 .Sh SEE ALSO
 .Xr inet 4 ,
@@ -121,3 +125,15 @@ same Internet address.
 .%B "Trailer Encapsulations"
 .%T RFC 893
 .Re
+.Rs
+.%A Cheshire, S.
+.%B "IPv4 Address Conflict Detection"
+.%T RFC 5227
+.Re
+.Sh HISTORY
+Since
+.Nx 8.0 ,
+the ARP cache was not stored in the routing table.
+.Pp
+Address Conflict Detection was added in
+.Nx 8.0 .

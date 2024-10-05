@@ -1,5 +1,5 @@
 #! /bin/sh
-#	$NetBSD: mknodes.sh,v 1.2 2008/04/29 06:53:00 martin Exp $
+#	$NetBSD: mknodes.sh,v 1.4 2019/01/19 13:08:50 kre Exp $
 
 # Copyright (c) 2003 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -83,11 +83,35 @@ for struct in $struct_list; do
 		IFS=' '
 		set -- $line
 		name=$1
+		case "$name" in
+		type)	if [ -n "$typetype" ] && [ "$typetype" != "$2" ]
+			then
+				echo >&2 "Conflicting type fields: node" \
+					"$struct has $2, others $typetype"
+				exit 1
+			fi
+			if [ $field -ne 1 ]
+			then
+				echo >&2 "Node $struct has type as field" \
+					"$field (should only be first)"
+				exit 1
+			fi
+			typetype=$2
+			;;
+		*)
+			if [ $field -eq 1 ]
+			then
+				echo >&2 "Node $struct does not have" \
+					"type as first field"
+				exit 1
+			fi
+			;;
+		esac
 		case $2 in
 		nodeptr ) type="union node *";;
 		nodelist ) type="struct nodelist *";;
 		string ) type="char *";;
-		int ) type="int ";;
+		int*_t | uint*_t | int ) type="$2 ";;
 		* ) name=; shift 2; type="$*";;
 		esac
 		echo "      $type$name;"
@@ -98,7 +122,7 @@ done
 echo
 echo
 echo "union node {"
-echo "      int type;"
+echo "      $typetype type;"
 for struct in $struct_list; do
 	echo "      struct $struct $struct;"
 done
@@ -111,8 +135,12 @@ echo "	union node *n;"
 echo "};"
 echo
 echo
-echo "union node *copyfunc(union node *);"
-echo "void freefunc(union node *);"
+echo 'struct funcdef;'
+echo 'struct funcdef *copyfunc(union node *);'
+echo 'union node *getfuncnode(struct funcdef *);'
+echo 'void reffunc(struct funcdef *);'
+echo 'void unreffunc(struct funcdef *);'
+echo 'void freefunc(struct funcdef *);'
 
 mv $objdir/nodes.h.tmp $objdir/nodes.h || exit 1
 
@@ -140,7 +168,7 @@ while IFS=; read -r line; do
 	'%CALCSIZE' )
 		echo "      if (n == NULL)"
 		echo "	    return;"
-		echo "      funcblocksize += nodesize[n->type];"
+		echo "      res->bsize += nodesize[n->type];"
 		echo "      switch (n->type) {"
 		IFS=' '
 		for struct in $struct_list; do
@@ -157,11 +185,11 @@ while IFS=; read -r line; do
 				IFS=' '
 				set -- $line
 				name=$1
-				cl=")"
+				cl=", res)"
 				case $2 in
 				nodeptr ) fn=calcsize;;
 				nodelist ) fn=sizenodelist;;
-				string ) fn="funcstringsize += strlen"
+				string ) fn="res->ssize += strlen"
 					cl=") + 1";;
 				* ) continue;;
 				esac
@@ -174,8 +202,8 @@ while IFS=; read -r line; do
 	'%COPY' )
 		echo "      if (n == NULL)"
 		echo "	    return NULL;"
-		echo "      new = funcblock;"
-		echo "      funcblock = (char *) funcblock + nodesize[n->type];"
+		echo "      new = st->block;"
+		echo "      st->block = (char *) st->block + nodesize[n->type];"
 		echo "      switch (n->type) {"
 		IFS=' '
 		for struct in $struct_list; do
@@ -196,11 +224,11 @@ while IFS=; read -r line; do
 				nodeptr ) fn="copynode(";;
 				nodelist ) fn="copynodelist(";;
 				string ) fn="nodesavestr(";;
-				int ) fn=;;
+				int*_t| uint*_t | int ) fn=;;
 				* ) continue;;
 				esac
 				f="$struct.$name"
-				echo "	    new->$f = ${fn}n->$f${fn:+)};"
+				echo "	    new->$f = ${fn}n->$f${fn:+, st)};"
 			done
 			echo "	    break;"
 		done

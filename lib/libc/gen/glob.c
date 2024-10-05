@@ -1,4 +1,4 @@
-/*	$NetBSD: glob.c,v 1.35 2013/03/20 23:44:47 lukem Exp $	*/
+/*	$NetBSD: glob.c,v 1.39 2019/05/29 01:21:33 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)glob.c	8.3 (Berkeley) 10/13/93";
 #else
-__RCSID("$NetBSD: glob.c,v 1.35 2013/03/20 23:44:47 lukem Exp $");
+__RCSID("$NetBSD: glob.c,v 1.39 2019/05/29 01:21:33 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -87,9 +87,9 @@ __RCSID("$NetBSD: glob.c,v 1.35 2013/03/20 23:44:47 lukem Exp $");
 #define NO_GETPW_R
 #endif
 
-#define	GLOB_LIMIT_STRING	65536	/* number of readdirs */
+#define	GLOB_LIMIT_STRING	524288	/* number of readdirs */
 #define	GLOB_LIMIT_STAT		128	/* number of stat system calls */
-#define	GLOB_LIMIT_READDIR	16384	/* total buffer size of path strings */
+#define	GLOB_LIMIT_READDIR	65536	/* total buffer size of path strings */
 #define	GLOB_LIMIT_PATH		1024	/* number of path elements */
 #define GLOB_LIMIT_BRACE	128	/* Number of brace calls */
 
@@ -170,7 +170,8 @@ static int	 glob2(Char *, Char *, Char *, const Char *, glob_t *,
 static int	 glob3(Char *, Char *, Char *, const Char *, const Char *,
     const Char *, glob_t *, struct glob_limit *);
 static int	 globextend(const Char *, glob_t *, struct glob_limit *);
-static const Char *globtilde(const Char *, Char *, size_t, glob_t *);
+static int       globtilde(const Char **, const Char *, Char *, size_t,
+    glob_t *);
 static int	 globexp1(const Char *, glob_t *, struct glob_limit *);
 static int	 globexp2(const Char *, const Char *, glob_t *, int *,
     struct glob_limit *);
@@ -378,8 +379,9 @@ globexp2(const Char *ptr, const Char *pattern, glob_t *pglob, int *rv,
 /*
  * expand tilde from the passwd file.
  */
-static const Char *
-globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
+static int
+globtilde(const Char **qpatnext, const Char *pattern, Char *patbuf,
+    size_t patsize, glob_t *pglob)
 {
 	struct passwd *pwd;
 	const char *h;
@@ -397,9 +399,10 @@ globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
 	_DIAGASSERT(pattern != NULL);
 	_DIAGASSERT(patbuf != NULL);
 	_DIAGASSERT(pglob != NULL);
+	*qpatnext = pattern;
 
 	if (*pattern != TILDE || !(pglob->gl_flags & GLOB_TILDE))
-		return pattern;
+		return 0;
 
 	/* Copy up to the end of the string or / */
 	for (p = pattern + 1, d = (char *)(void *)patbuf; 
@@ -408,7 +411,7 @@ globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
 		continue;
 
 	if (d == (char *)(void *)pend)
-		return NULL;
+		return GLOB_ABEND;
 
 	*d = EOS;
 	d = (char *)(void *)patbuf;
@@ -425,9 +428,8 @@ globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
 			if (getpwuid_r(getuid(), &pwres, pwbuf, sizeof(pwbuf),
 			    &pwd) != 0 || pwd == NULL)
 #endif
-				return pattern;
-			else
-				h = pwd->pw_dir;
+				goto nouser;
+			h = pwd->pw_dir;
 		}
 	}
 	else {
@@ -440,9 +442,8 @@ globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
 		if (getpwnam_r(d, &pwres, pwbuf, sizeof(pwbuf), &pwd) != 0 ||
 		    pwd == NULL)
 #endif
-			return pattern;
-		else
-			h = pwd->pw_dir;
+			goto nouser;
+		h = pwd->pw_dir;
 	}
 
 	/* Copy the home directory */
@@ -450,16 +451,19 @@ globtilde(const Char *pattern, Char *patbuf, size_t patsize, glob_t *pglob)
 		continue;
 
 	if (b == pend)
-		return NULL;
+		return GLOB_ABEND;
 	
 	/* Append the rest of the pattern */
 	while (b < pend && (*b++ = *p++) != EOS)
 		continue;
 
 	if (b == pend)
-		return NULL;
+		return GLOB_ABEND;
 
-	return patbuf;
+	*qpatnext = patbuf;
+	return 0;
+nouser:
+	return (pglob->gl_flags & GLOB_TILDE_CHECK) ?  GLOB_NOMATCH : 0;
 }
 	
 
@@ -481,9 +485,9 @@ glob0(const Char *pattern, glob_t *pglob, struct glob_limit *limit)
 	_DIAGASSERT(pattern != NULL);
 	_DIAGASSERT(pglob != NULL);
 
-	if ((qpatnext = globtilde(pattern, patbuf, sizeof(patbuf),
-	    pglob)) == NULL)
-		return GLOB_ABEND;
+	if ((error = globtilde(&qpatnext, pattern, patbuf, sizeof(patbuf),
+	    pglob)) != 0)
+		return error;
 	oldpathc = pglob->gl_pathc;
 	bufnext = patbuf;
 
@@ -936,39 +940,45 @@ nospace:
 
 
 /*
- * pattern matching function for filenames.  Each occurrence of the *
- * pattern causes a recursion level.
+ * pattern matching function for filenames.
  */
 static int
 match(const Char *name, const Char *pat, const Char *patend)
 {
 	int ok, negate_range;
 	Char c, k;
+	const Char *patNext, *nameNext, *nameStart, *nameEnd;
 
 	_DIAGASSERT(name != NULL);
 	_DIAGASSERT(pat != NULL);
 	_DIAGASSERT(patend != NULL);
+	patNext = pat;
+	nameStart = nameNext = name;
+	nameEnd = NULL;
 
-	while (pat < patend) {
-		c = *pat++;
+	while (pat < patend || *name) {
+		c = *pat;
+		if (*name == EOS)
+			nameEnd = name;
 		switch (c & M_MASK) {
 		case M_ALL:
-			while (pat < patend && (*pat & M_MASK) == M_ALL)
-				pat++;	/* eat consecutive '*' */
-			if (pat == patend)
-				return 1;
-			for (; !match(name, pat, patend); name++)
-				if (*name == EOS)
-					return 0;
-			return 1;
+			while ((pat[1] & M_MASK) == M_ALL) pat++;
+			patNext = pat;
+			nameNext = name + 1;
+			pat++;
+			continue;
 		case M_ONE:
-			if (*name++ == EOS)
-				return 0;
-			break;
+			if (*name == EOS)
+				break;
+			pat++;
+			name++;
+			continue;
 		case M_SET:
 			ok = 0;
-			if ((k = *name++) == EOS)
-				return 0;
+			if ((k = *name) == EOS)
+				break;
+			pat++;
+			name++;
 			if ((negate_range = ((*pat & M_MASK) == M_NOT)) != EOS)
 				++pat;
 			while (((c = *pat++) & M_MASK) != M_END)
@@ -979,15 +989,24 @@ match(const Char *name, const Char *pat, const Char *patend)
 				} else if (c == k)
 					ok = 1;
 			if (ok == negate_range)
-				return 0;
-			break;
+				break;
+			continue;
 		default:
-			if (*name++ != c)
-				return 0;
-			break;
+			if (*name != c)
+				break;
+			pat++;
+			name++;
+			continue;
 		}
+		if (nameNext != nameStart
+		    && (nameEnd == NULL || nameNext <= nameEnd)) {
+			pat = patNext;
+			name = nameNext;
+			continue;
+		}
+		return 0;
 	}
-	return *name == EOS;
+	return 1;
 }
 
 /* Free allocated data belonging to a glob_t structure. */

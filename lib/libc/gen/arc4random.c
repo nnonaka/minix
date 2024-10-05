@@ -359,7 +359,8 @@ crypto_onetimestream(const void *seed, void *buf, size_t n)
 	 *	  = log_2 o + 8 i.
 	 */
 	__CTASSERT(CHAR_BIT * sizeof n <=
-	    (/*LINTED*/ilog2(crypto_core_OUTPUTBYTES) + 8 * crypto_core_INPUTBYTES));
+	    (/*LINTED*/ilog2(crypto_core_OUTPUTBYTES) +
+		8*crypto_core_INPUTBYTES));
 
 	p8 = buf;
 	p32 = (uint8_t *)roundup2((uintptr_t)p8, 4);
@@ -464,7 +465,8 @@ arc4random_prng_create(void)
 	struct arc4random_prng *prng;
 	const size_t size = roundup(sizeof(*prng), sysconf(_SC_PAGESIZE));
 
-	prng = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
+	prng = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1,
+	    0);
 	if (prng == MAP_FAILED)
 		goto fail0;
 	if (minherit(prng, size, MAP_INHERIT_ZERO) == -1)

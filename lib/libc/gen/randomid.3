@@ -1,4 +1,4 @@
-.\"	$NetBSD: randomid.3,v 1.7 2006/01/05 19:45:29 rpaulo Exp $
+.\"	$NetBSD: randomid.3,v 1.9 2017/10/24 19:07:12 abhinav Exp $
 .\"
 .\" Copyright (C) 2006 The NetBSD Foundation
 .\" All rights reserved.
@@ -34,9 +34,9 @@
 .Dt RANDOMID 3
 .Os
 .Sh NAME
-.Nm randomid
+.Nm randomid ,
 .Nm randomid_new ,
-.Nm randomid_delete ,
+.Nm randomid_delete
 .Nd provide pseudo-random data stream without repetitions
 .Sh SYNOPSIS
 .In sys/types.h
@@ -113,9 +113,9 @@ It must not be shared among multiple data streams with different usage.
 .\"
 .Sh EXAMPLES
 .Bd -literal -offset indent
-#include \*[Lt]stdio.h\*[Gt]
-#include \*[Lt]sys/types.h\*[Gt]
-#include \*[Lt]randomid.h\*[Gt]
+#include <stdio.h>
+#include <sys/types.h>
+#include <randomid.h>
 
 uint32_t
 genid(void)

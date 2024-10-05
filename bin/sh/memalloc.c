@@ -1,4 +1,4 @@
-/*	$NetBSD: memalloc.c,v 1.29 2008/02/15 17:26:06 matt Exp $	*/
+/*	$NetBSD: memalloc.c,v 1.33.2.1 2021/11/06 13:35:43 martin Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,10 +37,12 @@
 #if 0
 static char sccsid[] = "@(#)memalloc.c	8.3 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: memalloc.c,v 1.29 2008/02/15 17:26:06 matt Exp $");
+__RCSID("$NetBSD: memalloc.c,v 1.33.2.1 2021/11/06 13:35:43 martin Exp $");
 #endif
 #endif /* not lint */
 
+#include <limits.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -141,9 +143,11 @@ stalloc(int nbytes)
 		stackp = sp;
 		INTON;
 	}
+	INTOFF;
 	p = stacknxt;
 	stacknxt += nbytes;
 	stacknleft -= nbytes;
+	INTON;
 	return p;
 }
 
@@ -160,32 +164,44 @@ stunalloc(pointer p)
 }
 
 
-
+/* save the current status of the sh stack */
 void
 setstackmark(struct stackmark *mark)
 {
 	mark->stackp = stackp;
 	mark->stacknxt = stacknxt;
 	mark->stacknleft = stacknleft;
+	mark->sstrnleft = sstrnleft;
 	mark->marknext = markp;
 	markp = mark;
 }
 
-
+/* reset the stack mark, and remove it from the list of marks */
 void
 popstackmark(struct stackmark *mark)
+{
+	INTOFF;
+	markp = mark->marknext;		/* delete mark from the list */
+	rststackmark(mark);		/* and reset stack */
+	INTON;
+}
+
+/* reset the shell stack to its state recorded in the stack mark */
+void
+rststackmark(struct stackmark *mark)
 {
 	struct stack_block *sp;
 
 	INTOFF;
-	markp = mark->marknext;
 	while (stackp != mark->stackp) {
+		/* delete any recently allocated mem blocks */
 		sp = stackp;
 		stackp = sp->prev;
 		ckfree(sp);
 	}
 	stacknxt = mark->stacknxt;
 	stacknleft = mark->stacknleft;
+	sstrnleft = mark->sstrnleft;
 	INTON;
 }
 
@@ -205,12 +221,12 @@ growstackblock(void)
 {
 	int newlen = SHELL_ALIGN(stacknleft * 2 + 100);
 
+	INTOFF;
 	if (stacknxt == stackp->space && stackp != &stackbase) {
 		struct stack_block *oldstackp;
 		struct stackmark *xmark;
 		struct stack_block *sp;
 
-		INTOFF;
 		oldstackp = stackp;
 		sp = stackp;
 		stackp = sp->prev;
@@ -219,6 +235,7 @@ growstackblock(void)
 		sp->prev = stackp;
 		stackp = sp;
 		stacknxt = sp->space;
+		sstrnleft += newlen - stacknleft;
 		stacknleft = newlen;
 
 		/*
@@ -229,10 +246,10 @@ growstackblock(void)
 		while (xmark != NULL && xmark->stackp == oldstackp) {
 			xmark->stackp = stackp;
 			xmark->stacknxt = stacknxt;
+			xmark->sstrnleft += stacknleft - xmark->stacknleft;
 			xmark->stacknleft = stacknleft;
 			xmark = xmark->marknext;
 		}
-		INTON;
 	} else {
 		char *oldspace = stacknxt;
 		int oldlen = stacknleft;
@@ -242,14 +259,17 @@ growstackblock(void)
 		stacknxt = p;			/* free the space */
 		stacknleft += newlen;		/* we just allocated */
 	}
+	INTON;
 }
 
 void
 grabstackblock(int len)
 {
 	len = SHELL_ALIGN(len);
+	INTOFF;
 	stacknxt += len;
 	stacknleft -= len;
+	INTON;
 }
 
 /*
@@ -297,11 +317,89 @@ makestrspace(void)
 	return stackblock() + len;
 }
 
+/*
+ * Note that this only works to release stack space for reuse
+ * if nothing else has allocated space on the stack since the grabstackstr()
+ *
+ * "s" is the start of the area to be released, and "p" represents the end
+ * of the string we have stored beyond there and are now releasing.
+ * (ie: "p" should be the same as in the call to grabstackstr()).
+ *
+ * stunalloc(s) and ungrabstackstr(s, p) are almost interchangable after
+ * a grabstackstr(), however the latter also returns string space so we
+ * can just continue with STPUTC() etc without needing a new STARTSTACKSTR(s)
+ */
 void
 ungrabstackstr(char *s, char *p)
 {
+#ifdef DEBUG
+	if (s < stacknxt || stacknxt + stacknleft < s)
+		abort();
+#endif
 	stacknleft += stacknxt - s;
 	stacknxt = s;
 	sstrnleft = stacknleft - (p - s);
-
 }
+
+/*
+ * Save the concat of a sequence of strings in stack space
+ *
+ * The first arg (if not NULL) is a pointer to where the final string
+ * length will be returned.
+ *
+ * Remaining args are pointers to strings - sufficient space to hold
+ * the concat of the strings is allocated on the stack, the strings
+ * are copied into that space, and a pointer to its start is retured.
+ * The arg list is terminated with STSTRC_END.
+ *
+ * Use stunalloc(string) (in proper sequence) to release the string
+ */
+char *
+ststrcat(size_t *lp, ...)
+{
+	va_list ap;
+	const char *arg;
+	size_t len, tlen = 0, alen[8];
+	char *str, *nxt;
+	unsigned int n;
+
+	n = 0;
+	va_start(ap, lp);
+	arg = va_arg(ap, const char *);
+	while (arg != STSTRC_END) {
+		len = strlen(arg);
+		if (n < sizeof(alen)/sizeof(alen[0]))
+			alen[n++] = len;
+		tlen += len;
+		arg = va_arg(ap, const char *);
+	}
+	va_end(ap);
+
+	if (lp != NULL)
+		*lp = tlen;
+
+	if (tlen >= INT_MAX)
+		error("ststrcat() over length botch");
+	str = (char *)stalloc((int)tlen + 1);	/* 1 for \0 */
+	str[tlen] = '\0';	/* in case of no args  */
+
+	n = 0;
+	nxt = str;
+	va_start(ap, lp);
+	arg = va_arg(ap, const char *);
+	while (arg != STSTRC_END) {
+		if (n < sizeof(alen)/sizeof(alen[0]))
+			len = alen[n++];
+		else
+			len = strlen(arg);
+
+		scopy(arg, nxt);
+		nxt += len;
+
+		arg = va_arg(ap, const char *);
+	}
+	va_end(ap);
+
+	return str;
+}
+

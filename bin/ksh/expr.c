@@ -1,4 +1,4 @@
-/*	$NetBSD: expr.c,v 1.9 2011/10/16 17:12:11 joerg Exp $	*/
+/*	$NetBSD: expr.c,v 1.12 2018/05/08 16:37:59 kamil Exp $	*/
 
 /*
  * Korn expression evaluation
@@ -9,13 +9,13 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: expr.c,v 1.9 2011/10/16 17:12:11 joerg Exp $");
+__RCSID("$NetBSD: expr.c,v 1.12 2018/05/08 16:37:59 kamil Exp $");
 #endif
 
 
 #include "sh.h"
 #include <ctype.h>
-
+#include <stdbool.h>
 
 /* The order of these enums is constrained by the order of opinfo[] */
 enum token {
@@ -138,8 +138,7 @@ static void        evalerr  ARGS((Expr_state *es, enum error_type type,
 				  const char *str)) GCC_FUNC_ATTR(noreturn);
 static struct tbl *evalexpr ARGS((Expr_state *es, enum prec prec));
 static void        token    ARGS((Expr_state *es));
-static struct tbl *do_ppmm  ARGS((Expr_state *es, enum token op,
-				  struct tbl *vasn, bool_t is_prefix));
+static struct tbl *do_ppmm(Expr_state *, enum token, struct tbl *, bool);
 static void	   assign_check ARGS((Expr_state *es, enum token op,
 				      struct tbl *vasn));
 static struct tbl *tempvar  ARGS((void));
@@ -251,31 +250,31 @@ evalerr(es, type, str)
 		default:
 			s = opinfo[(int)es->tok].name;
 		}
-		warningf(TRUE, "%s: unexpected `%s'", es->expression, s);
+		warningf(true, "%s: unexpected `%s'", es->expression, s);
 		break;
 
 	case ET_BADLIT:
-		warningf(TRUE, "%s: bad number `%s'", es->expression, str);
+		warningf(true, "%s: bad number `%s'", es->expression, str);
 		break;
 
 	case ET_RECURSIVE:
-		warningf(TRUE, "%s: expression recurses on parameter `%s'",
+		warningf(true, "%s: expression recurses on parameter `%s'",
 			es->expression, str);
 		break;
 
 	case ET_LVALUE:
-		warningf(TRUE, "%s: %s requires lvalue",
+		warningf(true, "%s: %s requires lvalue",
 			es->expression, str);
 		break;
 
 	case ET_RDONLY:
-		warningf(TRUE, "%s: %s applied to read only variable",
+		warningf(true, "%s: %s applied to read only variable",
 			es->expression, str);
 		break;
 
 	default: /* keep gcc happy */
 	case ET_STR:
-		warningf(TRUE, "%s: %s", es->expression, str);
+		warningf(true, "%s: %s", es->expression, str);
 		break;
 	}
 	unwind(LAEXPR);
@@ -312,7 +311,7 @@ evalexpr(es, prec)
 			token(es);
 		} else if (op == O_PLUSPLUS || op == O_MINUSMINUS) {
 			token(es);
-			vl = do_ppmm(es, op, es->val, TRUE);
+			vl = do_ppmm(es, op, es->val, true);
 			token(es);
 		} else if (op == VAR || op == LIT) {
 			vl = es->val;
@@ -322,7 +321,7 @@ evalexpr(es, prec)
 			/*NOTREACHED*/
 		}
 		if (es->tok == O_PLUSPLUS || es->tok == O_MINUSMINUS) {
-			vl = do_ppmm(es, es->tok, vl, FALSE);
+			vl = do_ppmm(es, es->tok, vl, false);
 			token(es);
 		}
 		return vl;
@@ -537,11 +536,7 @@ token(es)
 
 /* Do a ++ or -- operation */
 static struct tbl *
-do_ppmm(es, op, vasn, is_prefix)
-	Expr_state *es;
-	enum token op;
-	struct tbl *vasn;
-	bool_t is_prefix;
+do_ppmm(Expr_state *es, enum token op, struct tbl *vasn, bool is_prefix)
 {
 	struct tbl *vl;
 	int oval;
@@ -575,7 +570,7 @@ assign_check(es, op, vasn)
 static struct tbl *
 tempvar()
 {
-	register struct tbl *vp;
+	struct tbl *vp;
 
 	vp = (struct tbl*) alloc(sizeof(struct tbl), ATEMP);
 	vp->flag = ISSET|INTEGER;

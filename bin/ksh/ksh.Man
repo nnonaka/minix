@@ -1,5 +1,5 @@
 '\" t
-.\" $NetBSD: ksh.Man,v 1.24 2015/04/12 17:05:03 jmcneill Exp $
+.\" $NetBSD: ksh.Man,v 1.26 2018/08/26 22:52:34 sevan Exp $
 .\"{{{}}}
 .\"{{{  Notes about man page
 .\"     - use the pseudo-macros .sh( and .sh) to begin and end sh-specific
@@ -19,10 +19,10 @@
 .\"}}}
 .\"{{{  Title
 .ksh(
-.TH KSH 1 "April 12, 2015" "" "User commands"
+.TH KSH 1 "August 26, 2018" "" "User commands"
 .ksh)
 .sh(
-.TH SH 1 "April 12, 2015" "" "User commands"
+.TH SH 1 "August 26, 2018" "" "User commands"
 .sh)
 .\"}}}
 .\"{{{  Name
@@ -43,7 +43,7 @@ sh \- Public domain Bourne shell
 .sh(
 \fBsh\fP
 .sh)
-[\fB\(+-abCefhikmnprsuvxX\fP] [\fB\(+-o\fP \fIoption\fP] [ [ \fB\-c\fP \fIcommand-string\fP [\fIcommand-name\fP] | \fB\-s\fP | \fIfile\fP ] [\fIargument\fP ...] ]
+[\fB\(+-abCefhiklmnprsuvxX\fP] [\fB\(+-o\fP \fIoption\fP] [ [ \fB\-c\fP \fIcommand-string\fP [\fIcommand-name\fP] | \fB\-s\fP | \fIfile\fP ] [\fIargument\fP ...] ]
 .ad b
 .\"}}}
 .\"{{{  Description
@@ -2653,6 +2653,7 @@ on some systems this is the maximum allowable virtual address (in bytes,
 not kbytes).
 .IP \fB\-w\fP
 Impose a limit of \fIn\fP kbytes on the amount of swap space used.
+(Not supported on NetBSD)
 .PP
 As far as \fBulimit\fP is concerned, a block is 512 bytes.
 .RE

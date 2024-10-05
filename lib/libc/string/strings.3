@@ -1,4 +1,4 @@
-.\" $NetBSD: strings.3,v 1.1 2007/02/17 09:32:58 wiz Exp $
+.\" $NetBSD: strings.3,v 1.3 2017/06/17 10:48:09 abhinav Exp $
 .\"
 .\" Copyright (c) 2007 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -27,18 +27,11 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd February 17, 2007
+.Dd June 17, 2017
 .Dt STRINGS 3
 .Os
 .Sh NAME
-.Nm bcmp ,
-.Nm bcopy ,
-.Nm bzero ,
-.Nm ffs ,
-.Nm index ,
-.Nm rindex ,
-.Nm strcasecmp ,
-.Nm strncasecmp
+.Nm strings
 .Nd string operations
 .Sh LIBRARY
 .Lb libc
@@ -62,7 +55,7 @@
 .Fn strncasecmp "const char *s1" "const char *s2" "size_t len"
 .Sh DESCRIPTION
 These functions all live in the
-.Pa strings.h
+.In strings.h
 header file.
 Except for
 .Fn ffs ,

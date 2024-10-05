@@ -1,10 +1,12 @@
-/*	$NetBSD: proto.h,v 1.7 2005/06/26 19:09:00 christos Exp $	*/
+/*	$NetBSD: proto.h,v 1.13 2018/06/03 12:18:29 kamil Exp $	*/
 
 /*
  * prototypes for PD-KSH
  * originally generated using "cproto.c 3.5 92/04/11 19:28:01 cthuang "
- * $Id: proto.h,v 1.7 2005/06/26 19:09:00 christos Exp $
+ * $Id: proto.h,v 1.13 2018/06/03 12:18:29 kamil Exp $
  */
+
+#include <stdbool.h>
 
 /* alloc.c */
 Area *	ainit		ARGS((Area *));
@@ -214,10 +216,10 @@ struct op * compile	ARGS((Source *));
 /* table.c */
 unsigned int 	hash	ARGS((const char *));
 void 	tinit		ARGS((struct table *, Area *, int));
-struct tbl *	tsearch	ARGS((struct table *, const char *, unsigned int));
+struct tbl *	mytsearch	ARGS((struct table *, const char *, unsigned int));
 struct tbl *	tenter	ARGS((struct table *, const char *, unsigned int));
-void 	tdelete		ARGS((struct tbl *));
-void 	twalk		ARGS((struct tstate *, struct table *));
+void 	mytdelete		ARGS((struct tbl *));
+void 	ksh_twalk		ARGS((struct tstate *, struct table *));
 struct tbl *	tnext	ARGS((struct tstate *));
 struct tbl **	tsort	ARGS((struct table *));
 /* trace.c */
@@ -253,7 +255,7 @@ void 	newblock	ARGS((void));
 void 	popblock	ARGS((void));
 void	initvar		ARGS((void));
 struct tbl *	global	ARGS((const char *));
-struct tbl *	local	ARGS((const char *, bool_t));
+struct tbl *	local(const char *, bool);
 char *	str_val		ARGS((struct tbl *));
 long 	intval		ARGS((struct tbl *));
 int 	setstr		ARGS((struct tbl *, const char *, int));
@@ -273,26 +275,3 @@ char *	arrayname	ARGS((const char *));
 void    set_array	ARGS((const char *, int, char **));
 /* version.c */
 /* vi.c: see edit.h */
-
-
-/* Hack to avoid billions of compile warnings on SunOS 4.1.x */
-#if defined(MUN) && defined(sun) && !defined(__svr4__)
-extern void bcopy ARGS((const void *, void *, size_t));
-extern intclose ARGS((FILE *));
-extern intprintf ARGS((FILE *, const char *, ...));
-extern intread ARGS((void *, int, int, FILE *));
-extern int ioctl ARGS((int, int, void *));
-extern int killpg ARGS((int, int));
-extern int nice ARGS((int));
-extern int readlink ARGS((const char *, char *, int));
-extern int setpgrp ARGS((int, int));
-extern int strcasecmp ARGS((const char *, const char *));
-extern int tolower ARGS((int));
-extern int toupper ARGS((int));
-/*  Include files aren't included yet */
-extern int getrlimit ARGS(( /* int, struct rlimit * */ ));
-extern int getrusage ARGS(( /* int, struct rusage * */ ));
-extern int gettimeofday ARGS(( /* struct timeval *, struct timezone * */ ));
-extern int setrlimit ARGS(( /* int, struct rlimit * */ ));
-extern int lstat ARGS(( /* const char *, struct stat * */ ));
-#endif

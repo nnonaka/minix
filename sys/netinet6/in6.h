@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.h,v 1.85 2015/08/07 08:11:33 ozaki-r Exp $	*/
+/*	$NetBSD: in6.h,v 1.95.2.1 2019/09/06 19:43:00 martin Exp $	*/
 /*	$KAME: in6.h,v 1.83 2001/03/29 02:55:07 jinmei Exp $	*/
 
 /*
@@ -71,6 +71,7 @@
 #endif
 
 #include <sys/socket.h>
+#include <sys/endian.h>		/* ntohl */
 
 /*
  * Identification of the network protocol stack
@@ -491,71 +492,20 @@ struct ip6_mtuinfo {
  * Third level is protocol number.
  * Fourth level is desired variable within that protocol.
  */
-#define IPV6PROTO_MAXID	(IPPROTO_PIM + 1)	/* don't list to IPV6PROTO_MAX */
-
-#define CTL_IPV6PROTO_NAMES { \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, \
-	{ "tcp6", CTLTYPE_NODE }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "udp6", CTLTYPE_NODE }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, \
-	{ "ip6", CTLTYPE_NODE }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, \
-	{ "ipsec6", CTLTYPE_NODE }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "icmp6", CTLTYPE_NODE }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "pim6", CTLTYPE_NODE }, \
-}
-
 /*
  * Names for IP sysctl objects
  */
 #define IPV6CTL_FORWARDING	1	/* act as router */
 #define IPV6CTL_SENDREDIRECTS	2	/* may send redirects when forwarding*/
 #define IPV6CTL_DEFHLIM		3	/* default Hop-Limit */
-#ifdef notyet
-#define IPV6CTL_DEFMTU		4	/* default MTU */
-#endif
+/* IPV6CTL_DEFMTU=4, never implemented */
 #define IPV6CTL_FORWSRCRT	5	/* forward source-routed dgrams */
 #define IPV6CTL_STATS		6	/* stats */
 #define IPV6CTL_MRTSTATS	7	/* multicast forwarding stats */
 #define IPV6CTL_MRTPROTO	8	/* multicast routing protocol */
 #define IPV6CTL_MAXFRAGPACKETS	9	/* max packets reassembly queue */
 #define IPV6CTL_SOURCECHECK	10	/* verify source route and intf */
-#define IPV6CTL_SOURCECHECK_LOGINT 11	/* minimume logging interval */
+#define IPV6CTL_SOURCECHECK_LOGINT 11	/* minimum logging interval */
 #define IPV6CTL_ACCEPT_RTADV	12
 #define IPV6CTL_KEEPFAITH	13
 #define IPV6CTL_LOG_INTERVAL	14
@@ -576,7 +526,8 @@ struct ip6_mtuinfo {
 #define IPV6CTL_LOWPORTMAX	31	/* maximum reserved port */
 /* 32 to 34: reserved */
 #define IPV6CTL_AUTO_LINKLOCAL	35	/* automatic link-local addr assign */
-/* 36 to 38: reserved */
+/* 36 to 37: reserved */
+#define IPV6CTL_ADDRCTLPOLICY	38	/* get/set address selection policy */
 #define IPV6CTL_USE_DEFAULTZONE	39	/* use default scope zone */
 /* 40: reserved */
 #define IPV6CTL_MAXFRAGS	41	/* max fragments */
@@ -585,58 +536,6 @@ struct ip6_mtuinfo {
 					/* via router advertisement */
 #define IPV6CTL_RTADV_NUMROUTES 44	/* current number of routes */
 					/* via router advertisement */
-/* New entries should be added here from current IPV6CTL_MAXID value. */
-/* to define items, should talk with KAME guys first, for *BSD compatibility */
-#define IPV6CTL_MAXID		45
-
-#define IPV6CTL_NAMES { \
-	{ 0, 0 }, \
-	{ "forwarding", CTLTYPE_INT }, \
-	{ "redirect", CTLTYPE_INT }, \
-	{ "hlim", CTLTYPE_INT }, \
-	{ "mtu", CTLTYPE_INT }, \
-	{ "forwsrcrt", CTLTYPE_INT }, \
-	{ "stats", CTLTYPE_STRUCT }, \
-	{ 0, 0 }, \
-	{ "mrtproto", CTLTYPE_INT }, \
-	{ "maxfragpackets", CTLTYPE_INT }, \
-	{ "sourcecheck", CTLTYPE_INT }, \
-	{ "sourcecheck_logint", CTLTYPE_INT }, \
-	{ "accept_rtadv", CTLTYPE_INT }, \
-	{ "keepfaith", CTLTYPE_INT }, \
-	{ "log_interval", CTLTYPE_INT }, \
-	{ "hdrnestlimit", CTLTYPE_INT }, \
-	{ "dad_count", CTLTYPE_INT }, \
-	{ "auto_flowlabel", CTLTYPE_INT }, \
-	{ "defmcasthlim", CTLTYPE_INT }, \
-	{ "gifhlim", CTLTYPE_INT }, \
-	{ "kame_version", CTLTYPE_STRING }, \
-	{ "use_deprecated", CTLTYPE_INT }, \
-	{ "rr_prune", CTLTYPE_INT }, \
-	{ 0, 0 }, \
-	{ "v6only", CTLTYPE_INT }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "anonportmin", CTLTYPE_INT }, \
-	{ "anonportmax", CTLTYPE_INT }, \
-	{ "lowportmin", CTLTYPE_INT }, \
-	{ "lowportmax", CTLTYPE_INT }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ 0, 0 }, \
-	{ "maxfrags", CTLTYPE_INT }, \
-	{ "ifq", CTLTYPE_NODE }, \
-	{ "rtadv_maxroutes", CTLTYPE_INT }, \
-	{ "rtadv_numroutes", CTLTYPE_INT }, \
-}
-
 #endif /* _NETBSD_SOURCE */
 
 #ifdef _KERNEL
@@ -699,7 +598,6 @@ int sockaddr_in6_cmp(const struct sockaddr *, const struct sockaddr *);
 struct sockaddr *sockaddr_in6_externalize(struct sockaddr *, socklen_t,
     const struct sockaddr *);
 int	in6_cksum(struct mbuf *, u_int8_t, u_int32_t, u_int32_t);
-void	in6_delayed_cksum(struct mbuf *);
 int	in6_localaddr(const struct in6_addr *);
 int	in6_addrscope(const struct in6_addr *);
 struct	in6_ifaddr *in6_ifawithifp(struct ifnet *, struct in6_addr *);
@@ -708,11 +606,12 @@ extern void in6_if_link_down(struct ifnet *);
 extern void in6_if_link_state_change(struct ifnet *, int);
 extern void in6_if_up(struct ifnet *);
 extern void in6_if_down(struct ifnet *);
-#ifndef __FreeBSD__
-extern int in6_src_sysctl(void *, size_t *, void *, size_t);
-#endif
 extern void addrsel_policy_init(void);
 extern	u_char	ip6_protox[];
+
+struct ip6_hdr;
+int in6_tunnel_validate(const struct ip6_hdr *, const struct in6_addr *,
+	const struct in6_addr *);
 
 #define	satosin6(sa)	((struct sockaddr_in6 *)(sa))
 #define	satocsin6(sa)	((const struct sockaddr_in6 *)(sa))
@@ -720,7 +619,7 @@ extern	u_char	ip6_protox[];
 #define	sin6tocsa(sin6)	((const struct sockaddr *)(sin6))
 #define	ifatoia6(ifa)	((struct in6_ifaddr *)(ifa))
 
-static inline void
+static __inline void
 sockaddr_in6_init1(struct sockaddr_in6 *sin6, const struct in6_addr *addr,
     in_port_t port, uint32_t flowinfo, uint32_t scope_id)
 {
@@ -730,7 +629,7 @@ sockaddr_in6_init1(struct sockaddr_in6 *sin6, const struct in6_addr *addr,
 	sin6->sin6_scope_id = scope_id;
 }
 
-static inline void
+static __inline void
 sockaddr_in6_init(struct sockaddr_in6 *sin6, const struct in6_addr *addr,
     in_port_t port, uint32_t flowinfo, uint32_t scope_id)
 {
@@ -739,7 +638,7 @@ sockaddr_in6_init(struct sockaddr_in6 *sin6, const struct in6_addr *addr,
 	sockaddr_in6_init1(sin6, addr, port, flowinfo, scope_id);
 }
 
-static inline struct sockaddr *
+static __inline struct sockaddr *
 sockaddr_in6_alloc(const struct in6_addr *addr, in_port_t port,
     uint32_t flowinfo, uint32_t scope_id, int flags)
 {
@@ -770,6 +669,7 @@ typedef	_BSD_SIZE_T_		size_t;
 __BEGIN_DECLS
 struct cmsghdr;
 
+void	in6_in_2_v4mapin6(const struct in_addr *, struct in6_addr *);
 void	in6_sin6_2_sin(struct sockaddr_in *, struct sockaddr_in6 *);
 void	in6_sin_2_v4mapsin6(const struct sockaddr_in *, struct sockaddr_in6 *);
 void	in6_sin6_2_sin_in_sock(struct sockaddr *);

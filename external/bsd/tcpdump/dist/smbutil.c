@@ -8,21 +8,20 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: smbutil.c,v 1.4 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: smbutil.c,v 1.6 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "interface.h"
+#include "netdissect.h"
 #include "extract.h"
 #include "smb.h"
 
@@ -243,6 +242,7 @@ name_len(netdissect_options *ndo,
 	    return(-1);	/* name goes past the end of the buffer */
 	ND_TCHECK2(*s, 1);
 	s += (*s) + 1;
+	ND_TCHECK2(*s, 1);
     }
     return(PTR_DIFF(s, s0) + 1);
 
@@ -277,8 +277,7 @@ name_type_str(int name_type)
 }
 
 void
-print_data(netdissect_options *ndo,
-           const unsigned char *buf, int len)
+smb_print_data(netdissect_options *ndo, const unsigned char *buf, int len)
 {
     int i = 0;
 
@@ -866,7 +865,7 @@ smb_fdata(netdissect_options *ndo,
     if (!depth && buf < maxbuf) {
 	size_t len = PTR_DIFF(maxbuf, buf);
 	ND_PRINT((ndo, "Data: (%lu bytes)\n", (unsigned long)len));
-	print_data(ndo, buf, len);
+	smb_print_data(ndo, buf, len);
 	return(buf + len);
     }
     return(buf);

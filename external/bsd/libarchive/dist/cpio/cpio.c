@@ -378,7 +378,7 @@ main(int argc, char *argv[])
 }
 
 static void
-usage(void)
+_Noreturn usage(void)
 {
 	const char	*p;
 
@@ -441,7 +441,7 @@ long_help(void)
 }
 
 static void
-version(void)
+_Noreturn version(void)
 {
 	fprintf(stdout,"bsdcpio %s -- %s\n",
 	    BSDCPIO_VERSION_STRING,
@@ -798,7 +798,7 @@ restore_time(struct cpio *cpio, struct archive_entry *entry,
 
 
 static void
-mode_in(struct cpio *cpio)
+_Noreturn mode_in(struct cpio *cpio)
 {
 	struct archive *a;
 	struct archive_entry *entry;
@@ -903,7 +903,7 @@ extract_data(struct archive *ar, struct archive *aw)
 }
 
 static void
-mode_list(struct cpio *cpio)
+_Noreturn mode_list(struct cpio *cpio)
 {
 	struct archive *a;
 	struct archive_entry *entry;
@@ -1006,7 +1006,7 @@ list_item_verbose(struct cpio *cpio, struct archive_entry *entry)
 	else
 		fmt = cpio->day_first ? "%d %b %H:%M" : "%b %d %H:%M";
 #else
-	if (abs(mtime - now) > (365/2)*86400)
+	if (llabs(mtime - now) > (365/2)*86400)
 		fmt = cpio->day_first ? "%e %b  %Y" : "%b %e  %Y";
 	else
 		fmt = cpio->day_first ? "%e %b %H:%M" : "%b %e %H:%M";

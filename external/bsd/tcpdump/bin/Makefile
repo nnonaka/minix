@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.13 2015/03/31 21:59:35 christos Exp $	
+#	$NetBSD: Makefile,v 1.19 2017/05/21 15:28:39 riastradh Exp $	
 
 WARNS?=	1	# XXX: need to cleanup later
 
@@ -22,8 +22,9 @@ PROG=	tcpdump
 MAN=	tcpdump.8 
 
 SRCS=	addrtoname.c cpack.c gmpls.c gmt2local.c machdep.c oui.c parsenfsfh.c \
-	setsignal.c smbutil.c tcpdump.c util.c checksum.c signature.c \
-	l2vpn.c nlpid.c ipproto.c af.c in_cksum.c pf_print_state.c
+	setsignal.c smbutil.c tcpdump.c netdissect.c checksum.c signature.c \
+	l2vpn.c nlpid.c ipproto.c af.c in_cksum.c pf_print_state.c \
+	util-print.c addrtostr.c ascii_strcasecmp.c print.c strtoaddr.c
 
 SRCS+=	bpf_dump.c
 SRCS+=	version.c
@@ -67,11 +68,11 @@ print-ether.c \
 print-fddi.c \
 print-forces.c \
 print-fr.c \
-print-frag6.c \
 print-ftp.c \
 print-geneve.c \
 print-geonet.c \
 print-gre.c \
+print-hncp.c \
 print-hsrp.c \
 print-http.c \
 print-icmp.c \
@@ -89,6 +90,7 @@ print-krb.c \
 print-l2tp.c \
 print-lane.c \
 print-ldp.c \
+print-lisp.c \
 print-llc.c \
 print-lldp.c \
 print-lmp.c \
@@ -97,6 +99,7 @@ print-lspping.c \
 print-lwapp.c \
 print-lwres.c \
 print-m3ua.c \
+print-medsa.c \
 print-mobile.c \
 print-mobility.c \
 print-mpcp.c \
@@ -106,11 +109,12 @@ print-msdp.c \
 print-msnlb.c \
 print-nflog.c \
 print-nfs.c \
+print-nsh.c \
 print-ntp.c \
 print-null.c \
 print-olsr.c \
-print-openflow.c \
 print-openflow-1.0.c \
+print-openflow.c \
 print-ospf.c \
 print-otv.c \
 print-pflog.c \
@@ -124,6 +128,7 @@ print-pppoe.c \
 print-pptp.c \
 print-radius.c \
 print-raw.c \
+print-resp.c \
 print-rip.c \
 print-ripng.c \
 print-rpki-rtr.c \
@@ -142,6 +147,7 @@ print-smtp.c \
 print-snmp.c \
 print-stp.c \
 print-sunatm.c \
+print-sunrpc.c \
 print-symantec.c \
 print-syslog.c \
 print-tcp.c \
@@ -157,12 +163,11 @@ print-vjc.c \
 print-vqp.c \
 print-vrrp.c \
 print-vtp.c \
+print-vxlan-gpe.c \
 print-vxlan.c \
 print-wb.c \
 print-zephyr.c \
 print-zeromq.c
-# MINIX 3: readd this file once rpc has been imported!
-#print-sunrpc.c
 
 version.c: VERSION
 	${_MKTARGET_CREATE}
@@ -183,25 +188,29 @@ CPPFLAGS+=-DWITH_USER=\"_tcpdump\"
 CPPFLAGS+=-DWITH_CHROOT=\"/var/chroot/tcpdump\"
 
 .if (${USE_INET6} != "no")
-SRCS+=	print-babel.c print-ip6.c print-ip6opts.c print-icmp6.c \
-	print-rt6.c print-dhcp6.c print-ospf6.c 
+SRCS+= \
+print-babel.c \
+print-ip6opts.c \
+print-dhcp6.c \
+print-frag6.c \
+print-icmp6.c \
+print-ip6.c \
+print-ospf6.c \
+print-rt6.c
 
-CPPFLAGS+=-DINET6=1 -DHAVE_RES_USE_INET6=1 
-.elif defined(__MINIX)
-# MINIX 3 compilation fix for USE_INET6=no  (already fixed upstream!)
-SRCS+=	print-ip6.c
+CPPFLAGS+=-DHAVE_OS_IPV6_SUPPORT=1
 .endif
 
-.if (${MKCRYPTO} != "no")
-CPPFLAGS+=-DHAVE_LIBCRYPTO=1 
+CPPFLAGS+=-DHAVE_LIBCRYPTO=1 -DHAVE_OPENSSL_EVP_H 
 LDADD+=	-lcrypto -lcrypt
 DPADD+=	${LIBCRYPTO} ${LIBCRYPT}
-.endif
 
 CLEANFILES+=	version.c tcpdump.8
 
 tcpdump.8: tcpdump.1.in
 	@rm -f ${.TARGET}
 	cp ${.ALLSRC} ${.TARGET}
+
+CWARNFLAGS.clang+=	-Wno-error=address-of-packed-member
 
 .include <bsd.prog.mk>

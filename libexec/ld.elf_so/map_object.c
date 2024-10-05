@@ -77,14 +77,12 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	size_t		 mapsize = 0;
 	int		 mapflags;
 	Elf_Off		 base_offset;
-#ifdef MAP_ALIGNED
 	Elf_Addr	 base_alignment;
-#endif
 	Elf_Addr	 base_vaddr;
 	Elf_Addr	 base_vlimit;
 	Elf_Addr	 text_vlimit;
 	int		 text_flags;
-	caddr_t		 base_addr;
+	void		*base_addr;
 	Elf_Off		 data_offset;
 	Elf_Addr	 data_vaddr;
 	Elf_Addr	 data_vlimit;
@@ -104,6 +102,10 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	Elf_Addr	 clear_vaddr;
 	caddr_t		 clear_addr;
 	size_t		 nclear;
+#endif
+#ifdef GNU_RELRO
+	Elf_Addr 	 relro_page;
+	size_t		 relro_size;
 #endif
 
 	if (sb != NULL && sb->st_size < (off_t)sizeof (Elf_Ehdr)) {
@@ -175,6 +177,10 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 #endif
 	phsize = ehdr->e_phnum * sizeof(phdr[0]);
 	obj->phdr = NULL;
+#ifdef GNU_RELRO
+	relro_page = 0;
+	relro_size = 0;
+#endif
 	phdr_vaddr = EA_UNDEF;
 	phdr_memsz = 0;
 	phlimit = phdr + ehdr->e_phnum;
@@ -201,6 +207,13 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 			dbg(("%s: %s %p phsize %" PRImemsz, obj->path, "PT_PHDR",
 			    (void *)(uintptr_t)phdr->p_vaddr, phdr->p_memsz));
 			break;
+
+#ifdef GNU_RELRO
+		case PT_GNU_RELRO:
+			relro_page = phdr->p_vaddr;
+			relro_size = phdr->p_memsz;
+			break;
+#endif
 
 		case PT_DYNAMIC:
 			obj->dynamic = (void *)(uintptr_t)phdr->p_vaddr;
@@ -249,9 +262,7 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	 * and unmap the gaps left by padding to alignment.
 	 */
 
-#ifdef MAP_ALIGNED
 	base_alignment = segs[0]->p_align;
-#endif
 	base_offset = round_down(segs[0]->p_offset);
 	base_vaddr = round_down(segs[0]->p_vaddr);
 	base_vlimit = round_up(segs[1]->p_vaddr + segs[1]->p_memsz);
@@ -323,19 +334,19 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	 * Calculate log2 of the base section alignment.
 	 */
 	mapflags = 0;
-#ifdef MAP_ALIGNED
 	if (base_alignment > _rtld_pagesz) {
 		unsigned int log2 = 0;
 		for (; base_alignment > 1; base_alignment >>= 1)
 			log2++;
 		mapflags = MAP_ALIGNED(log2);
 	}
-#endif
 
-#ifdef RTLD_LOADER
-	base_addr = obj->isdynamic ? NULL : (caddr_t)base_vaddr;
-#else
 	base_addr = NULL;
+#ifdef RTLD_LOADER
+	if (!obj->isdynamic) {
+		mapflags |= MAP_TRYFIXED;
+		base_addr = (void *)(uintptr_t)base_vaddr;
+	}
 #endif
 	mapsize = base_vlimit - base_vaddr;
 	mapbase = mmap(base_addr, mapsize, text_flags,
@@ -345,6 +356,12 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 		    xstrerror(errno));
 		goto bad;
 	}
+#ifdef RTLD_LOADER
+	if (!obj->isdynamic && mapbase != base_addr) {
+		_rtld_error("mmap of executable at correct address failed");
+		goto bad;
+	}
+#endif
 
 	/* Overlay the data segment onto the proper region. */
 	data_addr = mapbase + (data_vaddr - base_vaddr);
@@ -395,6 +412,12 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	obj->mapbase = mapbase;
 	obj->mapsize = mapsize;
 	obj->relocbase = mapbase - base_vaddr;
+
+#ifdef GNU_RELRO
+	/* rounding happens later. */
+	obj->relro_page = obj->relocbase + relro_page;
+	obj->relro_size = relro_size;
+#endif
 
 	if (obj->dynamic)
 		obj->dynamic = (void *)(obj->relocbase + (Elf_Addr)(uintptr_t)obj->dynamic);
@@ -450,9 +473,6 @@ _rtld_obj_free(Obj_Entry *obj)
 	}
 	if (!obj->phdr_loaded)
 		xfree((void *)(uintptr_t)obj->phdr);
-#ifdef COMBRELOC
-	_rtld_combreloc_reset(obj);
-#endif
 	xfree(obj);
 }
 

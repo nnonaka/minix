@@ -1,4 +1,4 @@
-/*	$NetBSD: c_ulimit.c,v 1.12 2015/05/09 13:26:06 christos Exp $	*/
+/*	$NetBSD: c_ulimit.c,v 1.16 2017/06/30 03:43:57 kamil Exp $	*/
 
 /*
 	ulimit -- handle "ulimit" builtin
@@ -20,12 +20,13 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: c_ulimit.c,v 1.12 2015/05/09 13:26:06 christos Exp $");
+__RCSID("$NetBSD: c_ulimit.c,v 1.16 2017/06/30 03:43:57 kamil Exp $");
 #endif
 
+#include <sys/time.h>
+#include <time.h>
 
 #include "sh.h"
-#include "ksh_time.h"
 #ifdef HAVE_SYS_RESOURCE_H
 # include <sys/resource.h>
 #endif /* HAVE_SYS_RESOURCE_H */
@@ -113,9 +114,6 @@ c_ulimit(wp)
 #  ifdef UL_GETBREAK /* osf/1 */
 		{ "vmemory(maxaddr)", ULIMIT, UL_GETBREAK, -1, 1, 'v' },
 #  else /* UL_GETBREAK */
-#   ifdef UL_GETMAXBRK /* hpux */
-		{ "vmemory(maxaddr)", ULIMIT, UL_GETMAXBRK, -1, 1, 'v' },
-#   endif /* UL_GETMAXBRK */
 #  endif /* UL_GETBREAK */
 # endif /* UL_GMEMLIM */
 #endif /* RLIMIT_VMEM */

@@ -1,14 +1,14 @@
-/*	$NetBSD: tty.c,v 1.4 2003/06/23 11:39:06 agc Exp $	*/
+/*	$NetBSD: tty.c,v 1.9 2017/06/30 04:41:19 kamil Exp $	*/
 
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: tty.c,v 1.4 2003/06/23 11:39:06 agc Exp $");
+__RCSID("$NetBSD: tty.c,v 1.9 2017/06/30 04:41:19 kamil Exp $");
 #endif
 
+#include <sys/stat.h>
 
 #include "sh.h"
-#include "ksh_stat.h"
 #define EXTERN
 #include "tty.h"
 #undef EXTERN
@@ -74,16 +74,6 @@ set_tty(fd, ts, flags)
 			ret = -1;
 #   endif
 #  else /* HAVE_TERMIO_H */
-#   if defined(__mips) && (defined(_SYSTYPE_BSD43) || defined(__SYSTYPE_BSD43))
-	/* Under RISC/os 5.00, bsd43 environment, after a tty driver
-	 * generated interrupt (eg, INTR, TSTP), all output to tty is
-	 * lost until a SETP is done (there must be a better way of
-	 * doing this...).
-	 */
-	if (flags & TF_MIPSKLUDGE)
-		ret = ioctl(fd, TIOCSETP, &ts->sgttyb);
-	else
-#   endif /* _SYSTYPE_BSD43 */
 	    ret = ioctl(fd, TIOCSETN, &ts->sgttyb);
 #   ifdef TIOCGATC
 	if (ioctl(fd, TIOCSATC, &ts->lchars) < 0)
@@ -119,38 +109,14 @@ tty_init(init_ttystate)
 	}
 	tty_devtty = 1;
 
-	/* SCO can't job control on /dev/tty, so don't try... */
-#if !defined(__SCO__)
 	if ((tfd = open(devtty, O_RDWR, 0)) < 0) {
-#ifdef __NeXT
-		/* rlogin on NeXT boxes does not set up the controlling tty,
-		 * so force it to be done here...
-		 */
-		{
-			extern char *ttyname ARGS((int));
-			char *s = ttyname(isatty(2) ? 2 : 0);
-			int fd;
-
-			if (s && (fd = open(s, O_RDWR, 0)) >= 0) {
-				close(fd);
-				tfd = open(devtty, O_RDWR, 0);
-			}
-		}
-#endif /* __NeXT */
-
-/* X11R5 xterm on mips doesn't set controlling tty properly - temporary hack */
-# if !defined(__mips) || !(defined(_SYSTYPE_BSD43) || defined(__SYSTYPE_BSD43))
 		if (tfd < 0) {
 			tty_devtty = 0;
-			warningf(FALSE,
+			warningf(false,
 				"No controlling tty (open %s: %s)",
 				devtty, strerror(errno));
 		}
-# endif /* __mips  */
 	}
-#else /* !__SCO__ */
-	tfd = -1;
-#endif /* __SCO__ */
 
 	if (tfd < 0) {
 		do_close = 0;
@@ -159,15 +125,15 @@ tty_init(init_ttystate)
 		else if (isatty(2))
 			tfd = 2;
 		else {
-			warningf(FALSE, "Can't find tty file descriptor");
+			warningf(false, "Can't find tty file descriptor");
 			return;
 		}
 	}
 	if ((tty_fd = ksh_dupbase(tfd, FDBASE)) < 0) {
-		warningf(FALSE, "j_ttyinit: dup of tty fd failed: %s",
+		warningf(false, "j_ttyinit: dup of tty fd failed: %s",
 			strerror(errno));
 	} else if (fd_clexec(tty_fd) < 0) {
-		warningf(FALSE, "j_ttyinit: can't set close-on-exec flag: %s",
+		warningf(false, "j_ttyinit: can't set close-on-exec flag: %s",
 			strerror(errno));
 		close(tty_fd);
 		tty_fd = -1;

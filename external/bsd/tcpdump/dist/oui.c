@@ -10,21 +10,20 @@
  * LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
  * FOR A PARTICULAR PURPOSE.
  *
- * Original code by Hannes Gredler (hannes@juniper.net)
+ * Original code by Hannes Gredler (hannes@gredler.at)
  */
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: oui.c,v 1.5 2015/03/31 21:59:35 christos Exp $");
+__RCSID("$NetBSD: oui.c,v 1.8 2017/09/08 14:01:12 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
-#include "interface.h"
+#include <netdissect-stdinc.h>
+#include "netdissect.h"
 #include "oui.h"
 
 /* FIXME complete OUI list using a script */
@@ -32,6 +31,7 @@ __RCSID("$NetBSD: oui.c,v 1.5 2015/03/31 21:59:35 christos Exp $");
 const struct tok oui_values[] = {
     { OUI_ENCAP_ETHER, "Ethernet" },
     { OUI_CISCO, "Cisco" },
+    { OUI_IANA, "IANA" },
     { OUI_NORTEL, "Nortel Networks SONMP" },
     { OUI_CISCO_90, "Cisco bridged" },
     { OUI_RFC2684, "Ethernet bridged" },

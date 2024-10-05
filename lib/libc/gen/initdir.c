@@ -201,7 +201,8 @@ retry:
 					 * This sort must be stable.
 					 */
 					mergesort(dpv, (size_t)n, sizeof(*dpv),
-					    alphasort);
+					    (int (*)(const void *,
+						     const void *))alphasort);
 
 					dpv[n] = NULL;
 					xp = NULL;

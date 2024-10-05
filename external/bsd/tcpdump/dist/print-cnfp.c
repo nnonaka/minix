@@ -25,6 +25,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* \summary: Cisco NetFlow protocol printer */
+
 /*
  * Cisco NetFlow protocol
  *
@@ -35,20 +37,19 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-cnfp.c,v 1.5 2015/03/31 21:59:35 christos Exp $");
+__RCSID("$NetBSD: print-cnfp.c,v 1.8 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
 #include <stdio.h>
 #include <string.h>
 
-#include "interface.h"
+#include "netdissect.h"
 #include "addrtoname.h"
 #include "extract.h"
 
@@ -158,7 +159,7 @@ cnfp_v1_print(netdissect_options *ndo, const u_char *cp)
 {
 	register const struct nfhdr_v1 *nh;
 	register const struct nfrec_v1 *nr;
-	struct protoent *pent;
+	const char *p_name;
 	int nrecs, ver;
 #if 0
 	time_t t;
@@ -210,14 +211,13 @@ cnfp_v1_print(netdissect_options *ndo, const u_char *cp)
 
 		ND_PRINT((ndo, ">> %s\n    ", intoa(nr->nhop_ina.s_addr)));
 
-		pent = getprotobynumber(nr->proto);
-		if (!pent || ndo->ndo_nflag)
-			ND_PRINT((ndo, "%u ", nr->proto));
+		if (!ndo->ndo_nflag && (p_name = netdb_protoname(nr->proto)) != NULL)
+			ND_PRINT((ndo, "%s ", p_name));
 		else
-			ND_PRINT((ndo, "%s ", pent->p_name));
+			ND_PRINT((ndo, "%u ", nr->proto));
 
 		/* tcp flags for tcp only */
-		if (pent && pent->p_proto == IPPROTO_TCP) {
+		if (nr->proto == IPPROTO_TCP) {
 			int flags;
 			flags = nr->tcp_flags;
 			ND_PRINT((ndo, "%s%s%s%s%s%s%s",
@@ -248,7 +248,7 @@ cnfp_v5_print(netdissect_options *ndo, const u_char *cp)
 {
 	register const struct nfhdr_v5 *nh;
 	register const struct nfrec_v5 *nr;
-	struct protoent *pent;
+	const char *p_name;
 	int nrecs, ver;
 #if 0
 	time_t t;
@@ -307,14 +307,13 @@ cnfp_v5_print(netdissect_options *ndo, const u_char *cp)
 
 		ND_PRINT((ndo, ">> %s\n    ", intoa(nr->nhop_ina.s_addr)));
 
-		pent = getprotobynumber(nr->proto);
-		if (!pent || ndo->ndo_nflag)
-			ND_PRINT((ndo, "%u ", nr->proto));
+		if (!ndo->ndo_nflag && (p_name = netdb_protoname(nr->proto)) != NULL)
+			ND_PRINT((ndo, "%s ", p_name));
 		else
-			ND_PRINT((ndo, "%s ", pent->p_name));
+			ND_PRINT((ndo, "%u ", nr->proto));
 
 		/* tcp flags for tcp only */
-		if (pent && pent->p_proto == IPPROTO_TCP) {
+		if (nr->proto == IPPROTO_TCP) {
 			int flags;
 			flags = nr->tcp_flags;
 			ND_PRINT((ndo, "%s%s%s%s%s%s%s",
@@ -345,7 +344,7 @@ cnfp_v6_print(netdissect_options *ndo, const u_char *cp)
 {
 	register const struct nfhdr_v6 *nh;
 	register const struct nfrec_v6 *nr;
-	struct protoent *pent;
+	const char *p_name;
 	int nrecs, ver;
 #if 0
 	time_t t;
@@ -404,14 +403,13 @@ cnfp_v6_print(netdissect_options *ndo, const u_char *cp)
 
 		ND_PRINT((ndo, ">> %s\n    ", intoa(nr->nhop_ina.s_addr)));
 
-		pent = getprotobynumber(nr->proto);
-		if (!pent || ndo->ndo_nflag)
-			ND_PRINT((ndo, "%u ", nr->proto));
+		if (!ndo->ndo_nflag && (p_name = netdb_protoname(nr->proto)) != NULL)
+			ND_PRINT((ndo, "%s ", p_name));
 		else
-			ND_PRINT((ndo, "%s ", pent->p_name));
+			ND_PRINT((ndo, "%u ", nr->proto));
 
 		/* tcp flags for tcp only */
-		if (pent && pent->p_proto == IPPROTO_TCP) {
+		if (nr->proto == IPPROTO_TCP) {
 			int flags;
 			flags = nr->tcp_flags;
 			ND_PRINT((ndo, "%s%s%s%s%s%s%s",

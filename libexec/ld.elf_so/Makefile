@@ -66,6 +66,8 @@ COPTS+=		-fvisibility=hidden
 .if defined(MLIBDIR)
 PROG=		ld.elf_so-${MLIBDIR}
 CPPFLAGS+=	-DRTLD_ARCH_SUBDIR=\"${MLIBDIR}\"
+.	if ${MLIBDIR} == "o32"
+.	endif
 .else
 PROG=		ld.elf_so
 .endif
@@ -74,7 +76,7 @@ CLIBOBJ!=	cd ${NETBSDSRCDIR}/lib/libc && ${PRINTOBJDIR}
 
 SRCS+=		rtld.c reloc.c symbol.c xmalloc.c xprintf.c debug.c \
 		map_object.c load.c search.c headers.c paths.c expand.c \
-		tls.c symver.c diagassert.c
+		tls.c symver.c diagassert.c compat.c
 
 .if ${USE_FORT} == "yes"
 .PATH.c: ${NETBSDSRCDIR}/lib/libc/misc
@@ -94,11 +96,13 @@ CLEANFILES+=	errlist_concat.h ${PROG}.map
 
 BINDIR=		${SHLINKINSTALLDIR}
 
+CPPFLAGS.tls.c+=	-std=gnu11
 CPPFLAGS+=	-DLIBDIR=\"${LIBDIR}\" -D_PATH_RTLD=\"${BINDIR}/${PROG}\"
-CPPFLAGS+=	-I${.CURDIR} -I.
+CPPFLAGS+=	-I${.CURDIR} -I. -D_KERNTYPES
 CPPFLAGS+=	-DRTLD_LOADER
+CPPFLAGS+=	-DGNU_RELRO
 CPPFLAGS+=	-D_RTLD_SOURCE
-CPPFLAGS+=	-DCOMBRELOC
+CPPFLAGS+=	-DHAVE_INITFINI_ARRAY
 #CPPFLAGS+=	-DDEBUG
 #CPPFLAGS+=	-DRTLD_DEBUG
 #CPPFLAGS+=	-DRTLD_DEBUG_RELOC
@@ -125,6 +129,11 @@ CPPFLAGS+=	-DRTLD_DEFAULT_LIBRARY_PATH=\"${SHLIBDIR}:${LIBDIR}\"
 COPTS.rtld.c+=	-Wno-stack-protector
 COPTS.symbol.c+=-Wno-stack-protector
 
+.if ${MACHINE_CPU} == "vax"
+COPTS.rtld.c+=	-O0
+.endif
+
+LDADD+=		-Wl,--version-script=${.CURDIR}/symbols.map
 LDADD+=		-L${CLIBOBJ} -L${DESTDIR}${LIBDIR}
 .if ${MKPICLIB} != "no"
 LDADD+=		-lc_pic

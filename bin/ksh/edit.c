@@ -1,4 +1,4 @@
-/*	$NetBSD: edit.c,v 1.25 2010/06/05 03:02:37 sjg Exp $	*/
+/*	$NetBSD: edit.c,v 1.35 2018/06/03 12:18:29 kamil Exp $	*/
 
 /*
  * Command line editing - common code
@@ -7,9 +7,10 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: edit.c,v 1.25 2010/06/05 03:02:37 sjg Exp $");
+__RCSID("$NetBSD: edit.c,v 1.35 2018/06/03 12:18:29 kamil Exp $");
 #endif
 
+#include <stdbool.h>
 
 #include "config.h"
 #ifdef EDIT
@@ -19,13 +20,9 @@ __RCSID("$NetBSD: edit.c,v 1.25 2010/06/05 03:02:37 sjg Exp $");
 #define EXTERN
 #include "edit.h"
 #undef EXTERN
-#ifdef OS_SCO	/* SCO Unix 3.2v4.1 */
-# include <sys/stream.h>	/* needed for <sys/ptem.h> */
-# include <sys/ptem.h>		/* needed for struct winsize */
-#endif /* OS_SCO */
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <ctype.h>
-#include "ksh_stat.h"
 
 
 #if defined(TIOCGWINSZ)
@@ -135,7 +132,7 @@ x_read(buf, len)
 {
 	int	i;
 
-	x_mode(TRUE);
+	x_mode(true);
 #ifdef EMACS
 	if (Flag(FEMACS) || Flag(FGMACS))
 		i = x_emacs(buf, len);
@@ -147,7 +144,7 @@ x_read(buf, len)
 	else
 #endif
 		i = -1;		/* internal error */
-	x_mode(FALSE);
+	x_mode(false);
 #if defined(TIOCGWINSZ)
 	if (got_sigwinch)
 		check_sigwinch();
@@ -161,23 +158,18 @@ x_read(buf, len)
 int
 x_getc()
 {
-#ifdef OS2
-	unsigned char c = _read_kbd(0, 1, 0);
-	return c == 0 ? 0xE0 : c;
-#else /* OS2 */
 	char c;
 	int n;
 
 	while ((n = blocking_read(0, &c, 1)) < 0 && errno == EINTR)
 		if (trap) {
-			x_mode(FALSE);
+			x_mode(false);
 			runtraps(0);
-			x_mode(TRUE);
+			x_mode(true);
 		}
 	if (n != 1)
 		return -1;
 	return (int) (unsigned char) c;
-#endif /* OS2 */
 }
 
 void
@@ -201,12 +193,11 @@ x_puts(s)
 		shf_putc(*s++, shl_out);
 }
 
-bool_t
-x_mode(onoff)
-	bool_t	onoff;
+bool
+x_mode(bool onoff)
 {
-	static bool_t	x_cur_mode;
-	bool_t		prev;
+	static bool	x_cur_mode;
+	bool		prev;
 
 	if (x_cur_mode == onoff)
 		return x_cur_mode;
@@ -292,11 +283,6 @@ x_mode(onoff)
 #endif /* HAVE_TERMIOS_H || HAVE_TERMIO_H */
 
 		set_tty(tty_fd, &cb, TF_WAIT);
-
-#ifdef __CYGWIN__
-		if (edchars.eof == '\0')
-			edchars.eof = '\4';
-#endif /* __CYGWIN__ */
 
 		/* Convert unset values to internal `unset' value */
 		if (edchars.erase == vdisable_c)
@@ -463,35 +449,6 @@ x_do_comment(buf, bsize, lenp)
 static char	*add_glob ARGS((const char *, int));
 static void	glob_table ARGS((const char *, XPtrV *, struct table *));
 static void	glob_path ARGS((int, const char *, XPtrV *, const char *));
-
-#if 0 /* not used... */
-int	x_complete_word ARGS((const char *, int, int, int *, char **));
-int
-x_complete_word(str, slen, is_command, nwordsp, ret)
-	const char *str;
-	int slen;
-	int is_command;
-	int *nwordsp;
-	char **ret;
-{
-	int nwords;
-	int prefix_len;
-	char **words;
-
-	nwords = (is_command ? x_command_glob : x_file_glob)(XCF_FULLPATH,
-				str, slen, &words);
-	*nwordsp = nwords;
-	if (nwords == 0) {
-		*ret = (char *) 0;
-		return -1;
-	}
-
-	prefix_len = x_longest_prefix(nwords, words);
-	*ret = str_nsave(words[0], prefix_len, ATEMP);
-	x_free_words(nwords, words);
-	return prefix_len;
-}
-#endif /* 0 */
 
 void
 x_print_expansions(nwords, words, is_command)
@@ -863,7 +820,7 @@ add_glob(str, slen)
 {
 	char *toglob;
 	char *s;
-	bool_t saw_slash = FALSE;
+	bool saw_slash = false;
 
 	if (slen < 0)
 		return (char *) 0;
@@ -884,7 +841,7 @@ add_glob(str, slen)
 			 || (s[1] == '(' /*)*/ && strchr("*+?@!", *s)))
 			break;
 		else if (ISDIRSEP(*s))
-			saw_slash = TRUE;
+			saw_slash = true;
 	}
 	if (!*s && (*toglob != '~' || saw_slash)) {
 		toglob[slen] = '*';
@@ -981,8 +938,8 @@ glob_table(pat, wp, tp)
 	struct tstate ts;
 	struct tbl *te;
 
-	for (twalk(&ts, tp); (te = tnext(&ts)); ) {
-		if (gmatch(te->name, pat, FALSE))
+	for (ksh_twalk(&ts, tp); (te = tnext(&ts)); ) {
+		if (gmatch(te->name, pat, false))
 			XPput(*wp, str_save(te->name, ATEMP));
 	}
 }

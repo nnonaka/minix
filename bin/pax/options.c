@@ -225,8 +225,6 @@ int havechd = 0;
  *	parser
  */
 
-char *chdname;
-
 void
 options(int argc, char **argv)
 {

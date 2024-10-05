@@ -1,4 +1,4 @@
-/*	$NetBSD: installboot.h,v 1.42 2020/06/21 17:17:02 thorpej Exp $	*/
+/*	$NetBSD: installboot.h,v 1.40.2.1 2019/08/16 19:20:46 martin Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -195,7 +195,6 @@ extern struct ib_mach ib_mach_amd64;
 extern struct ib_mach ib_mach_amiga;
 extern struct ib_mach ib_mach_emips;
 extern struct ib_mach ib_mach_evbarm;
-extern struct ib_mach ib_mach_evbmips;
 extern struct ib_mach ib_mach_ews4800mips;
 extern struct ib_mach ib_mach_hp300;
 extern struct ib_mach ib_mach_hppa;

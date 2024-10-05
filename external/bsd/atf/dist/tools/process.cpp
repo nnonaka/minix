@@ -363,6 +363,25 @@ impl::status::~status(void)
 {
 }
 
+std::string
+impl::status::str(void)
+     const
+{
+    int mutable_status = m_status;
+    std::stringstream rv;
+    if (WIFEXITED(mutable_status))
+	rv << "exit("  << WEXITSTATUS(mutable_status);
+    else if (WIFSTOPPED(mutable_status))
+	rv << "stopped("  << WSTOPSIG(mutable_status);
+    else if (WIFSIGNALED(mutable_status))
+	rv << "terminated("  << WTERMSIG(mutable_status);
+    if (WCOREDUMP(mutable_status))
+	rv << "/core)";
+    else
+	rv << ")";
+    return rv.str();
+}
+
 bool
 impl::status::exited(void)
     const
@@ -425,10 +444,12 @@ impl::child::~child(void)
         ::kill(m_pid, SIGTERM);
         (void)wait();
 
-        if (m_stdout != -1)
-            ::close(m_stdout);
-        if (m_stderr != -1)
-            ::close(m_stderr);
+        if (m_stdout != -1) {
+            ::close(m_stdout); m_stdout = -1;
+        }
+        if (m_stderr != -1) {
+            ::close(m_stderr); m_stderr = -1;
+        }
     }
 }
 
@@ -441,10 +462,12 @@ impl::child::wait(void)
         throw system_error(IMPL_NAME "::child::wait", "Failed waiting for "
                            "process " + text::to_string(m_pid), errno);
 
-    if (m_stdout != -1)
+    if (m_stdout != -1) {
         ::close(m_stdout); m_stdout = -1;
-    if (m_stderr != -1)
+    }
+    if (m_stderr != -1) {
         ::close(m_stderr); m_stderr = -1;
+    }
 
     m_waited = true;
     return status(s);

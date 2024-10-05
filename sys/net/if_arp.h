@@ -1,4 +1,4 @@
-/*	$NetBSD: if_arp.h,v 1.30 2015/08/31 08:05:20 ozaki-r Exp $	*/
+/*	$NetBSD: if_arp.h,v 1.33 2018/06/30 15:08:04 christos Exp $	*/
 
 /*
  * Copyright (c) 1986, 1993
@@ -68,20 +68,48 @@ struct	arphdr {
 #ifdef COMMENT_ONLY
 	uint8_t  ar_sha[];	/* sender hardware address */
 	uint8_t  ar_spa[];	/* sender protocol address */
-	uint8_t  ar_tha[];	/* target hardware address */
+	uint8_t  ar_tha[];	/* target hardware address (!IEEE1394) */
 	uint8_t  ar_tpa[];	/* target protocol address */
 #endif
-#define ar_sha(ap) (((char *)((ap)+1))+0)
-#define ar_spa(ap) (((char *)((ap)+1))+(ap)->ar_hln)
-#define ar_tha(ap) \
-	(ntohs((ap)->ar_hrd) == ARPHRD_IEEE1394 \
-		? NULL : (((char *)((ap)+1))+(ap)->ar_hln+(ap)->ar_pln))
-#define ar_tpa(ap) \
-	(ntohs((ap)->ar_hrd) == ARPHRD_IEEE1394 \
-		? (((char *)((ap)+1))+(ap)->ar_hln+(ap)->ar_pln) \
-		: (((char *)((ap)+1))+(ap)->ar_hln+(ap)->ar_pln+(ap)->ar_hln))
 } __packed;
 
+static __inline uint8_t *
+ar_data(struct arphdr *ap)
+{
+	return (uint8_t *)(void *)(ap + 1);
+}
+
+static __inline uint8_t *
+ar_sha(struct arphdr *ap)
+{
+	return ar_data(ap) + 0;
+}
+
+static __inline uint8_t *
+ar_spa(struct arphdr *ap)
+{
+	return ar_data(ap) + ap->ar_hln;
+}
+
+static __inline uint8_t *
+ar_tha(struct arphdr *ap)
+{
+	if (ntohs(ap->ar_hrd) == ARPHRD_IEEE1394) {
+		return NULL;
+	} else {
+		return ar_data(ap) + ap->ar_hln + ap->ar_pln;
+	}
+}
+
+static __inline uint8_t *
+ar_tpa(struct arphdr *ap)
+{
+	if (ntohs(ap->ar_hrd) == ARPHRD_IEEE1394) {
+		return ar_data(ap) + ap->ar_hln + ap->ar_pln;
+	} else {
+		return ar_data(ap) + ap->ar_hln + ap->ar_pln + ap->ar_hln;
+	}
+}
 
 /*
  * ARP ioctl request

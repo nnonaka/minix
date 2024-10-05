@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2004  Hannes Gredler <hannes@tcpdump.org>
+ * Copyright (c) 1998-2004  Hannes Gredler <hannes@gredler.at>
  *      The TCPDUMP project
  *
  * Redistribution and use in source and binary forms, with or without
@@ -16,17 +16,18 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-syslog.c,v 1.5 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: print-syslog.c,v 1.8 2017/09/08 14:01:13 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
+/* \summary: Syslog protocol printer */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
-#include "interface.h"
+#include "netdissect.h"
 #include "extract.h"
 
 static const char tstr[] = "[|syslog]";

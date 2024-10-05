@@ -19,17 +19,18 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: print-bt.c,v 1.4 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: print-bt.c,v 1.6 2017/02/05 04:05:05 spz Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
+/* \summary: Bluetooth printer */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
+#include <netdissect-stdinc.h>
 
-#include "interface.h"
+#include "netdissect.h"
 #include "extract.h"
 
 #if defined(DLT_BLUETOOTH_HCI_H4_WITH_PHDR) && defined(HAVE_PCAP_BLUETOOTH_H)

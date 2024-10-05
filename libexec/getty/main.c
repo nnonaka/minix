@@ -47,6 +47,7 @@ __RCSID("$NetBSD: main.c,v 1.64 2013/08/12 13:54:33 joerg Exp $");
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/utsname.h>
 
 #include <ctype.h>
@@ -185,7 +186,8 @@ int
 main(int argc, char *argv[], char *envp[])
 {
 	const char *progname;
-	int repcnt = 0, failopenlogged = 0, first_time = 1;
+	int repcnt = 0, failopenlogged = 0;
+	volatile int first_time = 1;
 	struct rlimit limit;
 	struct passwd *pw;
 	int rval;

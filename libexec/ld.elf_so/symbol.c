@@ -1,4 +1,4 @@
-/*	$NetBSD: symbol.c,v 1.65 2014/08/10 23:35:26 matt Exp $	 */
+/*	$NetBSD: symbol.c,v 1.69 2017/08/09 18:44:32 joerg Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: symbol.c,v 1.65 2014/08/10 23:35:26 matt Exp $");
+__RCSID("$NetBSD: symbol.c,v 1.69 2017/08/09 18:44:32 joerg Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -77,43 +77,6 @@ _rtld_donelist_check(DoneList *dlp, const Obj_Entry *obj)
 	 */
 	if (dlp->num_used < dlp->num_alloc)
 		dlp->objs[dlp->num_used++] = obj;
-	return false;
-}
-
-static bool
-_rtld_is_exported(const Elf_Sym *def)
-{
-	static const fptr_t _rtld_exports[] = {
-		(fptr_t)dlopen,
-		(fptr_t)dlclose,
-		(fptr_t)dlsym,
-		(fptr_t)dlvsym,
-		(fptr_t)dlerror,
-		(fptr_t)dladdr,
-		(fptr_t)dlinfo,
-		(fptr_t)dl_iterate_phdr,
-		(fptr_t)_dlauxinfo,
-#if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
-		(fptr_t)_rtld_tls_allocate,
-		(fptr_t)_rtld_tls_free,
-		(fptr_t)__tls_get_addr,
-#ifdef __i386__
-		(fptr_t)___tls_get_addr,
-#endif
-#endif
-#if defined(__ARM_EABI__) && !defined(__ARM_DWARF_EH__)
-		(fptr_t)__gnu_Unwind_Find_exidx,	/* for gcc EHABI */
-#endif
-		NULL
-	};
-	int i;
-	fptr_t value;
-
-	value = (fptr_t)(_rtld_objself.relocbase + def->st_value);
-	for (i = 0; _rtld_exports[i] != NULL; i++) {
-		if (value == _rtld_exports[i])
-			return true;
-	}
 	return false;
 }
 
@@ -360,21 +323,6 @@ _rtld_symlook_obj(const char *name, unsigned long hash,
 	return NULL;
 }
 
-#ifdef COMBRELOC
-static const Obj_Entry *_rtld_last_refobj;
-
-/*
- * Called when an object is freed. Reset the cached symbol look up if
- * our last referencing or definition object just got unloaded.
- */
-void
-_rtld_combreloc_reset(const Obj_Entry *obj)
-{
-	if (_rtld_last_refobj == obj)
-		_rtld_last_refobj = NULL;
-}
-#endif
-
 /*
  * Given a symbol number in a referencing object, find the corresponding
  * definition of the symbol.  Returns a pointer to the symbol, or NULL if
@@ -390,25 +338,6 @@ _rtld_find_symdef(unsigned long symnum, const Obj_Entry *refobj,
 	const Obj_Entry *defobj;
 	const char     *name;
 	unsigned long   hash;
-
-#ifdef COMBRELOC
-	/*
-	 * COMBRELOC combines multiple reloc sections and sorts them to make
-	 * dynamic symbol lookup caching possible.
-	 *
-	 * So if the lookup we are doing is the same as the previous lookup
-	 * return the cached results.
-	 */
-	static unsigned long last_symnum;
-	static const Obj_Entry *last_defobj;
-	static const Elf_Sym *last_def;
-
-	if (symnum == last_symnum && refobj == _rtld_last_refobj
-	    && !(flags & SYMLOOK_IN_PLT)) {
-		*defobj_out = last_defobj;
-		return last_def;
-	}
-#endif
 
 	ref = refobj->symtab + symnum;
 	name = refobj->strtab + ref->st_name;
@@ -446,18 +375,6 @@ _rtld_find_symdef(unsigned long symnum, const Obj_Entry *refobj,
 
 	if (def != NULL) {
 		*defobj_out = defobj;
-#ifdef COMBRELOC
-		if (!(flags & SYMLOOK_IN_PLT)) {
-			/*
-			 * Cache the lookup arguments and results if this was
-			 * non-PLT lookup.
-			 */
-			last_symnum = symnum;
-			_rtld_last_refobj = refobj;
-			last_def = def;
-			last_defobj = defobj;
-		}
-#endif
 	} else {
 		rdbg(("lookup failed"));
 		_rtld_error("%s: Undefined %ssymbol \"%s\" (symnum = %ld)",
@@ -563,17 +480,30 @@ _rtld_symlook_default(const char *name, unsigned long hash,
 	}
 
 	/*
+	 * Finally, look in the referencing object if not linked symbolically.
+	 * This is necessary for DF_1_NODELETE objects where the containing DAG
+	 * has been unlinked, so local references are resolved properly.
+	 */
+	if ((def == NULL || ELF_ST_BIND(def->st_info) == STB_WEAK) &&
+	    !refobj->symbolic && !_rtld_donelist_check(&donelist, refobj)) {
+		rdbg(("search referencing object for %s", name));
+		symp = _rtld_symlook_obj(name, hash, refobj, flags, ventry);
+		if (symp != NULL) {
+			def = symp;
+			defobj = refobj;
+		}
+	}
+
+	/*
 	 * Search the dynamic linker itself, and possibly resolve the
 	 * symbol from there.  This is how the application links to
-	 * dynamic linker services such as dlopen.  Only the values listed
-	 * in the "_rtld_exports" array can be resolved from the dynamic
-	 * linker.
+	 * dynamic linker services such as dlopen.
 	 */
 	if (def == NULL || ELF_ST_BIND(def->st_info) == STB_WEAK) {
 		rdbg(("Search the dynamic linker itself."));
 		symp = _rtld_symlook_obj(name, hash, &_rtld_objself, flags,
 		    ventry);
-		if (symp != NULL && _rtld_is_exported(symp)) {
+		if (symp != NULL) {
 			def = symp;
 			defobj = &_rtld_objself;
 		}

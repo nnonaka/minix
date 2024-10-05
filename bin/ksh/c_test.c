@@ -1,4 +1,4 @@
-/*	$NetBSD: c_test.c,v 1.6 2005/06/26 19:09:00 christos Exp $	*/
+/*	$NetBSD: c_test.c,v 1.9 2017/06/30 04:41:19 kamil Exp $	*/
 
 /*
  * test(1); version 7-like  --  author Erik Baalbergen
@@ -11,12 +11,12 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: c_test.c,v 1.6 2005/06/26 19:09:00 christos Exp $");
+__RCSID("$NetBSD: c_test.c,v 1.9 2017/06/30 04:41:19 kamil Exp $");
 #endif
 
+#include <sys/stat.h>
 
 #include "sh.h"
-#include "ksh_stat.h"
 #include "c_test.h"
 
 /* test(1) accepts the following grammar:
@@ -352,11 +352,11 @@ test_eval(te, op, opnd1, opnd2, do_eval)
 	 */
 	  case TO_STEQL: /* = */
 		if (te->flags & TEF_DBRACKET)
-			return gmatch(opnd1, opnd2, FALSE);
+			return gmatch(opnd1, opnd2, false);
 		return strcmp(opnd1, opnd2) == 0;
 	  case TO_STNEQ: /* != */
 		if (te->flags & TEF_DBRACKET)
-			return !gmatch(opnd1, opnd2, FALSE);
+			return !gmatch(opnd1, opnd2, false);
 		return strcmp(opnd1, opnd2) != 0;
 	  case TO_STLT: /* < */
 		return strcmp(opnd1, opnd2) < 0;
@@ -422,19 +422,11 @@ test_eval(te, op, opnd1, opnd2, do_eval)
 	return 1;
 }
 
-/* Nasty kludge to handle Korn's bizarre /dev/fd hack */
 static int
 test_stat(pathx, statb)
 	const char *pathx;
 	struct stat *statb;
 {
-#if !defined(HAVE_DEV_FD)
-	int fd;
-
-	if (strncmp(pathx, "/dev/fd/", 8) == 0 && getn(pathx + 8, &fd))
-		return fstat(fd, statb);
-#endif /* !HAVE_DEV_FD */
-
 	return stat(pathx, statb);
 }
 
@@ -447,22 +439,6 @@ test_eaccess(pathx, mode)
 	int mode;
 {
 	int res;
-
-#if !defined(HAVE_DEV_FD)
-	int fd;
-
-	/* Note: doesn't handle //dev/fd, etc.. (this is ok) */
-	if (strncmp(pathx, "/dev/fd/", 8) == 0 && getn(pathx + 8, &fd)) {
-		int flags;
-
-		if ((flags = fcntl(fd, F_GETFL, 0)) < 0
-		    || (mode & X_OK)
-		    || ((mode & W_OK) && (flags & O_ACCMODE) == O_RDONLY)
-		    || ((mode & R_OK) && (flags & O_ACCMODE) == O_WRONLY))
-			return -1;
-		return 0;
-	}
-#endif /* !HAVE_DEV_FD */
 
 	res = eaccess(pathx, mode);
 	/*

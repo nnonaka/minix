@@ -10,7 +10,7 @@
 
 SRCS+=	bm.c stpcpy.c stpncpy.c \
 	strcasecmp.c strncasecmp.c strcasestr.c strcoll.c strdup.c \
-	strerror.c strlcat.c strlcpy.c strnlen.c \
+	strerror.c strerror_ss.c strlcat.c strlcpy.c strnlen.c \
 	strmode.c strsignal.c strtok.c \
 	strtok_r.c strxfrm.c __strsignal.c strerror_r.c strndup.c \
 	stresep.c memrchr.c
@@ -22,12 +22,12 @@ SRCS+=	strspn.c strstr.c swab.c strnstr.c
 SRCS+=	explicit_memset.c consttime_memequal.c
 
 SRCS+=	memccpy.c memcpy.c memmem.c memmove.c
-SRCS+=	strchr.c strrchr.c
+SRCS+=	strchr.c strrchr.c strchrnul.c
 SRCS+=	popcount32.c popcount64.c
 
 # wide char
 SRCS+=	wcscat.c wcschr.c wcscmp.c wcscpy.c wcscspn.c wcslcat.c wcslcpy.c \
-	wcslen.c wcsncat.c wcscasecmp.c wcsdup.c wcsncasecmp.c \
+	wcslen.c wcsncat.c wcsnlen.c wcscasecmp.c wcsdup.c wcsncasecmp.c \
 	wcsncmp.c wcsncpy.c wcspbrk.c wcsrchr.c wcsspn.c wcsstr.c wcstok.c \
 	wcswcs.c wmemchr.c wmemcmp.c wmemcpy.c wmemmove.c wmemset.c
 CPPFLAGS.wcscmp.c+=	-I${LIBCDIR}/locale
@@ -59,6 +59,7 @@ MLINKS+=strlcpy.3 strlcat.3
 MLINKS+=strlen.3 strnlen.3
 MLINKS+=strstr.3 strcasestr.3
 MLINKS+=strstr.3 strnstr.3
+MLINKS+=strchr.3 strchrnul.3
 MLINKS+=memchr.3 memrchr.3
 MLINKS+=strtok.3 strtok_r.3
 MLINKS+=strerror.3 strerror_r.3 strerror.3 perror.3 \
@@ -71,8 +72,9 @@ MLINKS+=wmemchr.3 wmemcmp.3 wmemchr.3 wmemcpy.3 \
 	wmemchr.3 wcscmp.3 wmemchr.3 wcscpy.3 \
 	wmemchr.3 wcscspn.3 wmemchr.3 wcslcat.3 \
 	wmemchr.3 wcslcpy.3 wmemchr.3 wcslen.3 \
-	wmemchr.3 wcsncat.3 wmemchr.3 wcsncmp.3 \
-	wmemchr.3 wcsncpy.3 wmemchr.3 wcspbrk.3 \
-	wmemchr.3 wcsrchr.3 wmemchr.3 wcsspn.3 \
-	wmemchr.3 wcsstr.3 wmemchr.3 wcswcs.3
+	wmemchr.3 wcsncat.3 wmemchr.3 wcsnlen.3 \
+	wmemchr.3 wcsncmp.3 wmemchr.3 wcsncpy.3 \
+	wmemchr.3 wcspbrk.3 wmemchr.3 wcsrchr.3 \
+	wmemchr.3 wcsspn.3 wmemchr.3 wcsstr.3 \
+	wmemchr.3 wcswcs.3
 MLINKS+=wcscasecmp.3 wcsncasecmp.3

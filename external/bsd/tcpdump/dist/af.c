@@ -12,21 +12,20 @@
  * LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
  * FOR A PARTICULAR PURPOSE.
  *
- * Original code by Hannes Gredler (hannes@juniper.net)
+ * Original code by Hannes Gredler (hannes@gredler.at)
  */
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: af.c,v 1.4 2014/11/20 03:05:03 christos Exp $");
+__RCSID("$NetBSD: af.c,v 1.6 2017/09/08 14:01:12 christos Exp $");
 #endif
 
-#define NETDISSECT_REWORKED
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <tcpdump-stdinc.h>
-#include "interface.h"
+#include <netdissect-stdinc.h>
+#include "netdissect.h"
 #include "af.h"
 
 const struct tok af_values[] = {

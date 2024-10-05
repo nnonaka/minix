@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.31 2015/01/29 20:46:31 joerg Exp $
+#	$NetBSD: Makefile,v 1.35 2019/02/04 04:05:15 mrg Exp $
 
 WARNS=3
 CWARNFLAGS.clang+=	-Wno-error=cast-qual
@@ -10,8 +10,8 @@ CPPFLAGS+=	-I.
 PROG=	ksh
 SRCS=	alloc.c c_ksh.c c_sh.c c_test.c c_ulimit.c edit.c emacs.c \
 	eval.c exec.c expr.c history.c io.c jobs.c lex.c mail.c \
-	main.c misc.c path.c shf.c sigact.c syn.c table.c trap.c \
-	tree.c tty.c var.c version.c vi.c
+	main.c misc.c path.c shf.c syn.c table.c trap.c tree.c tty.c \
+	var.c version.c vi.c
 DPSRCS=	emacs.out siglist.out
 .if (${MKMAN} != "no")
 DPSRCS+=ksh.1
@@ -47,5 +47,9 @@ ksh.1: ksh.Man mkman
 	${SCRIPT_ENV} \
 	${HOST_SH} $(.CURDIR)/mkman ksh $(.CURDIR)/ksh.Man >ksh.1.tmp \
 	    && mv ksh.1.tmp ksh.1
+
+.if defined(HAVE_GCC) && ${HAVE_GCC} == 7 && ${ACTIVE_CC} == "gcc"
+COPTS+=	-Wno-error=implicit-fallthrough
+.endif
 
 .include <bsd.prog.mk>

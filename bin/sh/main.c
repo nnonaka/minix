@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.59 2015/05/26 21:35:15 christos Exp $	*/
+/*	$NetBSD: main.c,v 1.82.2.2 2021/11/06 13:35:43 martin Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\
 #if 0
 static char sccsid[] = "@(#)main.c	8.7 (Berkeley) 7/19/95";
 #else
-__RCSID("$NetBSD: main.c,v 1.59 2015/05/26 21:35:15 christos Exp $");
+__RCSID("$NetBSD: main.c,v 1.82.2.2 2021/11/06 13:35:43 martin Exp $");
 #endif
 #endif /* not lint */
 
@@ -51,6 +51,7 @@ __RCSID("$NetBSD: main.c,v 1.59 2015/05/26 21:35:15 christos Exp $");
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <locale.h>
 #include <fcntl.h>
@@ -77,19 +78,21 @@ __RCSID("$NetBSD: main.c,v 1.59 2015/05/26 21:35:15 christos Exp $");
 #include "mystring.h"
 #include "exec.h"
 #include "cd.h"
+#include "redir.h"
 
 #define PROFILE 0
 
 int rootpid;
 int rootshell;
-int posix;
+struct jmploc main_handler;
+int max_user_fd;
+bool privileged;
 #if PROFILE
 short profile_buf[16384];
 extern int etext();
 #endif
 
 STATIC void read_profile(const char *);
-int main(int, char **);
 
 /*
  * Main routine.  We initialize things, parse the arguments, execute
@@ -102,15 +105,37 @@ int main(int, char **);
 int
 main(int argc, char **argv)
 {
-	struct jmploc jmploc;
 	struct stackmark smark;
 	volatile int state;
 	char *shinit;
 	uid_t uid;
 	gid_t gid;
+	sigset_t mask;
+	bool waspriv;
+
+	/*
+	 * If we happen to be invoked with SIGCHLD ignored, we cannot
+	 * successfully do almost anything.   Perhaps we should remember
+	 * its state and pass it on ignored to children if it was ignored
+	 * on entry, but that seems like just leaving the shit on the
+	 * footpath for someone else to fall into...
+	 */
+	(void)signal(SIGCHLD, SIG_DFL);
+	/*
+	 * Similarly, SIGCHLD must not be blocked
+	 */
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+	sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
 	uid = getuid();
 	gid = getgid();
+
+	waspriv = privileged = (uid != geteuid()) || (gid != getegid());
+
+	max_user_fd = fcntl(0, F_MAXFD);
+	if (max_user_fd < 2)
+		max_user_fd = 2;
 
 	setlocale(LC_ALL, "");
 
@@ -119,7 +144,7 @@ main(int argc, char **argv)
 	monitor(4, etext, profile_buf, sizeof profile_buf, 50);
 #endif
 	state = 0;
-	if (setjmp(jmploc.loc)) {
+	if (setjmp(main_handler.loc)) {
 		/*
 		 * When a shell procedure is executed, we raise the
 		 * exception EXSHELLPROC to clean up before executing
@@ -146,15 +171,12 @@ main(int argc, char **argv)
 		}
 
 		if (exception != EXSHELLPROC) {
-			if (state == 0 || iflag == 0 || ! rootshell)
+			if (state == 0 || iflag == 0 || ! rootshell ||
+			    exception == EXEXIT)
 				exitshell(exitstatus);
 		}
 		reset();
-		if (exception == EXINT
-#if ATTY
-		 && (! attyset() || equal(termval(), "emacs"))
-#endif
-		 ) {
+		if (exception == EXINT) {
 			out2c('\n');
 			flushout(&errout);
 		}
@@ -169,13 +191,18 @@ main(int argc, char **argv)
 		else
 			goto state4;
 	}
-	handler = &jmploc;
+	handler = &main_handler;
 #ifdef DEBUG
-#if DEBUG == 2
-	debug = 1;
+#if DEBUG >= 2
+	debug = 1;	/* this may be reset by procargs() later */
 #endif
 	opentrace();
+	if (privileged)
+		trputs("Privileged ");
 	trputs("Shell args:  ");  trargs(argv);
+#if DEBUG >= 3
+	set_debug(((DEBUG)==3 ? "_@" : "++"), 1);
+#endif
 #endif
 	rootpid = getpid();
 	rootshell = 1;
@@ -184,6 +211,7 @@ main(int argc, char **argv)
 	setstackmark(&smark);
 	procargs(argc, argv);
 
+#if 0	/* This now happens (indirectly) in the procargs() just above */
 	/*
 	 * Limit bogus system(3) or popen(3) calls in setuid binaries,
 	 * by requiring the -p flag
@@ -194,25 +222,48 @@ main(int argc, char **argv)
 		/* PS1 might need to be changed accordingly. */
 		choose_ps1();
 	}
+#else	/* except for this one little bit */
+	if (waspriv && !privileged)
+		choose_ps1();
+#endif
 
 	if (argv[0] && argv[0][0] == '-') {
 		state = 1;
 		read_profile("/etc/profile");
-state1:
+ state1:
 		state = 2;
-		read_profile(".profile");
+		if (!privileged) {
+			char *profile;
+			const char *home;
+
+			home = lookupvar("HOME");
+			if (home == NULL)
+				home = nullstr;
+			profile = ststrcat(NULL, home, "/.profile", STSTRC_END);
+			read_profile(profile);
+			stunalloc(profile);
+		}
+#if 0	/* FreeBSD does (effectively) ...*/
+		else
+			read_profile("/etc/suid_profile");
+#endif
 	}
-state2:
+ state2:
 	state = 3;
-	if ((iflag || !posix) &&
-	    getuid() == geteuid() && getgid() == getegid()) {
+	if ((iflag || !posix) && !privileged) {
+		struct stackmark env_smark;
+
+		setstackmark(&env_smark);
 		if ((shinit = lookupvar("ENV")) != NULL && *shinit != '\0') {
 			state = 3;
-			read_profile(shinit);
+			read_profile(expandenv(shinit));
 		}
+		popstackmark(&env_smark);
 	}
-state3:
+ state3:
 	state = 4;
+	line_number = 1;	/* undo anything from profile files */
+
 	if (sflag == 0 || minusc) {
 		static int sigs[] =  {
 		    SIGINT, SIGQUIT, SIGHUP, 
@@ -228,16 +279,23 @@ state3:
 		    setsignal(sigs[i], 0);
 	}
 
+	rststackmark(&smark);	/* this one is never popped */
+
 	if (minusc)
-		evalstring(minusc, 0);
+		evalstring(minusc, sflag ? 0 : EV_EXIT);
 
 	if (sflag || minusc == NULL) {
-state4:	/* XXX ??? - why isn't this before the "if" statement */
+ state4:	/* XXX ??? - why isn't this before the "if" statement */
 		cmdloop(1);
+		if (iflag) {
+			out2str("\n");
+			flushout(&errout);
+		}
 	}
 #if PROFILE
 	monitor(0);
 #endif
+	line_number = plinno;
 	exitshell(exitstatus);
 	/* NOTREACHED */
 }
@@ -257,7 +315,7 @@ cmdloop(int top)
 	int numeof = 0;
 	enum skipstate skip;
 
-	TRACE(("cmdloop(%d) called\n", top));
+	CTRACE(DBG_ALWAYS, ("cmdloop(%d) called\n", top));
 	setstackmark(&smark);
 	for (;;) {
 		if (pendingsigs)
@@ -268,14 +326,17 @@ cmdloop(int top)
 			showjobs(out2, SHOW_CHANGED);
 			chkmail(0);
 			flushout(&errout);
+			nflag = 0;
 		}
 		n = parsecmd(inter);
-		/* showtree(n); DEBUG */
+		VXTRACE(DBG_PARSE|DBG_EVAL|DBG_CMDS,("cmdloop: "),showtree(n));
 		if (n == NEOF) {
 			if (!top || numeof >= 50)
 				break;
+			if (nflag)
+				break;
 			if (!stoppedjobs()) {
-				if (!Iflag)
+				if (!iflag || !Iflag)
 					break;
 				out2str("\nUse \"exit\" to leave shell.\n");
 			}
@@ -285,8 +346,7 @@ cmdloop(int top)
 			numeof = 0;
 			evaltree(n, 0);
 		}
-		popstackmark(&smark);
-		setstackmark(&smark);
+		rststackmark(&smark);
 
 		/*
 		 * Any SKIP* can occur here!  SKIP(FUNC|BREAK|CONT) occur when
@@ -318,6 +378,9 @@ read_profile(const char *name)
 	int xflag_set = 0;
 	int vflag_set = 0;
 
+	if (*name == '\0')
+		return;
+
 	INTOFF;
 	if ((fd = open(name, O_RDONLY)) >= 0)
 		setinputfd(fd, 1);
@@ -331,7 +394,9 @@ read_profile(const char *name)
 	    if (vflag)
 		    vflag = 0, vflag_set = 1;
 	}
+	(void)set_dot_funcnest(1);	/* allow profile to "return" */
 	cmdloop(0);
+	(void)set_dot_funcnest(0);
 	if (qflag)  {
 	    if (xflag_set)
 		    xflag = 1;
@@ -370,7 +435,8 @@ exitcmd(int argc, char **argv)
 	if (stoppedjobs())
 		return 0;
 	if (argc > 1)
-		exitstatus = number(argv[1]);
-	exitshell(exitstatus);
+		exitshell(number(argv[1]));
+	else
+		exitshell_savedstatus();
 	/* NOTREACHED */
 }
