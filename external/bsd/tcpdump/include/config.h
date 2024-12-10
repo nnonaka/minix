@@ -92,7 +92,7 @@
 /* Define to 1 if you have the <openssl/evp.h> header file. */
 #define HAVE_OPENSSL_EVP_H 1
 
-#ifndef __NetBSD__
+#if !defined(__NetBSD__) && !defined(__minix)
 /* define if the OS provides AF_INET6 and struct in6_addr */
 #define HAVE_OS_IPV6_SUPPORT 1
 #endif

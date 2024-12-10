@@ -778,7 +778,7 @@ char *ctime_r(time_t const *, char *);
 #define SECSPERREPEAT_BITS	34	/* ceil(log2(SECSPERREPEAT)) */
 
 #if defined(_LIBC) || defined(__minix)
-#include "reentrant.h"
+#include "../include/reentrant.h"
 extern struct __state *__lclptr;
 #if defined(__LIBC12_SOURCE__)
 #define tzset_unlocked __tzset_unlocked

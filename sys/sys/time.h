@@ -62,12 +62,10 @@ struct timeval {
  * Note: timezone is obsolete. All timezone handling is now in
  * userland. Its just here for back compatibility.
  */
-#if 0
 struct timezone {
 	int	tz_minuteswest;	/* minutes west of Greenwich */
 	int	tz_dsttime;	/* type of dst correction */
 };
-#endif
 
 /* Operations on timevals. */
 #define	timerclear(tvp)		(tvp)->tv_sec = (tvp)->tv_usec = 0L

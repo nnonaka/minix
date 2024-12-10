@@ -82,12 +82,6 @@ static int verbose;
 static void save_for_optional(const char *, const char *);
 static size_t write_optional(int, opt_t *, size_t);
 
-static inline void *
-deconst(const void *p)
-{
-	return (const char *)p - (const char *)0 + (char *)0;
-}
-
 __dead static void
 usage(void)
 {
@@ -119,8 +113,8 @@ run_cc(int argc, char **argv, const char **fname)
 	if ((args = malloc((argc + 3) * sizeof(char *))) == NULL)
 		err(EXIT_FAILURE, "malloc");
 
-	args[0] = deconst(CC);
-	args[1] = deconst("-M");
+	args[0] = __UNCONST(CC);
+	args[1] = __UNCONST("-M");
 	(void)memcpy(&args[2], argv, (argc + 1) * sizeof(char *));
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL)

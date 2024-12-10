@@ -68,6 +68,7 @@ __RCSID("$NetBSD: ldd_elfxx.c,v 1.6 2012/07/08 00:53:44 matt Exp $");
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #include <dirent.h>
 #include <err.h>

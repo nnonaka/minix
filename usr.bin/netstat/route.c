@@ -38,6 +38,9 @@ __RCSID("$NetBSD: route.c,v 1.84 2015/05/25 03:56:20 manu Exp $");
 #endif
 #endif /* not lint */
 
+#define _KERNEL
+#include <sys/types.h>
+#undef _KERNEL
 #include <stdbool.h>
 #include <sys/param.h>
 #include <sys/protosw.h>
@@ -241,9 +244,6 @@ p_krtentry(struct rtentry *rt)
 	static struct ifnet ifnet, *lastif;
 	union sockaddr_union addr_un, mask_un;
 	struct sockaddr *addr, *mask;
-
-	if (Lflag && (rt->rt_flags & RTF_LLINFO))
-		return;
 
 	memset(&addr_un, 0, sizeof(addr_un));
 	memset(&mask_un, 0, sizeof(mask_un));

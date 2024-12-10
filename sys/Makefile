@@ -3,7 +3,7 @@
 .include <bsd.own.mk>
 
 SUBDIR=	altq arch dev fs \
-	net net80211 netatalk netinet netinet6 \
+	net net80211 netatalk netipsec  netinet netinet6 \
         netmpls \
 	sys ufs uvm
 

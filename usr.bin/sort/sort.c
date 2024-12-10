@@ -66,11 +66,7 @@
  * a choice of merge sort and radix sort for external sorting.
  */
 
-#include <util.h>
-#include "sort.h"
-#include "fsort.h"
-#include "pathnames.h"
-
+#include <sys/cdefs.h>
 #ifndef lint
 __COPYRIGHT("@(#) Copyright (c) 1993\
  The Regents of the University of California.  All rights reserved.");
@@ -80,6 +76,7 @@ __RCSID("$NetBSD: sort.c,v 1.61 2011/09/16 15:39:29 joerg Exp $");
 
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <sys/resource.h>
 
 #include <paths.h>
@@ -88,6 +85,11 @@ __RCSID("$NetBSD: sort.c,v 1.61 2011/09/16 15:39:29 joerg Exp $");
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
+#include <util.h>
+
+#include "sort.h"
+#include "fsort.h"
+#include "pathnames.h"
 
 int REC_D = '\n';
 u_char d_mask[NBINS];		/* flags for rec_d, field_d, <blank> */

@@ -88,6 +88,9 @@
 #include <sys/uio.h>
 #include <limits.h>
 #endif /* __FreeBSD_version */
+#if defined(__minix)
+#include <sys/stat.h>
+#endif /* defined(__minix) */
 
 #ifndef DISABLE_TLS
 #include <netinet/tcp.h>

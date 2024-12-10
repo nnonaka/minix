@@ -1,4 +1,4 @@
-/*	$NetBSD: diag.c,v 1.10 2012/03/22 22:58:15 joerg Exp $	*/
+/*	$NetBSD: diag.c,v 1.17 2019/01/12 19:08:24 christos Exp $	*/
 
  /*
   * Routines to report various classes of problems. Each report is decorated
@@ -16,7 +16,7 @@
 #if 0
 static char sccsid[] = "@(#) diag.c 1.1 94/12/28 17:42:20";
 #else
-__RCSID("$NetBSD: diag.c,v 1.10 2012/03/22 22:58:15 joerg Exp $");
+__RCSID("$NetBSD: diag.c,v 1.17 2019/01/12 19:08:24 christos Exp $");
 #endif
 #endif
 
@@ -33,28 +33,24 @@ __RCSID("$NetBSD: diag.c,v 1.10 2012/03/22 22:58:15 joerg Exp $");
 /* Local stuff */
 
 #include "tcpd.h"
+#include "expandm.h"
 
 struct tcpd_context tcpd_context;
 jmp_buf tcpd_buf;
 
 static void tcpd_diag(int, const char *, const char *, va_list)
-    __printflike(3,0);
+    __sysloglike(3,0);
 
 /* tcpd_diag - centralize error reporter */
 
 static void
 tcpd_diag(int severity, const char *tag, const char *fmt, va_list ap)
 {
-    char *buf;
-    int     oerrno;
+    char *buf, *bufx;
 
-    /* save errno in case we need it */
-    oerrno = errno;
-
-    if (vasprintf(&buf, fmt, ap) == -1)
+    if (vasprintf(&buf, expandm(fmt, NULL, &bufx), ap) == -1)
 	buf = __UNCONST(fmt);
-
-    errno = oerrno;
+    free(bufx);
 
     /* contruct the tag for the log entry */
     if (tcpd_context.file)
@@ -64,7 +60,7 @@ tcpd_diag(int severity, const char *tag, const char *fmt, va_list ap)
 	syslog(severity, "%s: %s", tag, buf);
 
     if (buf != fmt)
-        free(buf);
+	free(buf);
 }
 
 /* tcpd_warn - report problem of some sort and proceed */

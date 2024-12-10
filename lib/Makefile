@@ -77,7 +77,7 @@ SUBDIR+=	i18n_module
 SUBDIR+=	\
 		libbz2 \
 		libcrypt \
-		libintl libkvm libm \
+		libintl libipsec libkvm libm \
 		libpci libprop \
 		libpuffs librmt librt \
 		libtelnet libterminfo \

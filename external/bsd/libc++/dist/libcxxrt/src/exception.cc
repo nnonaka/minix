@@ -33,7 +33,7 @@
 #if !defined(__minix)
 #include <pthread.h>
 #else
-#define _MTHREADIFY_PTHREADS
+#define _MTHREADIFY_PTHREADS 1 
 #include <minix/mthread.h>
 #define LIBCXXRT_WEAK_LOCKS 1
 #endif /* !defined(__minix) */

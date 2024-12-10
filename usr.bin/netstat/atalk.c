@@ -38,6 +38,9 @@ __RCSID("$NetBSD: atalk.c,v 1.16 2015/06/06 13:08:31 joerg Exp $");
 #endif
 #endif /* not lint */
 
+#define _KERNEL
+#include <sys/types.h>
+#undef _KERNEL
 #include <sys/param.h>
 #include <sys/queue.h>
 #include <sys/socket.h>

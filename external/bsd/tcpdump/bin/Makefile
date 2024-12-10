@@ -147,7 +147,6 @@ print-smtp.c \
 print-snmp.c \
 print-stp.c \
 print-sunatm.c \
-print-sunrpc.c \
 print-symantec.c \
 print-syslog.c \
 print-tcp.c \
@@ -168,6 +167,8 @@ print-vxlan.c \
 print-wb.c \
 print-zephyr.c \
 print-zeromq.c
+# MINIX 3: readd this file once rpc has been imported!
+#print-sunrpc.c
 
 version.c: VERSION
 	${_MKTARGET_CREATE}

@@ -1,10 +1,10 @@
-/*	$NetBSD: dump.c,v 1.12 2015/06/05 14:09:20 roy Exp $	*/
+/*	$NetBSD: dump.c,v 1.17 2018/11/16 08:57:10 ozaki-r Exp $	*/
 /*	$KAME: dump.c,v 1.34 2004/06/14 05:35:59 itojun Exp $	*/
 
 /*
  * Copyright (C) 2000 WIDE Project.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -16,7 +16,7 @@
  * 3. Neither the name of the project nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE PROJECT AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -57,8 +57,10 @@
 
 #include "rtadvd.h"
 #include "timer.h"
+#include "logit.h"
 #include "if.h"
 #include "dump.h"
+#include "prog_ops.h"
 
 static FILE *fp;
 
@@ -101,7 +103,7 @@ if_dump(void)
 	char prefixbuf[INET6_ADDRSTRLEN];
 	struct timespec now;
 
-	clock_gettime(CLOCK_MONOTONIC, &now); /* XXX: unused in most cases */
+	prog_clock_gettime(CLOCK_MONOTONIC, &now); /* XXX: unused in most cases */
 	TAILQ_FOREACH(rai, &ralist, next) {
 		fprintf(fp, "%s:\n", rai->ifname);
 
@@ -112,11 +114,11 @@ if_dump(void)
 		if (rai->lastsent.tv_sec) {
 			/* note that ctime() appends CR by itself */
 			fprintf(fp, "  Last RA sent: %s",
-				ctime((time_t *)&rai->lastsent.tv_sec));
+				ctime(&rai->lastsent.tv_sec));
 		}
 		if (rai->timer) {
 			fprintf(fp, "  Next RA will be sent: %s",
-				ctime((time_t *)&rai->timer->tm.tv_sec));
+				ctime(&rai->timer->tm.tv_sec));
 		}
 		else
 			fprintf(fp, "  RA timer is stopped");
@@ -136,23 +138,23 @@ if_dump(void)
 		if (rai->advlinkopt)
 			fprintf(fp, "  Link-layer address: %s\n",
 			    ether_str(rai->sdl));
-		fprintf(fp, "  MTU: %d\n", rai->phymtu);
+		fprintf(fp, "  MTU: %u\n", rai->phymtu);
 
 		/* Router configuration variables */
-		fprintf(fp, "  DefaultLifetime: %d, MaxAdvInterval: %d, "
-		    "MinAdvInterval: %d\n", rai->lifetime, rai->maxinterval,
+		fprintf(fp, "  DefaultLifetime: %u, MaxAdvInterval: %u, "
+		    "MinAdvInterval: %u\n", rai->lifetime, rai->maxinterval,
 		    rai->mininterval);
 		fprintf(fp, "  Flags: %s%s%s, ",
 		    rai->managedflg ? "M" : "", rai->otherflg ? "O" : "",
 		    "");
 		fprintf(fp, "Preference: %s, ",
 			rtpref_str[(rai->rtpref >> 3) & 0xff]);
-		fprintf(fp, "MTU: %d\n", rai->linkmtu);
-		fprintf(fp, "  ReachableTime: %d, RetransTimer: %d, "
-			"CurHopLimit: %d\n", rai->reachabletime,
+		fprintf(fp, "MTU: %u\n", rai->linkmtu);
+		fprintf(fp, "  ReachableTime: %u, RetransTimer: %u, "
+			"CurHopLimit: %u\n", rai->reachabletime,
 			rai->retranstimer, rai->hoplimit);
 		if (rai->clockskew)
-			fprintf(fp, "  Clock skew: %dsec\n",
+			fprintf(fp, "  Clock skew: %usec\n",
 			    rai->clockskew);
 		TAILQ_FOREACH(pfx, &rai->prefix, next) {
 			if (pfx == TAILQ_FIRST(&rai->prefix))
@@ -174,8 +176,7 @@ if_dump(void)
 			if (pfx->validlifetime == ND6_INFINITE_LIFETIME)
 				fprintf(fp, "vltime: infinity");
 			else
-				fprintf(fp, "vltime: %ld",
-					(long)pfx->validlifetime);
+				fprintf(fp, "vltime: %u", pfx->validlifetime);
 			if (pfx->vltimeexpire != 0)
 				fprintf(fp, "(decr,expire %lld), ", (long long)
 					(pfx->vltimeexpire > now.tv_sec ?
@@ -185,8 +186,7 @@ if_dump(void)
 			if (pfx->preflifetime ==  ND6_INFINITE_LIFETIME)
 				fprintf(fp, "pltime: infinity");
 			else
-				fprintf(fp, "pltime: %ld",
-					(long)pfx->preflifetime);
+				fprintf(fp, "pltime: %u", pfx->preflifetime);
 			if (pfx->pltimeexpire != 0)
 				fprintf(fp, "(decr,expire %lld), ", (long long)
 					(pfx->pltimeexpire > now.tv_sec ?
@@ -253,7 +253,7 @@ if_dump(void)
 				{
 					if (p != dnsd->domain)
 					    fputc('.', fp);
-					while(len-- != 0)	
+					while(len-- != 0)
 					    fputc(*p++, fp);
 				}
 				fputc('\n', fp);
@@ -265,11 +265,11 @@ if_dump(void)
 void
 rtadvd_dump_file(const char *dumpfile)
 {
-	syslog(LOG_DEBUG, "<%s> dump current status to %s", __func__,
+	logit(LOG_DEBUG, "<%s> dump current status to %s", __func__,
 	    dumpfile);
 
 	if ((fp = fopen(dumpfile, "w")) == NULL) {
-		syslog(LOG_WARNING, "<%s> open a dump file(%s): %m",
+		logit(LOG_WARNING, "<%s> open a dump file(%s): %m",
 		       __func__, dumpfile);
 		return;
 	}

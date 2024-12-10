@@ -130,7 +130,7 @@ enum mowner_counter_index {
 struct mowner_counter {
 	u_long mc_counter[MOWNER_COUNTER_NCOUNTERS];
 };
-#endif
+#endif /* defined(_KERNEL) */
 
 /* userland-exported version of struct mowner */
 struct mowner_user {

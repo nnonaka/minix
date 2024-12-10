@@ -68,6 +68,9 @@ __RCSID("$NetBSD: vtw.c,v 1.8 2015/06/16 22:54:10 christos Exp $");
 
 #define	_CALLOUT_PRIVATE	/* for defs in sys/callout.h */
 
+#define _KERNEL
+#include <sys/types.h>
+#undef _KERNEL
 #include <sys/param.h>
 #include <sys/queue.h>
 #include <sys/socket.h>

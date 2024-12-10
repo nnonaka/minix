@@ -457,9 +457,8 @@ print_addr(struct sockaddr *sa, struct sockaddr **rtinfo, struct if_data *ifd,
 			struct in6_multi inm;
 			struct sockaddr_in6 as6;
 			union ifaddr_u *ifaddr = (union ifaddr_u *)rtinfo;
-		
-			multiaddr = (u_long)
-			    ifaddr->in6.ia6_multiaddrs.lh_first;
+
+			multiaddr = (u_long)ifaddr->in6._ia6_multiaddrs.lh_first;
 			while (multiaddr != 0) {
 				kread(multiaddr, (char *)&inm,
 				   sizeof inm);

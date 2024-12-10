@@ -1,10 +1,10 @@
-/*	$NetBSD: if.c,v 1.23 2015/06/05 15:41:59 roy Exp $	*/
+/*	$NetBSD: if.c,v 1.26 2018/04/20 10:39:37 roy Exp $	*/
 /*	$KAME: if.c,v 1.36 2004/11/30 22:32:01 suz Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -16,7 +16,7 @@
  * 3. Neither the name of the project nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE PROJECT AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -55,6 +55,8 @@
 
 #include "rtadvd.h"
 #include "if.h"
+#include "logit.h"
+#include "prog_ops.h"
 
 #ifndef RT_ROUNDUP
 #define RT_ROUNDUP(a)							       \
@@ -66,7 +68,7 @@ static void
 get_rtaddrs(int addrs, struct sockaddr *sa, struct sockaddr **rti_info)
 {
 	int i;
-	
+
 	for (i = 0; i < RTAX_MAX; i++) {
 		if (addrs & (1 << i)) {
 			rti_info[i] = sa;
@@ -111,17 +113,17 @@ if_getmtu(const char *name)
 	struct ifreq ifr;
 	int s, mtu;
 
-	if ((s = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+	if ((s = prog_socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
 		return 0;
 
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_addr.sa_family = AF_INET6;
 	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
-	if (ioctl(s, SIOCGIFMTU, &ifr) != -1)
+	if (prog_ioctl(s, SIOCGIFMTU, &ifr) != -1)
 		mtu = ifr.ifr_mtu;
 	else
 		mtu = 0;
-	close(s);
+	prog_close(s);
 
 	return mtu;
 }
@@ -133,20 +135,20 @@ if_getflags(int ifindex, int oifflags)
 	struct ifreq ifr;
 	int s;
 
-	if ((s = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
-		syslog(LOG_ERR, "<%s> socket: %m", __func__);
+	if ((s = prog_socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
+		logit(LOG_ERR, "<%s> socket: %m", __func__);
 		return (oifflags & ~IFF_UP);
 	}
 
 	memset(&ifr, 0, sizeof(ifr));
 	if_indextoname(ifindex, ifr.ifr_name);
-	if (ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
-		syslog(LOG_ERR, "<%s> ioctl:SIOCGIFFLAGS: failed for %s",
+	if (prog_ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
+		logit(LOG_ERR, "<%s> ioctl:SIOCGIFFLAGS: failed for %s",
 		       __func__, ifr.ifr_name);
-		close(s);
+		prog_close(s);
 		return (oifflags & ~IFF_UP);
 	}
-	close(s);
+	prog_close(s);
 	return (ifr.ifr_flags);
 }
 
@@ -178,7 +180,7 @@ lladdropt_fill(struct sockaddr_dl *sdl, struct nd_opt_hdr *ndopt)
 		memcpy(addr, LLADDR(sdl), ETHER_ADDR_LEN);
 		break;
 	default:
-		syslog(LOG_ERR, "<%s> unsupported link type(%d)",
+		logit(LOG_ERR, "<%s> unsupported link type(%d)",
 		    __func__, sdl->sdl_type);
 		exit(1);
 	}
@@ -202,7 +204,7 @@ get_next_msg(char *buf, char *lim, int ifindex, size_t *lenp, int filter)
 	     rtm = (struct rt_msghdr *)(((char *)rtm) + rtm->rtm_msglen)) {
 		/* just for safety */
 		if (!rtm->rtm_msglen) {
-			syslog(LOG_WARNING, "<%s> rtm_msglen is 0 "
+			logit(LOG_WARNING, "<%s> rtm_msglen is 0 "
 				"(buf=%p lim=%p rtm=%p)", __func__,
 				buf, lim, rtm);
 			break;
@@ -350,7 +352,7 @@ get_prefixlen(char *buf)
 	struct rt_msghdr *rtm = (struct rt_msghdr *)buf;
 	struct sockaddr *sa, *rti_info[RTAX_MAX];
 	unsigned char *p, *lim;
-	
+
 	sa = (struct sockaddr *)(rtm + 1);
 	get_rtaddrs(rtm->rtm_addrs, sa, rti_info);
 	sa = rti_info[RTAX_NETMASK];

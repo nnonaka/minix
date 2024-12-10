@@ -40,6 +40,9 @@ __RCSID("$NetBSD: mbuf.c,v 1.33 2015/07/28 19:46:42 christos Exp $");
 
 #define	__POOL_EXPOSE
 
+#define _KERNEL
+#include <sys/types.h>
+#undef _KERNEL
 #include <sys/param.h>
 #include <sys/protosw.h>
 #include <sys/socket.h>

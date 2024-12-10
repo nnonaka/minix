@@ -36,6 +36,7 @@ __RCSID("$NetBSD: tic.c,v 1.24 2014/07/20 20:20:16 christos Exp $");
 
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <sys/stat.h>
 
 #if !HAVE_NBTOOL_CONFIG_H || HAVE_SYS_ENDIAN_H
 #include <sys/endian.h>
@@ -55,6 +56,7 @@ __RCSID("$NetBSD: tic.c,v 1.24 2014/07/20 20:20:16 christos Exp $");
 #include <string.h>
 #include <term_private.h>
 #include <term.h>
+#include <unistd.h>
 #include <util.h>
 
 #define	HASH_SIZE	16384	/* 2012-06-01: 3600 entries */
@@ -110,6 +112,7 @@ save_term(struct cdbw *db, TERM *term)
 		memcpy(buf + 7, term->name, slen);
 		if (cdbw_put(db, term->name, slen, buf, len))
 			err(1, "cdbw_put");
+		free(buf);
 		return 0;
 	}
 
@@ -164,7 +167,7 @@ process_entry(TBUF *buf, int flags)
 	char *p, *e, *alias;
 	TERM *term;
 	TIC *tic;
-	
+
 	if (buf->bufpos == 0)
 		return 0;
 	/* Terminate the string */
@@ -204,7 +207,7 @@ process_entry(TBUF *buf, int flags)
 		}
 		free(alias);
 	}
-	
+
 	return 0;
 }
 
@@ -419,7 +422,7 @@ print_dump(int argc, char **argv)
 				printf("\t\t\"");
 				col = 16;
 			}
-			
+
 			col += printf("\\%03o", (uint8_t)buf[j]);
 			if (col > 75) {
 				printf("\"%s\n",
@@ -485,6 +488,7 @@ main(int argc, char **argv)
 	size_t buflen;
 	ssize_t len;
 	TBUF tbuf;
+	struct term *term;
 
 	cflag = sflag = 0;
 	ofile = NULL;
@@ -529,7 +533,7 @@ main(int argc, char **argv)
 	hcreate(HASH_SIZE);
 
 	buf = tbuf.buf = NULL;
-	buflen = tbuf.buflen = tbuf.bufpos = 0;	
+	buflen = tbuf.buflen = tbuf.bufpos = 0;
 	while ((len = getline(&buf, &buflen, f)) != -1) {
 		/* Skip comments */
 		if (*buf == '#')
@@ -541,12 +545,12 @@ main(int argc, char **argv)
 			continue;
 		}
 		/*
-		  If the first char is space not a space then we have a
-		  new entry, so process it.
-		*/
+		 * If the first char is space not a space then we have a
+		 * new entry, so process it.
+		 */
 		if (!isspace((unsigned char)*buf) && tbuf.bufpos != 0)
 			process_entry(&tbuf, flags);
-		
+
 		/* Grow the buffer if needed */
 		grow_tbuf(&tbuf, len);
 		/* Append the string */
@@ -580,7 +584,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "%zu entries and %zu aliases written to %s\n",
 		    nterm, nalias, dbname);
 
-#ifdef __VALGRIND__
 	if (ofile == NULL)
 		free(dbname);
 	while ((term = STAILQ_FIRST(&terms)) != NULL) {
@@ -589,9 +592,13 @@ main(int argc, char **argv)
 		free(term->name);
 		free(term);
 	}
+#ifndef HAVE_NBTOOL_CONFIG_H
+	/*
+	 * hdestroy1 is not standard but we don't really care if we
+	 * leak in the tools version
+	 */
 	hdestroy1(free, NULL);
 #endif
-
 
 	return EXIT_SUCCESS;
 }

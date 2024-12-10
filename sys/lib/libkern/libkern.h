@@ -43,6 +43,8 @@
 #include <sys/inttypes.h>
 #include <sys/null.h>
 
+#include <lib/libkern/strlist.h>
+
 #ifndef LIBKERN_INLINE
 #define LIBKERN_INLINE	static __inline
 #define LIBKERN_BODY
@@ -266,8 +268,14 @@ tolower(int ch)
 #define	KASSERTMSG(e, msg, ...)	/* NOTHING */
 #define	KASSERT(e)		/* NOTHING */
 #else /* !lint */
-#define	KASSERTMSG(e, msg, ...)	((void)0)
-#define	KASSERT(e)		((void)0)
+/*
+ * Make sure the expression compiles, but don't evaluate any of it.  We
+ * use sizeof to inhibit evaluation, and cast to long so the expression
+ * can be integer- or pointer-valued without bringing in other header
+ * files.
+ */
+#define	KASSERTMSG(e, msg, ...)	((void)sizeof((long)(e)))
+#define	KASSERT(e)		((void)sizeof((long)(e)))
 #endif /* !lint */
 #else /* DIAGNOSTIC */
 #define _DIAGASSERT(a)	assert(a)
@@ -495,6 +503,11 @@ int	strnvisx(char *, size_t, const char *, size_t, int);
 #define VIS_OCTAL	0x01
 #define VIS_SAFE	0x20
 #define VIS_TRIM	0x40
+
+struct disklabel;
+void	disklabel_swap(struct disklabel *, struct disklabel *);
+uint16_t dkcksum(const struct disklabel *);
+uint16_t dkcksum_sized(const struct disklabel *, size_t);
 
 #ifdef notyet
 /*

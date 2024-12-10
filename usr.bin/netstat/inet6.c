@@ -70,6 +70,9 @@ __RCSID("$NetBSD: inet6.c,v 1.68 2015/02/08 15:09:45 christos Exp $");
 
 #define _CALLOUT_PRIVATE
 
+#define _KERNEL
+#include <sys/types.h>
+#undef _KERNEL
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>

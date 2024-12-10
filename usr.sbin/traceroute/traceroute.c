@@ -292,34 +292,13 @@ struct outdata {
  *
  * http://www.ietf.org/proceedings/01aug/I-D/draft-ietf-mpls-icmp-02.txt
  */
+#ifdef ICMP_EXT_OFFSET
+#undef ICMP_EXT_OFFSET
+#endif
 #define ICMP_EXT_OFFSET    8 /* ICMP type, code, checksum, unused */ + \
                          128 /* original datagram */
-#define ICMP_EXT_VERSION 2
-/*
- * ICMP extensions, common header
- */
-struct icmp_ext_cmn_hdr {
-#if BYTE_ORDER == BIG_ENDIAN
-	unsigned char   version:4;
-	unsigned char   reserved1:4;
-#else
-	unsigned char   reserved1:4;
-	unsigned char   version:4;
-#endif
-	unsigned char   reserved2;
-	unsigned short  checksum;
-};
-
-/*
- * ICMP extensions, object header
- */
-struct icmp_ext_obj_hdr {
-    u_short length;
-    u_char  class_num;
 #define MPLS_STACK_ENTRY_CLASS 1
-    u_char  c_type;
 #define MPLS_STACK_ENTRY_C_TYPE 1
-};
 
 struct mpls_header {
 #if BYTE_ORDER == BIG_ENDIAN
@@ -1123,7 +1102,7 @@ wait_for_reply(int sock, struct sockaddr_in *fromp, const struct timeval *tp)
 static void
 decode_extensions(unsigned char *buf, int ip_len)
 {
-        struct icmp_ext_cmn_hdr *cmn_hdr;
+        struct icmp_ext_hdr *cmn_hdr;
         struct icmp_ext_obj_hdr *obj_hdr;
         union {
                 struct mpls_header mpls;
@@ -1135,7 +1114,7 @@ decode_extensions(unsigned char *buf, int ip_len)
         ip = (struct ip *)buf;
 
         if (ip_len < (int)((ip->ip_hl << 2) + ICMP_EXT_OFFSET +
-	    sizeof(struct icmp_ext_cmn_hdr))) {
+	    sizeof(struct icmp_ext_hdr))) {
 		/*
 		 * No support for ICMP extensions on this host
 		 */
@@ -1146,7 +1125,7 @@ decode_extensions(unsigned char *buf, int ip_len)
          * Move forward to the start of the ICMP extensions, if present
          */
         buf += (ip->ip_hl << 2) + ICMP_EXT_OFFSET;
-        cmn_hdr = (struct icmp_ext_cmn_hdr *)buf;
+        cmn_hdr = (struct icmp_ext_hdr *)buf;
 
         if (cmn_hdr->version != ICMP_EXT_VERSION) {
 		/*
@@ -1243,7 +1222,7 @@ dump_packet(void)
 	Fprintf(stderr, "packet data:");
 
 #ifdef __hpux
-	for (p = useicmp ? (u_char *)outicmp : (u_char *)outudp, i = 0; i < 
+	for (p = useicmp ? (u_char *)outicmp : (u_char *)outudp, i = 0;
 	    i < packlen - (sizeof(*outip) + optlen); i++)
 #else
 	for (p = (u_char *)outip, i = 0; i < packlen; i++)

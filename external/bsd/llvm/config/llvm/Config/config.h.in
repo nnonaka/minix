@@ -198,7 +198,7 @@
 #if !defined(__minix)
 /* Define to 1 if you have the `posix_spawn' function. */
 #define HAVE_POSIX_SPAWN 1
-.endif # !defined(__MINIX)
+#endif /* !defined(__minix) */
 
 /* Define to 1 if you have the `pread' function. */
 #define HAVE_PREAD 1

@@ -156,7 +156,7 @@ extern int	optind;
 # define symlink(from, to) (errno = ENOTSUP, -1)
 # define S_ISLNK(m) 0
 #endif
-#ifndef AT_SYMLINK_FOLLOW
+#if !defined(AT_SYMLINK_FOLLOW) || defined(__minix)
 # define linkat(fromdir, from, todir, to, flag) \
     (itssymlink(from) ? (errno = ENOTSUP, -1) : link(from, to))
 #endif
