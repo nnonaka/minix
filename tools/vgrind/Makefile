@@ -4,7 +4,7 @@ HOSTPROGNAME=	${_TOOL_PREFIX}vfontedpr
 HOST_BINDIR=	${TOOLDIR}/libexec
 HOST_SRCDIR=	usr.bin/vgrind
 HOST_FILESDIR=	${TOOLDIR}/share/misc
-HOST_CPPFLAGS=	-D_PATH_VGRINDEFS=\"${HOST_FILESDIR}/vgrindefs\"
+HOST_CPPFLAGS+=	-D_PATH_VGRINDEFS=\"${HOST_FILESDIR}/vgrindefs\"
 HOSTFILES=	vgrindefs vgrindefs.db
 NOSHARE=# defined
 CLEANFILES+= ${HOSTFILES}

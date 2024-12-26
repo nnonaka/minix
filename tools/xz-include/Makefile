@@ -9,10 +9,13 @@
 .include "Makefile.inc"
 
 CONFIGURE_ARGS+=	--enable-threads=no --disable-nls
+.if ${MAKEVERBOSE} == 0
+CONFIGURE_ARGS+=	--silent
+.endif
 
 config.status: ${XZSRCDIR}/configure
 	${HOST_SH} ${XZSRCDIR}/configure ${CONFIGURE_ARGS} \
-	    CC=${HOST_CC:Q}
+	    CC=${HOST_CC:Q} CPPFLAGS=${HOST_CPPFLAGS:Q}
 
 CLEANFILES+=	config.log config.status config.h libtool stamp-h1
 

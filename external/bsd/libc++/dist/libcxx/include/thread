@@ -98,12 +98,7 @@ void sleep_for(const chrono::duration<Rep, Period>& rel_time);
 #ifndef _LIBCPP_HAS_NO_VARIADICS
 #include <tuple>
 #endif
-#if !defined(__minix)
 #include <pthread.h>
-#else
-#define _MTHREADIFY_PTHREADS 1 
-#include <minix/mthread.h>
-#endif
 #include <sched.h>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -113,9 +108,7 @@ void sleep_for(const chrono::duration<Rep, Period>& rel_time);
 #define __STDCPP_THREADS__ __cplusplus
 
 #ifdef _LIBCPP_HAS_NO_THREADS
-#if !defined(__minix)
 #error <thread> is not supported on this single threaded system
-#endif
 #else // !_LIBCPP_HAS_NO_THREADS
 
 _LIBCPP_BEGIN_NAMESPACE_STD

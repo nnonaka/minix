@@ -375,9 +375,7 @@ template <class R, class Alloc> struct uses_allocator<packaged_task<R>, Alloc>;
 #endif
 
 #ifdef _LIBCPP_HAS_NO_THREADS
-#if !defined(__minix)
 #error <future> is not supported on this single threaded system
-#endif
 #else // !_LIBCPP_HAS_NO_THREADS
 
 _LIBCPP_BEGIN_NAMESPACE_STD

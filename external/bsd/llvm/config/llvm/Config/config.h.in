@@ -145,10 +145,8 @@
 /* Define to 1 if you have the `psapi' library (-lpsapi). */
 /* #undef HAVE_LIBPSAPI */
 
-#if !defined(__minix)
 /* Define to 1 if you have the `pthread' library (-lpthread). */
-#define HAVE_LIBPTHREAD 1
-#endif /* !defined(__minix) */
+/* #define HAVE_LIBPTHREAD 1 */
 
 /* Define to 1 if you have the `shell32' library (-lshell32). */
 /* #undef HAVE_LIBSHELL32 */
@@ -195,27 +193,23 @@
 /* Define to 1 if you have the `posix_fallocate' function. */
 #define HAVE_POSIX_FALLOCATE 1
 
-#if !defined(__minix)
 /* Define to 1 if you have the `posix_spawn' function. */
-#define HAVE_POSIX_SPAWN 1
-#endif /* !defined(__minix) */
+/* #define HAVE_POSIX_SPAWN 1 */
 
 /* Define to 1 if you have the `pread' function. */
 #define HAVE_PREAD 1
 
-#if !defined(__minix)
 /* Have pthread_getspecific */
-#define HAVE_PTHREAD_GETSPECIFIC 1
+/* #define HAVE_PTHREAD_GETSPECIFIC 1 */
 
 /* Define to 1 if you have the <pthread.h> header file. */
-#define HAVE_PTHREAD_H 1
+/* #define HAVE_PTHREAD_H 1 */
 
 /* Have pthread_mutex_lock */
-#define HAVE_PTHREAD_MUTEX_LOCK 1
+/* #define HAVE_PTHREAD_MUTEX_LOCK 1 */
 
 /* Have pthread_rwlock_init */
-#define HAVE_PTHREAD_RWLOCK_INIT 1
-#endif /* !defined(__minix) */
+/* #define HAVE_PTHREAD_RWLOCK_INIT 1 */
 
 /* Define to 1 if you have the `realpath' function. */
 #define HAVE_REALPATH 1
@@ -401,10 +395,8 @@
 /* Installation directory for documentation */
 #define LLVM_DOCSDIR "/usr/share/doc/llvm"
 
-#if !defined(__minix)
 /* Define if threads enabled */
-#define LLVM_ENABLE_THREADS 1
-#endif /* !defined(__minix) */
+/* #define LLVM_ENABLE_THREADS 1 */
 
 /* Define if zlib compression is available */
 #define LLVM_ENABLE_ZLIB 1

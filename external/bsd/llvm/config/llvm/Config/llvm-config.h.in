@@ -36,10 +36,8 @@
 /* Installation directory for documentation */
 #define LLVM_DOCSDIR "/usr/share/doc/llvm"
 
-#if !defined(__minix)
 /* Define if threads enabled */
-#define LLVM_ENABLE_THREADS 1
-#endif /* !defined(__MINIX) */
+/* #define LLVM_ENABLE_THREADS 1 */
 
 /* Installation directory for config files */
 #define LLVM_ETCDIR "/usr/etc/llvm"

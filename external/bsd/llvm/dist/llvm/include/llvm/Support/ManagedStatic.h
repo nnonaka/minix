@@ -14,8 +14,14 @@
 #ifndef LLVM_SUPPORT_MANAGEDSTATIC_H
 #define LLVM_SUPPORT_MANAGEDSTATIC_H
 
+#if !defined(__minix)
 #include <atomic>
 #include <cstddef>
+#else
+#include "llvm/Support/Atomic.h"
+#include "llvm/Support/Threading.h"
+#include "llvm/Support/Valgrind.h"
+#endif
 
 namespace llvm {
 

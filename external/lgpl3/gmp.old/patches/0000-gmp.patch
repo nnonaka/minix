@@ -1,0 +1,613 @@
+diff -rNU3 dist.orig/Makefile.in dist.nbsd/Makefile.in
+--- dist.orig/Makefile.in	2013-09-30 12:18:35.000000000 +0200
++++ dist.nbsd/Makefile.in	2013-11-29 08:57:10.000000000 +0100
+@@ -1166,7 +1166,8 @@
+ uninstall: uninstall-recursive
+ 
+ install-am: all-am
+-	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
++	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am
++	@$(MAKE) $(AM_MAKEFLAGS) install-data-am
+ 
+ installcheck: installcheck-recursive
+ install-strip:
+diff -rNU3 dist.orig/acinclude.m4 dist.nbsd/acinclude.m4
+--- dist.orig/acinclude.m4	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/acinclude.m4	2013-11-29 08:57:10.000000000 +0100
+@@ -33,6 +33,9 @@
+ define(IA64_PATTERN,
+ [[ia64*-*-* | itanium-*-* | itanium2-*-*]])
+ 
++define(M5407_PATTERN,
++[[m5407-*-*]])
++
+ dnl  Need to be careful not to match m6811, m6812, m68hc11 and m68hc12, all
+ dnl  of which config.sub accepts.  (Though none of which are likely to work
+ dnl  with GMP.)
+diff -rNU3 dist.orig/config.guess dist.nbsd/config.guess
+--- dist.orig/config.guess	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/config.guess	2013-11-29 08:57:10.000000000 +0100
+@@ -945,8 +945,8 @@
+ 
+ # -------------------------------------------------------------------------
+ # Use an exact cpu, if possible
+-
+-if test -n "$exact_cpu"; then
++# Disabled for NetBSD cross builds
++if false && test -n "$exact_cpu"; then
+   echo "$exact_cpu$guess_rest"
+ else
+   echo "$guess_full"
+diff -rNU3 dist.orig/configfsf.guess dist.nbsd/configfsf.guess
+--- dist.orig/configfsf.guess	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/configfsf.guess	2014-06-23 19:18:43.000000000 +0200
+@@ -158,14 +158,28 @@
+ 	case "${UNAME_MACHINE_ARCH}" in
+ 	    armeb) machine=armeb-unknown ;;
+ 	    arm*) machine=arm-unknown ;;
++	    coldfire) machine=m5407-unknown ;;
++	    earm*eb*) machine=armeb-unknown ;;
++	    earm*) machine=arm-unknown ;;
+ 	    sh3el) machine=shl-unknown ;;
+ 	    sh3eb) machine=sh-unknown ;;
+ 	    sh5el) machine=sh5le-unknown ;;
+ 	    *) machine=${UNAME_MACHINE_ARCH}-unknown ;;
+ 	esac
+ 	# The Operating System including object format, if it has switched
+-	# to ELF recently, or will in the future.
++	# to ELF recently, or will in the future and ABI.
+ 	case "${UNAME_MACHINE_ARCH}" in
++	    coldfire) os=netbsdelf ;;
++	    earm*)
++		eval $set_cc_for_build
++		if echo __ARM_PCS_VFP | $CC_FOR_BUILD -E - 2>/dev/null \
++			| grep -q __ARM_PCS_VFP
++		then
++		    os=netbsdelf-eabi
++		else
++		    os=netbsdelf-eabihf
++		fi
++		;;
+ 	    arm*|i386|m68k|ns32k|sh3*|sparc|vax)
+ 		eval $set_cc_for_build
+ 		if echo __ELF__ | $CC_FOR_BUILD -E - 2>/dev/null \
+diff -rNU3 dist.orig/configfsf.sub dist.nbsd/configfsf.sub
+--- dist.orig/configfsf.sub	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/configfsf.sub	2013-11-29 08:57:10.000000000 +0100
+@@ -124,7 +124,7 @@
+ case $maybe_os in
+   nto-qnx* | linux-gnu* | linux-android* | linux-dietlibc | linux-newlib* | \
+   linux-musl* | linux-uclibc* | uclinux-uclibc* | uclinux-gnu* | kfreebsd*-gnu* | \
+-  knetbsd*-gnu* | netbsd*-gnu* | \
++  knetbsd*-gnu* | netbsd*-gnu* | netbsd*-*eabi* | \
+   kopensolaris*-gnu* | \
+   storm-chaos* | os2-emx* | rtmk-nova*)
+     os=-$maybe_os
+@@ -334,7 +334,8 @@
+ 		basic_machine=$basic_machine-unknown
+ 		os=-none
+ 		;;
+-	m88110 | m680[12346]0 | m683?2 | m68360 | m5200 | v70 | w65 | z8k)
++	m88110 | m680[12346]0 | m683?2 | m68360 | m5200 | m5407 \
++	| v70 | w65 | z8k)
+ 		;;
+ 	ms1)
+ 		basic_machine=mt-unknown
+@@ -390,6 +391,7 @@
+ 	| le32-* | le64-* \
+ 	| lm32-* \
+ 	| m32c-* | m32r-* | m32rle-* \
++	| m5200-* | m5407-* \
+ 	| m68000-* | m680[012346]0-* | m68360-* | m683?2-* | m68k-* \
+ 	| m88110-* | m88k-* | maxq-* | mcore-* | metag-* \
+ 	| microblaze-* | microblazeel-* \
+diff -rNU3 dist.orig/configure dist.nbsd/configure
+--- dist.orig/configure	2013-09-30 12:18:33.000000000 +0200
++++ dist.nbsd/configure	2014-06-24 14:54:56.000000000 +0200
+@@ -4377,6 +4377,16 @@
+     ;;
+ 
+ 
++  # Motorola Coldfire
++  #
++  m5407-*-*)
++
++    gcc_cflags="$gcc_cflags $fomit_frame_pointer"
++    gcc_cflags_optlist="arch"
++    gcc_cflags_arch="-m5407"
++  ;;
++
++
+   # Motorola 68k
+   #
+   m68k-*-* | m68[0-9][0-9][0-9]-*-*)
+diff -rNU3 dist.orig/configure.ac dist.nbsd/configure.ac
+--- dist.orig/configure.ac	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/configure.ac	2013-11-29 08:49:47.000000000 +0100
+@@ -25,7 +25,7 @@
+ AC_COPYRIGHT(GMP_COPYRIGHT)
+ AH_TOP(/*GMP_COPYRIGHT*/)
+ 
+-AC_REVISION($Revision$)
++AC_REVISION($Revision: 1.1.1.1 $)
+ AC_PREREQ(2.59)
+ AC_INIT(GNU MP, GMP_VERSION, [gmp-bugs@gmplib.org, see http://gmplib.org/manual/Reporting-Bugs.html], gmp)
+ AC_CONFIG_SRCDIR(gmp-impl.h)
+diff -rNU3 dist.orig/gmp-h.in dist.nbsd/gmp-h.in
+--- dist.orig/gmp-h.in	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/gmp-h.in	2013-11-29 08:57:10.000000000 +0100
+@@ -359,11 +359,9 @@
+     GCC 4.3 and above with -std=c99 or -std=gnu99 implements ISO C99
+     inline semantics, unless -fgnu89-inline is used.  */
+ #ifdef __GNUC__
+-#if (defined __GNUC_STDC_INLINE__) || (__GNUC__ == 4 && __GNUC_MINOR__ == 2) \
+-  || (defined __GNUC_GNU_INLINE__ && defined __cplusplus)
++#if (defined __GNUC_STDC_INLINE__) || \
++    (__GNUC__ == 4 && __GNUC_MINOR__ >= 2) || (__GNUC__ > 4)
+ #define __GMP_EXTERN_INLINE extern __inline__ __attribute__ ((__gnu_inline__))
+-#else
+-#define __GMP_EXTERN_INLINE      extern __inline__
+ #endif
+ #define __GMP_INLINE_PROTOTYPES  1
+ #endif
+@@ -1610,6 +1608,10 @@
+ #define mpn_zero __MPN(zero)
+ __GMP_DECLSPEC void mpn_zero (mp_ptr, mp_size_t);
+ 
++#define mpn_udiv_w_sdiv __MPN(udiv_w_sdiv)
++__GMP_DECLSPEC mp_limb_t mpn_udiv_w_sdiv (mp_limb_t *, mp_limb_t, mp_limb_t, mp_limb_t);
++
++
+ /**************** mpz inlines ****************/
+ 
+ /* The following are provided as inlines where possible, but always exist as
+diff -rNU3 dist.orig/gmp-impl.h dist.nbsd/gmp-impl.h
+--- dist.orig/gmp-impl.h	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/gmp-impl.h	2013-11-29 08:57:10.000000000 +0100
+@@ -196,7 +196,9 @@
+ #     if defined (_AIX) || defined (_IBMR2)
+  #pragma alloca
+ #     else
+-       char *alloca ();
++#      if !defined (__NetBSD__)
++        char *alloca ();
++#      endif
+ #     endif
+ #    endif
+ #   endif
+diff -rNU3 dist.orig/longlong.h dist.nbsd/longlong.h
+--- dist.orig/longlong.h	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/longlong.h	2014-03-25 16:28:15.000000000 +0100
+@@ -1209,7 +1209,7 @@
+ #endif /* __m88000__ */
+ 
+ #if defined (__mips) && W_TYPE_SIZE == 32
+-#if __GMP_GNUC_PREREQ (4,4)
++#if __GMP_GNUC_PREREQ (4,4) || defined(__clang__)
+ #define umul_ppmm(w1, w0, u, v) \
+   do {									\
+     UDItype __ll = (UDItype)(u) * (v);					\
+@@ -1231,7 +1231,7 @@
+ #endif /* __mips */
+ 
+ #if (defined (__mips) && __mips >= 3) && W_TYPE_SIZE == 64
+-#if __GMP_GNUC_PREREQ (4,4)
++#if __GMP_GNUC_PREREQ (4,4) || defined(__clang__)
+ #define umul_ppmm(w1, w0, u, v) \
+   do {									\
+     typedef unsigned int __ll_UTItype __attribute__((mode(TI)));	\
+@@ -1347,7 +1347,7 @@
+   __asm__ ("cntlzw %0,%1" : "=r" (count) : "r" (x))
+ #define COUNT_LEADING_ZEROS_0 32
+ #if HAVE_HOST_CPU_FAMILY_powerpc
+-#if __GMP_GNUC_PREREQ (4,4)
++#if __GMP_GNUC_PREREQ (4,4) || defined(__clang__)
+ #define umul_ppmm(w1, w0, u, v) \
+   do {									\
+     UDItype __ll = (UDItype)(u) * (v);					\
+diff -rNU3 dist.orig/mpn/Makefile.in dist.nbsd/mpn/Makefile.in
+--- dist.orig/mpn/Makefile.in	2013-09-30 12:18:34.000000000 +0200
++++ dist.nbsd/mpn/Makefile.in	2013-11-29 08:57:10.000000000 +0100
+@@ -631,7 +631,7 @@
+ 	$(CCAS) $(COMPILE_FLAGS) tmp-$*.s -o $@
+ 	$(RM_TMP) tmp-$*.s
+ .S.lo:
+-	$(LIBTOOL) --mode=compile --tag=CC $(top_srcdir)/mpn/cpp-ccas --cpp="$(CPP) $(PREPROCESS_FLAGS)" $(CCAS) $(COMPILE_FLAGS) `test -f '$<' || echo '$(srcdir)/'`$<
++	$(LIBTOOL) --mode=compile --tag=CC $(SHELL) $(top_srcdir)/mpn/cpp-ccas --cpp="$(CPP) $(PREPROCESS_FLAGS)" $(CCAS) $(COMPILE_FLAGS) `test -f '$<' || echo '$(srcdir)/'`$<
+ 
+ # .asm assembler, preprocessed with m4.
+ #
+@@ -659,7 +659,7 @@
+ 	$(CCAS) $(COMPILE_FLAGS) tmp-$*.s -o $@
+ 	$(RM_TMP) tmp-$*.s
+ .asm.lo:
+-	$(LIBTOOL) --mode=compile --tag=CC $(top_srcdir)/mpn/m4-ccas --m4="$(M4)" $(CCAS) $(COMPILE_FLAGS) `test -f '$<' || echo '$(srcdir)/'`$<
++	$(LIBTOOL) --mode=compile --tag=CC $(SHELL) $(top_srcdir)/mpn/m4-ccas --m4="$(M4)" $(CCAS) $(COMPILE_FLAGS) `test -f '$<' || echo '$(srcdir)/'`$<
+ 
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+diff -rNU3 dist.orig/mpn/arm/aorscnd_n.asm dist.nbsd/mpn/arm/aorscnd_n.asm
+--- dist.orig/mpn/arm/aorscnd_n.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/aorscnd_n.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -117,5 +117,8 @@
+ 
+ L(end):	RETVAL
+ 	pop	{r4-r11}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/aorslsh1_n.asm dist.nbsd/mpn/arm/aorslsh1_n.asm
+--- dist.orig/mpn/arm/aorslsh1_n.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/aorslsh1_n.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -151,5 +151,8 @@
+ 	REVCY(r12)
+ L(rt0):	RETVAL(	r14)
+ 	pop	{r4-r10r11, r14}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/bdiv_dbm1c.asm dist.nbsd/mpn/arm/bdiv_dbm1c.asm
+--- dist.orig/mpn/arm/bdiv_dbm1c.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/bdiv_dbm1c.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -97,5 +97,8 @@
+ 	str	r5, [qp]
+ 	sbc	r0, r5, r12
+ 	pop	{r4, r5, r6, r7, r8}
+-	bx	lr
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/com.asm dist.nbsd/mpn/arm/com.asm
+--- dist.orig/mpn/arm/com.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/com.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -59,5 +59,9 @@
+ 	bne	L(top)
+ 
+ 	ldmfd	sp!, { r7, r8, r9 }		C restore regs from stack
+-L(rtn):	bx	lr
++L(rtn):
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/copyd.asm dist.nbsd/mpn/arm/copyd.asm
+--- dist.orig/mpn/arm/copyd.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/copyd.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -57,5 +57,9 @@
+ 	bne	L(top)
+ 
+ 	ldmfd	sp!, { r7, r8, r9 }		C restore regs from stack
+-L(rtn):	bx	lr
++L(rtn):
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/copyi.asm dist.nbsd/mpn/arm/copyi.asm
+--- dist.orig/mpn/arm/copyi.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/copyi.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -52,5 +52,9 @@
+ 	bne	L(top)
+ 
+ 	ldmfd	sp!, { r7, r8, r9 }		C restore regs from stack
+-L(rtn):	bx	lr
++L(rtn):
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/invert_limb.asm dist.nbsd/mpn/arm/invert_limb.asm
+--- dist.orig/mpn/arm/invert_limb.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/invert_limb.asm	2013-11-29 08:57:11.000000000 +0100
+@@ -41,7 +41,10 @@
+ 	adds	r1, r12, r0
+ 	adc	r3, r3, r0
+ 	rsb	r0, r3, r2
+-	bx	lr
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+ 
+ 	.section .rodata
+diff -rNU3 dist.orig/mpn/arm/logops_n.asm dist.nbsd/mpn/arm/logops_n.asm
+--- dist.orig/mpn/arm/logops_n.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/logops_n.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -123,5 +123,8 @@
+ 	pop	{ r4, r5, r6, r7 }	C popping r8-r10 here strangely fails
+ 
+ L(rtn):	pop	{ r8, r9, r10 }
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/lshift.asm dist.nbsd/mpn/arm/lshift.asm
+--- dist.orig/mpn/arm/lshift.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/lshift.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -72,5 +72,8 @@
+ L(1):	str	r7, [rp, #-4]
+ 	lsr	r0, r4, tnc
+ 	pop	{r4, r6, r7, r8}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/lshiftc.asm dist.nbsd/mpn/arm/lshiftc.asm
+--- dist.orig/mpn/arm/lshiftc.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/lshiftc.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -79,5 +79,8 @@
+ 	str	r7, [rp, #-4]
+ 	lsr	r0, r4, tnc
+ 	pop	{r4, r6, r7, r8}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/mod_34lsub1.asm dist.nbsd/mpn/arm/mod_34lsub1.asm
+--- dist.orig/mpn/arm/mod_34lsub1.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/mod_34lsub1.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -94,7 +94,10 @@
+ 	add	r0, r0, r12, lsr #8
+ 
+ 	pop	{ r4, r5, r6, r7 }
+-	bx	lr
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ 
+ L(le2):	cmn	n, #1
+ 	bne	L(1)
+@@ -105,5 +108,8 @@
+ 	bic	r0, r2, #0xff000000
+ 	add	r0, r0, r2, lsr #24
+ 	pop	{ r4, r5, r6, r7 }
+-	bx	lr
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/mode1o.asm dist.nbsd/mpn/arm/mode1o.asm
+--- dist.orig/mpn/arm/mode1o.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/mode1o.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -68,5 +68,8 @@
+ 	addcc	r0, r0, #1
+ 
+ 	ldmfd	sp!, {r4, r5}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/rsh1aors_n.asm dist.nbsd/mpn/arm/rsh1aors_n.asm
+--- dist.orig/mpn/arm/rsh1aors_n.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/rsh1aors_n.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -108,5 +108,8 @@
+ 	str	r4, [rp, #0]
+ 	mov	r0, r11
+ 	pop	{r4-r11}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/rshift.asm dist.nbsd/mpn/arm/rshift.asm
+--- dist.orig/mpn/arm/rshift.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/rshift.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -70,5 +70,8 @@
+ L(1):	str	r7, [rp], #4
+ 	lsl	r0, r4, tnc
+ 	pop	{r4, r6, r7, r8}
+-	bx	r14
++ifdef(`ARM_THUMB_MODE',
++`	bx	r14
++',`	mov	pc, r14
++')
+ EPILOGUE()
+diff -rNU3 dist.orig/mpn/arm/udiv.asm dist.nbsd/mpn/arm/udiv.asm
+--- dist.orig/mpn/arm/udiv.asm	2013-09-30 12:18:28.000000000 +0200
++++ dist.nbsd/mpn/arm/udiv.asm	2013-11-29 09:02:28.000000000 +0100
+@@ -50,7 +50,10 @@
+ 
+ 	str	n1, [rem_ptr]		C store remainder
+ 	adc	r0, n0, n0		C quotient: add last carry from divstep
+-	bx	lr
++ifdef(`ARM_THUMB_MODE',
++`	bx	lr
++',`	mov	pc, lr
++')
+ 
+ L(_large_divisor):
+ 	stmfd	sp!, { r8, lr }
+diff -rNU3 dist.orig/mpn/generic/div_qr_2.c dist.nbsd/mpn/generic/div_qr_2.c
+--- dist.orig/mpn/generic/div_qr_2.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/div_qr_2.c	2013-12-01 10:29:06.000000000 +0100
+@@ -130,10 +130,11 @@
+     umul_ppmm (_q1d,_q0, n2, di0);					\
+     add_sssaaaa (_q3,_q2,_q1, _q2,_q1, _q2a,_q1d);			\
+ 									\
+-    add_ssaaaa (r1, r0, n3, n2, 0, 1); /* FIXME: combine as in x86_64 asm */ \
++    add_ssaaaa (r1, r0, n3, n2, CNST_LIMB(0), CNST_LIMB(1));		\
++    				  /* FIXME: combine as in x86_64 asm */	\
+ 									\
+     /* [q3,q2,q1,q0] += [n3,n3,n1,n0] */				\
+-    add_csaac (_c, _q0, _q0, n0, 0);					\
++    add_csaac (_c, _q0, _q0, n0, CNST_LIMB(0));				\
+     add_csaac (_c, _q1, _q1, n1, _c);					\
+     add_csaac (_c, _q2, _q2, r0, _c);					\
+     _q3 = _q3 + r1 + _c;						\
+@@ -145,14 +146,14 @@
+ 									\
+     _mask = -(mp_limb_t) (r1 >= _q1 & (r1 > _q1 | r0 >= _q0));  /* (r1,r0) >= (q1,q0) */  \
+     add_ssaaaa (r1, r0, r1, r0, d1 & _mask, d0 & _mask);		\
+-    sub_ddmmss (_q3, _q2, _q3, _q2, 0, -_mask);				\
++    sub_ddmmss (_q3, _q2, _q3, _q2, CNST_LIMB(0), -_mask);		\
+ 									\
+     if (UNLIKELY (r1 >= d1))						\
+       {									\
+ 	if (r1 > d1 || r0 >= d0)					\
+ 	  {								\
+ 	    sub_ddmmss (r1, r0, r1, r0, d1, d0);			\
+-	    add_ssaaaa (_q3, _q2, _q3, _q2, 0, 1);			\
++	    add_ssaaaa (_q3, _q2, _q3, _q2, CNST_LIMB(0), CNST_LIMB(1));\
+ 	  }								\
+       }									\
+     (q1) = _q3;								\
+diff -rNU3 dist.orig/mpn/generic/divrem_2.c dist.nbsd/mpn/generic/divrem_2.c
+--- dist.orig/mpn/generic/divrem_2.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/divrem_2.c	2013-12-01 10:29:06.000000000 +0100
+@@ -98,7 +98,7 @@
+       for (i = qxn - 1; i >= 0; i--)
+ 	{
+ 	  mp_limb_t q;
+-	  udiv_qr_3by2 (q, r1, r0, r1, r0, 0, d1, d0, di.inv32);
++	  udiv_qr_3by2 (q, r1, r0, r1, r0, CNST_LIMB(0), d1, d0, di.inv32);
+ 	  qp[i] = q;
+ 	}
+     }
+diff -rNU3 dist.orig/mpn/generic/get_d.c dist.nbsd/mpn/generic/get_d.c
+--- dist.orig/mpn/generic/get_d.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/get_d.c	2013-11-29 09:02:28.000000000 +0100
+@@ -209,7 +209,7 @@
+ 	      x <<= GMP_NAIL_BITS;
+ 	      mhi |= x >> nbits >> 11;
+ 
+-	      mlo = x << GMP_LIMB_BITS - nbits - 11;
++	      mlo = x << (GMP_LIMB_BITS - nbits - 11);
+ 	      nbits = nbits + 11 - GMP_NAIL_BITS;
+ 	    }
+ 	  else
+diff -rNU3 dist.orig/mpn/generic/mod_1_1.c dist.nbsd/mpn/generic/mod_1_1.c
+--- dist.orig/mpn/generic/mod_1_1.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/mod_1_1.c	2013-12-01 10:29:06.000000000 +0100
+@@ -160,7 +160,7 @@
+    *   B2modb = - b * bi;
+    *   ASSERT (B2modb <= b);    // NB: equality iff b = B/2
+    */
+-  udiv_rnnd_preinv (B2modb, B1modb, 0, b, bi);
++  udiv_rnnd_preinv (B2modb, B1modb, CNST_LIMB(0), b, bi);
+   cps[3] = B2modb >> cnt;
+ }
+ 
+diff -rNU3 dist.orig/mpn/generic/mod_1_2.c dist.nbsd/mpn/generic/mod_1_2.c
+--- dist.orig/mpn/generic/mod_1_2.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/mod_1_2.c	2013-12-01 10:29:06.000000000 +0100
+@@ -51,10 +51,10 @@
+   ASSERT (B1modb <= b);		/* NB: not fully reduced mod b */
+   cps[2] = B1modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B2modb, B1modb, 0, b, bi);
++  udiv_rnnd_preinv (B2modb, B1modb, CNST_LIMB(0), b, bi);
+   cps[3] = B2modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B3modb, B2modb, 0, b, bi);
++  udiv_rnnd_preinv (B3modb, B2modb, CNST_LIMB(0), b, bi);
+   cps[4] = B3modb >> cnt;
+ 
+ #if WANT_ASSERT
+diff -rNU3 dist.orig/mpn/generic/mod_1_3.c dist.nbsd/mpn/generic/mod_1_3.c
+--- dist.orig/mpn/generic/mod_1_3.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/mod_1_3.c	2013-12-01 10:29:06.000000000 +0100
+@@ -51,13 +51,13 @@
+   ASSERT (B1modb <= b);		/* NB: not fully reduced mod b */
+   cps[2] = B1modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B2modb, B1modb, 0, b, bi);
++  udiv_rnnd_preinv (B2modb, B1modb, CNST_LIMB(0), b, bi);
+   cps[3] = B2modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B3modb, B2modb, 0, b, bi);
++  udiv_rnnd_preinv (B3modb, B2modb, CNST_LIMB(0), b, bi);
+   cps[4] = B3modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B4modb, B3modb, 0, b, bi);
++  udiv_rnnd_preinv (B4modb, B3modb, CNST_LIMB(0), b, bi);
+   cps[5] = B4modb >> cnt;
+ 
+ #if WANT_ASSERT
+diff -rNU3 dist.orig/mpn/generic/mod_1_4.c dist.nbsd/mpn/generic/mod_1_4.c
+--- dist.orig/mpn/generic/mod_1_4.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/mod_1_4.c	2013-12-01 10:29:06.000000000 +0100
+@@ -51,16 +51,16 @@
+   ASSERT (B1modb <= b);		/* NB: not fully reduced mod b */
+   cps[2] = B1modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B2modb, B1modb, 0, b, bi);
++  udiv_rnnd_preinv (B2modb, B1modb, CNST_LIMB(0), b, bi);
+   cps[3] = B2modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B3modb, B2modb, 0, b, bi);
++  udiv_rnnd_preinv (B3modb, B2modb, CNST_LIMB(0), b, bi);
+   cps[4] = B3modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B4modb, B3modb, 0, b, bi);
++  udiv_rnnd_preinv (B4modb, B3modb, CNST_LIMB(0), b, bi);
+   cps[5] = B4modb >> cnt;
+ 
+-  udiv_rnnd_preinv (B5modb, B4modb, 0, b, bi);
++  udiv_rnnd_preinv (B5modb, B4modb, CNST_LIMB(0), b, bi);
+   cps[6] = B5modb >> cnt;
+ 
+ #if WANT_ASSERT
+diff -rNU3 dist.orig/mpn/generic/toom_interpolate_7pts.c dist.nbsd/mpn/generic/toom_interpolate_7pts.c
+--- dist.orig/mpn/generic/toom_interpolate_7pts.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/generic/toom_interpolate_7pts.c	2013-11-30 20:05:25.000000000 +0100
+@@ -33,7 +33,7 @@
+   ((((GMP_NUMB_MAX / 9) << (6 - GMP_NUMB_BITS % 6)) * 8 & GMP_NUMB_MAX) | 0x39)
+ 
+ #define BINVERT_15 \
+-  ((((GMP_NUMB_MAX >> (GMP_NUMB_BITS % 4)) / 15) * 14 * 16 & GMP_NUMB_MAX) + 15))
++  ((((GMP_NUMB_MAX >> (GMP_NUMB_BITS % 4)) / 15) * 14 * 16 & GMP_NUMB_MAX) + 15)
+ 
+ /* For the various mpn_divexact_byN here, fall back to using either
+    mpn_pi1_bdiv_q_1 or mpn_divexact_1.  The former has less overhead and is
+diff -rNU3 dist.orig/mpn/powerpc32/elf.m4 dist.nbsd/mpn/powerpc32/elf.m4
+--- dist.orig/mpn/powerpc32/elf.m4	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/mpn/powerpc32/elf.m4	2013-12-02 14:16:49.000000000 +0100
+@@ -41,9 +41,11 @@
+ m4_assert_numargs(2)
+ `ifdef(`PIC',`
+ 	mflr	r0
+-	bl	_GLOBAL_OFFSET_TABLE_@local-4
+-	mflr	$1
++	bcl	20,31,1f
++1:	mflr	$1
+ 	mtlr	r0
++	addis	$1,$1,_GLOBAL_OFFSET_TABLE_-1b@ha
++	addi	$1,$1,_GLOBAL_OFFSET_TABLE_-1b@l
+ 	lwz	$1, $2@got($1)
+ ',`
+ 	lis	$1, $2@ha
+diff -rNU3 dist.orig/tests/rand/findlc.c dist.nbsd/tests/rand/findlc.c
+--- dist.orig/tests/rand/findlc.c	2013-09-30 12:18:29.000000000 +0200
++++ dist.nbsd/tests/rand/findlc.c	2013-11-29 08:49:48.000000000 +0100
+@@ -27,7 +27,7 @@
+ #define RCSID(msg) \
+ static /**/const char *const rcsid[] = { (char *)rcsid, "\100(#)" msg }
+ 
+-RCSID("$Id$");
++RCSID("$Id: findlc.c,v 1.1.1.2 2013/11/29 07:49:48 mrg Exp $");
+ 
+ int g_debug = 0;
+ 

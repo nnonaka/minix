@@ -28,7 +28,11 @@
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Compiler.h"
+#if !defined(__minix)
 #include <atomic>
+#else
+#include "llvm/Support/Atomic.h"
+#endif
 #include <memory>
 #include <vector>
 

@@ -58,7 +58,7 @@
 #define LT_OBJDIR ".libs/"
 
 /* Target triple MCLinker will generate code for by default */
-#define MCLD_DEFAULT_TARGET_TRIPLE "x86_64--netbsd"
+#define MCLD_DEFAULT_TARGET_TRIPLE "i586-elf32-minix"
 
 /* Define if this is Unixish platform */
 #define MCLD_ON_UNIX 1

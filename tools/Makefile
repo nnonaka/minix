@@ -110,10 +110,10 @@ SUBDIR+= cap_mkdb crunchgen ctags gencat hexdump \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
-SUBDIR+= cat rpcgen join lorder m4 mkdep tsort xz-include .WAIT yacc .WAIT awk .WAIT lex
-SUBDIR+= grep xz-lib pax .WAIT libprop
-
+SUBDIR+= cat rpcgen join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
 .if ${TOOLS_BUILDRUMP} == "no"
+SUBDIR+= xz-include .WAIT grep xz-lib pax .WAIT libprop
+
 SUBDIR += .WAIT texinfo \
 	.WAIT tic \
 	.WAIT ${TOOLCHAIN_BITS} \
@@ -203,8 +203,7 @@ SUBDIR+=	arm-elf2aout
 SUBDIR+=	m68k-elf2aout
 .endif
 
-.if (${MACHINE_ARCH} == "mipsel" || ${MACHINE_ARCH} == "mipseb" || \
-     ${MACHINE_ARCH} == "mips64el" || ${MACHINE_ARCH} == "mips64eb")
+.if !empty(MACHINE_ARCH:Mmips*)
 SUBDIR+=	mips-elf2ecoff
 .endif
 

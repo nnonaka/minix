@@ -1,11 +1,11 @@
-#	$NetBSD: Makefile,v 1.24 2013/12/19 01:07:03 gdt Exp $
+#	$NetBSD: Makefile,v 1.28 2018/09/04 06:09:31 mrg Exp $
 
 .include <bsd.init.mk>
 
 # We don't install gmp, just provide it for GCC.
 LIBISPRIVATE?=	yes
 
-GMP_MACHINE_ARCH?=	${MACHINE_ARCH:S/earmv4/arm/:C/armv[5-7]/arm/}
+.include "../../Makefile.arch"
 
 .if ${LIBISPRIVATE} != "yes"
 INCS=         gmp.h
@@ -25,7 +25,7 @@ MPF_SRCS = \
 	sqrt.c random2.c inp_str.c out_str.c		\
 	add.c add_ui.c sub.c sub_ui.c ui_sub.c		\
 	mul.c mul_ui.c div.c div_ui.c			\
-	cmp.c cmp_d.c cmp_ui.c cmp_si.c			\
+	cmp.c cmp_d.c cmp_ui.c cmp_si.c cmp_z.c		\
 	mul_2exp.c div_2exp.c abs.c neg.c		\
 	set_q.c get_d.c get_d_2exp.c set_dfl_prec.c	\
 	set_prc.c set_prc_raw.c get_dfl_prec.c		\
@@ -66,14 +66,20 @@ MPZ_SRCS = \
 	ior.c iset.c iset_d.c iset_si.c			\
 	iset_str.c iset_ui.c jacobi.c kronsz.c		\
 	kronuz.c kronzs.c kronzu.c			\
+	limbs_finish.c limbs_modify.c			\
+	limbs_read.c limbs_write.c			\
 	lcm.c lcm_ui.c lucnum_ui.c lucnum2_ui.c		\
 	millerrabin.c mod.c mul.c mul_2exp.c		\
 	mul_si.c mul_ui.c				\
 	n_pow_ui.c neg.c nextprime.c			\
+	oddfac_1.c					\
 	out_raw.c out_str.c perfpow.c perfsqr.c		\
-	popcount.c pow_ui.c powm.c powm_sec.c		\
-	powm_ui.c pprime_p.c random.c random2.c		\
+	popcount.c pow_ui.c powm.c			\
+	powm_ui.c pprime_p.c 				\
+	prodlimbs.c					\
+	random.c random2.c				\
 	realloc.c realloc2.c remove.c			\
+	roinit_n.c					\
 	root.c rootrem.c rrandomb.c scan0.c		\
 	scan1.c set.c set_d.c set_f.c			\
 	set_q.c set_si.c set_str.c set_ui.c		\
@@ -98,10 +104,6 @@ MPQ_SRCS = \
 	equal.c set_z.c set_d.c				\
 	set_f.c swap.c
 
-MPN_GENERIC_SRCS = \
-	popcount.c \
-	hamdist.c
-
 PRINTF_SRCS =						\
 	asprintf.c asprntffuns.c			\
 	doprnt.c doprntf.c doprnti.c			\
@@ -119,12 +121,14 @@ SCANF_SRCS =						\
 	scanf.c sscanf.c sscanffuns.c			\
 	vfscanf.c vscanf.c vsscanf.c
 
+.include "${.CURDIR}/arch/${GMP_MACHINE_ARCH}/Makefile.inc"
+
 SRCS+= 									\
 	assert.c compat.c errno.c extract-dbl.c invalid.c memory.c	\
 	mp_bpl.c mp_clz_tab.c mp_dv_tab.c mp_minv_tab.c mp_get_fns.c	\
 	mp_set_fns.c randclr.c randdef.c randiset.c randlc2s.c 	\
 	randlc2x.c randmt.c randmts.c rands.c randsd.c randsdui.c 	\
-	randbui.c randmui.c version.c nextprime.c
+	randbui.c randmui.c version.c nextprime.c primesieve.c
 
 SRCS+=	tal-reent.c
 
@@ -199,8 +203,6 @@ trialdivtab.h: gen-trialdivtab Makefile
 CLEANFILES+=	${DPSRCS} gen-fac gen-fib gen-bases gen-jacobitab \
 		gen-psqr gen-trialdivtab
 
-.include "${.CURDIR}/arch/${GMP_MACHINE_ARCH}/Makefile.inc"
-
 # Makefile.inc must define GMP_LIMB_BITS.
 .if !defined(GMP_LIMB_BITS)
 .BEGIN:
@@ -259,3 +261,7 @@ COPTS += -marm
 .endif
 
 CWARNFLAGS.clang+=	-Wno-unused-value -Wno-tautological-compare -Wno-parentheses
+
+.if !empty(CFLAGS:M-fPIE)
+M4FLAGS+=-DPIC
+.endif
