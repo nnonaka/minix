@@ -39,11 +39,10 @@
 
 extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
 extern char twiddle_toggle;
-extern u_long load_offset;
 
 static bool efi_exited = false;
 
-typedef struct multiboot_package_priv {
+typedef struct multiboot_header_private {
 	struct multiboot_tag 			       *mpp_mbi;
 	size_t						mpp_mbi_len;
 	struct multiboot_header_tag_information_request*mpp_info_req;
@@ -56,27 +55,15 @@ typedef struct multiboot_package_priv {
 	struct multiboot_header_tag_entry_address	*mpp_entry_elf32;
 	struct multiboot_header_tag_entry_address	*mpp_entry_elf64;
 	struct multiboot_header_tag_relocatable		*mpp_relocatable;
-} mpp_t;
+} mhp_t;
 
 typedef struct multiboot_package {
-	int			 mbp_version;
 	struct multiboot_header	*mbp_header;
 	const char		*mbp_file;
-	char			*mbp_args;
-	u_long			 mbp_basemem;
-	u_long			 mbp_extmem;
-	u_long			 mbp_loadaddr;
+	const char		*mbp_args;
 	u_long			*mbp_marks;
-	mpp_t			*mbp_priv;
+	mhp_t			*mbp_mhp;
 } mbp_t;
-
-static
-EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *
-efi_get_mode_info(void)
-{
-	// TODO
-	return NULL;
-}
 
 #ifdef MULTIBOOT2_DEBUG
 static void
@@ -352,6 +339,7 @@ multiboot2_info_dump(uint32_t magic, char *mbi)
 			break;
 		}
 		case MULTIBOOT_TAG_TYPE_END:
+			printf("\n");
 			break;
 		default:
 			printf("\n");
@@ -375,9 +363,14 @@ out:
 static
 void multiboot2_header_dump(struct multiboot_package *mbp)
 {
-	struct multiboot_package_priv *mpp = mbp->mbp_priv;
+	struct multiboot_header	*mbh = mbp->mbp_header;
+	struct multiboot_header_private *mpp = mbp->mbp_mhp;
 
-	printf("=== multiboot2 header dump start ===\n");
+	printf("\n=== multiboot2 header dump start ===\n");
+	printf("header magic: %x\n", mbh->magic);
+	printf("header arch: %d\n", mbh->architecture);
+	printf("header length: %d\n", mbh->header_length);
+	
 	if (mpp->mpp_info_req) {
 		struct multiboot_header_tag_information_request *info_req;	
 		size_t nreq;
@@ -472,6 +465,18 @@ void multiboot2_header_dump(struct multiboot_package *mbp)
 	printf("=== multiboot2 header dump end  ===\n");
 	return;
 }
+
+static void
+show_marks(u_long *marks)
+{
+	printf("Mark Start: %8lX\n", marks[MARK_START]);
+	printf("Mark Entry: %8lX\n", marks[MARK_ENTRY]);
+	printf("Mark Data:  %8lX\n", marks[MARK_DATA]);
+	printf("Mark NSym:  %8lX\n", marks[MARK_NSYM]);
+	printf("Mark Sym:   %8lX\n", marks[MARK_SYM]);
+	printf("Mark End:   %8lX\n", marks[MARK_END]);
+}
+
 #endif /* MULTIBOOT2_DEBUG */
 
 static size_t
@@ -483,8 +488,7 @@ mbi_cmdline(struct multiboot_package *mbp, void *buf)
 	const char fmt[] = "%s %s";
 
 	/* +1 for trailing \0 */
-	cmdlen = snprintf(NULL, SIZE_T_MAX, fmt, mbp->mbp_file, mbp->mbp_args)
-	       + 1;
+	cmdlen = strlen(mbp->mbp_args) + 1;
 	len = sizeof(*mbt) + cmdlen;
 
 	if (mbt) {
@@ -526,7 +530,7 @@ static size_t
 mbi_modules(struct multiboot_package *mbp, void *buf)
 {
 	struct multiboot_tag_module *mbt = buf;
-	size_t len;
+	size_t len = 0;
 
 	const int chosen = efi_fdt_chosen();
 	const char *module_name;
@@ -551,7 +555,7 @@ mbi_modules(struct multiboot_package *mbp, void *buf)
 
 		const paddr_t startpa = (paddr_t)be64dec(data + 0);
 		const size_t size = (size_t)be64dec(data + 1);
-		
+				
 		size_t pathlen = strlen(module_name) + 1;
 		size_t mbt_len = sizeof(*mbt) + pathlen;
 		size_t mbt_len_align = roundup(mbt_len, MULTIBOOT_TAG_ALIGN);
@@ -585,48 +589,91 @@ mbi_mmap(struct multiboot_package *mbp, void *buf)
 	len = sizeof(*mbt) + nentries * sizeof(mbt->entries[0]);
 	
 	if (mbt) {
-		int i;
+		int i,j;
 		struct multiboot_mmap_entry *mbte;
+		struct multiboot_mmap_entry tmp_mme;
 
+		memset(mbt, 0, len);
 		mbt->type = MULTIBOOT_TAG_TYPE_MMAP;
 		mbt->size = len;
 		mbt->entry_size = sizeof(mbt->entries[0]);
 		mbt->entry_version = 0;
 
 		mbte = (struct multiboot_mmap_entry *)(mbt + 1);
-		for (i = 0, md = memmap; i < nentries; i++, 
+		for (i = 0, j = 0, md = memmap; i < nentries; i++, 
 					md = NextMemoryDescriptor(md, descsize)) {
-			mbte[i].addr = md->PhysicalStart;
-			mbte[i].len = md->NumberOfPages * EFI_PAGE_SIZE;
+			tmp_mme.addr = md->PhysicalStart;
+			tmp_mme.len = md->NumberOfPages * EFI_PAGE_SIZE;
 			switch(md->Type) {
 			case EfiLoaderCode:
 			case EfiLoaderData:
 			case EfiBootServicesCode:
 			case EfiBootServicesData:
 			case EfiConventionalMemory:
-				mbte[i].type = MULTIBOOT_MEMORY_AVAILABLE;
+				tmp_mme.type = MULTIBOOT_MEMORY_AVAILABLE;
 				break;
 			case EfiReservedMemoryType:
-				mbte[i].type = MULTIBOOT_MEMORY_RESERVED;
+				tmp_mme.type = MULTIBOOT_MEMORY_RESERVED;
 				break;
 			case EfiACPIReclaimMemory:
-				mbte[i].type = 
+				tmp_mme.type = 
 				    MULTIBOOT_MEMORY_ACPI_RECLAIMABLE;
 				break;
 			case EfiACPIMemoryNVS:
-				mbte[i].type = MULTIBOOT_MEMORY_NVS;
+				tmp_mme.type = MULTIBOOT_MEMORY_NVS;
 				break;
 			case EfiUnusableMemory:
-				mbte[i].type = MULTIBOOT_MEMORY_BADRAM;
+				tmp_mme.type = MULTIBOOT_MEMORY_BADRAM;
 				break;
 			default:
-				mbte[i].type = MULTIBOOT_MEMORY_RESERVED;
+				tmp_mme.type = MULTIBOOT_MEMORY_RESERVED;
 				break;
 			}
-			mbte[i].zero = 0;
+			tmp_mme.zero = 0;
+			if (j == 0) {
+				mbte[j] = tmp_mme;
+				j++;
+			}
+			else if ((mbte[j-1].type == tmp_mme.type) &&
+					((mbte[j-1].addr + mbte[j-1].len) == tmp_mme.addr)) {
+				mbte[j-1].len += tmp_mme.len;
+			}
+			else {
+				mbte[j] = tmp_mme;
+				j++;
+			}
 		}
 	}
 	
+	return roundup(len, MULTIBOOT_TAG_ALIGN);
+}
+
+static size_t
+mbi_efi_mmap(struct multiboot_package *mbp, void *buf)
+{
+	size_t len = 0;
+	struct multiboot_tag_efi_mmap *mbt = buf;
+
+	UINTN nentries = 0, mapkey, descsize;
+	EFI_MEMORY_DESCRIPTOR *memmap;
+	UINT32 descver;
+
+	memmap = LibMemoryMap(&nentries, &mapkey, &descsize, &descver);
+
+	if (memmap == NULL)
+		goto out;
+		
+	len = sizeof(*mbt) + descsize * nentries;
+
+	if (mbt) {
+		mbt->type = MULTIBOOT_TAG_TYPE_EFI_MMAP;
+		mbt->size = len;
+		mbt->descr_size = descsize;
+		mbt->descr_vers = descver;
+		memcpy(mbt + 1, memmap, descsize * nentries);
+	}
+
+out:
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
 }
 
@@ -635,10 +682,12 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 {
 	size_t len = 0;
 	struct multiboot_tag_framebuffer *mbt = buf;
+	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
 	EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *mode;
 
-	mode = efi_get_mode_info();
-	if (mode == NULL) return 0;
+	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
+	if (gop == NULL) return 0;
+	mode = gop->Mode;
 	
 	len = sizeof(*mbt);
 	
@@ -901,7 +950,7 @@ mbi_efi_bs(struct multiboot_package *mbp, void *buf)
 	size_t len = 0;
 	struct multiboot_tag *mbt = buf;
 
-	if (mbp->mbp_priv->mpp_efi_bs == NULL)
+	if (mbp->mbp_mhp->mpp_efi_bs == NULL)
 		goto out;
 
 	len = sizeof(*mbt);
@@ -914,55 +963,6 @@ mbi_efi_bs(struct multiboot_package *mbp, void *buf)
 out:
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
 }
-
-
-static size_t
-mbi_efi_mmap(struct multiboot_package *mbp, void *buf)
-{
-	EFI_STATUS status;
-	size_t len = 0;
-	struct multiboot_tag_efi_mmap *mbt = buf;
-
-	UINTN nentries = 0, mapkey, descsize;
-	EFI_MEMORY_DESCRIPTOR *memmap;
-	UINT32 descver;
-
-	memmap = LibMemoryMap(&nentries, &mapkey, &descsize, &descver);
-	
-
-	if (memmap == NULL)
-		goto out;
-		
-	len = sizeof(*mbt) + descsize * nentries;
-
-	if (mbt) {
-		/* Call ExitBootService if required */
-		//if (mbp->mbp_priv->mpp_efi_bs == NULL) {
-		if (0) {
-			status = uefi_call_wrapper(BS->ExitBootServices, 2, IH, mapkey);
-			if (EFI_ERROR(status)) {
-				FreePool(memmap);
-				memmap = LibMemoryMap(&nentries, &mapkey, &descsize, &descver);
-				status = uefi_call_wrapper(BS->ExitBootServices, 2, IH, mapkey);
-				if (EFI_ERROR(status))
-					panic("ExitBootServices failed");
-			}
-			len = sizeof(*mbt) + descsize * nentries;
-			efi_exited = true;
-		}
-
-		mbt->type = MULTIBOOT_TAG_TYPE_EFI_MMAP;
-		mbt->size = len;
-		mbt->descr_size = descsize;
-		mbt->descr_vers = descver;
-		memcpy(mbt + 1, memmap, descsize * nentries);
-	}
-
-out:
-	return roundup(len, MULTIBOOT_TAG_ALIGN);
-}
-
-
 
 #ifndef __LP64__
 static size_t
@@ -1040,7 +1040,7 @@ is_tag_required(struct multiboot_package *mbp, uint16_t tag)
 	struct multiboot_header_tag_information_request *info_req;
 	size_t nreq;
 
-	info_req = mbp->mbp_priv->mpp_info_req;
+	info_req = mbp->mbp_mhp->mpp_info_req;
 
 	if (info_req == NULL)
 		goto out;
@@ -1068,8 +1068,6 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 {
 	int ret = 0;
 	size_t len = 0;
-
-	printf("Debug: mbi_dispatch: type =%d\n", type);
 
 	switch (type) {
 	case MULTIBOOT_TAG_TYPE_END:
@@ -1138,28 +1136,18 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 	return ret;
 }
 
-static void efi_setfb(struct multiboot_header_tag_framebuffer *fb)
-{
-	// TODO
-}
-
-
 static int
-exec_multiboot2(struct multiboot_package *mbp)
+start_multiboot2(struct multiboot_package *mbp)
 {
 	size_t len, alen;
 	char *mbi = NULL;
-	struct multiboot_package_priv *mpp = mbp->mbp_priv;
+	struct multiboot_header_private *mpp = mbp->mbp_mhp;
 	uint16_t tags[] = {
 		MULTIBOOT_TAG_TYPE_CMDLINE,
 		MULTIBOOT_TAG_TYPE_BOOT_LOADER_NAME,
 		MULTIBOOT_TAG_TYPE_MODULE,
-		MULTIBOOT_TAG_TYPE_BASIC_MEMINFO,
-		MULTIBOOT_TAG_TYPE_BOOTDEV,
-		MULTIBOOT_TAG_TYPE_VBE,
 		MULTIBOOT_TAG_TYPE_FRAMEBUFFER,
 		MULTIBOOT_TAG_TYPE_ELF_SECTIONS,
-		MULTIBOOT_TAG_TYPE_APM,
 		MULTIBOOT_TAG_TYPE_SMBIOS,
 		MULTIBOOT_TAG_TYPE_ACPI_OLD,
 		MULTIBOOT_TAG_TYPE_ACPI_NEW,
@@ -1185,11 +1173,6 @@ exec_multiboot2(struct multiboot_package *mbp)
 	int i;
 
 	printf("Debug: exec_multiboot2 start\n");
-
-	/* set new video mode if text mode was not requested */
-	if (mpp->mpp_framebuffer == NULL ||
-	    mpp->mpp_framebuffer->depth != 0)
-	efi_setfb(mpp->mpp_framebuffer);
 
 	len = 2 * sizeof(multiboot_uint32_t);
 	for (i = 0; i < sizeof(tags) / sizeof(*tags); i++) {
@@ -1228,10 +1211,6 @@ exec_multiboot2(struct multiboot_package *mbp)
 	multiboot2_info_dump(MULTIBOOT2_BOOTLOADER_MAGIC, mbi);
 #endif /* MULTIBOOT2_DEBUG */
 
-	/* Call ExitBootService if required */
-	if ((mpp->mpp_efi_bs == NULL) && (efi_exited == false))
-		efi_cleanup();
-
 	printf("Start @ 0x%lx [%ld=0x%lx-0x%lx]...\n",
 	    mbp->mbp_marks[MARK_ENTRY],
 	    mbp->mbp_marks[MARK_NSYM],
@@ -1243,10 +1222,13 @@ exec_multiboot2(struct multiboot_package *mbp)
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
 
+	/* Call ExitBootService if required */
+	if ((mpp->mpp_efi_bs == NULL) && (efi_exited == false))
+		efi_cleanup();
+
 	/* Does not return */
-	multiboot(entry, (physaddr_t)mbi,
-	    x86_trunc_page(mbp->mbp_basemem * 1024),
-	    MULTIBOOT2_BOOTLOADER_MAGIC);
+	multiboot2(entry, (physaddr_t)mbi, MULTIBOOT2_BOOTLOADER_MAGIC);
+	
 fail:
 	return -1;
 }
@@ -1256,10 +1238,10 @@ cleanup_multiboot2(struct multiboot_package *mbp)
 {
 	if (mbp->mbp_header)
 		dealloc(mbp->mbp_header, mbp->mbp_header->header_length);
-	if (mbp->mbp_priv && mbp->mbp_priv->mpp_mbi)
-		dealloc(mbp->mbp_priv->mpp_mbi, mbp->mbp_priv->mpp_mbi_len);
-	if (mbp->mbp_priv)
-		dealloc(mbp->mbp_priv, sizeof(*mbp->mbp_priv));
+	if (mbp->mbp_mhp && mbp->mbp_mhp->mpp_mbi)
+		dealloc(mbp->mbp_mhp->mpp_mbi, mbp->mbp_mhp->mpp_mbi_len);
+	if (mbp->mbp_mhp)
+		dealloc(mbp->mbp_mhp, sizeof(*mbp->mbp_mhp));
 
 	dealloc(mbp, sizeof(*mbp));
 
@@ -1319,11 +1301,9 @@ probe_multiboot2(const char *path)
 		mbh_len = mbh->header_length;
 
 		mbp = alloc(sizeof(*mbp));
-		mbp->mbp_version	= 2;
-		mbp->mbp_file		= path;
 		mbp->mbp_header		= alloc(mbh_len);
-		mbp->mbp_priv		= alloc(sizeof(*mbp->mbp_priv));
-		memset(mbp->mbp_priv, 0, sizeof (*mbp->mbp_priv));
+		mbp->mbp_mhp		= alloc(sizeof(*mbp->mbp_mhp));
+		memset(mbp->mbp_mhp, 0, sizeof (*mbp->mbp_mhp));
 
 		break;
 	}
@@ -1352,34 +1332,34 @@ probe_multiboot2(const char *path)
 
 		switch(mbt->type) {
 		case MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST:
-			mbp->mbp_priv->mpp_info_req = (void *)mbt;
+			mbp->mbp_mhp->mpp_info_req = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_ADDRESS:
-			mbp->mbp_priv->mpp_address = (void *)mbt;
+			mbp->mbp_mhp->mpp_address = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS:
-			mbp->mbp_priv->mpp_entry = (void *)mbt;
+			mbp->mbp_mhp->mpp_entry = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_CONSOLE_FLAGS:
-			mbp->mbp_priv->mpp_console = (void *)mbt;
+			mbp->mbp_mhp->mpp_console = (void *)mbt;
 
 		case MULTIBOOT_HEADER_TAG_FRAMEBUFFER:
-			mbp->mbp_priv->mpp_framebuffer = (void *)mbt;
+			mbp->mbp_mhp->mpp_framebuffer = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_MODULE_ALIGN:
-			mbp->mbp_priv->mpp_module_align = (void *)mbt;
+			mbp->mbp_mhp->mpp_module_align = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_EFI_BS:
-			mbp->mbp_priv->mpp_efi_bs = (void *)mbt;
+			mbp->mbp_mhp->mpp_efi_bs = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32:
-			mbp->mbp_priv->mpp_entry_elf32 = (void *)mbt;
+			mbp->mbp_mhp->mpp_entry_elf32 = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI64:
-			mbp->mbp_priv->mpp_entry_elf64 = (void *)mbt;
+			mbp->mbp_mhp->mpp_entry_elf64 = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_RELOCATABLE:
-			mbp->mbp_priv->mpp_relocatable = (void *)mbt;
+			mbp->mbp_mhp->mpp_relocatable = (void *)mbt;
 			break;
 		case MULTIBOOT_HEADER_TAG_END: /* FALLTHROUGH */
 		default:
@@ -1407,24 +1387,11 @@ probe_multiboot2(const char *path)
 	 *  MULTIBOOT_HEADER_TAG_RELOCATABLE
 	 */
 
-	if (is_header_required((void *)mbp->mbp_priv->mpp_address)) {
+	if (is_header_required((void *)mbp->mbp_mhp->mpp_address)) {
 		printf("Unsupported multiboot address header\n");
 		cleanup_multiboot2(mbp);
 		mbp = NULL;
 		goto out;
-	}
-
-	/* uefi requires framubuffer */
-	if (mbp->mbp_priv->mpp_framebuffer == NULL) {
-		static struct multiboot_header_tag_framebuffer default_fb;
-		default_fb.type = MULTIBOOT_HEADER_TAG_FRAMEBUFFER;
-		default_fb.flags = 0;
-		default_fb.size = 20;
-		default_fb.width = 800;
-		default_fb.height = 600;
-		default_fb.depth = 32;
-
-		mbp->mbp_priv->mpp_framebuffer = &default_fb;
 	}
 
 	/*
@@ -1433,7 +1400,7 @@ probe_multiboot2(const char *path)
 	 * that to boot.
 	 */
 
-	if (is_header_required((void *)mbp->mbp_priv->mpp_relocatable)) {
+	if (is_header_required((void *)mbp->mbp_mhp->mpp_relocatable)) {
 		printf("Unsupported multiboot relocatable header\n");
 		cleanup_multiboot2(mbp);
 		mbp = NULL;
@@ -1449,79 +1416,47 @@ out:
 }
 
 int
-exec_multiboot(const char *fname, const char *args)
+exec_multiboot2(const char *fname, const char *args)
 {
-	EFI_PHYSICAL_ADDRESS addr;
-	u_long marks[MARK_MAX], alloc_size;
-	EFI_STATUS status;
+	u_long marks[MARK_MAX];
 	int fd;
-	physaddr_t loadaddr = 0;
 	struct multiboot_package *mbp = NULL;
 	twiddle_toggle = 0;
 
 	generate_efirng();
 
-	memset(marks, 0, sizeof(marks));
-	fd = loadfile(fname, marks, COUNT_KERNEL | LOAD_NOTE);
-	if (fd < 0) {
-		printf("multiboot: %s: %s\n", fname, strerror(errno));
-		return EIO;
-	}
-	close(fd);
-	marks[MARK_END] = (((u_long) marks[MARK_END] + sizeof(int) - 1)) & -sizeof(int);
-	alloc_size = marks[MARK_END] - marks[MARK_START] + arch_alloc_size() + EFIBOOT_ALIGN;
-
-#ifdef EFIBOOT_ALLOCATE_MAX_ADDRESS
-	addr = EFIBOOT_ALLOCATE_MAX_ADDRESS;
-	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress, EfiLoaderData,
-	    EFI_SIZE_TO_PAGES(alloc_size), &addr);
-#else
-	addr = 0;
-	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, EfiLoaderData,
-	    EFI_SIZE_TO_PAGES(alloc_size), &addr);
-#endif
-	if (EFI_ERROR(status)) {
-		printf("Failed to allocate %lu bytes for kernel image (error %lu)\n",
-		    alloc_size, (u_long)status);
-		return ENOMEM;
-	}
-	
 	if ((mbp = probe_multiboot2(fname)) == NULL) {
 		printf("%s is not a multiboot2 kernel\n", fname);
 		goto cleanup;
 	}
 
 	memset(marks, 0, sizeof(marks));
-	load_offset = (addr + EFIBOOT_ALIGN - 1) & -EFIBOOT_ALIGN;
 	fd = loadfile(fname, marks, LOAD_KERNEL);
 	if (fd < 0) {
-		printf("multiboot: %s: %s\n", fname, strerror(errno));
+		printf("multiboot2: %s: %s\n", fname, strerror(errno));
 		goto cleanup;
 	}
 	close(fd);
-	load_offset = 0;
+#ifdef MULTIBOOT2_DEBUG
+	show_marks(marks);
+	mbi_hexdump((char *)marks[MARK_START], 256);
+#endif
 
 	if (arch_prepare_boot(fname, args, marks) != 0) {
 		goto cleanup;
 	}
 
-	//if (module_enabled)
-	//	module_init(file);
-
-	mbp->mbp_args = (char *)args;
-	mbp->mbp_basemem = 0;
-	mbp->mbp_extmem = 0;
-	mbp->mbp_loadaddr = loadaddr;
+	mbp->mbp_file = fname;
+	mbp->mbp_args = args;
 	mbp->mbp_marks = marks;
-
+	
 	/* Only returns on error */
-	(void)exec_multiboot2(mbp);
+	(void)start_multiboot2(mbp);
 	
 	/* This should not happen.. */
 	printf("boot returned\n");
 
 cleanup:
-	uefi_call_wrapper(BS->FreePages, 2, addr, EFI_SIZE_TO_PAGES(alloc_size));
 	arch_cleanup_boot();
 
 	return EIO;

@@ -27,7 +27,6 @@
  */
 
 #include "../efiboot.h"
-#include "../efifdt.h"
 
 #include <sys/bootblock.h>
 
@@ -108,7 +107,7 @@ efi_boot_kernel(u_long marks[MARK_MAX])
 
 /* ARGSUSED */
 void
-multiboot(physaddr_t entry, physaddr_t header, physaddr_t sp, uint32_t magic)
+multiboot2(physaddr_t entry, physaddr_t header, uint32_t magic)
 {
 	(*multiboot32)(entry, header, magic);
 }

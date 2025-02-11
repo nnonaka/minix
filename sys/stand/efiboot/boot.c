@@ -97,7 +97,9 @@ int	set_bootargs(const char *);
 void	command_acpi(char *);
 #endif
 void	command_boot(char *);
-void	command_multiboot(char *);
+#ifdef EFIBOOT_MULTIBOOT2
+void	command_multiboot2(char *);
+#endif
 void	command_dev(char *);
 void	command_initrd(char *);
 void	command_rndseed(char *);
@@ -141,7 +143,7 @@ const struct boot_command commands[] = {
 	{ "mem",	command_mem,		"mem" },
 	{ "menu",	command_menu,		"menu" },
 #ifdef EFIBOOT_MULTIBOOT2
-	{ "multiboot",	command_multiboot,	"multiboot [dev:][filename] [<args>]" },
+	{ "multiboot2",	command_multiboot2,	"multiboot2 [dev:][filename] [<args>]" },
 #endif
 	{ "reboot",	command_reset,		"reboot|reset" },
 	{ "reset",	command_reset,		NULL },
@@ -207,10 +209,13 @@ command_acpi(char *arg)
 void
 command_boot(char *arg)
 {
+#ifndef __minix
 	char *fname = arg;
 	const char *kernel = *fname ? fname : bootfile;
 	char *bootargs = gettrailer(arg);
+#endif
 
+#ifndef __minix
 	if (!kernel || !*kernel)
 		kernel = DEFFILENAME;
 
@@ -220,20 +225,25 @@ command_boot(char *arg)
 	efi_block_set_readahead(true);
 	exec_netbsd(kernel, bootargs);
 	efi_block_set_readahead(false);
+#else
+	printf("boot NetBSD is not supported.\n");
+#endif
 }
 
 #ifdef EFIBOOT_MULTIBOOT2
 void
-command_multiboot(char *arg)
+command_multiboot2(char *arg)
 {
 	char *filename;
 
 	filename = arg;
-	if (exec_multiboot(filename, gettrailer(arg)) < 0)
-		printf("multiboot: %s: %s\n", filename,
+	if (exec_multiboot2(filename, gettrailer(arg)) < 0)
+		printf("multiboot2: %s: %s\n", filename,
 		       strerror(errno));
 	else
-		printf("boot returned\n");
+		printf("multiboot2 returned\n");
+
+	bootprompt();	/* does not return */
 }
 #endif
 

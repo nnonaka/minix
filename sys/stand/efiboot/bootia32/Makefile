@@ -1,14 +1,13 @@
 # $NetBSD: Makefile,v 1.12 2022/04/02 11:16:07 skrll Exp $
 
 PROG=		bootia32.efi
-OBJFMT=		pei-i386
 NEWVERSWHAT=	"efiboot (ia32)"
 CPUFLAGS=	-march=i686 -mtune=i686
 GNUEFIARCH=	ia32
 LIBKERN_ARCH=	i386
 LIBGNUEFI_ARCH=	i386
 KLINK_MACHINE=	i386
-#OBJCOPY_FORMAT=	-O binary
+OBJCOPY_FORMAT=	--subsystem efi-app	--target=pei-i386
 
 EFIBOOT_ACPI=	yes
 EFIBOOT_FDT=	yes

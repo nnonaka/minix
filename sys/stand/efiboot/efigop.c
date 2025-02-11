@@ -55,6 +55,12 @@ efi_gop_probe(void)
 	}
 }
 
+void *
+efi_gop_found(void)
+{
+	return (void *)gop;
+}
+
 static uint32_t
 efi_gop_bpp(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info)
 {

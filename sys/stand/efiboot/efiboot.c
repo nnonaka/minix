@@ -47,14 +47,6 @@ EFI_LOADED_IMAGE *efi_li;
 
 int howto = 0;
 
-#ifdef _LP64
-#define PRIxEFIPTR "lX"
-#define PRIxEFISIZE "lX"
-#else
-#define PRIxEFIPTR "X"
-#define PRIxEFISIZE "X"
-#endif
-
 static EFI_PHYSICAL_ADDRESS heap_start;
 static UINTN heap_size = 8 * 1024 * 1024;
 static EFI_EVENT delay_ev = 0;
@@ -66,26 +58,28 @@ efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 {
 	EFI_STATUS status;
 	u_int sz = EFI_SIZE_TO_PAGES(heap_size);
+	int rv;
 
 	IH = imageHandle;
 
 	InitializeLib(imageHandle, systemTable);
 
-	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, TRUE);
-	uefi_call_wrapper(ST->ConOut->SetMode, 2, ST->ConOut, 0);
-	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, TRUE);
-
+	cninit();
+		
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, EfiLoaderData, sz, &heap_start);
 	if (EFI_ERROR(status))
-		return status;
+		panic("%s: AllocatePages() failed: %d page(s): %" PRIxMAX,
+		    __func__, sz, (uintmax_t)status);
 	setheap((void *)(uintptr_t)heap_start, (void *)(uintptr_t)(heap_start + heap_size));
 
 	status = uefi_call_wrapper(BS->HandleProtocol, 3, imageHandle, &LoadedImageProtocol, (void **)&efi_li);
 	if (EFI_ERROR(status))
-		return status;
+		panic("HandleProtocol(LoadedImageProtocol): %" PRIxMAX,
+		    (uintmax_t)status);
 	status = uefi_call_wrapper(BS->HandleProtocol, 3, efi_li->DeviceHandle, &DevicePathProtocol, (void **)&efi_bootdp);
 	if (EFI_ERROR(status))
-		efi_bootdp = NULL;
+		panic("HandleProtocol(DevicePathProtocol): %" PRIxMAX,
+		    (uintmax_t)status);
 
 #ifdef EFIBOOT_DEBUG
 	Print(L"Loaded image      : 0x%" PRIxEFIPTR "\n", efi_li);
@@ -99,7 +93,9 @@ efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 	efi_acpi_probe();
 #endif
 #ifdef EFIBOOT_FDT
-	efi_fdt_probe();
+	rv = efi_fdt_probe();
+	if (rv != 0)
+		panic("FDT probe failed\n");
 #endif
 	efi_pxe_probe();
 	efi_net_probe();

@@ -34,3 +34,4 @@ is taken as the current.
 2.11:	Add support for changing the video mode.
 2.12:	Add userconf support.
 2.13:	Add Arm RT support and change Arm64 (aarch64) RT VAs.
+3.0:	Add multiboot2 support.

@@ -30,9 +30,9 @@ typedef unsigned long physaddr_t;
 
 
 void startprog(physaddr_t, uint32_t, uint32_t *, physaddr_t);
-void multiboot(physaddr_t, physaddr_t, physaddr_t, uint32_t);
+void multiboot2(physaddr_t, physaddr_t, uint32_t);
 
-int exec_multiboot(const char *, const char *);
+int exec_multiboot2(const char *, const char *);
 
 /* multiboot */
 
@@ -42,3 +42,4 @@ void efi_dcache_flush(u_long, u_long);
 void efi_boot_kernel(u_long[]);
 void efi_md_init(void);
 void efi_md_show(void);
+

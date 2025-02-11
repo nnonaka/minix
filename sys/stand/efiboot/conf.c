@@ -38,6 +38,13 @@
 #include <lib/libsa/nfs.h>
 #include <lib/libsa/net.h>
 #include <lib/libsa/dev_net.h>
+#ifdef SUPPORT_EXT2FS
+#include <lib/libsa/ext2fs.h>
+#endif
+#ifdef SUPPORT_MINIXFS3
+#include <lib/libsa/minixfs3.h>
+#endif
+
 
 struct devsw devsw[] = {
 	{ "efifile", efi_file_strategy, efi_file_open, efi_file_close, noioctl },
@@ -57,6 +64,12 @@ struct fs_ops file_system[] = {
 	FS_OPS(ffsv2),
 	FS_OPS(dosfs),
 	FS_OPS(cd9660),
+#ifdef SUPPORT_EXT2FS
+	FS_OPS(ext2fs),
+#endif
+#ifdef SUPPORT_MINIXFS3
+	FS_OPS(minixfs3),
+#endif
 };
 int nfsys = __arraycount(file_system);
 

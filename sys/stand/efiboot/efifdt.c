@@ -56,13 +56,6 @@ static EFI_GUID FdtTableGuid = FDT_TABLE_GUID;
 #define	FDT_SPACE	(4 * 1024 * 1024)
 #define	FDT_ALIGN	(2 * 1024 * 1024)
 
-#ifdef _LP64
-#define PRIdUINTN "ld"
-#define PRIxUINTN "lx"
-#else
-#define PRIdUINTN "d"
-#define PRIxUINTN "x"
-#endif
 static void *fdt_data = NULL;
 static size_t fdt_data_size = 512*1024;
 
@@ -82,11 +75,30 @@ int
 efi_fdt_probe(void)
 {
 	EFI_STATUS status;
+	EFI_PHYSICAL_ADDRESS fdt_start;
+	u_int sz;
 
+#ifndef __minix
 	status = LibGetSystemConfigurationTable(&FdtTableGuid, &fdt_data);
 	if (EFI_ERROR(status))
 		return EIO;
+#else
+	status = LibGetSystemConfigurationTable(&FdtTableGuid, &fdt_data);
+	if (EFI_ERROR(status)) {
+		sz = EFI_SIZE_TO_PAGES(FDT_SPACE);
+		status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, 
+			EfiLoaderData, sz, &fdt_start);
+		if (EFI_ERROR(status))
+			panic("%s: AllocatePages() failed: %d page(s): %" PRIxMAX,
+			    __func__, sz, (uintmax_t)status);
+		fdt_data = (void *)(uintptr_t)fdt_start;
+		fdt_create_empty_tree(fdt_data, FDT_SPACE);
+	}
+#endif
 
+#ifdef EFIBOOT_DEBUG
+	Print(L"FDT Table      : 0x%" PRIxEFIPTR "\n", fdt_data);
+#endif
 	if (fdt_check_header(fdt_data) != 0) {
 		fdt_data = NULL;
 		return EINVAL;
@@ -182,11 +194,15 @@ efi_fdt_init(u_long addr, u_long len)
 {
 	int error;
 
+	printf("efi_fdt_init: addr=%lx, len=%lx\n", addr, len);
 	error = fdt_open_into(fdt_data, (void *)addr, len);
 	if (error < 0)
 		panic("fdt_open_into failed: %d", error);
 
 	fdt_data = (void *)addr;
+	if (fdt_check_header(fdt_data) != 0) {
+		printf("efi_fdt_init: check failed\n");
+	}
 }
 
 void
@@ -662,9 +678,12 @@ load_module(const char *module_name)
 	u_long size;
 	char path[PATH_MAX];
 
+#ifndef __minix
 	snprintf(path, sizeof(path), "%s/%s/%s.kmod", module_prefix,
 	    module_name, module_name);
-
+#else
+	snprintf(path, sizeof(path), "%s", module_name);
+#endif
 	if (load_file(path, 0, false, &addr, &size) != 0 || addr == 0 || size == 0)
 	    return;
 
@@ -714,7 +733,9 @@ arch_prepare_boot(const char *fname, const char *args, u_long *marks)
 		load_file(get_rndseed_path(), 0, false,
 		    &rndseed_addr, &rndseed_size);
 
+#ifndef __minix
 		efi_fdt_init((marks[MARK_END] + FDT_ALIGN - 1) & -FDT_ALIGN, FDT_ALIGN);
+#endif
 		load_modules(fname);
 		load_fdt_overlays();
 		efi_fdt_initrd(initrd_addr, initrd_size);
@@ -727,7 +748,9 @@ arch_prepare_boot(const char *fname, const char *args, u_long *marks)
 		efi_fdt_memory_map();
 	}
 
+#ifndef EFIBOOT_MULTIBOOT2
 	efi_cleanup();
+#endif
 
 	if (efi_fdt_size() > 0) {
 		efi_fdt_fini();

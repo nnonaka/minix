@@ -127,11 +127,11 @@ do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 }
 
 static void
-do_tag_basic_meminfo(kinfo_t *cbi, struct multiboot_tag_basic_meminfo * tag_meminfo)
+do_tag_efi_mmap(kinfo_t *cbi, struct multiboot_tag_efi_mmap *tag_efi_mmap)
 {
-	add_memmap(cbi, 0, tag_meminfo->mem_lower*1024);
-	add_memmap(cbi, 0x100000, tag_meminfo->mem_upper*1024);
+	// TODO
 }
+
 
 void get_parameters2(u32_t ebx, kinfo_t *cbi) 
 {
@@ -173,9 +173,9 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 		} else if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {
 			//reset();
 			do_tag_mmap(cbi, (struct multiboot_tag_mmap *)tag);
-		} else if (tag->type == MULTIBOOT_TAG_TYPE_BASIC_MEMINFO) {
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_EFI_MMAP) {
 			//reset();
-			do_tag_basic_meminfo(cbi, (struct multiboot_tag_basic_meminfo *)tag);
+			do_tag_efi_mmap(cbi, (struct multiboot_tag_efi_mmap *)tag);
 		} else if (tag->type == MULTIBOOT_TAG_TYPE_FRAMEBUFFER) {
 			//reset();
 			do_tag_framebuffer(cbi, (struct multiboot_tag_framebuffer *)tag);
@@ -243,6 +243,7 @@ kinfo_t *pre2_init(u32_t magic, u32_t ebx)
 {
 	assert(magic == MULTIBOOT2_BOOTLOADER_MAGIC);
 
+	direct_com_print("Debug: pre2_init: 1\n");
 	/* Kernel may use memory */
 	kernel_may_alloc = 1;
 

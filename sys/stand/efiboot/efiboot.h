@@ -37,6 +37,18 @@
 
 #include "efiboot_machdep.h"
 
+#ifdef _LP64
+#define PRIdUINTN "ld"
+#define PRIxUINTN "lx"
+#define PRIxEFIPTR "lX"
+#define PRIxEFISIZE "lX"
+#else
+#define PRIdUINTN "d"
+#define PRIxUINTN "x"
+#define PRIxEFIPTR "X"
+#define PRIxEFISIZE "X"
+#endif
+
 struct boot_command {
 	const char *c_name;
 	void (*c_fn)(char *);
@@ -72,6 +84,7 @@ char *get_rndseed_path(void);
 
 /* console.c */
 int ischar(void);
+void cninit(void);
 
 /* efiboot.c */
 extern EFI_HANDLE IH;
@@ -118,6 +131,7 @@ void efi_gop_probe(void);
 void efi_gop_show(void);
 void efi_gop_dump(void);
 void efi_gop_setmode(UINT32);
+void *efi_gop_found(void);
 
 /* exec.c */
 int load_file(const char *, u_long, bool, EFI_PHYSICAL_ADDRESS *, u_long *);

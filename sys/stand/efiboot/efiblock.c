@@ -371,6 +371,8 @@ static const struct {
 	{ GPT_ENT_TYPE_NETBSD_CGD,		FS_CGD },
 	{ GPT_ENT_TYPE_MS_BASIC_DATA,		FS_MSDOS },	/* or NTFS? ambiguous */
 	{ GPT_ENT_TYPE_EFI,			FS_MSDOS },
+	{ GPT_ENT_TYPE_LINUX_DATA,		FS_EX2FS },
+	{ GPT_ENT_TYPE_MINIX_MFS,		FS_MINIXFS3 },
 };
 
 static int
@@ -522,6 +524,7 @@ efi_block_probe(void)
 		if (depth > 0 && efi_device_path_ncmp(efi_bootdp, DevicePathFromHandle(efi_block[n]), depth) == 0) {
 			TAILQ_FOREACH(bpart, &bdev->partitions, entries) {
 				uint8_t fstype = FS_UNUSED;
+				char devname[9];
 				switch (bpart->type) {
 				case EFI_BLOCK_PART_DISKLABEL:
 					fstype = bpart->disklabel.part.p_fstype;
@@ -533,8 +536,12 @@ efi_block_probe(void)
 					fstype = FS_ISO9660;
 					break;
 				}
-				if (fstype == FS_BSDFFS || fstype == FS_ISO9660 || fstype == FS_RAID) {
-					char devname[9];
+				switch (fstype) {
+				case FS_BSDFFS:
+				case FS_ISO9660:
+				case FS_RAID:
+				case FS_EX2FS:
+				case FS_MINIXFS3:
 					snprintf(devname, sizeof(devname), "hd%u%c", bdev->index, bpart->index + 'a');
 					set_default_device(devname);
 					set_default_fstype(fstype);

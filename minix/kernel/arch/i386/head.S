@@ -80,13 +80,12 @@ _C_LABEL(Multiboot2_Header):
 			/* + sizeof(uint32_t) * requests */
 	.long	1	/* MULTIBOOT_TAG_TYPE_CMDLINE */
 	.long	3	/* MULTIBOOT_TAG_TYPE_MODULE */
-	.long	4	/* MULTIBOOT_TAG_TYPE_BASIC_MEMINFO */
 	.long	6	/* MULTIBOOT_TAG_TYPE_MMAP */
 	.long	8	/* MULTIBOOT_TAG_TYPE_FRAMEBUFFER */
 	.long	17	/* MULTIBOOT_TAG_TYPE_EFI_MMAP */
-
-	.long	8	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI32 */
-	.long	12	/* sizeof(struct multiboot_tag_efi32) */
+	.long   0	/* pad for 8 bytes alignment */
+	.long	3	/* MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS */
+	.long	12	/* sizeof(multiboot_header_tag_entry_address) */
 	.long	multiboot_init
 	.long   0	/* pad for 8 bytes alignment */
 
