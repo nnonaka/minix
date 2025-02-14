@@ -1171,6 +1171,8 @@ start_multiboot2(struct multiboot_package *mbp)
 	};
 	physaddr_t entry;
 	int i;
+	UINT32 mode;
+	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
 
 	printf("Debug: exec_multiboot2 start\n");
 
@@ -1221,6 +1223,11 @@ start_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
+	
+	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
+	mode = gop->Mode->Mode;
+	printf("Gop mode: %u\n", mode);
+	efi_gop_setmode(mode);
 
 	/* Call ExitBootService if required */
 	if ((mpp->mpp_efi_bs == NULL) && (efi_exited == false))
@@ -1439,7 +1446,6 @@ exec_multiboot2(const char *fname, const char *args)
 	close(fd);
 #ifdef MULTIBOOT2_DEBUG
 	show_marks(marks);
-	mbi_hexdump((char *)marks[MARK_START], 256);
 #endif
 
 	if (arch_prepare_boot(fname, args, marks) != 0) {

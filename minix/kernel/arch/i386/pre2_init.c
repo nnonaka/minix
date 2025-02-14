@@ -241,9 +241,11 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 
 kinfo_t *pre2_init(u32_t magic, u32_t ebx)
 {
+	ser_putc('K');
+	direct_com_print("Debug: pre2_init: 1\n");
+
 	assert(magic == MULTIBOOT2_BOOTLOADER_MAGIC);
 
-	direct_com_print("Debug: pre2_init: 1\n");
 	/* Kernel may use memory */
 	kernel_may_alloc = 1;
 

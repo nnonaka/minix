@@ -4,4 +4,12 @@
 HERE=${.CURDIR}/arch/${MACHINE_ARCH}
 .PATH:  ${HERE}
 
-SRCS +=	console.c keyboard.c rs232.c
+SRCS +=	keyboard.c rs232.c
+
+.if ${USE_BIOS} != "no"
+SRCS+= console.c
+CPPFLAGS+= -DUSE_BIOS
+.else
+SRCS+= dummy_console.c
+.endif
+

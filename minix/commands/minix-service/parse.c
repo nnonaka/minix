@@ -841,7 +841,9 @@ struct
 	{ "VDEVIO",		SYS_VDEVIO },
 	{ "ABORT",		SYS_ABORT },
 	{ "IOPENABLE",		SYS_IOPENABLE },
+#ifdef USE_BIOS
 	{ "READBIOS",		SYS_READBIOS },
+#endif
 	{ "STIME",		SYS_STIME },
 	{ "VMCTL",		SYS_VMCTL },
 	{ "MEMSET",		SYS_MEMSET },
