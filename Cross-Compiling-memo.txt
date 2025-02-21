@@ -1,5 +1,9 @@
 Cross-compiling memo
 
+  For Ubuntu
+
+	# apt install build-essential curl git zlib1g zlib1g-dev
+
   Cross-building for x86
 
     $ bash ./releasetools/x86_hdimage.sh 
@@ -25,6 +29,8 @@ Cross-compiling memo
                    Without this, everything is rebuilt, including the tools.
     
     To use gcc: -V MKLLVM=no -V MKGCCCMDS=yes
+    
+    To build debug info: -V MKDEBUG=yes
     
   *texinfo
   

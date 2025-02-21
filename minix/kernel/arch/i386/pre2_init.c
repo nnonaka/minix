@@ -141,6 +141,9 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 	phys_bytes kernbase = (phys_bytes) &_kern_phys_base,
 	kernsize = (phys_bytes) &_kern_size;
 	
+	/* Kernel may use memory */
+	kernel_may_alloc = 1;
+
 	memset(cbi, 0, sizeof(kinfo_t));
 	
 	direct_com_print("get_parameters2\n");
@@ -237,34 +240,5 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 			cbi->module_list[m].mod_start, 
 			cbi->module_list[m].mod_end);
 	}
-}
-
-kinfo_t *pre2_init(u32_t magic, u32_t ebx)
-{
-	ser_putc('K');
-	direct_com_print("Debug: pre2_init: 1\n");
-
-	assert(magic == MULTIBOOT2_BOOTLOADER_MAGIC);
-
-	/* Kernel may use memory */
-	kernel_may_alloc = 1;
-
-	/* Get our own copy boot params pointed to by ebx.
-	 * Here we find out whether we should do serial output.
-	 */
-	get_parameters2(ebx, &kinfo);
-
-	/* Make and load a pagetable that will map the kernel
-	 * to where it should be; but first a 1:1 mapping so
-	 * this code stays where it should be.
-	 */
-	pg_clear();
-	pg_identity(&kinfo);
-	kinfo.freepde_start = pg_mapkernel();
-	pg_load();
-	vm_enable_paging();
-
-	/* Done, return boot info so it can be passed to kmain(). */
-	return &kinfo;
 }
 

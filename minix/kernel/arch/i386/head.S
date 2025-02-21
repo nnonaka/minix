@@ -104,17 +104,10 @@ multiboot_init:
 	push	$0	/* set flags to known good state */
 	popf	/* esp, clear nested task and int enable */
 	push	$0
-	cmpl	$MULTIBOOT_INFO_MAGIC,%eax
-	je	multiboot1_loader
 
-	cmpl	$MULTIBOOT2_BOOTLOADER_MAGIC,%eax
-	je	multiboot2_loader
-	jmp		hang
-
-multiboot1_loader:
-        push    %ebx	/* multiboot information struct */
+	push    %ebx	/* multiboot information struct */
 	push	%eax	/* multiboot magic number */
-        call    _C_LABEL(pre_init)
+	call    _C_LABEL(pre_init)
 
 	/* Kernel is mapped high now and ready to go, with
 	 * the boot info pointer returnd in %eax. Set the
@@ -124,25 +117,7 @@ multiboot1_loader:
 	mov	$k_initial_stktop, %esp
 	push	$0	/* Terminate stack */
 	push	%eax
-        call    _C_LABEL(kmain)
-
-	/* not reached */
-	jmp hang
-	
-multiboot2_loader:
-	push    %ebx	/* multiboot2 information struct */
-	push	%eax	/* multiboot2 magic number */
-	call    _C_LABEL(pre2_init)
-	
-	/* Kernel is mapped high now and ready to go, with
-	 * the boot info pointer returnd in %eax. Set the
-	 * highly mapped stack, initialize it, push the boot
-	 * info pointer and jump to the highly mapped kernel.
-	 */
-	mov	$k_initial_stktop, %esp
-	push	$0	/* Terminate stack */
-	push	%eax
-        call    _C_LABEL(kmain)
+	call    _C_LABEL(kmain)
 
 	/* not reached */
 hang:

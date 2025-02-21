@@ -8,8 +8,12 @@ LIVEIMAGEMB=	${EMUIMAGEMB}
 BUILDEXTRA+=	boot.cfg		# Add boot.cfg file
 CLEANFILES+=	boot.cfg
 
+BUILDEXTRA+=	grub.cfg		# Add grub.cfg file
+CLEANFILES+=	grub.cfg
+
 prepare_md_post:
 	${TOOL_SED} "s/@@VERSION@@/${DISTRIBVER}/" < ${.CURDIR}/boot.cfg.in > boot.cfg
+	${TOOL_SED} "s/@@VERSION@@/${DISTRIBVER}/" < ${.CURDIR}/grub.cfg.in > grub.cfg
 
 
 .include "${.CURDIR}/../Makefile.liveimage"

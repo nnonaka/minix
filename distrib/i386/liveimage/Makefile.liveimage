@@ -15,4 +15,8 @@ EFIMB=			128
 SWAPMB= 		0
 IMAGEMB=		2048
 
+# for using grub as efiboot
+USE_GRUB=		no
+GRUBDIR=		${NETBSDSRCDIR}/external/gpl3/grub/dist/grub-core
+
 .include "${.CURDIR}/../../../common/bootimage/Makefile.liveimage"

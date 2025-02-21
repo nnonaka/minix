@@ -18,6 +18,9 @@
 #define MULTIBOOT_VERBOSE 1
 #endif
 
+#define MULTIBOOT2_BOOTLOADER_MAGIC		0x36d76289
+extern void get_parameters2(u32_t, kinfo_t *);
+
 /* to-be-built kinfo struct, diagnostics buffer */
 kinfo_t kinfo;
 struct kmessages kmessages;
@@ -258,12 +261,15 @@ void get_parameters(u32_t ebx, kinfo_t *cbi)
 
 kinfo_t *pre_init(u32_t magic, u32_t ebx)
 {
-	assert(magic == MULTIBOOT_INFO_MAGIC);
-
 	/* Get our own copy boot params pointed to by ebx.
 	 * Here we find out whether we should do serial output.
 	 */
-	get_parameters(ebx, &kinfo);
+	if (magic == MULTIBOOT2_BOOTLOADER_MAGIC)
+		get_parameters2(ebx, &kinfo);
+	else if (magic == MULTIBOOT_INFO_MAGIC)
+		get_parameters(ebx, &kinfo);
+	else
+		panic("Invalid magic: %d\n", magic);
 
 	/* Make and load a pagetable that will map the kernel
 	 * to where it should be; but first a 1:1 mapping so

@@ -506,14 +506,21 @@ ${WORKLABEL}:
 
 ${WORKEFI}: ${TARGETFS}
 	@echo create EFI system partition...
-	@${MKDIR} ${MKDIRPERM} ${EFIWORKDIR}/EFI/boot
+	@${MKDIR} ${MKDIRPERM} ${EFIWORKDIR}/EFI/BOOT
+.if (defined(USE_GRUB) && (${USE_GRUB} != "no"))
+	@echo copying Grub
+	${INSTALL} ${COPY} -m 0644 ${GRUBDIR}/booti386.efi ${EFIWORKDIR}/EFI/BOOT/bootia32.efi
+	${INSTALL} ${COPY} ${GRUBDIR}/*.mod ${EFIWORKDIR}/EFI/BOOT
+	${INSTALL} ${COPY} -m 0600 grub.cfg ${EFIWORKDIR}/EFI/BOOT
+.else
 .for f in ${EFIBOOT}
-	${INSTALL} ${COPY} -m 0644 ${f} ${EFIWORKDIR}/EFI/boot/`basename ${f}`
+	${INSTALL} ${COPY} -m 0644 ${f} ${EFIWORKDIR}/EFI/BOOT/`basename ${f}`
 .endfor
 .if defined(__MINIX)
 	@echo copying boot.cfg... 
-	cp boot.cfg ${EFIWORKDIR}
-.endif
+	${INSTALL} ${COPY} boot.cfg ${EFIWORKDIR}
+.endif # defined(__MINIX)
+.endif # ${USE_GRUB} != "no"
 	${RM} -f ${WORKEFI}
 	${TOOL_MAKEFS} -M ${EFIMB}m -m ${EFIMB}m			\
 	    -B ${TARGET_ENDIANNESS}					\

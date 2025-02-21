@@ -38,9 +38,7 @@ extern void (*startprog32)(physaddr_t, uint32_t, uint32_t *, physaddr_t, \
     physaddr_t, physaddr_t, u_long, void *);
 extern u_int startprog32_size;
 
-void multiboot32_start(physaddr_t, physaddr_t, uint32_t);
-extern void (*multiboot32)(physaddr_t, physaddr_t, uint32_t);
-extern u_int multiboot32_size;
+extern void multiboot32_start(physaddr_t, physaddr_t, uint32_t);
 
 void
 efi_md_init(void)
@@ -58,16 +56,6 @@ efi_md_init(void)
 		    __func__, sz, (uintmax_t)status);
 	startprog32 = (void *)(u_long)addr;
 	CopyMem(startprog32, startprog32_start, startprog32_size);
-
-    addr = EFIBOOT_ALLOCATE_MAX_ADDRESS;
-    sz = EFI_SIZE_TO_PAGES(multiboot32_size);
-    status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
-        EfiLoaderData, sz, &addr); 
-    if (EFI_ERROR(status))
-            panic("%s: AllocatePages() failed: %d page(s): %" PRIxMAX,
-                __func__, sz, (uintmax_t)status);
-    multiboot32 = (void *)(u_long)addr;
-    CopyMem(multiboot32, multiboot32_start, multiboot32_size);
 }
 
 void efi_md_show(void)
@@ -109,5 +97,5 @@ efi_boot_kernel(u_long marks[MARK_MAX])
 void
 multiboot2(physaddr_t entry, physaddr_t header, uint32_t magic)
 {
-	(*multiboot32)(entry, header, magic);
+	multiboot32_start(entry, header, magic);
 }

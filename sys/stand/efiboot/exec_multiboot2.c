@@ -39,6 +39,7 @@
 
 extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
 extern char twiddle_toggle;
+//extern u_long load_offset;
 
 static bool efi_exited = false;
 
@@ -1214,8 +1215,8 @@ start_multiboot2(struct multiboot_package *mbp)
 #endif /* MULTIBOOT2_DEBUG */
 
 	printf("Start @ 0x%lx [%ld=0x%lx-0x%lx]...\n",
+	    mbp->mbp_marks[MARK_START],
 	    mbp->mbp_marks[MARK_ENTRY],
-	    mbp->mbp_marks[MARK_NSYM],
 	    mbp->mbp_marks[MARK_SYM],
 	    mbp->mbp_marks[MARK_END]);
 
@@ -1223,6 +1224,7 @@ start_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
+	printf("entry: %lx\n", entry);
 	
 	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
 	mode = gop->Mode->Mode;
@@ -1288,7 +1290,7 @@ probe_multiboot2(const char *path)
 
 	if ((fd = open(path, 0)) == -1)
 		goto out;
- 
+
 	readen = read(fd, buf, sizeof(buf));
 	if (readen < sizeof(struct multiboot_header))
 		goto out;
@@ -1436,7 +1438,7 @@ exec_multiboot2(const char *fname, const char *args)
 		printf("%s is not a multiboot2 kernel\n", fname);
 		goto cleanup;
 	}
-
+	
 	memset(marks, 0, sizeof(marks));
 	fd = loadfile(fname, marks, LOAD_KERNEL);
 	if (fd < 0) {
@@ -1444,6 +1446,7 @@ exec_multiboot2(const char *fname, const char *args)
 		goto cleanup;
 	}
 	close(fd);
+	
 #ifdef MULTIBOOT2_DEBUG
 	show_marks(marks);
 #endif

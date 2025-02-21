@@ -665,6 +665,7 @@ out:
 	return -1;
 }
 
+#if !defined(__minix)
 /* -------------------------------------------------------------------------- */
 
 /*
@@ -811,6 +812,157 @@ freephdr:
 	DEALLOC(phdr, sz);
 	return 1;
 }
+#endif
+
+#if defined(__minix)
+/* -------------------------------------------------------------------------- */
+
+/* NN: Load a static ELF binary into memory at phdr[i].p_paddr. */
+/*
+ * Load a static ELF binary into memory. Layout of the memory:
+ * +-----------------+------------+-----------------+-----------------+
+ * | KERNEL SEGMENTS | ELF HEADER | SECTION HEADERS | SYMBOL SECTIONS |
+ * +-----------------+------------+-----------------+-----------------+
+ * The KERNEL SEGMENTS start address is fixed by the segments themselves. We
+ * then map the rest by increasing maxp.
+ *
+ * The offsets of the SYMBOL SECTIONS are relative to the start address of the
+ * ELF HEADER. The shdr offset of ELF HEADER points to SECTION HEADERS.
+ *
+ * We just give the kernel a pointer to the ELF HEADER, which is enough for it
+ * to find the location and number of symbols by itself later.
+ */
+static int
+ELFNAMEEND(loadfile_static2)(int fd, Elf_Ehdr *elf, u_long *marks, int flags)
+{
+	const u_long offset = marks[MARK_START];
+	Elf_Phdr *phdr;
+	int i, first;
+	size_t sz;
+	Elf_Addr minp = ~0, maxp = 0, pos = 0, elfp = 0;
+	int ret;
+
+	/* for ports that define progress to nothing */
+	(void)&first;
+
+	/* have not seen a data segment so far */
+	marks[MARK_DATA] = 0;
+
+	internalize_ehdr(elf->e_ident[EI_DATA], elf);
+
+	if (elf->e_type != ET_EXEC) {
+		errno = EINVAL;
+		return 1;
+	}
+
+	sz = elf->e_phnum * sizeof(Elf_Phdr);
+	phdr = ALLOC(sz);
+	ret = ELFNAMEEND(readfile_local)(fd, elf->e_phoff, phdr, sz);
+	if (ret == -1) {
+		goto freephdr;
+	}
+
+	first = 1;
+	for (i = 0; i < elf->e_phnum; i++) {
+		internalize_phdr(elf->e_ident[EI_DATA], &phdr[i]);
+
+		if (MD_LOADSEG(&phdr[i]))
+			goto loadseg;
+
+		if (phdr[i].p_type != PT_LOAD ||
+		    (phdr[i].p_flags & (PF_W|PF_R|PF_X)) == 0)
+			continue;
+
+		if ((IS_TEXT(phdr[i]) && (flags & LOAD_TEXT)) ||
+		    (IS_DATA(phdr[i]) && (flags & LOAD_DATA))) {
+		loadseg:
+			/* XXX: Assume first address is lowest */
+			if (marks[MARK_DATA] == 0 && IS_DATA(phdr[i]))
+				marks[MARK_DATA] = LOADADDR(phdr[i].p_paddr);
+
+			/* Read in segment. */
+			PROGRESS(("%s%lu", first ? "" : "+",
+			    (u_long)phdr[i].p_filesz));
+
+			ret = ELFNAMEEND(readfile_global)(fd, offset,
+			    phdr[i].p_offset, phdr[i].p_paddr,
+			    phdr[i].p_filesz);
+			if (ret == -1) {
+				goto freephdr;
+			}
+
+			first = 0;
+		}
+		if ((IS_TEXT(phdr[i]) && (flags & (LOAD_TEXT|COUNT_TEXT))) ||
+		    (IS_DATA(phdr[i]) && (flags & (LOAD_DATA|COUNT_DATA)))) {
+			/* XXX: Assume first address is lowest */
+			if (marks[MARK_DATA] == 0 && IS_DATA(phdr[i]))
+				marks[MARK_DATA] = LOADADDR(phdr[i].p_paddr);
+
+			pos = phdr[i].p_paddr;
+			if (minp > pos)
+				minp = pos;
+			pos += phdr[i].p_filesz;
+			if (maxp < pos)
+				maxp = pos;
+		}
+
+		/* Zero out bss. */
+		if (IS_BSS(phdr[i]) && (flags & LOAD_BSS)) {
+			PROGRESS(("+%lu",
+			    (u_long)(phdr[i].p_memsz - phdr[i].p_filesz)));
+			BZERO((phdr[i].p_paddr + phdr[i].p_filesz),
+			    phdr[i].p_memsz - phdr[i].p_filesz);
+		}
+		if (IS_BSS(phdr[i]) && (flags & (LOAD_BSS|COUNT_BSS))) {
+			pos += phdr[i].p_memsz - phdr[i].p_filesz;
+			if (maxp < pos)
+				maxp = pos;
+		}
+	}
+	DEALLOC(phdr, sz);
+	maxp = roundup(maxp, ELFROUND);
+
+	/*
+	 * Load the ELF HEADER, SECTION HEADERS and possibly the SYMBOL
+	 * SECTIONS.
+	 */
+	if (flags & (LOAD_HDR|COUNT_HDR)) {
+		elfp = maxp;
+		maxp += sizeof(Elf_Ehdr);
+	}
+	if (flags & (LOAD_SYM|COUNT_SYM)) {
+		if (ELFNAMEEND(loadsym)(fd, elf, maxp, elfp, marks, flags,
+		    &maxp) == -1) {
+ 			return 1;
+		}
+	}
+
+	/*
+	 * Update the ELF HEADER to give information relative to elfp.
+	 */
+	if (flags & LOAD_HDR) {
+		elf->e_phoff = 0;
+		elf->e_shoff = sizeof(Elf_Ehdr);
+		elf->e_phentsize = 0;
+		elf->e_phnum = 0;
+		externalize_ehdr(elf->e_ident[EI_DATA], elf);
+		BCOPY(elf, elfp, sizeof(*elf));
+		internalize_ehdr(elf->e_ident[EI_DATA], elf);
+	}
+
+	marks[MARK_START] = LOADADDR(minp);
+	marks[MARK_ENTRY] = LOADADDR(elf->e_entry);
+	marks[MARK_NSYM] = 1;	/* XXX: Kernel needs >= 0 */
+	marks[MARK_SYM] = LOADADDR(elfp);
+	marks[MARK_END] = LOADADDR(maxp);
+	return 0;
+
+freephdr:
+	DEALLOC(phdr, sz);
+	return 1;
+}
+#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -820,7 +972,11 @@ ELFNAMEEND(loadfile)(int fd, Elf_Ehdr *elf, u_long *marks, int flags)
 	if (flags & LOAD_DYN) {
 		return ELFNAMEEND(loadfile_dynamic)(fd, elf, marks, flags);
 	} else {
+#if !defined(__minix)
 		return ELFNAMEEND(loadfile_static)(fd, elf, marks, flags);
+#else
+		return ELFNAMEEND(loadfile_static2)(fd, elf, marks, flags);
+#endif
 	}
 }
 
