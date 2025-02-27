@@ -1,4 +1,6 @@
-
+/*
+ * Get Parameters from Multiboot2 Information.
+ */
 #define UNPAGED 1	/* for proper kmain() prototype */
 
 #define	__MINIX_MULTIBOOT2	1
@@ -104,9 +106,9 @@ do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
 	int k = cbi->module_count;
 	
 	assert(k < MULTIBOOT_MAX_MODS);
-	cbi->module_count = k++;
 	cbi->module_list[k].mod_start = tag_module->mod_start;
 	cbi->module_list[k].mod_end = tag_module->mod_end;
+	cbi->module_count++;
 }
 
 static void
@@ -132,8 +134,13 @@ do_tag_efi_mmap(kinfo_t *cbi, struct multiboot_tag_efi_mmap *tag_efi_mmap)
 	// TODO
 }
 
+static void
+do_tag_acpi_new(kinfo_t *cbi, struct multiboot_tag_new_acpi *tag_new_acpi)
+{
+	cbi->rsdp_p = &tag_new_acpi->rsdp;
+}
 
-void get_parameters2(u32_t ebx, kinfo_t *cbi) 
+void get_parameters_mb2(u32_t ebx, kinfo_t *cbi) 
 {
 	struct multiboot_tag *tag, *tag_end;
 	multiboot_uint32_t size;
@@ -146,7 +153,6 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 
 	memset(cbi, 0, sizeof(kinfo_t));
 	
-	direct_com_print("get_parameters2\n");
 	/* Set various bits of info for the higher-level kernel. */
 	cbi->mb_version = 2;
 	
@@ -182,6 +188,9 @@ void get_parameters2(u32_t ebx, kinfo_t *cbi)
 		} else if (tag->type == MULTIBOOT_TAG_TYPE_FRAMEBUFFER) {
 			//reset();
 			do_tag_framebuffer(cbi, (struct multiboot_tag_framebuffer *)tag);
+		} else if (tag->type == MULTIBOOT_TAG_TYPE_ACPI_NEW) {
+			//reset();
+			do_tag_acpi_new(cbi, (struct multiboot_tag_new_acpi *)tag);
 		} else if (tag->type == MULTIBOOT_TAG_TYPE_END) {
 			break;
 		} else {

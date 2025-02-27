@@ -12,6 +12,7 @@ SRCS+=  \
         sys_eniop.c \
         sys_in.c \
         sys_out.c \
+        sys_readbios.c \
         sys_sdevio.c \
         sys_umap_remote.c \
         sys_vinb.c \
@@ -22,11 +23,6 @@ SRCS+=  \
         sys_voutw.c \
         tsc_util.c \
         vbox.c
-
-.if ${USE_BIOS} != "no"
-SRCS+= sys_readbios.c
-CPPFLAGS+= -DUSE_BIOS
-.endif
 
 CPPFLAGS+=        -I${HERE}/../../
 

@@ -734,22 +734,54 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 }
 
 static size_t
-mbi_acpi_new(struct multiboot_package *mbp, void *buf)
+mbi_acpi_old(struct multiboot_package *mbp, void *buf)
 {
 	size_t len = 0;
 	struct multiboot_tag_new_acpi *mbt = buf;
 	void *rsdp_phys;
-	struct acpi_rdsp rsdp;
+	struct acpi_rdsp *rsdp_p;
 
 	rsdp_phys = efi_acpi_root();
 	if (rsdp_phys == NULL)
 		goto out;
 
-	len = sizeof(*mbt) + sizeof(rsdp);
+	rsdp_p = (struct acpi_rdsp *)rsdp_phys;
+	if (rsdp_p->revision != 0)
+		goto out;
+		
+	len = sizeof(*mbt) + sizeof(struct acpi_rdsp);
+
+	if (mbt) {
+		mbt->type = MULTIBOOT_TAG_TYPE_ACPI_OLD;
+		mbt->size = len;
+		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, sizeof(struct acpi_rdsp));
+	}
+out:
+	return roundup(len, MULTIBOOT_TAG_ALIGN);
+}
+
+static size_t
+mbi_acpi_new(struct multiboot_package *mbp, void *buf)
+{
+	size_t len = 0;
+	struct multiboot_tag_new_acpi *mbt = buf;
+	void *rsdp_phys;
+	struct acpi_rdsp *rsdp_p;
+
+	rsdp_phys = efi_acpi_root();
+	if (rsdp_phys == NULL)
+		goto out;
+
+	rsdp_p = (struct acpi_rdsp *)rsdp_phys;
+	if (rsdp_p->revision != 2)
+		goto out;
+		
+	len = sizeof(*mbt) + rsdp_p->length;
+		
 	if (mbt) {
 		mbt->type = MULTIBOOT_TAG_TYPE_ACPI_NEW;
 		mbt->size = len;
-		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, sizeof(rsdp));
+		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, rsdp_p->length);
 	}
 out:
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
@@ -1088,6 +1120,9 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 		break;
 	case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
 		len = mbi_framebuffer(mbp, bp);
+		break;
+	case MULTIBOOT_TAG_TYPE_ACPI_OLD:
+		len = mbi_acpi_old(mbp, bp);
 		break;
 	case MULTIBOOT_TAG_TYPE_ACPI_NEW:
 		len = mbi_acpi_new(mbp, bp);

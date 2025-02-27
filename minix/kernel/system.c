@@ -254,9 +254,7 @@ void system_init(void)
 
   /* i386-specific. */
 #if defined(__i386__)
-#ifdef USE_BIOS
   map(SYS_READBIOS, do_readbios);	/* read from BIOS locations */
-#endif
   map(SYS_IOPENABLE, do_iopenable); 	/* Enable I/O */
   map(SYS_SDEVIO, do_sdevio);		/* phys_insb, _insw, _outsb, _outsw */
 #endif

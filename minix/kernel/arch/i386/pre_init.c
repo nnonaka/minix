@@ -19,7 +19,7 @@
 #endif
 
 #define MULTIBOOT2_BOOTLOADER_MAGIC		0x36d76289
-extern void get_parameters2(u32_t, kinfo_t *);
+extern void get_parameters_mb2(u32_t, kinfo_t *);
 
 /* to-be-built kinfo struct, diagnostics buffer */
 kinfo_t kinfo;
@@ -265,7 +265,7 @@ kinfo_t *pre_init(u32_t magic, u32_t ebx)
 	 * Here we find out whether we should do serial output.
 	 */
 	if (magic == MULTIBOOT2_BOOTLOADER_MAGIC)
-		get_parameters2(ebx, &kinfo);
+		get_parameters_mb2(ebx, &kinfo);
 	else if (magic == MULTIBOOT_INFO_MAGIC)
 		get_parameters(ebx, &kinfo);
 	else

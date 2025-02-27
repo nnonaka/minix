@@ -416,9 +416,13 @@ void cstart(void)
   /* low-level initialization */
   prot_init();
 
+#if 0 /* NN: for debug */
   /* determine verbosity */
   if ((value = env_get(VERBOSEBOOTVARNAME)))
 	  verboseboot = atoi(value);
+#else
+	  verboseboot = VERBOSEBOOT_MAX;
+#endif
 
   /* Initialize clock variables. */
   init_clock();

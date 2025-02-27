@@ -240,9 +240,7 @@
 #  define SYS_SAFECOPYTO   (KERNEL_CALL + 32)	/* sys_safecopyto() */
 #  define SYS_VSAFECOPY  (KERNEL_CALL + 33)	/* sys_vsafecopy() */
 #  define SYS_SETGRANT   (KERNEL_CALL + 34)	/* sys_setgrant() */
-#ifdef USE_BIOS
 #  define SYS_READBIOS   (KERNEL_CALL + 35)	/* sys_readbios() */
-#endif
 
 #  define SYS_SPROF      (KERNEL_CALL + 36)     /* sys_sprof() */ 
 

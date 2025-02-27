@@ -102,6 +102,7 @@ int main(void)
 	__vm_init_fresh=1;
   }
 
+	printf("main: init_vm passed.\n");
   /* SEF local startup. */
   sef_local_startup();
   __vm_init_fresh=0;
@@ -478,6 +479,7 @@ void init_vm(void)
 	 * before VM had determined kernel mappings
 	 */
 	__minix_init();
+	printf("init_vm: _minix_kerninfo=%x\n", (u32_t)_minix_kerninfo);
 
 	/* The kernel's freelist does not include boot-time modules; let
 	 * the allocator know that the total memory is bigger.

@@ -78,6 +78,7 @@ typedef struct kinfo {
         kinfo_memory_map_t  	memmap[MAXMEMMAP]; /* free mem list */
         phys_bytes              mem_high_phys;
         int                     mmap_size;
+        void					*rsdp_p;
 
         /* Multiboot-derived */
         int                     mods_with_kernel; /* no. of mods incl kernel */
