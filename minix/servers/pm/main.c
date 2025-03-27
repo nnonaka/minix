@@ -42,6 +42,8 @@ static void handle_vfs_reply(void);
 static void sef_local_startup(void);
 static int sef_cb_init_fresh(int type, sef_init_info_t *info);
 
+extern void __minix_init(void);
+
 /*===========================================================================*
  *				main					     *
  *===========================================================================*/
@@ -52,6 +54,7 @@ main(void)
   unsigned int call_index;
   int ipc_status, result;
 
+  __minix_init();
   /* SEF local startup. */
   sef_local_startup();
 

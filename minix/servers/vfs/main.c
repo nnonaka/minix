@@ -377,12 +377,14 @@ static void sef_local_startup(void)
   sef_setcb_init_fresh(sef_cb_init_fresh);
   sef_setcb_init_restart(SEF_CB_INIT_RESTART_STATEFUL);
 
+  printf("sef_local_startup: 1\n");
   /* Register live update callbacks. */
   sef_setcb_init_lu(sef_cb_init_lu);
   sef_setcb_lu_prepare(sef_cb_lu_prepare);
   sef_setcb_lu_state_changed(sef_cb_lu_state_changed);
   sef_setcb_lu_state_isvalid(sef_cb_lu_state_isvalid_standard);
 
+  printf("sef_local_startup: 2\n");
   /* Let SEF perform startup. */
   sef_startup();
 }
@@ -401,6 +403,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
   self = NULL;
   verbose = 0;
 
+  printf("sef_cb_init_fresh: start\n");
   /* Initialize proc endpoints to NONE */
   for (rfp = &fproc[0]; rfp < &fproc[NR_PROCS]; rfp++) {
 	rfp->fp_endpoint = NONE;
@@ -437,6 +440,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
 
   system_hz = sys_hz();
 
+  printf("sef_cb_init_fresh: 1\n");
   /* Subscribe to block and character driver events. */
   s = ds_subscribe("drv\\.[bc]..\\..*", DSF_INITIAL | DSF_OVERWRITE);
   if (s != OK) panic("VFS: can't subscribe to driver events (%d)", s);
@@ -444,6 +448,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
   /* Initialize worker threads */
   worker_init();
 
+  printf("sef_cb_init_fresh: 2\n");
   /* Initialize global locks */
   if (mthread_mutex_init(&bsf_lock, NULL) != 0)
 	panic("VFS: couldn't initialize block special file lock");
@@ -451,6 +456,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
   init_dmap();			/* Initialize device table. */
   init_smap();			/* Initialize socket table. */
 
+  printf("sef_cb_init_fresh: 3\n");
   /* Map all the services in the boot image. */
   if ((s = sys_safecopyfrom(RS_PROC_NR, info->rproctab_gid, 0,
 			    (vir_bytes) rprocpub, sizeof(rprocpub))) != OK){
@@ -464,6 +470,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
 	}
   }
 
+  printf("sef_cb_init_fresh: 4\n");
   /* Initialize locks and initial values for all processes. */
   for (rfp = &fproc[0]; rfp < &fproc[NR_PROCS]; rfp++) {
 	if (mutex_init(&rfp->fp_lock, NULL) != 0)
@@ -483,11 +490,13 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *info)
 	rfp->fp_wd = NULL;
   }
 
+  printf("sef_cb_init_fresh: 5\n");
   init_vnodes();		/* init vnodes */
   init_vmnts();			/* init vmnt structures */
   init_select();		/* init select() structures */
   init_filps();			/* Init filp structures */
 
+  printf("sef_cb_init_fresh: 6\n");
   /* Mount PFS and initial file system root. */
   worker_start(fproc_addr(VFS_PROC_NR), do_init_root, &mess /*unused*/,
 	FALSE /*use_spare*/);
@@ -503,6 +512,7 @@ static void do_init_root(void)
   char *mount_type, *mount_label;
   int r;
 
+  printf("do_init_root: start\n");
   /* Disallow requests from e.g. init(8) while doing the initial mounting. */
   worker_allow(FALSE);
 

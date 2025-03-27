@@ -101,7 +101,6 @@ load_file(const char *path, u_long extra, bool quiet_errors,
 		return ENOMEM;
 	}
 
-	printf("boot: loading %s ", path);
 	len = read(fd, (void *)(uintptr_t)*paddr, expectedlen);
 	close(fd);
 
@@ -114,8 +113,6 @@ load_file(const char *path, u_long extra, bool quiet_errors,
 		}
 		return EIO;
 	}
-
-	printf("done.\n");
 
 	efi_dcache_flush(*paddr, *psize);
 

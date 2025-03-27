@@ -45,7 +45,7 @@
 #define BZERO(d, c)		pbzero((void *)LOADADDR(d), (c))
 #define PROGRESS(a)		x86_progress a
 #else
-#define LOADADDR(a)		(((u_long)(a)) + offset)
+#define LOADADDR(a)		((((u_long)(a)) & 0x07ffffff) + offset)
 #define READ(f, b, c)		read((f), (void *)LOADADDR(b), (c))
 #define BCOPY(s, d, c)		memcpy((void *)LOADADDR(d), (void *)(s), (c))
 #define BZERO(d, c)		memset((void *)LOADADDR(d), 0, (c))

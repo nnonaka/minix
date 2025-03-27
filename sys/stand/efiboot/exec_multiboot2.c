@@ -1210,8 +1210,6 @@ start_multiboot2(struct multiboot_package *mbp)
 	UINT32 mode;
 	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
 
-	printf("Debug: exec_multiboot2 start\n");
-
 	len = 2 * sizeof(multiboot_uint32_t);
 	for (i = 0; i < sizeof(tags) / sizeof(*tags); i++) {
 		if (mbi_dispatch(mbp, tags[i], NULL, &len) != 0)
@@ -1243,8 +1241,6 @@ start_multiboot2(struct multiboot_package *mbp)
 	((multiboot_uint32_t *)mbi)[0] = alen;	/* total size */
 	((multiboot_uint32_t *)mbi)[1] = 0;	/* reserved */
 
-	printf("Debug: mbi alloc passed\n");
-
 #ifdef MULTIBOOT2_DEBUG
 	multiboot2_info_dump(MULTIBOOT2_BOOTLOADER_MAGIC, mbi);
 #endif /* MULTIBOOT2_DEBUG */
@@ -1259,11 +1255,9 @@ start_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
-	printf("entry: %lx\n", entry);
-	
+			
 	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
 	mode = gop->Mode->Mode;
-	printf("Gop mode: %u\n", mode);
 	efi_gop_setmode(mode);
 
 	/* Call ExitBootService if required */
