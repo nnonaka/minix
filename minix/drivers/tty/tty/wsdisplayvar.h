@@ -120,7 +120,7 @@ struct wsdisplay_char;
  * with these functions, which is passed to them when they are invoked.
  */
 struct wsdisplay_accessops {
-	int	(*ioctl)(void *, void *, u_long, void *, int, struct lwp *);
+	//int	(*ioctl)(void *, void *, u_long, void *, int, struct lwp *);
 	paddr_t	(*mmap)(void *, void *, off_t, int);
 	int	(*alloc_screen)(void *, const struct wsscreen_descr *,
 				void **, int *, int *, long *);
@@ -201,19 +201,19 @@ int wsdisplay_screenstate(struct wsdisplay_softc *, int);
 int wsdisplay_getactivescreen(struct wsdisplay_softc *);
 int wsscreen_switchwait(struct wsdisplay_softc *, int);
 
-int wsdisplay_internal_ioctl(struct wsdisplay_softc *, struct wsscreen *,
-			     u_long, void *, int, struct lwp *);
+//int wsdisplay_internal_ioctl(struct wsdisplay_softc *, struct wsscreen *,
+//			     u_long, void *, int, struct lwp *);
 
-int wsdisplay_usl_ioctl1(device_t, u_long, void *, int, struct lwp *);
+//int wsdisplay_usl_ioctl1(device_t, u_long, void *, int, struct lwp *);
 
-int wsdisplay_usl_ioctl2(struct wsdisplay_softc *, struct wsscreen *,
-			 u_long, void *, int, struct lwp *);
+//int wsdisplay_usl_ioctl2(struct wsdisplay_softc *, struct wsscreen *,
+//			 u_long, void *, int, struct lwp *);
 
-int wsdisplay_stat_ioctl(struct wsdisplay_softc *, u_long, void *,
-			 int, struct lwp *);
+//int wsdisplay_stat_ioctl(struct wsdisplay_softc *, u_long, void *,
+//			 int, struct lwp *);
 
-int wsdisplay_cfg_ioctl(struct wsdisplay_softc *, u_long, void *,
-			int, struct lwp *);
+//int wsdisplay_cfg_ioctl(struct wsdisplay_softc *, u_long, void *,
+//			int, struct lwp *);
 
 bool wsdisplay_isconsole(struct wsdisplay_softc *);
 
@@ -242,5 +242,41 @@ int wsdisplay_stat_inject(device_t, u_int, int);
 const struct wsscreen_descr *wsdisplay_screentype_pick(
     const struct wsscreen_list *, const char *);
 
+#  if defined(_KERNEL_OPT)
+#    include "opt_wsmsgattrs.h"
+#  endif
+#  if !defined(WS_DEFAULT_FG)
+#    define WS_DEFAULT_FG WSCOL_WHITE
+#  endif
+#  if !defined(WS_DEFAULT_BG)
+#    define WS_DEFAULT_BG WSCOL_BLACK
+#  endif
+#  if !defined(WS_DEFAULT_COLATTR)
+#    define WS_DEFAULT_COLATTR 0
+#  endif
+#  if !defined(WS_DEFAULT_MONOATTR)
+#    define WS_DEFAULT_MONOATTR 0
+#  endif
+#  if defined(WS_KERNEL_FG) || defined(WS_KERNEL_BG) || \
+      defined(WS_KERNEL_COLATTR) || defined(WS_KERNEL_MONOATTR)
+#    define WS_KERNEL_CUSTOMIZED
+#  else
+#    undef WS_KERNEL_CUSTOMIZED
+#  endif
+#  if !defined(WS_KERNEL_FG)
+#    define WS_KERNEL_FG WS_DEFAULT_FG
+#  endif
+#  if !defined(WS_KERNEL_BG)
+#    define WS_KERNEL_BG WS_DEFAULT_BG
+#  endif
+#  if !defined(WS_KERNEL_COLATTR)
+#    define WS_KERNEL_COLATTR WS_DEFAULT_COLATTR
+#  endif
+#  if !defined(WS_KERNEL_MONOATTR)
+#    define WS_KERNEL_MONOATTR WS_DEFAULT_MONOATTR
+#  endif
+#  if !defined(WSDISPLAY_BORDER_COLOR)
+#    define WSDISPLAY_BORDER_COLOR WSCOL_BLACK
+#  endif
 
 #endif /* !_DEV_WSCONS_WSDISPLAYVAR_H */

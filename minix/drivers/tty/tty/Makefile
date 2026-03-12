@@ -3,7 +3,12 @@ PROG=	tty
 
 .include "arch/${MACHINE_ARCH}/Makefile.inc"
 
+
 SRCS +=	tty.c
+
+.if ${USE_BIOS} == "no"
+.include "Makefile.fbcons.inc"
+.endif
 
 DPADD+=	${LIBCHARDRIVER} ${LIBSYS} ${LIBTIMERS}
 LDADD+=	-lchardriver -lsys -ltimers

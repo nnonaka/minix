@@ -47,7 +47,7 @@
 #include <sys/types.h>
 #include <sys/ioccom.h>
 #include <sys/time.h>
-#include <dev/wscons/wsksymvar.h>
+#include "wsksymvar.h"
 
 
 /*
@@ -683,5 +683,10 @@ struct wsdisplayio_blit {
 
 #define WSDISPLAYIO_DOBLIT   	_IOWR('W', 105, struct wsdisplayio_blit)
 #define WSDISPLAYIO_WAITBLIT 	_IOWR('W', 106, struct wsdisplayio_blit)
+
+/* some macros */
+#define uimin(i, j) (((i) < (j)) ? (i) : (j))
+
+
 
 #endif /* _DEV_WSCONS_WSCONSIO_H_ */

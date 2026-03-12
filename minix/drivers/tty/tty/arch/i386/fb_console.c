@@ -28,6 +28,9 @@
 #include <minix/sys_config.h>
 #include <minix/vm.h>
 #include "tty.h"
+#include "raster.h"
+#include "wscons_raster.h"
+#include "wsdisplayvar.h"
 
 /* Set this to 1 if you want console output duplicated on the first
  * serial line.
@@ -36,6 +39,17 @@
 
 /* The clock task should provide an interface for this */
 #define TIMER_FREQ  1193182L    /* clock frequency for timer in PC and AT */
+
+const struct wsdisplay_emulops fbcons_emulops = {
+	rcons_cursor,
+	rcons_mapchar,
+	rcons_putchar,
+	rcons_copycols,
+	rcons_erasecols,
+	rcons_copyrows,
+	rcons_eraserows,
+	rcons_allocattr
+};
 
 /* Private variables used by the console driver. */
 static int wrap;		/* hardware can wrap? */
@@ -59,6 +73,9 @@ static char *font_memory = NULL;
 
 /* Per console data. */
 typedef struct console {
+	const struct wsdisplay_emulops *emulops;
+	const struct wsemul_ops *wsemul;
+	const struct wsscreen_descr *scrdata;
   tty_t *c_tty;			/* associated TTY struct */
   int c_column;			/* current column number (0-origin) */
   int c_row;			/* current row (0 at top of screen) */
@@ -76,17 +93,25 @@ typedef struct console {
   int c_line;			/* line no */
 } console_t;
 
-#define UPDATE_CURSOR(ccons, cursor) {				\
-	ccons->c_cur = cursor;					\
-	if(curcons && ccons == curcons)				\
-		set_6845(CURSOR, ccons->c_cur);			\
-}
+struct fb_devconfig {
+	int	dc_type;	/* WSCONS display type */
 
-#define UPDATE_ORIGIN(ccons, origin) {				\
-	ccons->c_org = origin;					\
-  	if (curcons && ccons == curcons) 			\
-		set_6845(VID_ORG, ccons->c_org);		\
-}
+	vaddr_t	dc_vaddr;	/* memory space virtual base address */
+	paddr_t	dc_paddr;	/* memory space physical base address */
+	psize_t	dc_size;	/* size of slot memory */
+
+	int	dc_offset;	/* offset from dc_vaddr to base of flat fb */
+
+	int	dc_wid;		/* width of frame buffer */
+	int	dc_ht;		/* height of frame buffer */
+	int	dc_depth;	/* depth of frame buffer */
+	int	dc_rowbytes;	/* bytes in fb scan line */
+
+	struct raster dc_raster; /* raster description */
+	struct rcons dc_rcons;	/* raster blitter control info */
+
+	int isconsole;		/* console device */
+};
 
 static int nr_cons= 1;		/* actual number of consoles */
 static console_t cons_table[NR_CONS];
@@ -112,12 +137,10 @@ static void do_escape(console_t *cons, int c);
 static void flush(console_t *cons);
 static void parse_escape(console_t *cons, int c);
 static void scroll_screen(console_t *cons, int dir);
-//static void set_6845(int reg, unsigned val);
 static void stop_beep(int arg);
 static void cons_org0(void);
 static void disable_console(void);
 static void reenable_console(void);
-//static int ga_program(struct sequence *seq);
 static int cons_ioctl(tty_t *tp, int);
 //static void mem_vid_copy(vir_bytes src, int dst, int count);
 //static void vid_vid_copy(int src, int dst, int count);
@@ -803,15 +826,52 @@ static void stop_beep(int arg __unused)
 /*===========================================================================*
  *				scr_init				     *
  *===========================================================================*/
+
+void
+fb_clear(struct fb_devconfig *dc)
+{
+	// TODO
+}
+
+void
+fb_init(struct fb_devconfig *dc)
+{
+	struct raster *rap;
+	struct rcons *rcp;
+
+	fb_clear(dc);
+
+	rap = &dc->dc_raster;
+	rap->width = dc->dc_wid;
+	rap->height = dc->dc_ht;
+	rap->depth = dc->dc_depth;
+	rap->linelongs = dc->dc_rowbytes / sizeof(u_int32_t);
+	rap->pixels = (u_int32_t *)(dc->dc_vaddr + dc->dc_offset);
+
+	/* initialize the raster console blitter */
+	rcp = &dc->dc_rcons;
+	rcp->rc_sp = rap;
+	rcp->rc_crow = rcp->rc_ccol = -1;
+	rcp->rc_crowp = &rcp->rc_crow;
+	rcp->rc_ccolp = &rcp->rc_ccol;
+	rcons_init(rcp, 24, 80);
+
+	//fb_stdscreen.nrows = dc->dc_rcons.rc_maxrow;
+	//fb_stdscreen.ncols = dc->dc_rcons.rc_maxcol;
+}
+
+/*===========================================================================*
+ *				scr_init				     *
+ *===========================================================================*/
 void scr_init(tty_t *tp)
 {
 /* Initialize the screen driver. */
   console_t *cons;
-  u16_t bios_columns, bios_crtbase, bios_fontlines;
-  u8_t bios_rows;
+  //u16_t bios_columns, bios_crtbase, bios_fontlines;
+  //u8_t bios_rows;
   int line;
   int s;
-  static int vdu_initialized = 0;
+  //static int vdu_initialized = 0;
   static unsigned page_size;
   struct kinfo kinfo;		/* kernel information */
 

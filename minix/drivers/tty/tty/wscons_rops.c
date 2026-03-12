@@ -45,6 +45,7 @@
 
 #include <sys/param.h>
 
+#include "raster.h"
 #include "wscons_raster.h"
 #include "wsdisplayvar.h"
 

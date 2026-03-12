@@ -10,6 +10,6 @@ SRCS +=	keyboard.c rs232.c
 SRCS+= console.c
 CPPFLAGS+= -DUSE_BIOS
 .else
-SRCS+= dummy_console.c
+SRCS+= fb_console.c
 .endif
 

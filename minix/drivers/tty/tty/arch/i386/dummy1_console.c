@@ -1,5 +1,5 @@
 /* 
- * framebuffer console output
+ * dummy serial console output
  */
 
 #include <minix/drivers.h>
@@ -13,9 +13,14 @@
 #include <minix/com.h>
 #include <minix/sys_config.h>
 #include <minix/vm.h>
-#include "../tty.h"
+#include "tty.h"
+
+/* The clock task should provide an interface for this */
+#define TIMER_FREQ  1193182L    /* clock frequency for timer in PC and AT */
 
 /* Private variables used by the console driver. */
+static int wrap;		/* hardware can wrap? */
+static int softscroll;		/* 1 = software scrolling, 0 = hardware */
 static int beeping;		/* speaker is beeping? */
 static long disable_beep = -1;	/* do not use speaker if set to 1 */
 static unsigned font_lines;	/* font lines per character */
@@ -26,26 +31,29 @@ static unsigned scr_size;	/* # characters on the screen */
 static int disabled_vc = -1;	/* Virtual console that was active when 
 				 * disable_console was called.
 				 */
+static int disabled_sm;	/* Scroll mode to be restored when re-enabling
+				 * console
+				 */
 
 /* Per console data. */
-typedef struct fbcons {
+typedef struct console {
   tty_t *c_tty;			/* associated TTY struct */
   int c_column;			/* current column number (0-origin) */
   int c_row;			/* current row (0 at top of screen) */
   int c_rwords;			/* number of WORDS (not bytes) in outqueue */
   int c_line;			/* line no */
-} fbcons_t;
+} console_t;
 
 
-static int nr_fbcons= 1;		/* actual number of consoles */
-static fbcons_t cons_table[NR_CONS];
-static fbcons_t *curcons = NULL;	/* currently visible */
+static int nr_cons= 1;		/* actual number of consoles */
+static console_t cons_table[NR_CONS];
+static console_t *curcons = NULL;	/* currently visible */
 
 static int shutting_down = FALSE;	/* don't allow console switches */
 
 static int cons_write(struct tty *tp, int try);
 static void cons_echo(tty_t *tp, int c);
-static void flush(fbcons_t *cons);
+static void flush(console_t *cons);
 static void disable_console(void);
 static void reenable_console(void);
 static void stop_beep(int arg);
@@ -78,7 +86,7 @@ static int cons_write(register struct tty *tp, int try)
   int result = OK;
   register char *tbuf;
   char buf[64];
-  fbcons_t *cons = tp->tty_priv;
+  console_t *cons = tp->tty_priv;
 
   if (try) return 1;	/* we can always write to console */
 
@@ -139,7 +147,7 @@ static int cons_write(register struct tty *tp, int try)
 static void cons_echo(register tty_t *tp, int c)
 {
 /* Echo keyboard input (print & flush). */
-  fbcons_t *cons = tp->tty_priv;
+  console_t *cons = tp->tty_priv;
 
   ser_putc(c);
   flush(cons);
@@ -149,7 +157,7 @@ static void cons_echo(register tty_t *tp, int c)
  *				flush					     *
  *				cons - pointer to console struct
  *===========================================================================*/
-static void flush(register fbcons_t *cons)
+static void flush(register console_t *cons)
 {
   tty_t *tp = cons->c_tty;
 }
@@ -225,6 +233,24 @@ void beep_x(unsigned freq, clock_t dur)
 
   if (beep_disabled()) return;
   
+  unsigned long ival= TIMER_FREQ / freq;
+  if (ival == 0 || ival > 0xffff)
+	return;	/* Frequency out of range */
+
+  /* Set timer in advance to prevent beeping delay. */
+  set_timer(&tmr_stop_beep, dur, stop_beep, 0);
+
+  if (!beeping) {
+	/* Set timer channel 2, square wave, with given frequency. */
+        pv_set(char_out[0], TIMER_MODE, 0xB6);	
+        pv_set(char_out[1], TIMER2, (ival >> 0) & BYTE);
+        pv_set(char_out[2], TIMER2, (ival >> 8) & BYTE);
+        if (sys_voutb(char_out, 3)==OK) {
+        	if (sys_inb(PORT_B, &port_b_val)==OK &&
+        	    sys_outb(PORT_B, (port_b_val|3))==OK)
+        	    	beeping = TRUE;
+        }
+  }
 }
 
 /*===========================================================================*
@@ -245,13 +271,12 @@ static void stop_beep(int arg __unused)
 void scr_init(tty_t *tp)
 {
 /* Initialize the screen driver. */
-  fbcons_t *cons;
+  console_t *cons;
   int line;
   int s;
   static unsigned page_size;
   struct kinfo kinfo;		/* kernel information */
-  struct kinfo_framebuffer *kfb;
-  
+
   /* Associate console and TTY. */
   line = tp - &tty_table[0];
   if (line >= nr_cons) return;
@@ -264,19 +289,20 @@ void scr_init(tty_t *tp)
   tp->tty_devwrite = cons_write;
   tp->tty_echo = cons_echo;
   tp->tty_ioctl = cons_ioctl;
-  
-  if (! vdu_initialized++) {
-    if (OK != (s=sys_getkinfo(&kinfo))) {
-        panic("Couldn't get kernel information: %d", s);
-    }
-
-	if (kinfo.mb_version == 2) {
-	  kfb = &kinfo.fb;
-	}
-  }
 
   select_console(0);
   cons_ioctl(tp, 0);
+}
+
+/*===========================================================================*
+ *				toggle_scroll				     *
+ *===========================================================================*/
+void toggle_scroll(void)
+{
+/* Toggle between hardware and software scroll. */
+
+  softscroll = !softscroll;
+  printf("%sware scrolling enabled.\n", softscroll ? "Soft" : "Hard");
 }
 
 /*===========================================================================*

@@ -28,10 +28,15 @@
 
 
 #include <sys/param.h>
-#include <sys/systm.h>
+//#include <sys/systm.h>
 #include <sys/time.h>
-#include <sys/malloc.h>
+#include <stdio.h>
+#include <malloc.h>
+#include <string.h>
 #include <sys/fcntl.h>
+#include <assert.h>
+
+//#include "tty.h"
 
 #include "wsconsio.h"
 #include "wsdisplayvar.h"
@@ -236,9 +241,9 @@ wsemul_vt100_attach(int console, const struct wsscreen_descr *type,
 
 	if (console) {
 		edp = &wsemul_vt100_console_emuldata;
-		KASSERT(edp->console == 1);
+		assert(edp->console == 1);
 	} else {
-		edp = malloc(sizeof *edp, M_DEVBUF, M_WAITOK);
+		edp = malloc(sizeof *edp);
 		wsemul_vt100_init(edp, type, cookie, ccol, crow, defattr);
 #ifdef DIAGNOSTIC
 		edp->console = 0;
@@ -247,14 +252,14 @@ wsemul_vt100_attach(int console, const struct wsscreen_descr *type,
 	vd = &edp->bd;
 	vd->cbcookie = cbcookie;
 
-	vd->tabs = malloc(1024, M_DEVBUF, M_NOWAIT);
-	vd->dblwid = malloc(1024, M_DEVBUF, M_NOWAIT|M_ZERO);
+	vd->tabs = calloc(1,1024);
+	vd->dblwid = calloc(1,1024);
 	vd->dw = 0;
-	vd->dcsarg = malloc(DCS_MAXLEN, M_DEVBUF, M_NOWAIT);
-	edp->isolatin1tab = malloc(128 * sizeof(int), M_DEVBUF, M_NOWAIT);
-	edp->decgraphtab = malloc(128 * sizeof(int), M_DEVBUF, M_NOWAIT);
-	edp->dectechtab = malloc(128 * sizeof(int), M_DEVBUF, M_NOWAIT);
-	edp->nrctab = malloc(128 * sizeof(int), M_DEVBUF, M_NOWAIT);
+	vd->dcsarg = malloc(DCS_MAXLEN);
+	edp->isolatin1tab = malloc(128 * sizeof(int));
+	edp->decgraphtab = malloc(128 * sizeof(int));
+	edp->dectechtab = malloc(128 * sizeof(int));
+	edp->nrctab = malloc(128 * sizeof(int));
 	vt100_initchartables(edp);
 	wsemul_vt100_reset(edp);
 	return edp;
@@ -268,7 +273,7 @@ wsemul_vt100_detach(void *cookie, u_int *crowp, u_int *ccolp)
 
 	*crowp = vd->crow;
 	*ccolp = vd->ccol;
-#define f(ptr) if (ptr) {free(ptr, M_DEVBUF); ptr = 0;}
+#define f(ptr) if (ptr) {free(ptr); ptr = 0;}
 	f(vd->tabs)
 	f(vd->dblwid)
 	f(vd->dcsarg)
@@ -278,7 +283,7 @@ wsemul_vt100_detach(void *cookie, u_int *crowp, u_int *ccolp)
 	f(edp->nrctab)
 #undef f
 	if (edp != &wsemul_vt100_console_emuldata)
-		free(edp, M_DEVBUF);
+		free(edp);
 }
 
 static void
@@ -549,7 +554,7 @@ wsemul_vt100_output_esc(struct wsemul_vt100_emuldata *edp, u_char c)
 		wsemul_vt100_nextline(edp);
 		break;
 	case 'H': /* HTS */
-		KASSERT(vd->tabs != 0);
+		assert(vd->tabs != 0);
 		vd->tabs[vd->ccol] = 1;
 		break;
 	case '~': /* LS1R */
@@ -984,7 +989,7 @@ wsemul_vt100_output(void *cookie, const u_char *data, u_int count, int kernel)
 			continue;
 		}
 		int state = edp->state - 1;
-		KASSERT(state < __arraycount(vt100_output));
+		assert(state < __arraycount(vt100_output));
 		edp->state = vt100_output[state](edp, *data);
 	}
 	if (vd->flags & VTFL_CURSORON)
