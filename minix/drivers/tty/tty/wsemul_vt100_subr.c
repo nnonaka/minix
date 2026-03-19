@@ -36,7 +36,7 @@ __KERNEL_RCSID(0, "$NetBSD: wsemul_vt100_subr.c,v 1.24 2018/12/06 01:42:20 uwe E
 #include <assert.h>
 
 #include <wsconsio.h>
-#include <wsksymvar.h>
+//#include <wsksymvar.h>
 #include <wsdisplayvar.h>
 #include <wsemulvar.h>
 #include <vt100_base.h>

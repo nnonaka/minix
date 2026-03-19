@@ -15,10 +15,7 @@
 
 #include "arch_proto.h"
 #include "oxpcie.h"
-
-#ifdef	USE_BIOS
 #include "direct_utils.h"
-#endif
 
 #ifdef USE_ACPI
 #include "acpi.h"
@@ -114,18 +111,18 @@ __dead void arch_shutdown(int how)
 	/* Mask all interrupts, including the clock. */
 	outb( INT_CTLMASK, ~0);
 
-#ifdef USE_BIOS
+   	if (kinfo.boot_mode == 0) {
 	/* Empty buffer */
 	while(direct_read_char(&unused_ch))
 		;
-#endif
+	}
 
 	if(kinfo.minix_panicing) {
 		/* Printing is done synchronously over serial. */
 		if (kinfo.do_serial_debug)
 			reset();
 
-#ifdef USE_BIOS
+    	if (kinfo.boot_mode == 0) {
 		/* Print accumulated diagnostics buffer and reset. */
 		direct_cls();
 		direct_print("Minix panic. System diagnostics buffer:\n\n");
@@ -133,7 +130,7 @@ __dead void arch_shutdown(int how)
 		direct_print("\nSystem has panicked, press any key to reboot");
 		while (!direct_read_char(&unused_ch))
 			;
-#endif
+		}
 		reset();
 	}
 		

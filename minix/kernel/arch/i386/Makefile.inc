@@ -75,7 +75,7 @@ CLEANFILES+= ${ORIG_UNPAGED_OBJS}
 
 SRCS+=	mpx.S arch_clock.c arch_do_vmctl.c arch_system.c \
 	klib.S memory.c protect.c  arch_reset.c pg_utils.c \
-	direct_com_utils.c
+	direct_com_utils.c direct_tty_utils.c
 
 SRCS+=	do_iopenable.c do_readbios.c do_sdevio.c exception.c i8259.c oxpcie.c \
 	usermapped_data_arch.c \
@@ -88,11 +88,6 @@ OBJS.kernel+=	${UNPAGED_OBJS}
 SRCS += arch_smp.c trampoline.S
 trampoline.o: trampoline.S
 	${CC} -E ${AFLAGS} ${AFLAGS.${<:T}} ${CPPFLAGS} ${.IMPSRC} | ${AS} -o ${.TARGET}
-.endif
-
-.if ${USE_BIOS} != "no"
-SRCS+= direct_tty_utils.c
-CPPFLAGS+= -DUSE_BIOS
 .endif
 
 .if ${USE_ACPI} != "no"

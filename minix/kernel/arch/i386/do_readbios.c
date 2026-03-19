@@ -9,7 +9,7 @@
 
 #include "kernel/system.h"
 
-extern	int	no_bios;
+extern	kinfo_t kinfo;
 
 /*===========================================================================*
  *				do_readbios				     *
@@ -20,11 +20,7 @@ int do_readbios(struct proc * caller, message * m_ptr)
   size_t len = m_ptr->m_lsys_krn_readbios.size;
   vir_bytes limit;
 
-#ifndef USE_BIOS
-	return EINVAL;
-#endif
-
-	if (no_bios) return EINVAL;
+	if (kinfo.boot_mode != 0) return EINVAL;
 
   src.offset = m_ptr->m_lsys_krn_readbios.addr;
   dst.offset = m_ptr->m_lsys_krn_readbios.buf;

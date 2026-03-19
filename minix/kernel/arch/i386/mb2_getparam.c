@@ -154,6 +154,7 @@ void get_parameters_mb2(u32_t ebx, kinfo_t *cbi)
 	memset(cbi, 0, sizeof(kinfo_t));
 	
 	/* Set various bits of info for the higher-level kernel. */
+	cbi->boot_mode = 1;
 	cbi->mb_version = 2;
 	
 	cbi->module_count = 0;

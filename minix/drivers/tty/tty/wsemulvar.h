@@ -46,7 +46,7 @@ struct wsemul_ops {
 	void	*(*attach)(int console, const struct wsscreen_descr *, void *,
 				int, int, void *, long);
 	void	(*output)(void *, const u_char *, u_int, int);
-	int	(*translate)(void *, keysym_t, const char **);
+	//int	(*translate)(void *, keysym_t, const char **);
 	void	(*detach)(void *, u_int *, u_int *);
 	void    (*reset)(void *, enum wsemul_resetops);
 	void	(*getmsgattrs)(void *, struct wsdisplay_msgattrs *);

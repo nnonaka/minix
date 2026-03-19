@@ -14,25 +14,12 @@
 #include <minix/sys_config.h>
 #include <minix/vm.h>
 #include "tty.h"
-
-/* The clock task should provide an interface for this */
-#define TIMER_FREQ  1193182L    /* clock frequency for timer in PC and AT */
+#include "console.h"
 
 /* Private variables used by the console driver. */
-static int wrap;		/* hardware can wrap? */
-static int softscroll;		/* 1 = software scrolling, 0 = hardware */
-static int beeping;		/* speaker is beeping? */
-static long disable_beep = -1;	/* do not use speaker if set to 1 */
-static unsigned font_lines;	/* font lines per character */
-static unsigned scr_width;	/* # characters on a line */
-static unsigned scr_lines;	/* # lines on the screen */
-static unsigned scr_size;	/* # characters on the screen */
 
 static int disabled_vc = -1;	/* Virtual console that was active when 
 				 * disable_console was called.
-				 */
-static int disabled_sm;	/* Scroll mode to be restored when re-enabling
-				 * console
 				 */
 
 /* Per console data. */
@@ -59,16 +46,18 @@ static void reenable_console(void);
 static void stop_beep(int arg);
 static int cons_ioctl(tty_t *tp, int);
 
-static int video_open(devminor_t minor, int access, endpoint_t user_endpt);
-static int video_close(devminor_t minor);
-static int video_ioctl(devminor_t minor, unsigned long request,
-	endpoint_t endpt, cp_grant_id_t grant, int flags,
-	endpoint_t user_endpt, cdev_id_t id);
+static void ser_cons_stop(void);
+static void ser_scr_init(struct tty *tp);
+static int ser_con_loadfont(endpoint_t endpt, cp_grant_id_t grant);
+static void ser_select_console(int cons_line);
 
-static struct chardriver video_tab = {
-  .cdr_open	= video_open,
-  .cdr_close	= video_close,
-  .cdr_ioctl	= video_ioctl
+cons_sw_t ser_cons_sw = {
+	ser_scr_init,
+	ser_con_loadfont,
+	ser_cons_stop,
+	ser_select_console,
+	disable_console,
+	reenable_console
 };
 
 /*===========================================================================*
@@ -163,119 +152,13 @@ static void flush(register console_t *cons)
 }
 
 /*===========================================================================*
- *				beep_disabled				     *
- *===========================================================================*/
-static long beep_disabled(void)
-{
-/* Return whether the user requested that beeps not be performed.
- */
-
-  /* Perform first-time initialization if necessary. */
-  if (disable_beep < 0) {
-	disable_beep = 0;	/* the default is on */
-
-	(void) env_parse("nobeep", "d", 0, &disable_beep, 0, 1);
-  }
-
-  return disable_beep;
-}
-
-/*===========================================================================*
- *				video_open				     *
- *===========================================================================*/
-static int video_open(devminor_t minor, int UNUSED(access),
-	endpoint_t UNUSED(user_endpt))
-{
-  /* Should grant IOPL */
-  disable_console();
-  return OK;
-}
-
-/*===========================================================================*
- *				video_close				     *
- *===========================================================================*/
-static int video_close(devminor_t minor)
-{
-  reenable_console();
-  return OK;
-}
-
-/*===========================================================================*
- *				video_ioctl				     *
- *===========================================================================*/
-static int video_ioctl(devminor_t minor, unsigned long request,
-	endpoint_t endpt, cp_grant_id_t grant, int flags,
-	endpoint_t user_endpt, cdev_id_t id)
-{
-  return ENOTTY;
-}
-
-/*===========================================================================*
- *				do_video				     *
- *===========================================================================*/
-void do_video(message *m, int ipc_status)
-{
-  chardriver_process(&video_tab, m, ipc_status);
-}
-
-/*===========================================================================*
- *				beep_x					     *
- *===========================================================================*/
-void beep_x(unsigned freq, clock_t dur)
-{
-/* Making a beeping sound on the speaker.
- * This routine works by turning on the bits 0 and 1 in port B of the 8255
- * chip that drive the speaker.
- */
-  static minix_timer_t tmr_stop_beep;
-  pvb_pair_t char_out[3];
-  u32_t port_b_val;
-
-  if (beep_disabled()) return;
-  
-  unsigned long ival= TIMER_FREQ / freq;
-  if (ival == 0 || ival > 0xffff)
-	return;	/* Frequency out of range */
-
-  /* Set timer in advance to prevent beeping delay. */
-  set_timer(&tmr_stop_beep, dur, stop_beep, 0);
-
-  if (!beeping) {
-	/* Set timer channel 2, square wave, with given frequency. */
-        pv_set(char_out[0], TIMER_MODE, 0xB6);	
-        pv_set(char_out[1], TIMER2, (ival >> 0) & BYTE);
-        pv_set(char_out[2], TIMER2, (ival >> 8) & BYTE);
-        if (sys_voutb(char_out, 3)==OK) {
-        	if (sys_inb(PORT_B, &port_b_val)==OK &&
-        	    sys_outb(PORT_B, (port_b_val|3))==OK)
-        	    	beeping = TRUE;
-        }
-  }
-}
-
-/*===========================================================================*
- *				stop_beep				     *
- *===========================================================================*/
-static void stop_beep(int arg __unused)
-{
-/* Turn off the beeper by turning off bits 0 and 1 in PORT_B. */
-  u32_t port_b_val;
-  if (sys_inb(PORT_B, &port_b_val)==OK && 
-	sys_outb(PORT_B, (port_b_val & ~3))==OK)
-		beeping = FALSE;
-}
-
-/*===========================================================================*
  *				scr_init				     *
  *===========================================================================*/
-void scr_init(tty_t *tp)
+static void ser_scr_init(tty_t *tp)
 {
 /* Initialize the screen driver. */
   console_t *cons;
   int line;
-  int s;
-  static unsigned page_size;
-  struct kinfo kinfo;		/* kernel information */
 
   /* Associate console and TTY. */
   line = tp - &tty_table[0];
@@ -295,20 +178,9 @@ void scr_init(tty_t *tp)
 }
 
 /*===========================================================================*
- *				toggle_scroll				     *
- *===========================================================================*/
-void toggle_scroll(void)
-{
-/* Toggle between hardware and software scroll. */
-
-  softscroll = !softscroll;
-  printf("%sware scrolling enabled.\n", softscroll ? "Soft" : "Hard");
-}
-
-/*===========================================================================*
  *				cons_stop				     *
  *===========================================================================*/
-void cons_stop(void)
+static void ser_cons_stop(void)
 {
 /* Prepare for halt or reboot. */
   select_console(0);
@@ -324,7 +196,6 @@ static void disable_console(void)
 		return;
 	
 	disabled_vc = ccurrent;
-	disabled_sm = softscroll;
 
 	select_console(0);
 
@@ -346,7 +217,7 @@ static void reenable_console(void)
 /*===========================================================================*
  *				select_console				     *
  *===========================================================================*/
-void select_console(int cons_line)
+static void ser_select_console(int cons_line)
 {
 /* Set the current console to console number 'cons_line'. */
 
@@ -362,7 +233,7 @@ void select_console(int cons_line)
 /*===========================================================================*
  *				con_loadfont				     *
  *===========================================================================*/
-int con_loadfont(endpoint_t endpt, cp_grant_id_t grant)
+static int ser_con_loadfont(endpoint_t endpt, cp_grant_id_t grant)
 {
   return OK;
 }
@@ -373,12 +244,6 @@ int con_loadfont(endpoint_t endpt, cp_grant_id_t grant)
 static int cons_ioctl(tty_t *tp, int UNUSED(try))
 {
 /* Set the screen dimensions. */
-
-  tp->tty_winsize.ws_row= scr_lines;
-  tp->tty_winsize.ws_col= scr_width;
-  tp->tty_winsize.ws_xpixel= scr_width * 8;
-  tp->tty_winsize.ws_ypixel= scr_lines * font_lines;
-
   return 0;
 }
 

@@ -208,8 +208,9 @@ static int acpi_rsdp_test(void * buff)
 
 static int get_acpi_rsdp(void)
 {
-#ifdef USE_BIOS
 	u16_t ebda;
+	
+   	if (kinfo.boot_mode == 0) {
 	/*
 	 * Read 40:0Eh - to find the starting address of the EBDA.
 	 */
@@ -227,7 +228,8 @@ static int get_acpi_rsdp(void)
 				sizeof(acpi_rsdp), &machine.acpi_rsdp,
 				acpi_rsdp_test))
 		return 1;
-#else
+	} 
+	else {
 	if ((kinfo.mb_version == 2) && (kinfo.rsdp_p != NULL)) {
 		memcpy((void *)&acpi_rsdp, (void *)kinfo.rsdp_p, 
 				sizeof(acpi_rsdp));
@@ -237,7 +239,7 @@ static int get_acpi_rsdp(void)
 		}
 		printf("get_acpi_rsdp: acpi_rsdp_test failed.\n");
 	}
-#endif
+	}
 	
 	machine.acpi_rsdp = 0; /* RSDP cannot be found at this address therefore
 				  it is a valid negative value */

@@ -63,7 +63,7 @@ const struct wsemul_ops wsemul_vt100_ops = {
 	.cnattach = wsemul_vt100_cnattach,
 	.attach = wsemul_vt100_attach,
 	.output = wsemul_vt100_output,
-	.translate = wsemul_vt100_translate,
+//	.translate = wsemul_vt100_translate,
 	.detach = wsemul_vt100_detach,
 	.reset = wsemul_vt100_resetop,
 #ifdef WSDISPLAY_CUSTOM_OUTPUT
@@ -260,7 +260,7 @@ wsemul_vt100_attach(int console, const struct wsscreen_descr *type,
 	edp->decgraphtab = malloc(128 * sizeof(int));
 	edp->dectechtab = malloc(128 * sizeof(int));
 	edp->nrctab = malloc(128 * sizeof(int));
-	vt100_initchartables(edp);
+	//vt100_initchartables(edp);
 	wsemul_vt100_reset(edp);
 	return edp;
 }
@@ -308,7 +308,7 @@ wsemul_vt100_resetop(void *cookie, enum wsemul_resetops op)
 		wsemul_vt100_reset(edp);
 		break;
 	case WSEMUL_SYNCFONT:
-		vt100_initchartables(edp);
+		//vt100_initchartables(edp);
 		break;
 	case WSEMUL_CLEARSCREEN:
 		wsemul_vt100_ed(vd, 2);
@@ -710,7 +710,7 @@ wsemul_vt100_output_scs96(struct wsemul_vt100_emuldata *edp, u_char c)
 	case '=': /* swiss */
 		nrc = 11;
 setnrc:
-		vt100_setnrc(edp, nrc); /* what table ??? */
+		//vt100_setnrc(edp, nrc); /* what table ??? */
 		break;
 	default:
 #ifdef VT100_PRINTUNKNOWN
@@ -726,7 +726,7 @@ wsemul_vt100_output_scs96_percent(struct wsemul_vt100_emuldata *edp, u_char c)
 {
 	switch (c) {
 	case '6': /* portuguese */
-		vt100_setnrc(edp, 8);
+		//vt100_setnrc(edp, 8);
 		break;
 	default:
 #ifdef VT100_PRINTUNKNOWN

@@ -6,9 +6,7 @@ PROG=	tty
 
 SRCS +=	tty.c
 
-.if ${USE_BIOS} == "no"
 .include "Makefile.fbcons.inc"
-.endif
 
 DPADD+=	${LIBCHARDRIVER} ${LIBSYS} ${LIBTIMERS}
 LDADD+=	-lchardriver -lsys -ltimers

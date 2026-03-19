@@ -53,7 +53,7 @@ struct wsemul_vt100_emuldata {
 
 void wsemul_vt100_reset(struct wsemul_vt100_emuldata *);
 
-int wsemul_vt100_translate(void *, keysym_t, const char **);
+//int wsemul_vt100_translate(void *, keysym_t, const char **);
 
 void vt100_initchartables(struct wsemul_vt100_emuldata *);
 void vt100_setnrc(struct wsemul_vt100_emuldata *, int);

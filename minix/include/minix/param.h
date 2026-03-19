@@ -51,12 +51,12 @@ struct kinfo_module {
 	char *		mod_string;
 };
 
-//#define MULTIBOOT_VIDEO_MODE		0x00000004
-//#define MULTIBOOT_VIDEO_MODE_EGA	1
+#define MULTIBOOT_VIDEO_MODE		0x00000004
+#define MULTIBOOT_VIDEO_MODE_EGA	1
 #define MULTIBOOT_VIDEO_BUFFER		0xB8000
 
-//#define MULTIBOOT_CONSOLE_LINES		25
-//#define MULTIBOOT_CONSOLE_COLS		80
+#define MULTIBOOT_CONSOLE_LINES		25
+#define MULTIBOOT_CONSOLE_COLS		80
 
 #define MULTIBOOT_MEMORY_AVAILABLE	1
 #define MULTIBOOT_MAX_MODS			20
@@ -69,9 +69,11 @@ typedef struct kinfo_mmap kinfo_memory_map_t;
 /* This is used to obtain system information through SYS_GETINFO. */
 #define MAXMEMMAP 40
 typedef struct kinfo {
+		int						boot_mode;	/* 0:BIOS, 1:UEFI */
         /* Straight multiboot-provided info */
-        //multiboot_info_t        mbi1;
         int						mb_version;
+        //multiboot_info_t        mbi1;
+        /* mutiboot2 info */
         struct kinfo_framebuffer	fb;
         uint32_t	            module_count;
         kinfo_module_t      	module_list[MULTIBOOT_MAX_MODS];

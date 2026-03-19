@@ -12,8 +12,6 @@
 #define MULTIBOOT_CONSOLE_LINES		25
 #define MULTIBOOT_CONSOLE_COLS		80
 
-int	no_bios = 1;
-
 /* Give non-zero values to avoid them in BSS */
 static int print_line = 1, print_col = 1;
 
@@ -27,7 +25,7 @@ static char *video_mem;
 
 void direct_put_char(char c, int line, int col) 
 {
-	if (no_bios) return;
+	if (kinfo.boot_mode != 0) return;
 	video_mem = (char *)MULTIBOOT_VIDEO_BUFFER;
 	int offset = VIDOFFSET(line, col);
 	video_mem[offset] = c;
@@ -46,7 +44,7 @@ void direct_cls(void)
 	/* Clear screen */
 	int i,j;
 
-	if (no_bios) return;
+	if (kinfo.boot_mode != 0) return;
 	for(i = 0; i < MULTIBOOT_CONSOLE_COLS; i++)
 		for(j = 0; j < MULTIBOOT_CONSOLE_LINES; j++)
 			direct_put_char(' ', j, i);
@@ -76,7 +74,7 @@ static void direct_scroll_up(int lines)
 
 void direct_print_char(char c)
 {
-	if (no_bios) return;
+	if (kinfo.boot_mode != 0) return;
 	while (print_line >= MULTIBOOT_CONSOLE_LINES)
 		direct_scroll_up(1);
 
@@ -128,6 +126,8 @@ void direct_print(const char *str)
 int direct_read_char(unsigned char *ch)
 {
 	unsigned long sb;
+
+	if (kinfo.boot_mode != 0) return 0;
 
 	sb = inb(KB_STATUS);
 

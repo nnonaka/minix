@@ -38,8 +38,8 @@ __KERNEL_RCSID(0, "$NetBSD: wsdisplay.c,v 1.158 2019/07/25 20:26:39 jmcneill Exp
 #include "opt_wsmsgattrs.h"
 #endif
 
-#include "wskbd.h"
-#include "wsmux.h"
+//#include "wskbd.h"
+//#include "wsmux.h"
 #include "wsdisplay.h"
 
 #include <sys/param.h>
@@ -62,13 +62,13 @@ __KERNEL_RCSID(0, "$NetBSD: wsdisplay.c,v 1.158 2019/07/25 20:26:39 jmcneill Exp
 #include <assert.h>
 
 #include <wsconsio.h>
-#include <wseventvar.h>
-#include <wsmuxvar.h>
+//#include <wseventvar.h>
+//#include <wsmuxvar.h>
 #include <wsdisplayvar.h>
-#include <wsksymvar.h>
-#include <wsksymdef.h>
+//#include <wsksymvar.h>
+//#include <wsksymdef.h>
 #include <wsemulvar.h>
-#include <wscons_callbacks.h>
+//#include <wscons_callbacks.h>
 //#include <dev/cons.h>
 
 //#include "locators.h"

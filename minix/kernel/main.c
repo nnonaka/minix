@@ -390,7 +390,7 @@ void minix_shutdown(int how)
   stop_local_timer();
 
   /* Show shutdown message */
-#ifdef USE_BIOS
+  if (kinfo.boot_mode == 0) {
   direct_cls();
   if((how & RB_POWERDOWN) == RB_POWERDOWN)
 	direct_print("MINIX has halted and will now power off.\n");
@@ -399,7 +399,7 @@ void minix_shutdown(int how)
 		     "It is safe to turn off your computer.\n");
   else
 	direct_print("MINIX will now reset.\n");
-#endif
+  }
   arch_shutdown(how);
 }
 

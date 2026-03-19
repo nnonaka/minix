@@ -273,11 +273,11 @@ void arch_init(void)
 	}
 #endif
 
-#ifdef USE_BIOS
+   	if (kinfo.boot_mode == 0) {
 	/* Reserve some BIOS ranges */
 	cut_memmap(&kinfo, BIOS_MEM_BEGIN, BIOS_MEM_END);
 	cut_memmap(&kinfo, BASE_MEM_TOP, UPPER_MEM_END);
-#endif
+	}
 }
 
 /*===========================================================================*

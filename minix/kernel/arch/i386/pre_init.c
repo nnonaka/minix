@@ -114,6 +114,7 @@ void get_parameters(u32_t ebx, kinfo_t *cbi)
 	/* get our own copy of the multiboot info struct and module list */
 	memcpy((void *) mbi, (void *) ebx, sizeof(mbi1));
 
+	cbi->boot_mode = 0;
 	cbi->mb_version = 1;
 	
 	/* Set various bits of info for the higher-level kernel. */
