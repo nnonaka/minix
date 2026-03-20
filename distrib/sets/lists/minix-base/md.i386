@@ -92,3 +92,4 @@
 ./usr/mdec/mbr_com0                                     minix-base
 ./usr/mdec/mbr_com0_9600                                minix-base
 ./usr/mdec/mbr_ext                                      minix-base
+./usr/mdec/mbr_gpt                                      minix-base

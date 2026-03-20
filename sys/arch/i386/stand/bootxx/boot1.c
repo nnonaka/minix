@@ -41,8 +41,6 @@ __RCSID("$NetBSD: boot1.c,v 1.20 2011/01/06 01:08:48 jakllsch Exp $");
 #include <sys/disklabel.h>
 #if !defined(__minix)
 #include <dev/raidframe/raidframevar.h>	/* For RF_PROTECTED_SECTORS */
-#else
-#define RF_PROTECTED_SECTORS 64
 #endif /* !defined(__minix) */
 
 #define XSTR(x) #x
@@ -92,6 +90,7 @@ boot1(uint32_t biosdev, uint64_t *sector)
 	fd = ob();
 	if (fd != -1)
 		goto done;
+#if !defined(__minix) 
 	/*
 	 * Maybe the filesystem is enclosed in a raid set.
 	 * add in size of raidframe header and try again.
@@ -99,19 +98,14 @@ boot1(uint32_t biosdev, uint64_t *sector)
 	 * magic number is absent.)
 	 */
 	bios_sector += RF_PROTECTED_SECTORS;
-	fd = ob();
-	if (fd != -1)
-		goto done;
-
-#if defined(__minix) && defined(BOOT_FROM_MINIXFS3)
-	bios_sector -= RF_PROTECTED_SECTORS;
+#else
+#if defined(BOOT_FROM_MINIXFS3)
 	bios_sector += MINIX3_FIRST_SUBP_OFFSET;
-	*sector = bios_sector;
-
+#endif
+#endif
 	fd = ob();
 	if (fd != -1)
 		goto done;
-#endif /* defined(__minix) && defined(BOOT_FROM_MINIXFS3) */
 
 	/*
 	 * Nothing at the start of the MBR partition, fallback on
@@ -123,8 +117,10 @@ boot1(uint32_t biosdev, uint64_t *sector)
 		goto done;
 	bios_sector = ptn_disklabel.d_partitions[0].p_offset;
 	*sector = bios_sector;
+#if !defined(__minix)
 	if (ptn_disklabel.d_partitions[0].p_fstype == FS_RAID)
 		bios_sector += RF_PROTECTED_SECTORS;
+#endif /* !defined(__minix) */
 
 	fd = ob();
 

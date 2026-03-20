@@ -196,8 +196,8 @@ LABELSECTORS?=	2048	# 1MB aligned for modern flash devices
 .endif
 
 FSSECTORS!=	expr ${IMAGESECTORS} - ${SWAPSECTORS} - ${LABELSECTORS} \
-		    - ${EFISECTORS} - ${GPTSECTORS} - ${FATSECTORS}
-FSSIZE!=	expr ${FSSECTORS} \* 512
+		    - ${EFISECTORS} - ${GPTSECTORS} - ${FATSECTORS} || test $$? -eq 1 || exit 1
+FSSIZE!=	expr ${FSSECTORS} \* 512 || test $$? -eq 1 || exit 1
 
 # parameters for disklabel and MBR
 HEADS=		64
@@ -213,9 +213,9 @@ MBRFAT?=	6	# 16-bit FAT, more than 32M
 
 BSDPARTSECTORS!= expr ${IMAGESECTORS} - ${LABELSECTORS} \
 		    - ${EFISECTORS} - ${GPTSECTORS} - ${FATSECTORS}
-FSOFFSET!=	expr ${LABELSECTORS} + ${EFISECTORS} + ${FATSECTORS}
+FSOFFSET!=	expr ${LABELSECTORS} + ${EFISECTORS} + ${FATSECTORS} || test $$? -eq 1 || exit 1
 SWAPOFFSET!=	expr ${LABELSECTORS} + ${FSSECTORS} \
-		    + ${EFISECTORS} + ${FATSECTORS}
+		    + ${EFISECTORS} + ${FATSECTORS} || test $$? -eq 1 || exit 1
 FATOFFSET=	${LABELSECTORS}
 
 # parameters for sunlabel
@@ -259,8 +259,6 @@ WORKFSTAB?=	work.fstab
 WORKRCCONF?=	work.rc.conf
 WORKFS?=        work.rootfs
 TARGETFS?=      imgroot.fs
-GPTFS?=			ffs
-GPTLABEL?=		NetBSD
 
 .if defined(__MINIX)
 TOOL_MKFSMFS=	${TOOLDIR}/bin/${_TOOL_PREFIX}mkfs.mfs
@@ -269,7 +267,13 @@ WORKPROTO=		work.proto
 WRKMTREE=		work.mtree
 GPTFS=			mfs
 GPTLABEL=		Minix
+MBRFS=			${MBRMINIX}
+.else
+GPTFS=			ffs
+GPTLABEL=		NetBSD
+MBRFS=			${MBRNETBSD}
 .endif # defined(__MINIX)
+
 
 CLEANFILES+=	${WORKSPEC} ${WORKFSTAB} ${WORKRCCONF} ${WORKFS}
 CLEANFILES+=	${TARGETFS}
@@ -326,16 +330,9 @@ ${WORKFSTAB}:
 .  if ${SWAPSECTORS} != 0
 	${TOOL_SED} < ${FSTAB_IN} > ${WORKFSTAB}
 .  else
-.	if !defined(__MINIX)
 	${TOOL_SED}							\
 	    -e "/ROOT.b/d"						\
 	    < ${FSTAB_IN} > ${WORKFSTAB}
-.   else
-	${TOOL_SED}							\
-	    -e "s/ROOT.a/\/dev\/c0d0p0/"			\
-	    -e "/ROOT.b/d"						\
-	    < ${FSTAB_IN} > ${WORKFSTAB}
-.	endif
 .  endif
 .endif
 
@@ -379,6 +376,10 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	echo "no_swap=YES" >> ${WORKRCCONF}
 	@echo Setting savecore=NO in /etc/rc.conf ...
 	echo "savecore=NO" >> ${WORKRCCONF}
+.endif
+.if defined(RC_CONF_EXTRA)
+	@echo Adding contents of ${RC_CONF_EXTRA} to /etc/rc.conf ...
+	cat ${RC_CONF_EXTRA} >> ${WORKRCCONF}
 .endif
 	${INSTALL} ${COPY} -m 0644 ${WORKRCCONF} ${WORKDIR}/etc/rc.conf
 .if defined(IMGDIR_EXTRA)
@@ -445,8 +446,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 		${WORKFS} \
 		${WORKPROTO}
 .endif #!defined(__MINIX)
-.if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} == "no" \
-		&& !defined(__MINIX)
+.if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} == "no"
 	${TOOL_INSTALLBOOT} -v -m ${MACHINE} ${INSTALLBOOTOPTIONS} ${WORKFS} \
 	    ${WORKDIR}/usr/mdec/${PRIMARY_BOOT} ${SECONDARY_BOOT_ARG}
 .endif
@@ -566,7 +566,7 @@ ${WORKMBR}:
 	# create BSD partition
 	${TOOL_FDISK} -f -i -u \
 	    -b ${MBRCYLINDERS}/${MBRHEADS}/${MBRSECTORS}		\
-	    -1 -a -s ${MBRMINIX}/${FSOFFSET}/${BSDPARTSECTORS}		\
+	    -1 -a -s ${MBRFS}/${FSOFFSET}/${BSDPARTSECTORS}		\
 	    -F ${WORKMBR}
 	# create FAT partition
 	${TOOL_FDISK} -f -u \
@@ -577,7 +577,7 @@ ${WORKMBR}:
 	# create BSD partition
 	${TOOL_FDISK} -f -i -u \
 	    -b ${MBRCYLINDERS}/${MBRHEADS}/${MBRSECTORS}		\
-	    -0 -a -s ${MBRMINIX}/${FSOFFSET}/${BSDPARTSECTORS}		\
+	    -0 -a -s ${MBRFS}/${FSOFFSET}/${BSDPARTSECTORS}		\
 	    -F ${WORKMBR}
 .  endif
 .  if empty(MBR_BOOTCODE)
@@ -624,15 +624,15 @@ ${IMGBASE}.img:	${TARGET_BLOCKS}
 	    ${FSOFFSET} ${FSCYLINDERS} ${FSCYLINDERS} ${SWAPCYLINDERS} | \
 	    ${TOOL_SUNLABEL} -nq ${WORKIMG}
 .endif
+.if !defined(__MINIX)
 .if ${USE_GPT} == "no"
-.if ${INSTALLBOOT_AFTER_DISKLABEL} != "no"
 	${TOOL_DISKLABEL} -R -F ${WORKIMG} ${WORKLABEL}
-.endif
-.if !empty(PRIMARY_BOOT)
+.if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} != "no"
 	${TOOL_INSTALLBOOT} -v -m ${MACHINE} ${INSTALLBOOTOPTIONS} ${WORKIMG} \
 	    ${WORKDIR}/usr/mdec/${PRIMARY_BOOT}
 .endif
 .endif
+.endif # !defined(__MINIX)
 	mv ${WORKIMG} ${.TARGET}
 
 CLEANFILES+=	${IMGBASE}.img.gz ${IMGBASE}.img.gz.tmp

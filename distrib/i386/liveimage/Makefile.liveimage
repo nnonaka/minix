@@ -3,10 +3,11 @@
 .include <bsd.own.mk>
 
 KERN_SET=		minix-kernel
+#MBR_BOOTCODE=	mbr_gpt
 #PRIMARY_BOOT=		bootxx_minixfs3
 SECONDARY_BOOT=		boot_monitor
 #SECONDARY_BOOT_ARG=	# unnecessary
-EFIBOOT+=		${WORKDIR}/usr/mdec/bootia32.efi
+EFIBOOT=		${WORKDIR}/usr/mdec/bootia32.efi
 
 USE_MBR=		yes
 USE_GPT=		yes
@@ -18,5 +19,7 @@ IMAGEMB=		2048
 # for using grub as efiboot
 USE_GRUB=		no
 GRUBDIR=		${NETBSDSRCDIR}/external/gpl3/grub/dist/grub-core
+
+FSTAB_IN=	${.CURDIR}/fstab.in
 
 .include "${.CURDIR}/../../../common/bootimage/Makefile.liveimage"
