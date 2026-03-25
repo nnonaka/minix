@@ -19,14 +19,14 @@
 #include "raster.h"
 #include "wscons_raster.h"
 #include "wsdisplayvar.h"
+#include "wsemulvar.h"
 
 /* Set this to 1 if you want console output duplicated on the first
  * serial line.
   */
 #define DUP_CONS_TO_SER	1
 
-/* The clock task should provide an interface for this */
-#define TIMER_FREQ  1193182L    /* clock frequency for timer in PC and AT */
+#define	KASSERT(x)	assert(x)
 
 const struct wsdisplay_emulops fbcons_emulops = {
 	rcons_cursor,
@@ -39,21 +39,36 @@ const struct wsdisplay_emulops fbcons_emulops = {
 	rcons_allocattr
 };
 
+struct wsscreen_internal {
+	const struct wsdisplay_emulops *emulops;
+	void	*emulcookie;
+
+	const struct wsscreen_descr *scrdata;
+
+	const struct wsemul_ops *wsemul;
+	void	*wsemulcookie;
+};
+
 /* Private variables used by the console driver. */
-static int wrap;		/* hardware can wrap? */
-static int softscroll;		/* 1 = software scrolling, 0 = hardware */
-static int beeping;		/* speaker is beeping? */
-static long disable_beep = -1;	/* do not use speaker if set to 1 */
 static unsigned font_lines;	/* font lines per character */
 static unsigned scr_width;	/* # characters on a line */
 static unsigned scr_lines;	/* # lines on the screen */
 static unsigned scr_size;	/* # characters on the screen */
 
+static int wsdisplay_console_initted;
+static int wsdisplay_console_attached;
+//static struct wsdisplay_softc *wsdisplay_console_device;
+static struct wsscreen_internal wsdisplay_console_conf;
+
+static struct consdev wsdisplay_cons = {
+	NULL, NULL, NULL, wsdisplay_cnputc,
+	NULL, NULL, NULL, NULL, NODEV, CN_NORMAL
+};
+static struct consdev *wsdisplay_ocn;
+static struct consdev *cn_tab;
+
 static int disabled_vc = -1;	/* Virtual console that was active when 
 				 * disable_console was called.
-				 */
-static int disabled_sm;	/* Scroll mode to be restored when re-enabling
-				 * console
 				 */
 
 static char *console_memory = NULL;
@@ -61,9 +76,6 @@ static char *font_memory = NULL;
 
 /* Per console data. */
 typedef struct console {
-	const struct wsdisplay_emulops *emulops;
-	const struct wsemul_ops *wsemul;
-	const struct wsscreen_descr *scrdata;
   tty_t *c_tty;			/* associated TTY struct */
   int c_column;			/* current column number (0-origin) */
   int c_row;			/* current row (0 at top of screen) */
@@ -99,6 +111,7 @@ static int shutting_down = FALSE;	/* don't allow console switches */
 
 static int cons_write(struct tty *tp, int try);
 static void cons_echo(tty_t *tp, int c);
+static void out_char(console_t *cons, int c);
 static void flush(console_t *cons);
 static void disable_console(void);
 static void reenable_console(void);
@@ -168,7 +181,7 @@ static int cons_write(register struct tty *tp, int try)
 	 * directly.
 	 */
 	do {
-		ser_putc(*tbuf++);
+		out_char(cons, *tbuf++);
 	} while (--count != 0);
   } while ((count = tp->tty_outleft) != 0 && !tp->tty_inhibited);
 
@@ -196,8 +209,32 @@ static void cons_echo(register tty_t *tp, int c)
 /* Echo keyboard input (print & flush). */
   console_t *cons = tp->tty_priv;
 
-  ser_putc(c);
+  out_char(cons, c);
   flush(cons);
+}
+
+/*===========================================================================*
+ *				out_char				     *
+ *				cons - pointer to console struct
+ *				c - character to output
+ *===========================================================================*/
+static void out_char(register console_t *cons, int i)
+{
+	struct wsscreen_internal *dc;
+	u_char c = i;
+
+#if DUP_CONS_TO_SER
+  if (cons == &cons_table[0] && c != '\0')
+  {
+	if (c == '\n')
+		ser_putc('\r');
+	ser_putc(c);
+  }
+#endif
+	// TODO
+	dc = &wsdisplay_console_conf;
+	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
+
 }
 
 /*===========================================================================*
@@ -207,24 +244,116 @@ static void cons_echo(register tty_t *tp, int c)
 static void flush(register console_t *cons)
 {
   tty_t *tp = cons->c_tty;
+  
+    /* Check and update the cursor position. */
+  if (cons->c_column < 0) cons->c_column = 0;
+  if (cons->c_column > scr_width) cons->c_column = scr_width;
+  if (cons->c_row < 0) cons->c_row = 0;
+  if (cons->c_row >= scr_lines) cons->c_row = scr_lines - 1;
+  //cur = cons->c_org + cons->c_row * scr_width + cons->c_column;
+  //if (cur != cons->c_cur)
+  //  UPDATE_CURSOR(cons, cur);
 }
 
-/*===========================================================================*
- *				beep_disabled				     *
- *===========================================================================*/
-static long beep_disabled(void)
+void
+wsdisplay_cnputc(dev_t dev, int i)
 {
-/* Return whether the user requested that beeps not be performed.
+	struct wsscreen_internal *dc;
+	u_char c = i;
+
+	if (!wsdisplay_console_initted)
+		return;
+
+	dc = &wsdisplay_console_conf;
+	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
+
+#ifdef WSDISPLAY_MULTICONS
+	if (!wsdisplay_multicons_suspended &&
+	    wsdisplay_multicons_enable && wsdisplay_ocn && wsdisplay_ocn->cn_putc)
+		wsdisplay_ocn->cn_putc(wsdisplay_ocn->cn_dev, i);
+#endif
+}
+
+/*
+ * Callbacks for the emulation code.
  */
+void
+wsdisplay_emulbell(void *v)
+{
+	struct wsscreen *scr = v;
 
-  /* Perform first-time initialization if necessary. */
-  if (disable_beep < 0) {
-	disable_beep = 0;	/* the default is on */
+	if (scr == NULL)		/* console, before real attach */
+		return;
 
-	(void) env_parse("nobeep", "d", 0, &disable_beep, 0, 1);
-  }
+	//if (scr->scr_flags & SCR_GRAPHICS) /* can this happen? */
+	//	return;
 
-  return disable_beep;
+	//(void) wsdisplay_internal_ioctl(scr->sc, scr, WSKBDIO_BELL, NULL,
+	//				FWRITE, NULL);
+}
+
+void
+wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
+	int ccol, int crow, long defattr)
+{
+	const struct wsemul_ops *wsemul;
+
+	KASSERT(wsdisplay_console_initted < 2);
+	KASSERT(type->nrows > 0);
+	KASSERT(type->ncols > 0);
+	KASSERT(crow < type->nrows);
+	KASSERT(ccol < type->ncols);
+
+	wsdisplay_console_conf.emulops = type->textops;
+	wsdisplay_console_conf.emulcookie = cookie;
+	wsdisplay_console_conf.scrdata = type;
+
+	wsemul = &wsemul_vt100_ops;
+	wsdisplay_console_conf.wsemul = wsemul;
+	wsdisplay_console_conf.wsemulcookie = (*wsemul->cnattach)(type, cookie,
+								  ccol, crow,
+								  defattr);
+
+	if (cn_tab != &wsdisplay_cons)
+		wsdisplay_ocn = cn_tab;
+
+	if (wsdisplay_ocn != NULL && wsdisplay_ocn->cn_halt != NULL)
+		wsdisplay_ocn->cn_halt(wsdisplay_ocn->cn_dev);
+
+	cn_tab = &wsdisplay_cons;
+	wsdisplay_console_initted = 2;
+}
+
+void
+wsdisplay_preattach(const struct wsscreen_descr *type, void *cookie,
+	int ccol, int crow, long defattr)
+{
+	const struct wsemul_ops *wsemul;
+
+	KASSERT(!wsdisplay_console_initted);
+	KASSERT(type->nrows > 0);
+	KASSERT(type->ncols > 0);
+	KASSERT(crow < type->nrows);
+	KASSERT(ccol < type->ncols);
+
+	wsdisplay_console_conf.emulops = type->textops;
+	wsdisplay_console_conf.emulcookie = cookie;
+	wsdisplay_console_conf.scrdata = type;
+
+	wsemul = &wsemul_vt100_ops;
+	wsdisplay_console_conf.wsemul = wsemul;
+	wsdisplay_console_conf.wsemulcookie = (*wsemul->cnattach)(type, cookie,
+								  ccol, crow,
+								  defattr);
+
+	if (cn_tab != &wsdisplay_cons)
+		wsdisplay_ocn = cn_tab;
+
+	if (wsdisplay_ocn != NULL && wsdisplay_ocn->cn_halt != NULL)
+		wsdisplay_ocn->cn_halt(wsdisplay_ocn->cn_dev);
+
+	cn_tab = &wsdisplay_cons;
+	wsdisplay_console_initted = 1;
 }
 
 /*===========================================================================*
@@ -308,10 +437,7 @@ static void disable_console(void)
 		return;
 	
 	disabled_vc = ccurrent;
-	disabled_sm = softscroll;
 
-	//cons_org0();
-	softscroll = 1;
 	select_console(0);
 
 	/* Should also disable further output to virtual consoles */

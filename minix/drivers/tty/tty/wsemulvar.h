@@ -49,9 +49,9 @@ struct wsemul_ops {
 	//int	(*translate)(void *, keysym_t, const char **);
 	void	(*detach)(void *, u_int *, u_int *);
 	void    (*reset)(void *, enum wsemul_resetops);
-	void	(*getmsgattrs)(void *, struct wsdisplay_msgattrs *);
-	void	(*setmsgattrs)(void *, const struct wsscreen_descr *,
-		               const struct wsdisplay_msgattrs *);
+	//void	(*getmsgattrs)(void *, struct wsdisplay_msgattrs *);
+	//void	(*setmsgattrs)(void *, const struct wsscreen_descr *,
+	//	               const struct wsdisplay_msgattrs *);
 	void	(*resize)(void *, const struct wsscreen_descr *);
 };
 

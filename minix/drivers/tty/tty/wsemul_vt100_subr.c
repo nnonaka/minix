@@ -196,11 +196,12 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 
 #define A3(a, b, c) (((a) << 16) | ((b) << 8) | (c))
 	switch (A3(edp->modif1, edp->modif2, c)) {
+# if 0
 	    case A3('>', '\0', 'c'): /* DA secondary */
 		wsdisplay_emulinput(edp->cbcookie, WSEMUL_VT_ID2,
 				    sizeof(WSEMUL_VT_ID2));
 		break;
-
+#endif
 	    case A3('\0', '\0', 'J'): /* ED selective erase in display */
 	    case A3('?', '\0', 'J'): /* DECSED selective erase in display */
 		wsemul_vt100_ed(edp, ARG(edp, 0));
@@ -330,6 +331,7 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 			printf("CSI1$w ignored\n");
 #endif
 			break;
+#if 0
 		    case 2: /* tab stop report */
 			{
 			int i, j, ps = 0;
@@ -347,6 +349,7 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 			}
 			wsdisplay_emulinput(edp->cbcookie, "\033\\", 2);
 			break;
+#endif
 		    default:
 #ifdef VT100_PRINTUNKNOWN
 			printf("CSI%d$w unknown\n", ARG(edp, 0));
@@ -386,11 +389,12 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 		}
 		break;
 
+#if 0
 	    case A2('&', 'u'): /* DECRQUPSS request user preferred
 				  supplemental set */
 		wsdisplay_emulinput(edp->cbcookie, "\033P0!u%5\033\\", 9);
 		break;
-
+#endif
 	    case '@': /* ICH insert character VT300 only */
 		n = uimin(DEF1_ARG(edp, 0), COLS_LEFT(edp) + 1);
 		help = NCOLS(edp) - (edp->ccol + n);
@@ -452,11 +456,13 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 		n = uimin(DEF1_ARG(edp, 0), COLS_LEFT(edp) + 1);
 		ERASECOLS(edp, edp->ccol, n, edp->bkgdattr);
 		break;
+#if 0
 	    case 'c': /* DA primary */
 		if (ARG(edp, 0) == 0)
 			wsdisplay_emulinput(edp->cbcookie, WSEMUL_VT_ID1,
 					    sizeof(WSEMUL_VT_ID1));
 		break;
+#endif
 	    case 'g': /* TBC */
 		assert(edp->tabs != 0);
 		switch (ARG(edp, 0)) {
@@ -554,6 +560,7 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 			edp->bgcol = bgcol;
 		}
 		break;
+#if 0
 	    case 't': /* terminal size and such */
 		switch (ARG(edp, 0)) {
 		    case 18: {	/* xterm size */
@@ -603,6 +610,7 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 			break;
 		}
 		break;
+#endif
 	    case 'r': /* DECSTBM set top/bottom margins */
 		help = uimin(DEF1_ARG(edp, 0), edp->nrows) - 1;
 		n = uimin(DEFx_ARG(edp, 1, edp->nrows), edp->nrows) - help;

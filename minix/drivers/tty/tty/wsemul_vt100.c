@@ -70,8 +70,8 @@ const struct wsemul_ops wsemul_vt100_ops = {
 	.getmsgattrs = wsemul_vt100_getmsgattrs,
 	.setmsgattrs = wsemul_vt100_setmsgattrs,
 #else
-	.getmsgattrs = NULL,
-	.setmsgattrs = NULL,
+//	.getmsgattrs = NULL,
+//	.setmsgattrs = NULL,
 #endif
 	.resize = wsemul_vt100_resize
 };
