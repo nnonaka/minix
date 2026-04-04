@@ -20,7 +20,11 @@ int do_readbios(struct proc * caller, message * m_ptr)
   size_t len = m_ptr->m_lsys_krn_readbios.size;
   vir_bytes limit;
 
-	if (kinfo.boot_mode != 0) return EINVAL;
+	if (kinfo.boot_mode != 0)
+	{
+	  panic("READBIOS called in UEFI");
+	  return EINVAL;
+	}
 
   src.offset = m_ptr->m_lsys_krn_readbios.addr;
   dst.offset = m_ptr->m_lsys_krn_readbios.buf;
