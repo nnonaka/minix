@@ -28,6 +28,10 @@
 
 #define	KASSERT(x)	assert(x)
 
+
+extern const struct wsemul_ops wsemul_vt100_ops;
+extern const struct wsemul_ops wsemul_dumb_ops;
+
 const struct wsdisplay_emulops fbcons_emulops = {
 	rcons_cursor,
 	rcons_mapchar,
@@ -37,6 +41,14 @@ const struct wsdisplay_emulops fbcons_emulops = {
 	rcons_copyrows,
 	rcons_eraserows,
 	rcons_allocattr
+};
+
+struct wsscreen_descr fb_stdscreen = {
+	"std",
+	0, 0,	/* ncols, nrows */
+	&fbcons_emulops,
+	0, 0,	/* fontwidth, fontheight */
+	WSSCREEN_WSCOLORS | WSSCREEN_REVERSE
 };
 
 struct wsscreen_internal {
@@ -72,7 +84,7 @@ static int disabled_vc = -1;	/* Virtual console that was active when
 				 */
 
 static char *console_memory = NULL;
-static char *font_memory = NULL;
+//static char *font_memory = NULL;
 
 /* Per console data. */
 typedef struct console {
@@ -102,6 +114,8 @@ struct fb_devconfig {
 
 	int isconsole;		/* console device */
 };
+
+struct fb_devconfig fb_console_dc;
 
 static int nr_cons= 1;		/* actual number of consoles */
 static console_t cons_table[NR_CONS];
@@ -266,12 +280,6 @@ wsdisplay_cnputc(dev_t dev, int i)
 
 	dc = &wsdisplay_console_conf;
 	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
-
-#ifdef WSDISPLAY_MULTICONS
-	if (!wsdisplay_multicons_suspended &&
-	    wsdisplay_multicons_enable && wsdisplay_ocn && wsdisplay_ocn->cn_putc)
-		wsdisplay_ocn->cn_putc(wsdisplay_ocn->cn_dev, i);
-#endif
 }
 
 /*
@@ -308,7 +316,8 @@ wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
 	wsdisplay_console_conf.emulcookie = cookie;
 	wsdisplay_console_conf.scrdata = type;
 
-	wsemul = &wsemul_vt100_ops;
+	//wsemul = &wsemul_vt100_ops;
+	wsemul = &wsemul_dumb_ops;
 	wsdisplay_console_conf.wsemul = wsemul;
 	wsdisplay_console_conf.wsemulcookie = (*wsemul->cnattach)(type, cookie,
 								  ccol, crow,
@@ -324,74 +333,19 @@ wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
 	wsdisplay_console_initted = 2;
 }
 
-void
-wsdisplay_preattach(const struct wsscreen_descr *type, void *cookie,
-	int ccol, int crow, long defattr)
-{
-	const struct wsemul_ops *wsemul;
-
-	KASSERT(!wsdisplay_console_initted);
-	KASSERT(type->nrows > 0);
-	KASSERT(type->ncols > 0);
-	KASSERT(crow < type->nrows);
-	KASSERT(ccol < type->ncols);
-
-	wsdisplay_console_conf.emulops = type->textops;
-	wsdisplay_console_conf.emulcookie = cookie;
-	wsdisplay_console_conf.scrdata = type;
-
-	wsemul = &wsemul_vt100_ops;
-	wsdisplay_console_conf.wsemul = wsemul;
-	wsdisplay_console_conf.wsemulcookie = (*wsemul->cnattach)(type, cookie,
-								  ccol, crow,
-								  defattr);
-
-	if (cn_tab != &wsdisplay_cons)
-		wsdisplay_ocn = cn_tab;
-
-	if (wsdisplay_ocn != NULL && wsdisplay_ocn->cn_halt != NULL)
-		wsdisplay_ocn->cn_halt(wsdisplay_ocn->cn_dev);
-
-	cn_tab = &wsdisplay_cons;
-	wsdisplay_console_initted = 1;
-}
-
-/*===========================================================================*
- *				scr_init				     *
- *===========================================================================*/
-static void fb_scr_init(tty_t *tp)
-{
-/* Initialize the screen driver. */
-  console_t *cons;
-  int line;
-  int s;
-  static unsigned page_size;
-  struct kinfo kinfo;		/* kernel information */
-
-  /* Associate console and TTY. */
-  line = tp - &tty_table[0];
-  if (line >= nr_cons) return;
-  cons = &cons_table[line];
-  cons->c_tty = tp;
-  cons->c_line = line;
-  tp->tty_priv = cons;
-
-  /* Fill in TTY function hooks. */
-  tp->tty_devwrite = cons_write;
-  tp->tty_echo = cons_echo;
-  tp->tty_ioctl = cons_ioctl;
-
-  select_console(0);
-  cons_ioctl(tp, 0);
-}
-
-void
+static void
 fb_clear(struct fb_devconfig *dc)
 {
-	// TODO
+	int i, rows;
+
+	/* clear the display */
+	rows = dc->dc_ht;
+	for (i = 0; rows-- > 0; i += dc->dc_rowbytes)
+		memset((u_char *)dc->dc_vaddr + dc->dc_offset + i,
+		    0, dc->dc_rowbytes);
 }
 
-void
+static void
 fb_init(struct fb_devconfig *dc)
 {
 	struct raster *rap;
@@ -414,9 +368,96 @@ fb_init(struct fb_devconfig *dc)
 	rcp->rc_ccolp = &rcp->rc_ccol;
 	rcons_init(rcp, 24, 80);
 
-	//fb_stdscreen.nrows = dc->dc_rcons.rc_maxrow;
-	//fb_stdscreen.ncols = dc->dc_rcons.rc_maxcol;
+	fb_stdscreen.nrows = dc->dc_rcons.rc_maxrow;
+	fb_stdscreen.ncols = dc->dc_rcons.rc_maxcol;
 }
+
+/*===========================================================================*
+ *				scr_init				     *
+ *===========================================================================*/
+static void fb_scr_init(tty_t *tp)
+{
+/* Initialize the screen driver. */
+  console_t *cons;
+  int line;
+  int s;
+  static unsigned page_size;
+  struct kinfo kinfo;		/* kernel information */
+  struct kinfo_framebuffer *kfb;
+	struct fb_devconfig *dc = &fb_console_dc;
+	long defattr;
+  	
+  printf("fb_scr_init: start\n");
+  /* Associate console and TTY. */
+  line = tp - &tty_table[0];
+  if (line >= nr_cons) return;
+  cons = &cons_table[line];
+  cons->c_tty = tp;
+  cons->c_line = line;
+  tp->tty_priv = cons;
+  
+  /* Get the fb parameters that describe the VDU. */
+  if (! wsdisplay_console_initted) {
+
+    if (OK != (s=sys_getkinfo(&kinfo))) {
+        panic("Couldn't get kernel information: %d", s);
+    }
+
+	if (kinfo.mb_version == 2) {
+	  kfb = &kinfo.fb;
+		if (kfb->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
+			panic("framebuffer type is not RGB");
+
+	dc->dc_paddr = kfb->framebuffer_addr;
+
+	dc->dc_wid = kfb->framebuffer_width;
+	dc->dc_ht = kfb->framebuffer_height;
+	dc->dc_depth = kfb->framebuffer_bpp;
+	dc->dc_rowbytes = kfb->framebuffer_pitch * (kfb->framebuffer_bpp/8);
+
+	dc->dc_size = dc->dc_ht * dc->dc_rowbytes;
+	dc->dc_offset = 0;
+
+	console_memory = vm_map_phys(SELF, (void *) dc->dc_paddr, dc->dc_size);
+
+	if(console_memory == MAP_FAILED) 
+  		panic("Console couldn't map video memory");
+
+	dc->dc_vaddr = (vaddr_t)console_memory;
+
+	printf("dc: width=%d, height=%d, depth=%d\n", dc->dc_wid, dc->dc_ht, dc->dc_depth);
+	printf("    rowbytes=%d, size=%llu\n", dc->dc_rowbytes, dc->dc_size);
+	printf("    paddr=%llx, vaddr=%lx\n", dc->dc_paddr, dc->dc_vaddr);
+	
+	/* set up the display */
+	fb_init(&fb_console_dc);
+  printf("fb_scr_init: fb_init passed\n");
+
+	rcons_allocattr(&dc->dc_rcons, 0, 0, 0, &defattr);
+
+	wsdisplay_cnattach(&fb_stdscreen, &dc->dc_rcons,
+			0, 0, defattr);
+  printf("fb_scr_init: wsdisplay_cnattach passed\n");
+
+	dc->isconsole = 1;
+	wsdisplay_console_initted = 1;
+	}
+	else {
+	  	panic("UEFI version is not 2");
+	}
+			
+  }
+
+  /* Fill in TTY function hooks. */
+  tp->tty_devwrite = cons_write;
+  tp->tty_echo = cons_echo;
+  tp->tty_ioctl = cons_ioctl;
+
+  select_console(0);
+  cons_ioctl(tp, 0);
+}
+
+
 
 /*===========================================================================*
  *				cons_stop				     *

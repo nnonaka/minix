@@ -55,8 +55,6 @@ struct wsemul_ops {
 	void	(*resize)(void *, const struct wsscreen_descr *);
 };
 
-extern const struct wsemul_ops wsemul_vt100_ops;
-
 const struct wsemul_ops *wsemul_pick(const char *);
 void wsemul_drop(const struct wsemul_ops *);
 int wsemul_add(const struct wsemul_ops *);
