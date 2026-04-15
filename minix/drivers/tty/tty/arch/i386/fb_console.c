@@ -16,10 +16,16 @@
 #include <minix/vm.h>
 #include "tty.h"
 #include "console.h"
-#include "raster.h"
-#include "wscons_raster.h"
-#include "wsdisplayvar.h"
-#include "wsemulvar.h"
+//#include "raster.h"
+//#include "wscons_raster.h"
+#include "../../wscons/wsconsio.h"
+#include "../../wscons/wsdisplayvar.h"
+#include "../../wscons/wsemulvar.h"
+#include "../../rasops/rasops.h"
+#include "../../rasops/opt_rasops.h"
+#include "../../wsfont/wsfont.h"
+#include "../../wscons/wsdisplay_vconsvar.h"
+#include "genfbvar.h"
 
 /* Set this to 1 if you want console output duplicated on the first
  * serial line.
@@ -32,25 +38,6 @@
 extern const struct wsemul_ops wsemul_vt100_ops;
 extern const struct wsemul_ops wsemul_dumb_ops;
 
-const struct wsdisplay_emulops fbcons_emulops = {
-	rcons_cursor,
-	rcons_mapchar,
-	rcons_putchar,
-	rcons_copycols,
-	rcons_erasecols,
-	rcons_copyrows,
-	rcons_eraserows,
-	rcons_allocattr
-};
-
-struct wsscreen_descr fb_stdscreen = {
-	"std",
-	0, 0,	/* ncols, nrows */
-	&fbcons_emulops,
-	0, 0,	/* fontwidth, fontheight */
-	WSSCREEN_WSCOLORS | WSSCREEN_REVERSE
-};
-
 struct wsscreen_internal {
 	const struct wsdisplay_emulops *emulops;
 	void	*emulcookie;
@@ -61,6 +48,20 @@ struct wsscreen_internal {
 	void	*wsemulcookie;
 };
 
+#if 0
+struct wsscreen_descr fb_stdscreen = {
+	"std",
+	0, 0,	/* ncols, nrows */
+	&fbcons_emulops,
+	0, 0,	/* fontwidth, fontheight */
+	WSSCREEN_WSCOLORS | WSSCREEN_REVERSE
+};
+#endif
+
+struct genfb_softc fb_softc;
+struct genfb_ops fb_ops;
+
+
 /* Private variables used by the console driver. */
 static unsigned font_lines;	/* font lines per character */
 static unsigned scr_width;	/* # characters on a line */
@@ -69,7 +70,6 @@ static unsigned scr_size;	/* # characters on the screen */
 
 static int wsdisplay_console_initted;
 static int wsdisplay_console_attached;
-//static struct wsdisplay_softc *wsdisplay_console_device;
 static struct wsscreen_internal wsdisplay_console_conf;
 
 static struct consdev wsdisplay_cons = {
@@ -94,28 +94,6 @@ typedef struct console {
   int c_rwords;			/* number of WORDS (not bytes) in outqueue */
   int c_line;			/* line no */
 } console_t;
-
-struct fb_devconfig {
-	int	dc_type;	/* WSCONS display type */
-
-	vaddr_t	dc_vaddr;	/* memory space virtual base address */
-	paddr_t	dc_paddr;	/* memory space physical base address */
-	psize_t	dc_size;	/* size of slot memory */
-
-	int	dc_offset;	/* offset from dc_vaddr to base of flat fb */
-
-	int	dc_wid;		/* width of frame buffer */
-	int	dc_ht;		/* height of frame buffer */
-	int	dc_depth;	/* depth of frame buffer */
-	int	dc_rowbytes;	/* bytes in fb scan line */
-
-	struct raster dc_raster; /* raster description */
-	struct rcons dc_rcons;	/* raster blitter control info */
-
-	int isconsole;		/* console device */
-};
-
-struct fb_devconfig fb_console_dc;
 
 static int nr_cons= 1;		/* actual number of consoles */
 static console_t cons_table[NR_CONS];
@@ -162,6 +140,7 @@ static int cons_write(register struct tty *tp, int try)
   char buf[64];
   console_t *cons = tp->tty_priv;
 
+	//ser_puts("cons_write\n");
   if (try) return 1;	/* we can always write to console */
 
   /* Check quickly for nothing to do, so this can be called often without
@@ -246,6 +225,7 @@ static void out_char(register console_t *cons, int i)
   }
 #endif
 	// TODO
+	//ser_puts("out_char\n");
 	dc = &wsdisplay_console_conf;
 	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
 
@@ -278,6 +258,7 @@ wsdisplay_cnputc(dev_t dev, int i)
 	if (!wsdisplay_console_initted)
 		return;
 
+	//ser_puts("wsdisplay_cnputc\n");
 	dc = &wsdisplay_console_conf;
 	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
 }
@@ -316,8 +297,8 @@ wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
 	wsdisplay_console_conf.emulcookie = cookie;
 	wsdisplay_console_conf.scrdata = type;
 
-	//wsemul = &wsemul_vt100_ops;
-	wsemul = &wsemul_dumb_ops;
+	wsemul = &wsemul_vt100_ops; /* default */
+	//wsemul = &wsemul_dumb_ops; /* default */
 	wsdisplay_console_conf.wsemul = wsemul;
 	wsdisplay_console_conf.wsemulcookie = (*wsemul->cnattach)(type, cookie,
 								  ccol, crow,
@@ -333,45 +314,6 @@ wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
 	wsdisplay_console_initted = 2;
 }
 
-static void
-fb_clear(struct fb_devconfig *dc)
-{
-	int i, rows;
-
-	/* clear the display */
-	rows = dc->dc_ht;
-	for (i = 0; rows-- > 0; i += dc->dc_rowbytes)
-		memset((u_char *)dc->dc_vaddr + dc->dc_offset + i,
-		    0, dc->dc_rowbytes);
-}
-
-static void
-fb_init(struct fb_devconfig *dc)
-{
-	struct raster *rap;
-	struct rcons *rcp;
-
-	fb_clear(dc);
-
-	rap = &dc->dc_raster;
-	rap->width = dc->dc_wid;
-	rap->height = dc->dc_ht;
-	rap->depth = dc->dc_depth;
-	rap->linelongs = dc->dc_rowbytes / sizeof(u_int32_t);
-	rap->pixels = (u_int32_t *)(dc->dc_vaddr + dc->dc_offset);
-
-	/* initialize the raster console blitter */
-	rcp = &dc->dc_rcons;
-	rcp->rc_sp = rap;
-	rcp->rc_crow = rcp->rc_ccol = -1;
-	rcp->rc_crowp = &rcp->rc_crow;
-	rcp->rc_ccolp = &rcp->rc_ccol;
-	rcons_init(rcp, 24, 80);
-
-	fb_stdscreen.nrows = dc->dc_rcons.rc_maxrow;
-	fb_stdscreen.ncols = dc->dc_rcons.rc_maxcol;
-}
-
 /*===========================================================================*
  *				scr_init				     *
  *===========================================================================*/
@@ -384,21 +326,32 @@ static void fb_scr_init(tty_t *tp)
   static unsigned page_size;
   struct kinfo kinfo;		/* kernel information */
   struct kinfo_framebuffer *kfb;
-	struct fb_devconfig *dc = &fb_console_dc;
+	//struct fb_devconfig *dc = &fb_console_dc;
+	struct genfb_softc *sc = &fb_softc;
 	long defattr;
   	
-  printf("fb_scr_init: start\n");
+  //printf("fb_scr_init: start\n");
   /* Associate console and TTY. */
   line = tp - &tty_table[0];
-  if (line >= nr_cons) return;
+  if (line >= nr_cons) {
+    //printf("fb_scr_init: line too large\n");
+    //out_char(&cons_table[0], '0' + line);
+    return;
+  }
   cons = &cons_table[line];
   cons->c_tty = tp;
   cons->c_line = line;
   tp->tty_priv = cons;
   
+  /* Fill in TTY function hooks. */
+  tp->tty_devwrite = cons_write;
+  tp->tty_echo = cons_echo;
+  tp->tty_ioctl = cons_ioctl;
+
   /* Get the fb parameters that describe the VDU. */
   if (! wsdisplay_console_initted) {
 
+	/* set up the display */
     if (OK != (s=sys_getkinfo(&kinfo))) {
         panic("Couldn't get kernel information: %d", s);
     }
@@ -408,50 +361,52 @@ static void fb_scr_init(tty_t *tp)
 		if (kfb->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
 			panic("framebuffer type is not RGB");
 
-	dc->dc_paddr = kfb->framebuffer_addr;
+	//dc->dc_paddr = kfb->framebuffer_addr;
 
-	dc->dc_wid = kfb->framebuffer_width;
-	dc->dc_ht = kfb->framebuffer_height;
-	dc->dc_depth = kfb->framebuffer_bpp;
-	dc->dc_rowbytes = kfb->framebuffer_pitch * (kfb->framebuffer_bpp/8);
+	sc->sc_width = kfb->framebuffer_width;
+	sc->sc_height = kfb->framebuffer_height;
+	sc->sc_depth = kfb->framebuffer_bpp;
+	sc->sc_stride = (sc->sc_width * sc->sc_depth) >> 3;
+	sc->sc_fbsize = sc->sc_height * sc->sc_stride;
+	//sc->sc_fboffset = 0;
+	sc->sc_rpos = kfb->framebuffer_red_field_position;
+	sc->sc_gpos = kfb->framebuffer_green_field_position;
+	sc->sc_bpos = kfb->framebuffer_blue_field_position;
+	sc->sc_rnum = kfb->framebuffer_red_mask_size;
+	sc->sc_gnum = kfb->framebuffer_green_mask_size;
+	sc->sc_bnum = kfb->framebuffer_blue_mask_size;
 
-	dc->dc_size = dc->dc_ht * dc->dc_rowbytes;
-	dc->dc_offset = 0;
-
-	console_memory = vm_map_phys(SELF, (void *) dc->dc_paddr, dc->dc_size);
-
+	console_memory = vm_map_phys(SELF, (void *) kfb->framebuffer_addr, sc->sc_fbsize);
 	if(console_memory == MAP_FAILED) 
   		panic("Console couldn't map video memory");
 
-	dc->dc_vaddr = (vaddr_t)console_memory;
+	sc->sc_fbaddr = (void *)console_memory;
 
-	printf("dc: width=%d, height=%d, depth=%d\n", dc->dc_wid, dc->dc_ht, dc->dc_depth);
-	printf("    rowbytes=%d, size=%llu\n", dc->dc_rowbytes, dc->dc_size);
-	printf("    paddr=%llx, vaddr=%lx\n", dc->dc_paddr, dc->dc_vaddr);
+#ifdef GENFB_SHADOWFB
+	sc->sc_enable_shadowfb = true;
+#else
+	sc->sc_enable_shadowfb = false;
+#endif
+
+	printf("sc: width=%d, height=%d, depth=%d\n", sc->sc_width, sc->sc_height, sc->sc_depth);
+	printf("    stride=%d, size=%zu\n", sc->sc_stride, sc->sc_fbsize);
+	printf("    paddr=%llx, vaddr=%p\n", kfb->framebuffer_addr, sc->sc_fbaddr);
 	
-	/* set up the display */
-	fb_init(&fb_console_dc);
-  printf("fb_scr_init: fb_init passed\n");
 
-	rcons_allocattr(&dc->dc_rcons, 0, 0, 0, &defattr);
+	//rcons_allocattr(&dc->dc_rcons, 0, 0, 0, &defattr);
+	genfb_attach(sc, &fb_ops);
+	genfb_cnattach();
+  //printf("fb_scr_init: genfb_cnattach passed\n");
 
-	wsdisplay_cnattach(&fb_stdscreen, &dc->dc_rcons,
-			0, 0, defattr);
-  printf("fb_scr_init: wsdisplay_cnattach passed\n");
-
-	dc->isconsole = 1;
-	wsdisplay_console_initted = 1;
+	//wsdisplay_console_initted = 1;
 	}
 	else {
 	  	panic("UEFI version is not 2");
 	}
 			
+  } else {
+    printf("fb_scr_init: already inited\n\n");
   }
-
-  /* Fill in TTY function hooks. */
-  tp->tty_devwrite = cons_write;
-  tp->tty_echo = cons_echo;
-  tp->tty_ioctl = cons_ioctl;
 
   select_console(0);
   cons_ioctl(tp, 0);

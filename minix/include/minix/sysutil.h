@@ -75,6 +75,7 @@ void read_frclock_64(u64_t *frclk);
 u64_t delta_frclock_64(u64_t base, u64_t cur);
 u32_t frclock_64_to_micros(u64_t tsc);
 void ser_putc(char c);
+void ser_puts(char *p);
 void get_randomness(struct k_randomness *, int);
 u32_t sqrt_approx(u32_t);
 

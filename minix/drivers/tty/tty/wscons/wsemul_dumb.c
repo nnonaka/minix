@@ -38,6 +38,7 @@ __KERNEL_RCSID(0, "$NetBSD: wsemul_dumb.c,v 1.18 2018/09/03 16:29:34 riastradh E
 #include <sys/time.h>
 #include <malloc.h>
 #include <sys/fcntl.h>
+#include <minix/sysutil.h>
 
 #include "wsconsio.h"
 #include "wsdisplayvar.h"
@@ -130,6 +131,7 @@ wsemul_dumb_output(void *cookie, const u_char *data, u_int count,
 	u_char c;
 	int n;
 
+	ser_puts("wsemul_dumb_output:enter\n");
 	/* XXX */
 	(*edp->emulops->cursor)(edp->emulcookie, 0, edp->crow, edp->ccol);
 	while (count-- > 0) {
