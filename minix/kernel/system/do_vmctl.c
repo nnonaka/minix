@@ -124,13 +124,13 @@ int do_vmctl(struct proc * caller, message * m_ptr)
 	}
 	case VMCTL_VMINHIBIT_SET:
 		/* check if we must stop a process on a different CPU */
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 		if (p->p_cpu != cpuid) {
 			smp_schedule_vminhibit(p);
 		} else
 #endif
 			RTS_SET(p, RTS_VMINHIBIT);
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 		p->p_misc_flags |= MF_FLUSH_TLB;
 #endif
 		return OK;

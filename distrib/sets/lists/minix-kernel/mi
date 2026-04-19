@@ -30,3 +30,4 @@
 ./var/db                                                minix-kernel
 ./var/db/obsolete                                       minix-kernel
 ./var/db/obsolete/minix-kernel                          minix-kernel
+

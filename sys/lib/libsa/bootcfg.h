@@ -42,6 +42,7 @@ struct bootcfg_def {
 	char *banner[BOOTCFG_MAXBANNER];	/* Banner text */
 	char *command[BOOTCFG_MAXMENU];		/* Menu commands per entry*/
 	char *consdev;				/* Console device */
+	char *root;				/* Root specification */
 	int def;				/* Default menu option */
 	char *desc[BOOTCFG_MAXMENU];		/* Menu text per entry */
 	int nummenu;				/* Number of menu items */
@@ -53,5 +54,6 @@ extern struct bootcfg_def bootcfg_info;
 
 int perform_bootcfg(const char *, bootcfg_command, const off_t);
 void bootcfg_do_noop(const char *, char *);
+void print_bootcfg_banner(const char *, const char *);
 
 #endif /* !_BOOTCFG_H */

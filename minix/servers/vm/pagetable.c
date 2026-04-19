@@ -42,7 +42,7 @@ static struct pdm {
 	u32_t		*page_directories;
 } pagedir_mappings[MAX_PAGEDIR_PDES];
 
-static multiboot_module_t *kern_mb_mod = NULL;
+static kinfo_module_t *kern_mb_mod = NULL;
 static size_t kern_size = 0;
 static int kern_start_pde = -1;
 

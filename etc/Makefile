@@ -134,7 +134,8 @@ BIN1+=	etc.${MACHINE}/disktab
 BIN1+=	disktab
 .endif
 
-.if exists(etc.${MACHINE}/ld.so.conf) && empty(MACHINE_ARCH:M*arm*hf*)
+.if exists(etc.${MACHINE}/ld.so.conf) && \
+    empty(MACHINE_ARCH:M*arm*hf*) && ${MACHINE_ARCH} != "aarch64"
 BIN1+=	etc.${MACHINE}/ld.so.conf
 .endif
 
@@ -147,7 +148,7 @@ BIN2+=	motd
 FILESBUILD_motd=	YES
 
 # -rw-------
-BIN3+=	hosts.equiv
+BIN3+=	hosts.equiv wpa_supplicant.conf
 .endif # defined(__MINIX)
 
 SYSPKG=	etc
@@ -499,7 +500,11 @@ OBSOLETE.dir=		${.OBJDIR}/obsolete.dir
 .if !defined(__MINIX)
 OBSOLETE.files=		base comp etc games man misc rescue text
 .else
+.if ${MKLLVM} != "no"
 OBSOLETE.files=		minix-base minix-comp minix-games minix-kernel minix-man
+.else
+OBSOLETE.files=		minix-base minix-comp-gcc minix-games minix-kernel minix-man
+.endif
 .endif # !defined(__MINIX)
 .if ${MKDEBUG} != "no"
 OBSOLETE.files+=	minix-debug
@@ -671,9 +676,9 @@ snap_post: .PHONY .MAKE build_kernelsets build_releasekernels
 #	KERNEL_SETS		The list of kernels that will be
 #				packaged into sets, named
 #				kern-${kernel}.tgz.  These kernels
-#				are also placed in the binary/kernel
-#				area of the release package as
-#				netbsd-${kernel}.gz.
+#				These kernels are also placed in the
+#				binary/kernel area of the release package
+#				as netbsd-${kernel}.gz.
 #
 #	EXTRA_KERNELS		Additional kernels to place in the
 #				binary/kernel area of the release
@@ -713,8 +718,8 @@ build_kernels: .PHONY
 # (e.g. Linux) when building on NFS.
 #
 .if !defined(KERNELS_DONE)						# {
-.for configfile in ${ALL_KERNELS:O:u}					# {
 .if !defined(__MINIX)
+.for configfile in ${ALL_KERNELS:O:u}					# {
 build_kernels: kern-${configfile}
 kern-${configfile}: .PHONY .MAKE
 	cd ${KERNCONFDIR} && ${TOOL_CONFIG} ${CONFIGOPTS} -s ${KERNSRCDIR} \
@@ -725,8 +730,8 @@ kern-${configfile}: .PHONY .MAKE
 	${MAKE} -C ${KERNOBJDIR}/${configfile:C/.*\///} depend && \
 	${MAKE} -C ${KERNOBJDIR}/${configfile:C/.*\///} 
 	sync
-.endif  # !defined(__MINIX)
 .endfor	# ALL_KERNELS							# }
+.endif  # !defined(__MINIX)
 .endif	# KERNELS_DONE							# }
 
 build_kernelsets: .PHONY

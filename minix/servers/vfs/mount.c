@@ -104,6 +104,7 @@ int do_mount(void)
   type = job_m_in.m_lc_vfs_mount.type;
   type_len = job_m_in.m_lc_vfs_mount.typelen;
 
+  printf("vfs:do_mount\n");
   /* Only the super-user may do MOUNT. */
   if (!super_user) return(EPERM);
 

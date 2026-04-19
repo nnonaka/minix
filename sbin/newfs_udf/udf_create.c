@@ -52,6 +52,7 @@ __RCSID("$NetBSD: udf_create.c,v 1.28 2020/05/14 08:34:18 msaitoh Exp $");
 #  endif
 #endif
 
+/* shared structure between udf_create.c users */
 struct udf_create_context context;
 struct udf_disclayout     layout;
 

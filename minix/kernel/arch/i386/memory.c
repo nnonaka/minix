@@ -962,7 +962,7 @@ int arch_enable_paging(struct proc * caller)
 			io_apic[i].addr = io_apic[i].vaddr;
 		}
 	}
-#if CONFIG_SMP
+#ifdef CONFIG_SMP
 	barrier();
 
 	//wait_for_APs_to_finish_booting();

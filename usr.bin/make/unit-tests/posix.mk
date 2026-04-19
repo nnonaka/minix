@@ -1,4 +1,4 @@
-# $NetBSD: posix.mk,v 1.2 2020/10/24 08:34:59 rillig Exp $
+# $Id: posix.mk,v 1.1 2014/08/21 13:44:51 apb Exp $
 
 all:	x plus subs err
 

@@ -86,7 +86,7 @@ Revision History
        typedef unsigned char       uint8_t;
        typedef char                int8_t;
     #endif
-#elif defined(__NetBSD__)
+#elif defined(__NetBSD__) || defined(__minix)
     #include <sys/stdint.h>
 #elif defined(__GNUC__)
     #include <stdint.h>

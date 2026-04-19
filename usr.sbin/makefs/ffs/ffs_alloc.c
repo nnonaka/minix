@@ -70,7 +70,7 @@ static int scanc(u_int, const u_char *, const u_char *, int);
 
 static daddr_t ffs_alloccg(struct inode *, int, daddr_t, int);
 static daddr_t ffs_alloccgblk(struct inode *, struct buf *, daddr_t);
-static daddr_t ffs_hashalloc(struct inode *, int, daddr_t, int,
+static daddr_t ffs_hashalloc(struct inode *, uint32_t, daddr_t, int,
 		     daddr_t (*)(struct inode *, int, daddr_t, int));
 static int32_t ffs_mapsearch(struct fs *, struct cg *, daddr_t, int);
 
@@ -80,7 +80,7 @@ extern const u_char * const fragtbl[];
 
 /*
  * Allocate a block in the file system.
- * 
+ *
  * The size of the requested block is given, which must be some
  * multiple of fs_fsize and <= fs_bsize.
  * A preference may be optionally specified. If a preference is given
@@ -104,7 +104,7 @@ ffs_alloc(struct inode *ip, daddr_t lbn __unused, daddr_t bpref, int size,
 	struct fs *fs = ip->i_fs;
 	daddr_t bno;
 	int cg;
-	
+
 	*bnp = 0;
 	if (size > fs->fs_bsize || ffs_fragoff(fs, size) != 0) {
 		errx(EXIT_FAILURE, "%s: bad size: bsize %d size %d", __func__,
@@ -132,7 +132,7 @@ nospace:
  * Select the desired position for the next block in a file.  The file is
  * logically divided into sections. The first section is composed of the
  * direct blocks. Each additional section contains fs_maxbpg blocks.
- * 
+ *
  * If no blocks have been allocated in the first section, the policy is to
  * request a block in the same cylinder group as the inode that describes
  * the file. If no blocks have been allocated in any other section, the
@@ -146,7 +146,7 @@ nospace:
  * indirect block, the information on the previous allocation is unavailable;
  * here a best guess is made based upon the logical block number being
  * allocated.
- * 
+ *
  * If a section is already partially allocated, the policy is to
  * contiguously allocate fs_maxcontig blocks.  The end of one of these
  * contiguous blocks and the beginning of the next is physically separated
@@ -159,8 +159,8 @@ daddr_t
 ffs_blkpref_ufs1(struct inode *ip, daddr_t lbn, int indx, int32_t *bap)
 {
 	struct fs *fs;
-	int cg;
-	int avgbfree, startcg;
+	uint32_t cg, startcg;
+	int avgbfree;
 
 	fs = ip->i_fs;
 	if (indx % fs->fs_maxbpg == 0 || bap[indx - 1] == 0) {
@@ -198,8 +198,8 @@ daddr_t
 ffs_blkpref_ufs2(struct inode *ip, daddr_t lbn, int indx, int64_t *bap)
 {
 	struct fs *fs;
-	int cg;
-	int avgbfree, startcg;
+	uint32_t cg, startcg;
+	int avgbfree;
 
 	fs = ip->i_fs;
 	if (indx % fs->fs_maxbpg == 0 || bap[indx - 1] == 0) {
@@ -247,12 +247,12 @@ ffs_blkpref_ufs2(struct inode *ip, daddr_t lbn, int indx, int64_t *bap)
  */
 /*VARARGS5*/
 static daddr_t
-ffs_hashalloc(struct inode *ip, int cg, daddr_t pref, int size,
+ffs_hashalloc(struct inode *ip, uint32_t cg, daddr_t pref, int size,
     daddr_t (*allocator)(struct inode *, int, daddr_t, int))
 {
 	struct fs *fs;
 	daddr_t result;
-	int i, icg = cg;
+	uint32_t i, icg = cg;
 
 	fs = ip->i_fs;
 	/*
@@ -334,7 +334,7 @@ ffs_alloccg(struct inode *ip, int cg, daddr_t bpref, int size)
 			break;
 	if (allocsiz == fs->fs_frag) {
 		/*
-		 * no fragments were available, so a block will be 
+		 * no fragments were available, so a block will be
 		 * allocated, and hacked up
 		 */
 		if (cgp->cg_cs.cs_nbfree == 0) {
@@ -426,7 +426,7 @@ gotit:
  * Free a block or fragment.
  *
  * The specified block or fragment is placed back in the
- * free map. If a fragment is deallocated, a possible 
+ * free map. If a fragment is deallocated, a possible
  * block reassembly is checked.
  */
 void

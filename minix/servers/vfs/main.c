@@ -63,8 +63,6 @@ int main(void)
   /* SEF local startup. */
   sef_local_startup();
 
-  printf("Started VFS: %d worker thread(s)\n", NR_WTHREADS);
-
   /* This is the main loop that gets work, processes it, and sends replies. */
   while (TRUE) {
 	worker_yield();	/* let other threads run */
@@ -503,6 +501,7 @@ static void do_init_root(void)
   char *mount_type, *mount_label;
   int r;
 
+  printf("vfs:do_init_root: start\n");
   /* Disallow requests from e.g. init(8) while doing the initial mounting. */
   worker_allow(FALSE);
 

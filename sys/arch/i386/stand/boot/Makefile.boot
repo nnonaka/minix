@@ -103,18 +103,10 @@ SAMISCMAKEFLAGS+="SA_ENABLE_LS_OP=yes"
 .include "${S}/lib/libsa/Makefile.inc"
 LIBSA= ${SALIB}
 
-.if !defined(__MINIX)
 ### find out what to use for libkern
 KERN_AS= library
 .include "${S}/lib/libkern/Makefile.inc"
 LIBKERN= ${KERNLIB}
-.else
-
-USE_BITCODE=no
-
-# use MINIX minc
-LIBKERN= ${DESTDIR}/usr/lib/libminc.a
-.endif # !defined(__MINIX)
 
 ### find out what to use for libz
 Z_AS= library

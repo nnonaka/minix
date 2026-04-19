@@ -75,7 +75,7 @@ __RCSID("$NetBSD: mkfs.c,v 1.39 2020/03/26 04:25:28 kre Exp $");
 #include "ffs/ffs_extern.h"
 #include "ffs/newfs_extern.h"
 
-static void initcg(int, time_t, const fsinfo_t *);
+static void initcg(uint32_t, time_t, const fsinfo_t *);
 static int ilog2(int);
 
 static int count_digits(int);
@@ -109,6 +109,7 @@ union {
 #define writebuf wb.pad
 
 static int     Oflag;	   /* format as an 4.3BSD file system */
+static int     extattr;	   /* use UFS2ea magic */
 static int64_t fssize;	   /* file system size */
 static int     sectorsize;	   /* bytes/sector */
 static int     fsize;	   /* fragment size */
@@ -140,7 +141,8 @@ struct fs *
 ffs_mkfs(const char *fsys, const fsinfo_t *fsopts, time_t tstamp)
 {
 	int fragsperinode, optimalfpg, origdensity, minfpg, lastminfpg;
-	int32_t cylno, i, csfrags;
+	uint32_t cylno, i;
+	int32_t csfrags;
 	long long sizepb;
 	void *space;
 	int size;
@@ -148,6 +150,7 @@ ffs_mkfs(const char *fsys, const fsinfo_t *fsopts, time_t tstamp)
 	ffs_opt_t	*ffs_opts = fsopts->fs_specific;
 
 	Oflag =		ffs_opts->version;
+	extattr =	ffs_opts->extattr;
 	fssize =        fsopts->size / fsopts->sectorsize;
 	sectorsize =    fsopts->sectorsize;
 	fsize =         ffs_opts->fsize;
@@ -296,7 +299,10 @@ ffs_mkfs(const char *fsys, const fsinfo_t *fsopts, time_t tstamp)
 		sblock.fs_old_postblformat = 1;
 		sblock.fs_old_nrpos = 1;
 	} else {
-		sblock.fs_magic = FS_UFS2_MAGIC;
+		if (extattr)
+			sblock.fs_magic = FS_UFS2EA_MAGIC;
+		else
+			sblock.fs_magic = FS_UFS2_MAGIC;
 #if 0 /* XXX makefs is used for small filesystems. */
 		sblock.fs_sblockloc = SBLOCK_UFS2;
 #else
@@ -438,7 +444,7 @@ ffs_mkfs(const char *fsys, const fsinfo_t *fsopts, time_t tstamp)
 
 		sblock.fs_maxcluster = lp = space;
 		for (i = 0; i < sblock.fs_ncg; i++)
-		*lp++ = sblock.fs_contigsumsize;
+			*lp++ = sblock.fs_contigsumsize;
 	}
 
 	sblock.fs_sbsize = ffs_fragroundup(&sblock, sizeof(struct fs));
@@ -561,7 +567,8 @@ ffs_mkfs(const char *fsys, const fsinfo_t *fsopts, time_t tstamp)
 void
 ffs_write_superblock(struct fs *fs, const fsinfo_t *fsopts)
 {
-	int cylno, size, blks, i, saveflag;
+	int size, blks, i, saveflag;
+	uint32_t cylno;
 	void *space;
 	char *wrbuf;
 
@@ -601,10 +608,10 @@ ffs_write_superblock(struct fs *fs, const fsinfo_t *fsopts)
  * Initialize a cylinder group.
  */
 static void
-initcg(int cylno, time_t utime, const fsinfo_t *fsopts)
+initcg(uint32_t cylno, time_t utime, const fsinfo_t *fsopts)
 {
 	daddr_t cbase, dmax;
-	int i, j, d, dlower, dupper, blkno;
+	uint32_t i, j, d, dlower, dupper, blkno;
 	struct ufs1_dinode *dp1;
 	struct ufs2_dinode *dp2;
 	int start;
@@ -666,7 +673,7 @@ initcg(int cylno, time_t utime, const fsinfo_t *fsopts)
 		acg.cg_nextfreeoff = acg.cg_clusteroff +
 		    howmany(ffs_fragstoblks(&sblock, sblock.fs_fpg), CHAR_BIT);
 	}
-	if (acg.cg_nextfreeoff > sblock.fs_cgsize) {
+	if (acg.cg_nextfreeoff > (unsigned)sblock.fs_cgsize) {
 		printf("Panic: cylinder group too big\n");
 		exit(37);
 	}
@@ -796,7 +803,7 @@ ffs_rdfs(daddr_t bno, int size, void *bf, const fsinfo_t *fsopts)
 	int n;
 	off_t offset;
 
-	offset = bno * fsopts->sectorsize + fsopts->offset;
+	offset = bno * (off_t)fsopts->sectorsize + fsopts->offset;
 	if (lseek(fsopts->fd, offset, SEEK_SET) < 0)
 		err(EXIT_FAILURE, "%s: seek error for sector %lld", __func__,
 		    (long long)bno);
@@ -819,7 +826,7 @@ ffs_wtfs(daddr_t bno, int size, void *bf, const fsinfo_t *fsopts)
 	int n;
 	off_t offset;
 
-	offset = bno * fsopts->sectorsize + fsopts->offset;
+	offset = bno * (off_t)fsopts->sectorsize + fsopts->offset;
 	if (lseek(fsopts->fd, offset, SEEK_SET) == -1)
 		err(EXIT_FAILURE, "%s: seek error @%jd for sector %jd",
 		    __func__, (intmax_t)offset, (intmax_t)bno);

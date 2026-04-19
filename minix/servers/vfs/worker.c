@@ -397,7 +397,7 @@ void worker_start(struct fproc *rfp, void (*func)(void), message *m_ptr,
 	 * work (in particular, do_pending_pipe) arrives after postponed PM
 	 * work has been scheduled for execution, so we don't check for that.
 	 */
-#if 0
+#if 1
 	printf("VFS: adding %s work to %s thread\n",
 		is_pm_work ? "PM" : "normal",
 		is_pending ? "pending" : "active");
@@ -467,6 +467,7 @@ static void worker_wake(struct worker_thread *worker)
   if (mutex_unlock(&worker->w_event_mutex) != 0)
 	panic("unable to unlock event mutex");
 }
+
 
 /*===========================================================================*
  *				worker_suspend				     *

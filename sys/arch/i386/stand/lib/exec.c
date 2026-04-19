@@ -106,7 +106,7 @@
 #ifdef SUPPORT_PS2
 #include "biosmca.h"
 #endif
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 #include "efiboot.h"
 #undef DEBUG	/* XXX */
 #endif
@@ -467,7 +467,7 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 	u_long extmem;
 	u_long basemem;
 	int error;
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	int i;
 #endif
 
@@ -495,7 +495,7 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 		errno = error;
 		goto out;
 	}
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	/* adjust to the real load address */
 	marks[MARK_START] -= efi_loadaddr;
 	marks[MARK_ENTRY] -= efi_loadaddr;
@@ -516,7 +516,7 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 	if (boot_modules_enabled) {
 		module_init(file);
 		if (btinfo_modulelist) {
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 			/* convert module loaded address to paddr */
 			struct bi_modulelist_entry *bim;
 			bim = (void *)(btinfo_modulelist + 1);
@@ -551,7 +551,7 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 
 	if (callback != NULL)
 		(*callback)();
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	/* Copy bootinfo to safe arena. */
 	for (i = 0; i < bootinfo->nentries; i++) {
 		struct btinfo_common *bi = (void *)(u_long)bootinfo->entry[i];
@@ -844,7 +844,7 @@ exec_multiboot(const char *file, char *args)
 #endif
 
 	if ((mbp = probe_multiboot1(file)) != NULL) {
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 		printf("EFI boot requires multiboot 2 kernel\n");
 		goto out;
 #else
@@ -861,7 +861,7 @@ exec_multiboot(const char *file, char *args)
 	goto out;
 
 is_multiboot:
-#ifdef EFIBOOT
+#if defined(EFIBOOT)
 	loadaddr = efi_loadaddr;
 #endif
 	if (common_load_kernel(file, &basemem, &extmem, loadaddr, 0, marks))

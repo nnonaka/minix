@@ -84,6 +84,7 @@
 
 uint32_t	netbsd_version;
 u_int		netbsd_elf_class;
+u_int		netbsd_elf_data;
 
 /*
  * Open 'filename', read in program and return the opened file
@@ -159,6 +160,7 @@ fdloadfile(int fd, u_long *marks, int flags)
 	if (memcmp(hdr.elf32.e_ident, ELFMAG, SELFMAG) == 0 &&
 	    hdr.elf32.e_ident[EI_CLASS] == ELFCLASS32) {
 	    	netbsd_elf_class = ELFCLASS32;
+		netbsd_elf_data = hdr.elf32.e_ident[EI_DATA];
 		rval = loadfile_elf32(fd, &hdr.elf32, marks, flags);
 	} else
 #endif
@@ -166,6 +168,7 @@ fdloadfile(int fd, u_long *marks, int flags)
 	if (memcmp(hdr.elf64.e_ident, ELFMAG, SELFMAG) == 0 &&
 	    hdr.elf64.e_ident[EI_CLASS] == ELFCLASS64) {
 	    	netbsd_elf_class = ELFCLASS64;
+		netbsd_elf_data = hdr.elf64.e_ident[EI_DATA];
 		rval = loadfile_elf64(fd, &hdr.elf64, marks, flags);
 	} else
 #endif

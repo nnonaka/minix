@@ -4,6 +4,10 @@
 #include <minix/const.h>
 #include <sys/cdefs.h>
 
+#ifndef CONFIG_MAX_CPUS
+#define CONFIG_MAX_CPUS	1
+#endif
+
 #ifndef __ASSEMBLY__
 
 /* Here is the declaration of the process table.  It contains all process

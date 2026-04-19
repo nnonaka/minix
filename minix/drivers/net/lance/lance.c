@@ -182,7 +182,7 @@ int main(int argc, char **argv)
 /*===========================================================================*
  *                              lance_dump                                   *
  *===========================================================================*/
-static void lance_dump()
+static void lance_dump(void)
 {
    ether_card_t *ec;
    int isr, csr;

@@ -31,6 +31,7 @@ static int sef_cb_lu_response(message *m_ptr);
 static void sef_cb_signal_handler(int signo);
 static int sef_cb_signal_manager(endpoint_t target, int signo);
 
+extern void __minix_init(void);
 
 /*===========================================================================*
  *				main                                         *
@@ -47,6 +48,8 @@ int main(void)
   int result;                 			/* result to return */
   int s;
 
+  DEBUGBASIC(("rs server: started.\n"));
+  __minix_init();
   /* SEF local startup. */
   sef_local_startup();
   

@@ -108,7 +108,7 @@ msdosfs_mount(struct vnode *devvp, int flags)
 	if (!(flags & MSDOSFSMNT_GEMDOSFS)) {
 		if (bsp->bs50.bsBootSectSig0 != BOOTSIG0
 		    || bsp->bs50.bsBootSectSig1 != BOOTSIG1) {
-			DPRINTF(("bootsig0 %d bootsig1 %d\n", 
+			DPRINTF(("bootsig0 %d bootsig1 %d\n",
 			    bsp->bs50.bsBootSectSig0,
 			    bsp->bs50.bsBootSectSig1));
 			error = EINVAL;
@@ -145,7 +145,7 @@ msdosfs_mount(struct vnode *devvp, int flags)
     		if (!pmp->pm_BytesPerSec || !SecPerClust
 	    		|| pmp->pm_SecPerTrack > 63) {
 			DPRINTF(("bytespersec %d secperclust %d "
-			    "secpertrack %d\n", 
+			    "secpertrack %d\n",
 			    pmp->pm_BytesPerSec, SecPerClust,
 			    pmp->pm_SecPerTrack));
 			error = EINVAL;
@@ -317,7 +317,7 @@ msdosfs_mount(struct vnode *devvp, int flags)
 	 * must be a power of 2
 	 */
 	if (pmp->pm_bpcluster ^ (1 << pmp->pm_cnshift)) {
-		DPRINTF(("bpcluster %lu cnshift %lu\n", 
+		DPRINTF(("bpcluster %lu cnshift %lu\n",
 		    pmp->pm_bpcluster, pmp->pm_cnshift));
 		error = EINVAL;
 		goto error_exit;
@@ -382,7 +382,7 @@ msdosfs_mount(struct vnode *devvp, int flags)
 	/*
 	 * Have the inuse map filled in.
 	 */
-	if ((error = fillinusemap(pmp)) != 0) {
+	if ((error = msdosfs_fillinusemap(pmp)) != 0) {
 		DPRINTF(("fillinusemap %d\n", error));
 		goto error_exit;
 	}
@@ -423,7 +423,8 @@ msdosfs_root(struct msdosfsmount *pmp, struct vnode *vp) {
 	int error;
 
 	*vp = *pmp->pm_devvp;
-	if ((error = deget(pmp, MSDOSFSROOT, MSDOSFSROOT_OFS, &ndep)) != 0) {
+	if ((error = msdosfs_deget(pmp, MSDOSFSROOT, MSDOSFSROOT_OFS,
+	    &ndep)) != 0) {
 		errno = error;
 		return -1;
 	}

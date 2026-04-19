@@ -118,7 +118,7 @@ brelse(struct buf *bp, int u1 __unused)
 		bp->b_bcount = 0;
 		return;
 	}
-		
+
 	TAILQ_REMOVE(&buftail, bp, b_tailq);
 	free(bp->b_data);
 	free(bp);
@@ -163,7 +163,7 @@ bcleanup(void)
 	 *	know why there's still some buffers lying around that
 	 *	aren't brelse()d
 	 */
-	
+
 	if (TAILQ_EMPTY(&buftail))
 		return;
 

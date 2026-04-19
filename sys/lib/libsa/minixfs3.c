@@ -122,6 +122,7 @@
 #ifdef _STANDALONE
 #include <lib/libkern/libkern.h>
 #else
+#include <stddef.h>
 #include <string.h>
 #endif
 
@@ -456,7 +457,7 @@ read_sblock(struct open_file *f, struct mfs_sblock *fs)
 		return EINVAL;
 
 	rc = DEV_STRATEGY(f->f_dev)(f->f_devdata, F_READ,
-	    SUPER_BLOCK_OFF / DEV_BSIZE, MINBSIZE, sbbuf, &buf_size);
+	    SUPER_BLOCK_OFF / GETSECSIZE(f), MINBSIZE, sbbuf, &buf_size);
 	if (rc)
 		return rc;
 

@@ -38,7 +38,14 @@
 #include <efi.h>
 #include <efilib.h>
 
+#if defined(__NetBSD__) || defined(__minix)
+#include <sys/types.h>
+#include <sys/exec_elf.h>
+#else
 #include <elf.h>
+#endif
+
+EFI_STATUS _relocate (long, Elf32_Dyn *, EFI_HANDLE, EFI_SYSTEM_TABLE *);
 
 EFI_STATUS _relocate (long ldbase, Elf32_Dyn *dyn,
 		      EFI_HANDLE image EFI_UNUSED,

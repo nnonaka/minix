@@ -149,7 +149,7 @@ static  void	*ffs_build_dinode2(struct ufs2_dinode *, dirbuf_t *, fsnode *,
 
 
 
-	/* publically visible functions */
+	/* publicly visible functions */
 void
 ffs_prep_opts(fsinfo_t *fsopts)
 {
@@ -180,6 +180,8 @@ ffs_prep_opts(fsinfo_t *fsopts)
 	      0, 0, "Optimization (time|space)" },
 	    { 'l', "label", ffs_opts->label, OPT_STRARRAY,
 	      1, sizeof(ffs_opts->label), "UFS label" },
+	    { 'e', "extattr", &ffs_opts->extattr, OPT_INT32,
+	      0, 1, "extattr support" },
 	    { .name = NULL }
 	};
 
@@ -194,6 +196,7 @@ ffs_prep_opts(fsinfo_t *fsopts)
 	ffs_opts->avgfilesize= -1;
 	ffs_opts->avgfpdir= -1;
 	ffs_opts->version = 1;
+	ffs_opts->extattr = 1;
 
 	fsopts->fs_specific = ffs_opts;
 	fsopts->fs_options = copy_opts(ffs_options);
@@ -387,11 +390,11 @@ ffs_validate(const char *dir, fsnode *root, fsinfo_t *fsopts)
 		/* add space needed to store inodes, x3 for blockmaps, etc */
 	if (ffs_opts->version == 1)
 		fsopts->size += ncg * DINODE1_SIZE *
-		    roundup(fsopts->inodes / ncg, 
+		    roundup(fsopts->inodes / ncg,
 			ffs_opts->bsize / DINODE1_SIZE);
 	else
 		fsopts->size += ncg * DINODE2_SIZE *
-		    roundup(fsopts->inodes / ncg, 
+		    roundup(fsopts->inodes / ncg,
 			ffs_opts->bsize / DINODE2_SIZE);
 
 		/* add minfree */
@@ -966,7 +969,7 @@ ffs_write_file(union dinode *din, uint32_t ino, void *buf, fsinfo_t *fsopts)
 		if (!isfile)
 			p += chunk;
 	}
-  
+
  write_inode_and_leave:
 	ffs_write_inode(&in.i_din, in.i_number, fsopts);
 
@@ -1064,7 +1067,7 @@ ffs_write_inode(union dinode *dp, uint32_t ino, const fsinfo_t *fsopts)
 	struct ufs2_dinode *dp2, *dip;
 	struct cg	*cgp;
 	struct fs	*fs;
-	int		cg, cgino, i;
+	uint32_t	cg, cgino, i;
 	daddr_t		d;
 	char		sbbuf[FFS_MAXBSIZE];
 	uint32_t	initediblk;
@@ -1108,7 +1111,7 @@ ffs_write_inode(union dinode *dp, uint32_t ino, const fsinfo_t *fsopts)
 	if (S_ISDIR(DIP(dp, mode))) {
 		ufs_add32(cgp->cg_cs.cs_ndir, 1, fsopts->needswap);
 		fs->fs_cstotal.cs_ndir++;
-		fs->fs_cs(fs, cg).cs_ndir++; 
+		fs->fs_cs(fs, cg).cs_ndir++;
 	}
 
 	/*
