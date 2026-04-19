@@ -62,9 +62,6 @@ void *arg;
  	used_threads++;
  	if(threadid != NULL) 
  		*threadid = (mthread_thread_t) thread;
-#ifdef MDEBUG
- 	printf("Inited thread %d\n", thread);
-#endif
  	return(0);
   } else  {
   	if (mthread_increase_thread_pool() == -1) 
@@ -219,10 +216,6 @@ static int mthread_increase_thread_pool(void)
 	mthread_thread_reset(i);
   }
 
-#ifdef MDEBUG
-  printf("Increased thread pool from %d to %d threads\n", old_no_threads,
-  	 new_no_threads);
-#endif
   return(0);
 }
 

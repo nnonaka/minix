@@ -298,7 +298,7 @@ static void sef_local_startup(void)
 
   /* Register signal callbacks. */
   sef_setcb_signal_handler(sef_cb_signal_handler);
-
+ 
   /* Let SEF perform startup. */
   sef_startup();
 }

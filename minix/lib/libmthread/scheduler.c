@@ -40,11 +40,9 @@ void mthread_schedule(void)
 
   old_thread = current_thread;
 
-  printf("mthread_schedule: start\n");
   if (mthread_queue_isempty(&run_queue)) {
 	/* No runnable threads. Let main thread run. */
 
-    printf("mthread_schedule: empty\n");
 	/* We keep track whether we're running the program's 'main' thread or
 	 * a spawned thread. In case we're already running the main thread and
 	 * there are no runnable threads, we can't jump back to its context. 
@@ -60,7 +58,6 @@ void mthread_schedule(void)
 	current_thread = mthread_queue_remove(&run_queue);
   }
 
-  printf("mthread_schedule: 1\n");
   /* Find thread entries in tcb... */
   new_tcb = mthread_find_tcb(current_thread);
   old_tcb = mthread_find_tcb(old_thread);
@@ -155,7 +152,6 @@ int mthread_yield(void)
   mthread_tcb_t *tcb;
   mthread_thread_t t;
 
-  printf("mthread_yield: start\n");
   /* Detached threads cannot clean themselves up. This is a perfect moment to
    * do it */
   for (t = (mthread_thread_t) 0; need_reset > 0 && t < no_threads; t++) {
@@ -168,7 +164,6 @@ int mthread_yield(void)
 	}
   }
 
-  printf("mthread_yield: 1\n");
   if (mthread_queue_isempty(&run_queue)) {	/* No point in yielding. */
   	return(-1);
   } else if (current_thread == NO_THREAD) {
@@ -176,7 +171,6 @@ int mthread_yield(void)
   	return(-1);
   }
 
-  printf("mthread_yield: 2\n");
   mthread_queue_add(&run_queue, current_thread);
   mthread_suspend(MS_RUNNABLE);	/* We're still runnable, but we're just kind
 				 * enough to let someone else run.
@@ -194,7 +188,6 @@ void mthread_yield_all(void)
  * this function will lead to a deadlock.
  */
 
-  printf("mthread_yield_all: start\n");
   if (yield_all) mthread_panic("Deadlock: two threads trying to yield_all");
   yield_all = 1;
 

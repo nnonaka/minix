@@ -581,7 +581,7 @@ ${WORKMBR}:
 	    -F ${WORKMBR}
 .  endif
 .  if empty(MBR_BOOTCODE)
-	@if [ -f ${WORKDIR}/usr/mdec/${MBR_DEFAULT_BOOTCODE} ]; then 	\
+	if [ -f ${WORKDIR}/usr/mdec/${MBR_DEFAULT_BOOTCODE} ]; then 	\
 		echo ${TOOL_FDISK} -f					\
 		    -i -c ${WORKDIR}/usr/mdec/${MBR_DEFAULT_BOOTCODE}	\
 		    -F ${WORKMBR};					\
@@ -590,7 +590,7 @@ ${WORKMBR}:
 		    -F ${WORKMBR};					\
 	fi
 .  else
-	@if [ ! -f ${WORKDIR}/usr/mdec/${MBR_BOOTCODE} ]; then 		\
+	if [ ! -f ${WORKDIR}/usr/mdec/${MBR_BOOTCODE} ]; then 		\
 		echo "${MBR_BOOTCODE} is not found in DESTDIR/usr/mdec, aborting"; \
 		false; 							\
 	fi

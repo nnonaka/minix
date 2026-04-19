@@ -124,7 +124,6 @@ static void worker_assign(struct fproc *rfp)
   struct worker_thread *worker;
   int i;
 
-  printf("worker_assign: 1\n");
   /* Find a free worker thread. */
   for (i = 0; i < NR_WTHREADS; i++) {
 	worker = &workers[i];
@@ -336,7 +335,6 @@ static void worker_try_activate(struct fproc *rfp, int use_spare)
  */
   int needed;
 
-  printf("worker_try_activate: 1\n");
   /* Use the last available thread only if requested. Otherwise, leave at least
    * one spare thread for deadlock resolution.
    */
@@ -374,26 +372,22 @@ void worker_start(struct fproc *rfp, void (*func)(void), message *m_ptr,
 
   assert(rfp != NULL);
 
-  printf("worker_start: 1, func=%x\n", (uint32_t)func);
   is_pm_work = (func == NULL);
   is_pending = (rfp->fp_flags & FP_PENDING);
   is_active = (rfp->fp_worker != NULL);
   has_normal_work = (rfp->fp_func != NULL);
   has_pm_work = (rfp->fp_flags & FP_PM_WORK);
 
-  printf("worker_start: 2\n");
   /* Sanity checks. If any of these trigger, someone messed up badly! */
   if (is_pending || is_active) {
 	if (is_pending && is_active)
 		panic("work cannot be both pending and active");
 
-    printf("worker_start: 2-1\n");
 	/* The process cannot make more than one call at once. */
 	if (!is_pm_work && has_normal_work)
 		panic("process has two calls (%x, %x)",
 			rfp->fp_msg.m_type, m_ptr->m_type);
 
-    printf("worker_start: 2-2\n");
 	/* PM will not send more than one job per process to us at once. */
 	if (is_pm_work && has_pm_work)
 		panic("got two calls from PM (%x, %x)",
@@ -409,13 +403,11 @@ void worker_start(struct fproc *rfp, void (*func)(void), message *m_ptr,
 		is_pending ? "pending" : "active");
 #endif
   } else {
-    printf("worker_start: 2-3\n");
 	/* Some cleanup step forgotten somewhere? */
 	if (has_normal_work || has_pm_work)
 		panic("worker administration error");
   }
 
-  printf("worker_start: 3\n");
   /* Save the work to be performed. */
   if (!is_pm_work) {
 	rfp->fp_msg = *m_ptr;
@@ -425,7 +417,6 @@ void worker_start(struct fproc *rfp, void (*func)(void), message *m_ptr,
 	rfp->fp_flags |= FP_PM_WORK;
   }
 
-  printf("worker_start: 4\n");
   /* If we have not only added to existing work, go look for a free thread.
    * Note that we won't be using the spare thread for normal work if there is
    * already PM work pending, but that situation will never occur in practice.
@@ -441,7 +432,6 @@ void worker_yield(void)
 {
 /* Yield to all worker threads. To be called from the main thread only. */
 
-  printf("worker_yield:\n");
   mthread_yield_all();
 
   self = NULL;
@@ -470,7 +460,6 @@ static void worker_wake(struct worker_thread *worker)
 {
 /* Signal a worker to wake up */
   ASSERTW(worker);
-  printf("worker_wake: 1\n");
   if (mutex_lock(&worker->w_event_mutex) != 0)
 	panic("unable to lock event mutex");
   if (cond_signal(&worker->w_event) != 0)
@@ -478,6 +467,7 @@ static void worker_wake(struct worker_thread *worker)
   if (mutex_unlock(&worker->w_event_mutex) != 0)
 	panic("unable to unlock event mutex");
 }
+
 
 /*===========================================================================*
  *				worker_suspend				     *
