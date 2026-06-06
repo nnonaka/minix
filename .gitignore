@@ -27,8 +27,8 @@ GTAGS
 \#*#
 CVS
 obj
-!/.gitignore
 .gitignore
+!/.gitignore
 .svn
 *.worldstone.log
 .worldstone*
