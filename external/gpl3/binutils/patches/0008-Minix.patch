@@ -1,0 +1,41 @@
+diff -rNU3 dist-3/gold/binary.cc dist-8/gold/binary.cc
+--- dist-3/gold/binary.cc	2020-01-18 22:55:48.000000000 +0900
++++ dist-8/gold/binary.cc	2023-03-25 14:57:05.548905356 +0900
+@@ -25,8 +25,8 @@
+ #include <cerrno>
+ #include <cstring>
+ 
+-#include "elfcpp.h"
+ #include "stringpool.h"
++#include "elfcpp.h"
+ #include "fileread.h"
+ #include "output.h"
+ #include "binary.h"
+diff -rNU3 dist-3/ld/emulparams/armelf_minix.sh dist-8/ld/emulparams/armelf_minix.sh
+--- dist-3/ld/emulparams/armelf_minix.sh	2023-03-25 14:01:08.936492000 +0900
++++ dist-8/ld/emulparams/armelf_minix.sh	2023-03-25 15:01:16.393906295 +0900
+@@ -3,13 +3,19 @@
+ OUTPUT_FORMAT="elf32-littlearm"
+ MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
+ COMMONPAGESIZE="CONSTANT (COMMONPAGESIZE)"
+-
+-DATA_START_SYMBOLS='PROVIDE (__data_start = .);';
++TEXT_START_ADDR=0x00010000
+ 
+ # Dynamic libraries support
+-GENERATE_SHLIB_SCRIPT=yes
+ TARGET2_TYPE=got-rel
+ 
+-GENERATE_PIE_SCRIPT=yes
+-
+ unset EMBEDDED
++unset DATA_START_SYMBOLS
++unset STACK_ADDR
++
++# Use the ARM ABI-compliant exception-handling sections.
++OTHER_READONLY_SECTIONS="
++  .ARM.extab ${RELOCATING-0} : { *(.ARM.extab${RELOCATING+* .gnu.linkonce.armextab.*}) }
++  ${RELOCATING+ PROVIDE_HIDDEN (__exidx_start = .); }
++  .ARM.exidx ${RELOCATING-0} : { *(.ARM.exidx${RELOCATING+* .gnu.linkonce.armexidx.*}) }
++  ${RELOCATING+ PROVIDE_HIDDEN (__exidx_end = .); }"
++

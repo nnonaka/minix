@@ -1,0 +1,52 @@
+diff -rNU3 dist-8/gold/configure dist-9/gold/configure
+--- dist-8/gold/configure	2023-03-25 14:40:01.782614000 +0900
++++ dist-9/gold/configure	2023-03-25 15:20:20.816173228 +0900
+@@ -10293,7 +10293,7 @@
+ 
+ 
+ 
+-ac_config_files="$ac_config_files Makefile testsuite/Makefile po/Makefile.in:po/Make-in"
++ac_config_files="$ac_config_files Makefile po/Makefile.in:po/Make-in"
+ 
+ cat >confcache <<\_ACEOF
+ # This file is a shell script that caches the results of configure
+@@ -11155,7 +11155,6 @@
+     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
+     "default-1") CONFIG_COMMANDS="$CONFIG_COMMANDS default-1" ;;
+     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
+-    "testsuite/Makefile") CONFIG_FILES="$CONFIG_FILES testsuite/Makefile" ;;
+     "po/Makefile.in") CONFIG_FILES="$CONFIG_FILES po/Makefile.in:po/Make-in" ;;
+ 
+   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
+diff -rNU3 dist-8/gold/configure.ac dist-9/gold/configure.ac
+--- dist-8/gold/configure.ac	2020-01-18 22:55:48.000000000 +0900
++++ dist-9/gold/configure.ac	2023-03-25 15:20:49.427767332 +0900
+@@ -684,4 +684,4 @@
+ 
+ AM_MAINTAINER_MODE
+ 
+-AC_OUTPUT(Makefile testsuite/Makefile po/Makefile.in:po/Make-in)
++AC_OUTPUT(Makefile po/Makefile.in:po/Make-in)
+diff -rNU3 dist-8/gold/Makefile.in dist-9/gold/Makefile.in
+--- dist-8/gold/Makefile.in	2020-01-18 23:04:33.000000000 +0900
++++ dist-9/gold/Makefile.in	2023-03-25 15:42:05.053503200 +0900
+@@ -656,7 +656,7 @@
+ zlibdir = @zlibdir@
+ zlibinc = @zlibinc@
+ AUTOMAKE_OPTIONS = foreign
+-SUBDIRS = po testsuite
++SUBDIRS = po
+ tooldir = $(exec_prefix)/$(target_alias)
+ ACLOCAL_AMFLAGS = -I ../bfd -I ../config
+ 
+diff -rNU3 dist-8/libiberty/configure dist-9/libiberty/configure
+--- dist-8/libiberty/configure	2023-03-25 14:01:08.912472000 +0900
++++ dist-9/libiberty/configure	2023-03-25 15:23:12.913303318 +0900
+@@ -8186,7 +8186,6 @@
+   case $ac_config_target in
+     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h:config.in" ;;
+     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
+-    "testsuite/Makefile") CONFIG_FILES="$CONFIG_FILES testsuite/Makefile" ;;
+     "default") CONFIG_COMMANDS="$CONFIG_COMMANDS default" ;;
+ 
+   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
