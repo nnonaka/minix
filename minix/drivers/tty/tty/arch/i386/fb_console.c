@@ -224,8 +224,8 @@ static void out_char(register console_t *cons, int i)
 	ser_putc(c);
   }
 #endif
-	// TODO
-	//ser_puts("out_char\n");
+	if (!wsdisplay_console_initted)
+		return;
 	dc = &wsdisplay_console_conf;
 	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
 
@@ -366,7 +366,7 @@ static void fb_scr_init(tty_t *tp)
 	sc->sc_width = kfb->framebuffer_width;
 	sc->sc_height = kfb->framebuffer_height;
 	sc->sc_depth = kfb->framebuffer_bpp;
-	sc->sc_stride = (sc->sc_width * sc->sc_depth) >> 3;
+	sc->sc_stride = kfb->framebuffer_pitch;
 	sc->sc_fbsize = sc->sc_height * sc->sc_stride;
 	//sc->sc_fboffset = 0;
 	sc->sc_rpos = kfb->framebuffer_red_field_position;
@@ -396,7 +396,11 @@ static void fb_scr_init(tty_t *tp)
 	//rcons_allocattr(&dc->dc_rcons, 0, 0, 0, &defattr);
 	genfb_attach(sc, &fb_ops);
 	genfb_cnattach();
-  //printf("fb_scr_init: genfb_cnattach passed\n");
+
+	scr_lines = sc->sc_defaultscreen_descr.nrows;
+	scr_width = sc->sc_defaultscreen_descr.ncols;
+	font_lines = sc->sc_defaultscreen_descr.fontheight;
+	scr_size = scr_lines * scr_width;
 
 	//wsdisplay_console_initted = 1;
 	}
