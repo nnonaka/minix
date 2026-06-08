@@ -628,11 +628,14 @@ int actual_lseek(struct fproc *rfp, int seekfd, int seekwhence, off_t offset,
 
   newpos = pos + offset;
 
-  /* Check for overflow. */
+  /* Check for overflow or a negative result (POSIX: file offset must not
+   * be set to a value before the beginning of the file). */
   if ((offset > 0) && (newpos <= pos)) {
 	r = EOVERFLOW;
   } else if ((offset < 0) && (newpos >= pos)) {
 	r = EOVERFLOW;
+  } else if (newpos < 0) {
+	r = EINVAL;
   } else {
 	if (newposp != NULL) *newposp = newpos;
 

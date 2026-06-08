@@ -132,7 +132,8 @@ static void worker_assign(struct fproc *rfp)
 	if (worker->w_fp == NULL)
 		break;
   }
-  assert(worker != NULL);
+  assert(i < NR_WTHREADS);
+  assert(worker->w_fp == NULL);
 
   /* Assign work to it. */
   rfp->fp_worker = worker;

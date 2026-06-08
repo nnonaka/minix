@@ -104,18 +104,17 @@ int do_mount(void)
   type = job_m_in.m_lc_vfs_mount.type;
   type_len = job_m_in.m_lc_vfs_mount.typelen;
 
-  printf("vfs:do_mount\n");
   /* Only the super-user may do MOUNT. */
   if (!super_user) return(EPERM);
 
   /* Get the label from the caller, and ask DS for the endpoint of the FS. */
-  if (label_len > sizeof(mount_label))
+  if (label_len == 0 || label_len > sizeof(mount_label))
 	return EINVAL;
   r = sys_datacopy_wrapper(who_e, label, SELF, (vir_bytes) mount_label,
-	sizeof(mount_label));
+	label_len);
   if (r != OK) return(r);
 
-  mount_label[sizeof(mount_label)-1] = 0;
+  mount_label[label_len-1] = 0;
 
   r = ds_retrieve_label_endpt(mount_label, &fs_e);
   if (r != OK) return(r);
@@ -458,6 +457,8 @@ int do_umount(void)
   /* Return the label of the mounted file system, so that the caller
    * can shut down the corresponding server process.
    */
+  if (label_len == 0)
+	return OK;
   if (strlen(label) >= label_len)
 	label[label_len-1] = 0;
   return sys_datacopy_wrapper(SELF, (vir_bytes) label, who_e, label_addr,

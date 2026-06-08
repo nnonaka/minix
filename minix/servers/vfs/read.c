@@ -359,7 +359,7 @@ int rw_pipe(int rw_flag, endpoint_t usr_e, struct filp *f, int callnr, int fd,
 	size = vp->v_size;
   }
 
-  if (vp->v_mapfs_e == 0)
+  if (vp->v_mapfs_e == NONE)
 	panic("unmapped pipe");
 
   r = req_readwrite(vp->v_mapfs_e, vp->v_mapinode_nr, position, rw_flag, usr_e,
