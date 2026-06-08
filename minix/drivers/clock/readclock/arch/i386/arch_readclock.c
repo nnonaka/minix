@@ -98,23 +98,7 @@ int arch_setup(struct rtc *r)
 
 static int arch_init(void)
 {
-	int s;
-	unsigned char mach_id, cmos_state;
-
-#if 0
-	if ((s = sys_readbios(MACH_ID_ADDR, &mach_id, sizeof(mach_id))) != OK) {
-		log_warn(&log, "sys_readbios failed: %d.\n", s);
-
-		return -1;
-	}
-
-	if (mach_id != PS_386 && mach_id != PC_AT) {
-		log_warn(&log, "Machine ID unknown.");
-		log_warn(&log, "Machine ID byte = %02x\n", mach_id);
-
-		return -1;
-	}
-#endif
+	unsigned char cmos_state;
 
 	cmos_state = read_register(CMOS_STATUS);
 
