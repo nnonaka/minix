@@ -679,12 +679,15 @@ static void in_transfer(register tty_t *tp)
   int ch;
   int count;
   char buf[64], *bp;
+  int saved_incount;
 
   /* Force read to succeed if the line is hung up, looks like EOF to reader. */
   if (tp->tty_termios.c_ospeed == B0) tp->tty_min = 0;
 
   /* Anything to do? */
   if (tp->tty_inleft == 0 || tp->tty_eotct < tp->tty_min) return;
+
+  saved_incount = tp->tty_incount;
 
   bp = buf;
   while (tp->tty_inleft > 0 && tp->tty_eotct > 0) {
@@ -729,6 +732,15 @@ static void in_transfer(register tty_t *tp)
 	tp->tty_inleft = tp->tty_incum = 0;
 	tp->tty_incaller = NONE;
   }
+
+  /* Space opened in the input buffer: allow a stalled master write (from
+   * pty_slave_read) to retry on the next handle_events() pass.  Without
+   * this, a master write larger than TTY_IN_BYTES would stall indefinitely
+   * after filling tty_inbuf, waiting for an unrelated event to trigger
+   * the retry.
+   */
+  if (tp->tty_incount < saved_incount)
+	tp->tty_events = 1;
 }
 
 /*===========================================================================*
@@ -1209,7 +1221,9 @@ void sigchar(tty_t *tp, int sig, int mayflush)
 
   if (tp->tty_pgrp != 0)  {
       if (OK != (status = sys_kill(tp->tty_pgrp, sig))) {
-        panic("Error; call to sys_kill failed: %d", status);
+        /* Process group may have exited; tty_pgrp is stale.  Not fatal. */
+        printf("PTY: sys_kill(%d, %d) failed: %d\n",
+          tp->tty_pgrp, sig, status);
       }
   }
 

@@ -1481,7 +1481,9 @@ void sigchar(register tty_t *tp, int sig, int mayflush)
 
   if (tp->tty_pgrp != 0)  {
       if (OK != (status = sys_kill(tp->tty_pgrp, sig))) {
-        panic("Error; call to sys_kill failed: %d", status);
+        /* Process group may have exited; tty_pgrp is stale.  Not fatal. */
+        printf("TTY: sys_kill(%d, %d) failed: %d\n",
+          tp->tty_pgrp, sig, status);
       }
   }
 
