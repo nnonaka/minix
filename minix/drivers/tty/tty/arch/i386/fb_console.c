@@ -237,11 +237,9 @@ static void out_char(register console_t *cons, int i)
  *===========================================================================*/
 static void flush(register console_t *cons)
 {
-  tty_t *tp = cons->c_tty;
-  
     /* Check and update the cursor position. */
   if (cons->c_column < 0) cons->c_column = 0;
-  if (cons->c_column > scr_width) cons->c_column = scr_width;
+  if (cons->c_column >= (int)scr_width) cons->c_column = scr_width - 1;
   if (cons->c_row < 0) cons->c_row = 0;
   if (cons->c_row >= scr_lines) cons->c_row = scr_lines - 1;
   //cur = cons->c_org + cons->c_row * scr_width + cons->c_column;

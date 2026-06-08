@@ -137,10 +137,17 @@ int genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 
 	if (sc->sc_enable_shadowfb) {
 		sc->sc_shadowfb = malloc(sc->sc_fbsize);
-		if (sc->sc_want_clear == false)
-			memcpy(sc->sc_shadowfb, sc->sc_fbaddr, sc->sc_fbsize);
-		printf("shadow framebuffer enabled, size %zu KB\n",
-		    sc->sc_fbsize >> 10);
+		if (sc->sc_shadowfb == NULL) {
+			printf("genfb: shadow framebuffer allocation failed, "
+			    "disabling\n");
+			sc->sc_enable_shadowfb = false;
+		} else {
+			if (sc->sc_want_clear == false)
+				memcpy(sc->sc_shadowfb, sc->sc_fbaddr,
+				    sc->sc_fbsize);
+			printf("shadow framebuffer enabled, size %zu KB\n",
+			    sc->sc_fbsize >> 10);
+		}
 	}
 
 	vcons_init(&sc->vd, sc, &sc->sc_defaultscreen_descr,

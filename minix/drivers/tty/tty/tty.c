@@ -1542,7 +1542,8 @@ static void tty_init(void)
 	tp->tty_incaller = tp->tty_outcaller = tp->tty_iocaller = NONE;
   	tp->tty_termios = termios_defaults;
   	tp->tty_icancel = tp->tty_ocancel = tp->tty_ioctl = tp->tty_close =
-			  tp->tty_open = tty_devnop;
+			  tp->tty_open = tp->tty_devwrite = tp->tty_devread =
+			  tty_devnop;
   	if (tp < tty_addr(NR_CONS)) {
 		scr_init(tp);
 
