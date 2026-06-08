@@ -698,10 +698,12 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 		mbt->common.reserved = 0;
 
 		mbt->common.framebuffer_addr = mode->FrameBufferBase;
-		mbt->common.framebuffer_pitch = mode->Info->PixelsPerScanLine;
 		mbt->common.framebuffer_width = mode->Info->HorizontalResolution;
 		mbt->common.framebuffer_height = mode->Info->VerticalResolution;
 		mbt->common.framebuffer_bpp = 32;
+		/* PixelsPerScanLine is in pixels; multiboot2 pitch is bytes/scanline */
+		mbt->common.framebuffer_pitch =
+		    mode->Info->PixelsPerScanLine * (mbt->common.framebuffer_bpp / 8);
 		mbt->common.framebuffer_type =
 		    MULTIBOOT_FRAMEBUFFER_TYPE_RGB;
 			
