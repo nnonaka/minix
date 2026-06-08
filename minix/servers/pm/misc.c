@@ -68,8 +68,7 @@ unsigned long calls_stats[NR_PM_CALLS];
 /*===========================================================================*
  *				do_sysuname				     *
  *===========================================================================*/
-int
-do_sysuname(void)
+int do_sysuname(void)
 {
 /* Set or get uname strings. */
   int r;
@@ -104,8 +103,7 @@ do_sysuname(void)
 /*===========================================================================*
  *				do_getsysinfo			       	     *
  *===========================================================================*/
-int
-do_getsysinfo(void)
+int do_getsysinfo(void)
 {
   vir_bytes src_addr, dst_addr;
   size_t len;
@@ -195,8 +193,7 @@ int do_getepinfo(void)
 /*===========================================================================*
  *				do_reboot				     *
  *===========================================================================*/
-int
-do_reboot(void)
+int do_reboot(void)
 {
   message m;
 
@@ -235,8 +232,7 @@ do_reboot(void)
 /*===========================================================================*
  *				do_getsetpriority			     *
  *===========================================================================*/
-int
-do_getsetpriority(void)
+int do_getsetpriority(void)
 {
 	int r, arg_which, arg_who, arg_pri;
 	struct mproc *rmp;
@@ -397,8 +393,7 @@ int do_svrctl(void)
 /*===========================================================================*
  *				do_getrusage				     *
  *===========================================================================*/
-int
-do_getrusage(void)
+int do_getrusage(void)
 {
 	clock_t user_time, sys_time;
 	struct rusage r_usage;

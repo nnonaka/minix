@@ -30,8 +30,7 @@ void mthread_init_valid_conditions(void)
  *				mthread_cond_add			     *
  *===========================================================================*/
 #ifdef MTHREAD_STRICT
-static void mthread_cond_add(c) 
-mthread_cond_t *c;
+static void mthread_cond_add(mthread_cond_t *c)
 {
 /* Add condition to list of valid, initialized conditions */
 
@@ -51,8 +50,7 @@ mthread_cond_t *c;
 /*===========================================================================*
  *				mthread_cond_broadcast			     *
  *===========================================================================*/
-int mthread_cond_broadcast(cond)
-mthread_cond_t *cond;
+int mthread_cond_broadcast(mthread_cond_t *cond)
 {
 /* Signal all threads waiting for condition 'cond'. */
   mthread_thread_t t;
@@ -80,8 +78,7 @@ mthread_cond_t *cond;
 /*===========================================================================*
  *				mthread_cond_destroy			     *
  *===========================================================================*/
-int mthread_cond_destroy(cond)
-mthread_cond_t *cond;
+int mthread_cond_destroy(mthread_cond_t *cond)
 {
 /* Destroy a condition variable. Make sure it's not in use */
   mthread_thread_t t;
@@ -115,9 +112,7 @@ mthread_cond_t *cond;
 /*===========================================================================*
  *				mthread_cond_init			     *
  *===========================================================================*/
-int mthread_cond_init(cond, cattr)
-mthread_cond_t *cond;
-mthread_condattr_t *cattr;
+int mthread_cond_init(mthread_cond_t *cond, mthread_condattr_t *cattr)
 {
 /* Initialize condition variable to a known state. cattr is ignored */
   struct __mthread_cond *c;
@@ -147,8 +142,7 @@ mthread_condattr_t *cattr;
  *				mthread_cond_remove			     *
  *===========================================================================*/
 #ifdef MTHREAD_STRICT
-static void mthread_cond_remove(c)
-mthread_cond_t *c;
+static void mthread_cond_remove(mthread_cond_t *c)
 {
 /* Remove condition from list of valid, initialized conditions */
 
@@ -168,8 +162,7 @@ mthread_cond_t *c;
 /*===========================================================================*
  *				mthread_cond_signal			     *
  *===========================================================================*/
-int mthread_cond_signal(cond)
-mthread_cond_t *cond;
+int mthread_cond_signal(mthread_cond_t *cond)
 {
 /* Signal a thread that condition 'cond' was met. Just a single thread. */
   mthread_thread_t t;
@@ -200,8 +193,7 @@ mthread_cond_t *cond;
  *				mthread_cond_valid			     *
  *===========================================================================*/
 #ifdef MTHREAD_STRICT
-static int mthread_cond_valid(c)
-mthread_cond_t *c;
+static int mthread_cond_valid(mthread_cond_t *c)
 {
 /* Check to see if cond is on the list of valid conditions */
   struct __mthread_cond *loopitem;
@@ -235,9 +227,7 @@ int mthread_cond_verify(void)
 /*===========================================================================*
  *				mthread_cond_wait			     *
  *===========================================================================*/
-int mthread_cond_wait(cond, mutex)
-mthread_cond_t *cond;
-mthread_mutex_t *mutex;
+int mthread_cond_wait(mthread_cond_t *cond, mthread_mutex_t *mutex)
 {
 /* Wait for a condition to be signaled */
   mthread_tcb_t *tcb;

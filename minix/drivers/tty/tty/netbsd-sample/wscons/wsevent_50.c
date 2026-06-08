@@ -121,8 +121,7 @@ __KERNEL_RCSID(0, "$NetBSD: wsevent_50.c,v 1.4 2019/03/01 11:06:57 pgoyette Exp 
 #include <dev/wscons/wseventvar.h>
 #include <dev/wscons/wsevent_50.h>
 
-static int
-wsevent_copyout_events50(const struct wscons_event *events, int cnt,
+static int wsevent_copyout_events50(const struct wscons_event *events, int cnt,
     struct uio *uio)
 {
 	int i;
@@ -144,16 +143,14 @@ wsevent_copyout_events50(const struct wscons_event *events, int cnt,
 	return 0;
 }
 
-void
-wsevent_50_init(void)
+void wsevent_50_init(void)
 {
 
 	MODULE_HOOK_SET(wscons_copyout_events_50_hook, "wsc_50",
 	    wsevent_copyout_events50);
 }
 
-void
-wsevent_50_fini(void)
+void wsevent_50_fini(void)
 {
 
 	MODULE_HOOK_UNSET(wscons_copyout_events_50_hook);

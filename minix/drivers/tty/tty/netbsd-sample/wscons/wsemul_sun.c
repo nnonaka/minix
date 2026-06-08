@@ -335,8 +335,7 @@ wsemul_sun_output_haveesc(struct wsemul_sun_emuldata *edp, u_char c)
 	return (newstate);
 }
 
-static inline void
-wsemul_sun_control(struct wsemul_sun_emuldata *edp, u_char c)
+static inline void wsemul_sun_control(struct wsemul_sun_emuldata *edp, u_char c)
 {
 	u_int n, src, dst;
 
@@ -483,8 +482,7 @@ wsemul_sun_output_control(struct wsemul_sun_emuldata *edp, u_char c)
 	return (newstate);
 }
 
-void
-wsemul_sun_output(void *cookie, const u_char *data, u_int count, int kernel)
+void wsemul_sun_output(void *cookie, const u_char *data, u_int count, int kernel)
 {
 	struct wsemul_sun_emuldata *edp = cookie;
 	u_int newstate;
@@ -539,8 +537,7 @@ static const char *sun_fkeys[] = {
 	"\033[233z",	/* F10 */
 };
 
-int
-wsemul_sun_translate(void *cookie, keysym_t in, const char **out)
+int wsemul_sun_translate(void *cookie, keysym_t in, const char **out)
 {
 	static char c;
 
@@ -611,8 +608,7 @@ wsemul_sun_translate(void *cookie, keysym_t in, const char **out)
 	return (0);
 }
 
-void
-wsemul_sun_detach(void *cookie, u_int *crowp, u_int *ccolp)
+void wsemul_sun_detach(void *cookie, u_int *crowp, u_int *ccolp)
 {
 	struct wsemul_sun_emuldata *edp = cookie;
 
@@ -622,8 +618,7 @@ wsemul_sun_detach(void *cookie, u_int *crowp, u_int *ccolp)
 		free(edp, M_DEVBUF);
 }
 
-void
-wsemul_sun_resetop(void *cookie, enum wsemul_resetops op)
+void wsemul_sun_resetop(void *cookie, enum wsemul_resetops op)
 {
 	struct wsemul_sun_emuldata *edp = cookie;
 

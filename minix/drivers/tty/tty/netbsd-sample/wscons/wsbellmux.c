@@ -43,8 +43,7 @@ __KERNEL_RCSID(0, "$NetBSD: wsbellmux.c,v 1.1 2017/06/11 03:55:56 nat Exp $");
 /*
  * Print function (for parent devices).
  */
-int
-wsbelldevprint(void *aux, const char *pnp)
+int wsbelldevprint(void *aux, const char *pnp)
 {
 
 	if (pnp)
@@ -53,8 +52,7 @@ wsbelldevprint(void *aux, const char *pnp)
 }
 
 #if NWSMUX > 0
-int
-wsbell_add_mux(int unit, struct wsmux_softc *muxsc)
+int wsbell_add_mux(int unit, struct wsmux_softc *muxsc)
 {
 	struct wsbell_softc *sc;
 	device_t wsbelldev;

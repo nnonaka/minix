@@ -132,8 +132,7 @@ vt100_handler *vt100_output[] = {
 	wsemul_vt100_output_dcs_dollar,
 };
 
-static void
-wsemul_vt100_init(struct wsemul_vt100_emuldata *edp,
+static void wsemul_vt100_init(struct wsemul_vt100_emuldata *edp,
 	const struct wsscreen_descr *type, void *cookie, int ccol, int crow,
 	long defattr)
 {
@@ -265,8 +264,7 @@ wsemul_vt100_attach(int console, const struct wsscreen_descr *type,
 	return edp;
 }
 
-void
-wsemul_vt100_detach(void *cookie, u_int *crowp, u_int *ccolp)
+void wsemul_vt100_detach(void *cookie, u_int *crowp, u_int *ccolp)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 	struct vt100base_data *vd = &edp->bd;
@@ -286,8 +284,7 @@ wsemul_vt100_detach(void *cookie, u_int *crowp, u_int *ccolp)
 		free(edp);
 }
 
-static void
-wsemul_vt100_resize(void * cookie, const struct wsscreen_descr *type)
+static void wsemul_vt100_resize(void * cookie, const struct wsscreen_descr *type)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 
@@ -297,8 +294,7 @@ wsemul_vt100_resize(void * cookie, const struct wsscreen_descr *type)
 	wsemul_vt100_resetop(cookie, WSEMUL_CLEARSCREEN);
 }
 
-void
-wsemul_vt100_resetop(void *cookie, enum wsemul_resetops op)
+void wsemul_vt100_resetop(void *cookie, enum wsemul_resetops op)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 	struct vt100base_data *vd = &edp->bd;
@@ -321,8 +317,7 @@ wsemul_vt100_resetop(void *cookie, enum wsemul_resetops op)
 	}
 }
 
-void
-wsemul_vt100_reset(struct wsemul_vt100_emuldata *edp)
+void wsemul_vt100_reset(struct wsemul_vt100_emuldata *edp)
 {
 	struct vt100base_data *vd = &edp->bd;
 	int i;
@@ -360,8 +355,7 @@ wsemul_vt100_reset(struct wsemul_vt100_emuldata *edp)
  * the bottom of the scroll area, then scroll it up. If the cursor is
  * at the bottom of the screen then don't move it down.
  */
-static void
-wsemul_vt100_nextline(struct wsemul_vt100_emuldata *edp)
+static void wsemul_vt100_nextline(struct wsemul_vt100_emuldata *edp)
 {
 	struct vt100base_data *vd = &edp->bd;
 
@@ -376,8 +370,7 @@ wsemul_vt100_nextline(struct wsemul_vt100_emuldata *edp)
 	}
 }
 
-static void
-wsemul_vt100_output_normal(struct wsemul_vt100_emuldata *edp, u_char c,
+static void wsemul_vt100_output_normal(struct wsemul_vt100_emuldata *edp, u_char c,
 	int kernel)
 {
 	struct vt100base_data *vd = &edp->bd;
@@ -415,8 +408,7 @@ wsemul_vt100_output_normal(struct wsemul_vt100_emuldata *edp, u_char c,
 		vd->flags |= VTFL_LASTCHAR;
 }
 
-static void
-wsemul_vt100_output_c0c1(struct wsemul_vt100_emuldata *edp, u_char c,
+static void wsemul_vt100_output_c0c1(struct wsemul_vt100_emuldata *edp, u_char c,
 	int kernel)
 {
 	struct vt100base_data *vd = &edp->bd;
@@ -965,8 +957,7 @@ wsemul_vt100_output_csi(struct wsemul_vt100_emuldata *edp, u_char c)
 	return VT100_EMUL_STATE_CSI;
 }
 
-void
-wsemul_vt100_output(void *cookie, const u_char *data, u_int count, int kernel)
+void wsemul_vt100_output(void *cookie, const u_char *data, u_int count, int kernel)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 	struct vt100base_data *vd = &edp->bd;
@@ -998,8 +989,7 @@ wsemul_vt100_output(void *cookie, const u_char *data, u_int count, int kernel)
 }
 
 #ifdef WSDISPLAY_CUSTOM_OUTPUT
-static void
-wsemul_vt100_getmsgattrs(void *cookie, struct wsdisplay_msgattrs *ma)
+static void wsemul_vt100_getmsgattrs(void *cookie, struct wsdisplay_msgattrs *ma)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 	struct vt100base_data *vd = &edp->bd;
@@ -1007,8 +997,7 @@ wsemul_vt100_getmsgattrs(void *cookie, struct wsdisplay_msgattrs *ma)
 	*ma = vd->msgattrs;
 }
 
-static void
-wsemul_vt100_setmsgattrs(void *cookie, const struct wsscreen_descr *type,
+static void wsemul_vt100_setmsgattrs(void *cookie, const struct wsscreen_descr *type,
                          const struct wsdisplay_msgattrs *ma)
 {
 	int error;

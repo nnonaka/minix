@@ -45,8 +45,7 @@ static unsigned db_extend[] = {	/* table for sign-extending */
 	0xFF800000U
 };
 
-void
-db_read_bytes(vm_offset_t addr, register int size, register char *data)
+void db_read_bytes(vm_offset_t addr, register int size, register char *data)
 {
 	register char	*src;
 

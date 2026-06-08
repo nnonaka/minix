@@ -226,8 +226,7 @@ struct wssrcops wsmouse_srcops = {
 /*
  * Print function (for parent devices).
  */
-int
-wsmousedevprint(void *aux, const char *pnp)
+int wsmousedevprint(void *aux, const char *pnp)
 {
 
 	if (pnp)
@@ -235,14 +234,12 @@ wsmousedevprint(void *aux, const char *pnp)
 	return (UNCONF);
 }
 
-int
-wsmouse_match(device_t parent, cfdata_t match, void *aux)
+int wsmouse_match(device_t parent, cfdata_t match, void *aux)
 {
 	return (1);
 }
 
-void
-wsmouse_attach(device_t parent, device_t self, void *aux)
+void wsmouse_attach(device_t parent, device_t self, void *aux)
 {
         struct wsmouse_softc *sc = device_private(self);
 	struct wsmousedev_attach_args *ap = aux;
@@ -283,8 +280,7 @@ wsmouse_attach(device_t parent, device_t self, void *aux)
 		aprint_error_dev(self, "couldn't establish power handler\n");
 }
 
-int
-wsmouse_activate(device_t self, enum devact act)
+int wsmouse_activate(device_t self, enum devact act)
 {
 	struct wsmouse_softc *sc = device_private(self);
 
@@ -301,8 +297,7 @@ wsmouse_activate(device_t self, enum devact act)
  * that had the reference to wake us up again.  Then we blow away the
  * vnode and return (which will deallocate the softc).
  */
-int
-wsmouse_detach(device_t self, int flags)
+int wsmouse_detach(device_t self, int flags)
 {
 	struct wsmouse_softc *sc = device_private(self);
 	struct wseventvar *evar;
@@ -348,8 +343,7 @@ wsmouse_detach(device_t self, int flags)
 	return (0);
 }
 
-void
-wsmouse_input(device_t wsmousedev, u_int btns /* 0 is up */,
+void wsmouse_input(device_t wsmousedev, u_int btns /* 0 is up */,
 	int x, int y, int z, int w, u_int flags)
 {
 	struct wsmouse_softc *sc = device_private(wsmousedev);
@@ -516,8 +510,7 @@ wsmouse_input(device_t wsmousedev, u_int btns /* 0 is up */,
 	}
 }
 
-static void
-wsmouse_repeat(void *v)
+static void wsmouse_repeat(void *v)
 {
 	int oldspl;
 	unsigned int newdelay;
@@ -566,8 +559,7 @@ wsmouse_repeat(void *v)
 	splx(oldspl);
 }
 
-int
-wsmouseopen(dev_t dev, int flags, int mode, struct lwp *l)
+int wsmouseopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct wsmouse_softc *sc;
 	struct wseventvar *evar;
@@ -606,8 +598,7 @@ wsmouseopen(dev_t dev, int flags, int mode, struct lwp *l)
 	return (error);
 }
 
-int
-wsmouseclose(dev_t dev, int flags, int mode,
+int wsmouseclose(dev_t dev, int flags, int mode,
     struct lwp *l)
 {
 	struct wsmouse_softc *sc =
@@ -624,8 +615,7 @@ wsmouseclose(dev_t dev, int flags, int mode,
 	return (0);
 }
 
-int
-wsmousedoopen(struct wsmouse_softc *sc, struct wseventvar *evp)
+int wsmousedoopen(struct wsmouse_softc *sc, struct wseventvar *evp)
 {
 	sc->sc_base.me_evp = evp;
 	sc->sc_x = INVALID_X;
@@ -644,8 +634,7 @@ wsmousedoopen(struct wsmouse_softc *sc, struct wseventvar *evp)
 	return (*sc->sc_accessops->enable)(sc->sc_accesscookie);
 }
 
-int
-wsmouseread(dev_t dev, struct uio *uio, int flags)
+int wsmouseread(dev_t dev, struct uio *uio, int flags)
 {
 	struct wsmouse_softc *sc =
 	    device_lookup_private(&wsmouse_cd, minor(dev));
@@ -670,16 +659,14 @@ wsmouseread(dev_t dev, struct uio *uio, int flags)
 	return (error);
 }
 
-int
-wsmouseioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
+int wsmouseioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	return (wsmousedoioctl(device_lookup(&wsmouse_cd, minor(dev)),
 			       cmd, data, flag, l));
 }
 
 /* A wrapper around the ioctl() workhorse to make reference counting easy. */
-int
-wsmousedoioctl(device_t dv, u_long cmd, void *data, int flag,
+int wsmousedoioctl(device_t dv, u_long cmd, void *data, int flag,
 	       struct lwp *l)
 {
 	struct wsmouse_softc *sc = device_private(dv);
@@ -692,8 +679,7 @@ wsmousedoioctl(device_t dv, u_long cmd, void *data, int flag,
 	return (error);
 }
 
-int
-wsmouse_do_ioctl(struct wsmouse_softc *sc, u_long cmd, void *data,
+int wsmouse_do_ioctl(struct wsmouse_softc *sc, u_long cmd, void *data,
 		 int flag, struct lwp *l)
 {
 	int error;
@@ -773,8 +759,7 @@ wsmouse_do_ioctl(struct wsmouse_softc *sc, u_long cmd, void *data,
 	return (error); /* may be EPASSTHROUGH */
 }
 
-int
-wsmousepoll(dev_t dev, int events, struct lwp *l)
+int wsmousepoll(dev_t dev, int events, struct lwp *l)
 {
 	struct wsmouse_softc *sc =
 	    device_lookup_private(&wsmouse_cd, minor(dev));
@@ -784,8 +769,7 @@ wsmousepoll(dev_t dev, int events, struct lwp *l)
 	return (wsevent_poll(sc->sc_base.me_evp, events, l));
 }
 
-int
-wsmousekqfilter(dev_t dev, struct knote *kn)
+int wsmousekqfilter(dev_t dev, struct knote *kn)
 {
 	struct wsmouse_softc *sc =
 	    device_lookup_private(&wsmouse_cd, minor(dev));
@@ -796,8 +780,7 @@ wsmousekqfilter(dev_t dev, struct knote *kn)
 }
 
 #if NWSMUX > 0
-int
-wsmouse_mux_open(struct wsevsrc *me, struct wseventvar *evp)
+int wsmouse_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 {
 	struct wsmouse_softc *sc = (struct wsmouse_softc *)me;
 
@@ -807,8 +790,7 @@ wsmouse_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 	return wsmousedoopen(sc, evp);
 }
 
-int
-wsmouse_mux_close(struct wsevsrc *me)
+int wsmouse_mux_close(struct wsevsrc *me)
 {
 	struct wsmouse_softc *sc = (struct wsmouse_softc *)me;
 
@@ -818,8 +800,7 @@ wsmouse_mux_close(struct wsevsrc *me)
 	return (0);
 }
 
-int
-wsmouse_add_mux(int unit, struct wsmux_softc *muxsc)
+int wsmouse_add_mux(int unit, struct wsmux_softc *muxsc)
 {
 	struct wsmouse_softc *sc;
 

@@ -346,8 +346,7 @@ static struct	font *wsfont_add0(struct wsdisplay_font *, int);
 static void	wsfont_revbit(struct wsdisplay_font *);
 static void	wsfont_revbyte(struct wsdisplay_font *);
 
-int
-wsfont_make_cookie(int cident, int bito, int byteo)
+int wsfont_make_cookie(int cident, int bito, int byteo)
 {
 
 	return ((cident & WSFONT_IDENT_MASK) |
@@ -355,8 +354,7 @@ wsfont_make_cookie(int cident, int bito, int byteo)
 	    (byteo << WSFONT_BYTEO_SHIFT));
 }
 
-static void
-wsfont_revbit(struct wsdisplay_font *font)
+static void wsfont_revbit(struct wsdisplay_font *font)
 {
 	u_char *p, *m;
 
@@ -367,8 +365,7 @@ wsfont_revbit(struct wsdisplay_font *font)
 		*p = reverse[*p];
 }
 
-static void
-wsfont_revbyte(struct wsdisplay_font *font)
+static void wsfont_revbyte(struct wsdisplay_font *font)
 {
 	int x, l, r, nr;
 	u_char *rp;
@@ -394,8 +391,7 @@ wsfont_revbyte(struct wsdisplay_font *font)
 	}
 }
 
-void
-wsfont_enum(void (*cb)(const char *, int, int, int))
+void wsfont_enum(void (*cb)(const char *, int, int, int))
 {
 	struct wsdisplay_font *f;
 	struct font *ent;
@@ -542,8 +538,7 @@ wsfont_rotate_ccw_internal(struct wsdisplay_font *font)
 	return (newfont);
 }
 
-int
-wsfont_rotate(int cookie, int rotate)
+int wsfont_rotate(int cookie, int rotate)
 {
 	int s, ncookie;
 	struct wsdisplay_font *font;
@@ -579,8 +574,7 @@ wsfont_rotate(int cookie, int rotate)
 
 #endif	/* NRASOPS_ROTATION */
 
-void
-wsfont_init(void)
+void wsfont_init(void)
 {
 	struct font *ent;
 	static int again;
@@ -614,8 +608,7 @@ wsfont_find0(int cookie, int mask)
 	return (NULL);
 }
 
-int
-wsfont_matches(struct wsdisplay_font *font, const char *name,
+int wsfont_matches(struct wsdisplay_font *font, const char *name,
 	       int width, int height, int stride, int flags)
 {
 	int score = 20000;
@@ -655,8 +648,7 @@ wsfont_matches(struct wsdisplay_font *font, const char *name,
 	return (score);
 }
 
-int
-wsfont_find(const char *name, int width, int height, int stride, int bito, int byteo, int flags)
+int wsfont_find(const char *name, int width, int height, int stride, int bito, int byteo, int flags)
 {
 	struct font *ent, *bestent = NULL;
 	int score, bestscore = 0;
@@ -676,8 +668,7 @@ wsfont_find(const char *name, int width, int height, int stride, int bito, int b
 	return (-1);
 }
 
-void
-wsfont_walk(void (*matchfunc)(struct wsdisplay_font *, void *, int), void *cookie)
+void wsfont_walk(void (*matchfunc)(struct wsdisplay_font *, void *, int), void *cookie)
 {
 	struct font *ent;
 
@@ -720,8 +711,7 @@ wsfont_add0(struct wsdisplay_font *font, int copy)
 	return (ent);
 }
 
-int
-wsfont_add(struct wsdisplay_font *font, int copy)
+int wsfont_add(struct wsdisplay_font *font, int copy)
 {
 	struct font *ent;
 
@@ -739,8 +729,7 @@ wsfont_add(struct wsdisplay_font *font, int copy)
 	return (0);
 }
 
-int
-wsfont_remove(int cookie)
+int wsfont_remove(int cookie)
 {
 	struct font *ent;
 
@@ -762,8 +751,7 @@ wsfont_remove(int cookie)
 	return (0);
 }
 
-int
-wsfont_lock(int cookie, struct wsdisplay_font **ptr)
+int wsfont_lock(int cookie, struct wsdisplay_font **ptr)
 {
 	struct font *ent, *neu;
 	int bito, byteo;
@@ -806,8 +794,7 @@ wsfont_lock(int cookie, struct wsdisplay_font **ptr)
 	return (0);
 }
 
-int
-wsfont_unlock(int cookie)
+int wsfont_unlock(int cookie)
 {
 	struct font *ent;
 
@@ -1072,8 +1059,7 @@ static const struct wsfont_level1_glyphmap encodings[] = {
 /*
  * Remap Unicode character to glyph
  */
-int
-wsfont_map_unichar(struct wsdisplay_font *font, int c)
+int wsfont_map_unichar(struct wsdisplay_font *font, int c)
 {
 	const struct wsfont_level1_glyphmap *map1;
 	const struct wsfont_level2_glyphmap *map2;

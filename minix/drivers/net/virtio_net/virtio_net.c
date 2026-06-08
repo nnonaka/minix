@@ -107,8 +107,7 @@ static struct virtio_feature netf[] = {
 	{ "control channel rx",	VIRTIO_NET_F_CTRL_RX,	0,	0	}
 };
 
-static int
-virtio_net_probe(unsigned int skip)
+static int virtio_net_probe(unsigned int skip)
 {
 	/* virtio-net has at least 2 queues */
 	int queues = 2;
@@ -130,8 +129,7 @@ virtio_net_probe(unsigned int skip)
 	return OK;
 }
 
-static void
-virtio_net_config(netdriver_addr_t * addr)
+static void virtio_net_config(netdriver_addr_t * addr)
 {
 	u32_t mac14;
 	u32_t mac56;
@@ -166,8 +164,7 @@ virtio_net_config(netdriver_addr_t * addr)
 	}
 }
 
-static int
-virtio_net_alloc_bufs(void)
+static int virtio_net_alloc_bufs(void)
 {
 	data_vir = alloc_contig(PACKET_BUF_SZ, 0, &data_phys);
 
@@ -197,8 +194,7 @@ virtio_net_alloc_bufs(void)
 	return OK;
 }
 
-static void
-virtio_net_init_queues(void)
+static void virtio_net_init_queues(void)
 {
 	int i;
 	STAILQ_INIT(&free_list);
@@ -214,8 +210,7 @@ virtio_net_init_queues(void)
 	}
 }
 
-static void
-virtio_net_refill_rx_queue(void)
+static void virtio_net_refill_rx_queue(void)
 {
 	struct vumap_phys phys[2];
 	struct packet *p;
@@ -247,8 +242,7 @@ virtio_net_refill_rx_queue(void)
 	}
 }
 
-static void
-virtio_net_check_queues(void)
+static void virtio_net_check_queues(void)
 {
 	struct packet *p;
 	size_t len;
@@ -271,8 +265,7 @@ virtio_net_check_queues(void)
 	}
 }
 
-static void
-virtio_net_check_pending(void)
+static void virtio_net_check_pending(void)
 {
 
 	/* Pending read and something in recv_list? */
@@ -283,8 +276,7 @@ virtio_net_check_pending(void)
 		netdriver_send();
 }
 
-static void
-virtio_net_intr(unsigned int __unused mask)
+static void virtio_net_intr(unsigned int __unused mask)
 {
 
 	/* Check and clear interrupt flag */
@@ -310,8 +302,7 @@ virtio_net_intr(unsigned int __unused mask)
  * Put user bytes into a free packet buffer, forward this packet to the TX
  * queue, and return OK.  If there are no free packet buffers, return SUSPEND.
  */
-static int
-virtio_net_send(struct netdriver_data * data, size_t len)
+static int virtio_net_send(struct netdriver_data * data, size_t len)
 {
 	struct vumap_phys phys[2];
 	struct packet *p;
@@ -343,8 +334,7 @@ virtio_net_send(struct netdriver_data * data, size_t len)
  * Put a packet receive from the RX queue into a user buffer, and return the
  * packet length.  If there are no received packets, return SUSPEND.
  */
-static ssize_t
-virtio_net_recv(struct netdriver_data * data, size_t max)
+static ssize_t virtio_net_recv(struct netdriver_data * data, size_t max)
 {
 	struct packet *p;
 	ssize_t len;
@@ -389,8 +379,7 @@ virtio_net_recv(struct netdriver_data * data, size_t max)
 /*
  * Initialize the driver and the virtual hardware.
  */
-static int
-virtio_net_init(unsigned int instance, netdriver_addr_t * addr,
+static int virtio_net_init(unsigned int instance, netdriver_addr_t * addr,
 	uint32_t * caps, unsigned int * ticks __unused)
 {
 	int r;
@@ -419,8 +408,7 @@ virtio_net_init(unsigned int instance, netdriver_addr_t * addr,
 /*
  * The driver is terminating.  Clean up.
  */
-static void
-virtio_net_stop(void)
+static void virtio_net_stop(void)
 {
 
 	dput(("Terminating"));
@@ -438,8 +426,7 @@ virtio_net_stop(void)
 /*
  * The virtio-net device driver.
  */
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 
 	env_setargs(argc, argv);

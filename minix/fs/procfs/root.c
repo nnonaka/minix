@@ -40,8 +40,7 @@ struct file root_files[] = {
 /*
  * Print the system clock frequency.
  */
-static void
-root_hz(void)
+static void root_hz(void)
 {
 
 	buf_printf("%lu\n", (unsigned long)sys_hz());
@@ -50,8 +49,7 @@ root_hz(void)
 /*
  * Print load averages.
  */
-static void
-root_loadavg(void)
+static void root_loadavg(void)
 {
 	struct load loads[3];
 	ldiv_t avg[3];
@@ -71,8 +69,7 @@ root_loadavg(void)
 /*
  * Print the current uptime.
  */
-static void
-root_uptime(void)
+static void root_uptime(void)
 {
 	ldiv_t division;
 
@@ -84,8 +81,7 @@ root_uptime(void)
 /*
  * Print general kernel information.
  */
-static void
-root_kinfo(void)
+static void root_kinfo(void)
 {
 	struct kinfo kinfo;
 
@@ -98,8 +94,7 @@ root_kinfo(void)
 /*
  * Print general memory information.
  */
-static void
-root_meminfo(void)
+static void root_meminfo(void)
 {
 	struct vm_stats_info vsi;
 
@@ -114,8 +109,7 @@ root_meminfo(void)
 /*
  * Print information about PCI devices present in the system.
  */
-static void
-root_pci(void)
+static void root_pci(void)
 {
 	u16_t vid, did, subvid, subdid;
 	u8_t bcr, scr, pifr, rev;
@@ -156,8 +150,7 @@ root_pci(void)
 /*
  * Print a list of drivers that have been assigned major device numbers.
  */
-static void
-root_dmap(void)
+static void root_dmap(void)
 {
 	struct dmap dmap[NR_DEVICES];
 	int i;
@@ -177,8 +170,7 @@ root_dmap(void)
 /*
  * Print a list of IPC vectors with their addresses.
  */
-static void
-root_ipcvecs(void)
+static void root_ipcvecs(void)
 {
 	extern struct minix_ipcvecs _minix_ipcvecs;
 
@@ -210,8 +202,7 @@ root_ipcvecs(void)
 /*
  * Print the list of mounted file systems.
  */
-static void
-root_mounts(void)
+static void root_mounts(void)
 {
 	struct statvfs buf[NR_MNTS];
 	int i, count;

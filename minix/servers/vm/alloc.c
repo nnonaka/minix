@@ -133,8 +133,7 @@ void *reservedqueue_new(int max_available, int npages, int mapped, int allocflag
 	return rq;
 }
 
-static void
-reservedqueue_fillslot(struct reserved_pages *rq,
+static void reservedqueue_fillslot(struct reserved_pages *rq,
 	struct reserved_pageslot *rps, phys_bytes ph, void *vir)
 {
 	rps->phys = ph;
@@ -145,8 +144,7 @@ reservedqueue_fillslot(struct reserved_pages *rq,
 	rq->n_available++;
 }
 
-static int
-reservedqueue_addslot(struct reserved_pages *rq)
+static int reservedqueue_addslot(struct reserved_pages *rq)
 {
 	phys_bytes cl, cl_addr;
 	void *vir;
@@ -202,8 +200,7 @@ static int reservedqueue_fill(void *rq_v)
 	return OK;
 }
 
-int
-reservedqueue_alloc(void *rq_v, phys_bytes *ph, void **vir)
+int reservedqueue_alloc(void *rq_v, phys_bytes *ph, void **vir)
 {
 	struct reserved_pages *rq = rq_v;
 	struct reserved_pageslot *rps;

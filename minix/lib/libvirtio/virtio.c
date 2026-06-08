@@ -184,8 +184,7 @@ err:
 	return NULL;
 }
 
-static int
-init_device(int devind, struct virtio_device *dev)
+static int init_device(int devind, struct virtio_device *dev)
 {
 	u32_t base, size;
 	int iof, r;
@@ -219,8 +218,7 @@ init_device(int devind, struct virtio_device *dev)
 	return OK;
 }
 
-static int
-exchange_features(struct virtio_device *dev)
+static int exchange_features(struct virtio_device *dev)
 {
 	u32_t guest_features = 0, host_features = 0;
 	struct virtio_feature *f;
@@ -243,8 +241,7 @@ exchange_features(struct virtio_device *dev)
 	return OK;
 }
 
-int
-virtio_alloc_queues(struct virtio_device *dev, int num_queues)
+int virtio_alloc_queues(struct virtio_device *dev, int num_queues)
 {
 	int r = OK;
 
@@ -272,8 +269,7 @@ virtio_alloc_queues(struct virtio_device *dev, int num_queues)
 	return r;
 }
 
-static int
-init_phys_queues(struct virtio_device *dev)
+static int init_phys_queues(struct virtio_device *dev)
 {
 	/* Initialize all queues */
 	int i, j, r;
@@ -311,8 +307,7 @@ free_phys_queues:
 	return r;
 }
 
-static int
-alloc_phys_queue(struct virtio_queue *q)
+static int alloc_phys_queue(struct virtio_queue *q)
 {
 	assert(q != NULL);
 
@@ -336,8 +331,7 @@ alloc_phys_queue(struct virtio_queue *q)
 	return OK;
 }
 
-void
-virtio_device_ready(struct virtio_device *dev)
+void virtio_device_ready(struct virtio_device *dev)
 {
 	assert(dev != NULL);
 
@@ -348,8 +342,7 @@ virtio_device_ready(struct virtio_device *dev)
 	virtio_write8(dev, VIRTIO_DEV_STATUS_OFF, VIRTIO_STATUS_DRV_OK);
 }
 
-void
-virtio_free_queues(struct virtio_device *dev)
+void virtio_free_queues(struct virtio_device *dev)
 {
 	int i;
 	assert(dev != NULL);
@@ -363,8 +356,7 @@ virtio_free_queues(struct virtio_device *dev)
 	dev->queues = NULL;
 }
 
-static void
-free_phys_queue(struct virtio_queue *q)
+static void free_phys_queue(struct virtio_queue *q)
 {
 	assert(q != NULL);
 	assert(q->vaddr != NULL);
@@ -377,8 +369,7 @@ free_phys_queue(struct virtio_queue *q)
 	q->data = NULL;
 }
 
-static void
-init_phys_queue(struct virtio_queue *q)
+static void init_phys_queue(struct virtio_queue *q)
 {
 	memset(q->vaddr, 0, q->ring_size);
 	memset(q->data, 0, sizeof(q->data[0]) * q->num);
@@ -403,8 +394,7 @@ init_phys_queue(struct virtio_queue *q)
 	return;
 }
 
-void
-virtio_free_device(struct virtio_device *dev)
+void virtio_free_device(struct virtio_device *dev)
 {
 	int i;
 	struct indirect_desc_table *desc;
@@ -427,8 +417,7 @@ virtio_free_device(struct virtio_device *dev)
 	free(dev);
 }
 
-static int
-init_indirect_desc_table(struct indirect_desc_table *desc)
+static int init_indirect_desc_table(struct indirect_desc_table *desc)
 {
 	desc->in_use = 0;
 	desc->len = (MAPVEC_NR + MAPVEC_NR / 2) * sizeof(struct vring_desc);
@@ -442,8 +431,7 @@ init_indirect_desc_table(struct indirect_desc_table *desc)
 	return OK;
 }
 
-static int
-init_indirect_desc_tables(struct virtio_device *dev)
+static int init_indirect_desc_tables(struct virtio_device *dev)
 {
 	int i, j, r;
 	struct indirect_desc_table *desc;
@@ -476,8 +464,7 @@ init_indirect_desc_tables(struct virtio_device *dev)
 	return OK;
 }
 
-static void
-clear_indirect_table(struct virtio_device *dev, struct vring_desc *vd)
+static void clear_indirect_table(struct virtio_device *dev, struct vring_desc *vd)
 {
 	int i;
 	struct indirect_desc_table *desc;
@@ -513,8 +500,7 @@ use_vring_desc(struct vring_desc *vd, struct vumap_phys *vp)
 		vd->flags |= VRING_DESC_F_WRITE;
 }
 
-static void
-set_indirect_descriptors(struct virtio_device *dev, struct virtio_queue *q,
+static void set_indirect_descriptors(struct virtio_device *dev, struct virtio_queue *q,
 	struct vumap_phys *bufs, size_t num)
 {
 	/* Indirect descriptor tables are simply filled from left to right */
@@ -568,8 +554,7 @@ set_indirect_descriptors(struct virtio_device *dev, struct virtio_queue *q,
 	q->free_head = vd->next;
 }
 
-static void
-set_direct_descriptors(struct virtio_queue *q, struct vumap_phys *bufs,
+static void set_direct_descriptors(struct virtio_queue *q, struct vumap_phys *bufs,
 	size_t num)
 {
 	u16_t i;
@@ -602,8 +587,7 @@ set_direct_descriptors(struct virtio_queue *q, struct vumap_phys *bufs,
 	q->free_head = i;
 }
 
-int
-virtio_to_queue(struct virtio_device *dev, int qidx, struct vumap_phys *bufs,
+int virtio_to_queue(struct virtio_device *dev, int qidx, struct vumap_phys *bufs,
 	size_t num, void *data)
 {
 	u16_t free_first;
@@ -645,8 +629,7 @@ virtio_to_queue(struct virtio_device *dev, int qidx, struct vumap_phys *bufs,
 	return 0;
 }
 
-int
-virtio_from_queue(struct virtio_device *dev, int qidx, void **data,
+int virtio_from_queue(struct virtio_device *dev, int qidx, void **data,
 	size_t *len)
 {
 	struct virtio_queue *q;
@@ -732,45 +715,39 @@ virtio_from_queue(struct virtio_device *dev, int qidx, void **data,
 	return 0;
 }
 
-int
-virtio_had_irq(struct virtio_device *dev)
+int virtio_had_irq(struct virtio_device *dev)
 {
 	return virtio_read8(dev, VIRTIO_ISR_STATUS_OFF) & 1;
 }
 
-void
-virtio_reset_device(struct virtio_device *dev)
+void virtio_reset_device(struct virtio_device *dev)
 {
 	virtio_irq_unregister(dev);
 	virtio_write8(dev, VIRTIO_DEV_STATUS_OFF, 0);
 }
 
 
-void
-virtio_irq_enable(struct virtio_device *dev)
+void virtio_irq_enable(struct virtio_device *dev)
 {
 	int r;
 	if ((r = sys_irqenable(&dev->irq_hook)) != OK)
 		panic("%s Unable to enable IRQ %d", dev->name, r);
 }
 
-void
-virtio_irq_disable(struct virtio_device *dev)
+void virtio_irq_disable(struct virtio_device *dev)
 {
 	int r;
 	if ((r = sys_irqdisable(&dev->irq_hook)) != OK)
 		panic("%s: Unable to disable IRQ %d", dev->name, r);
 }
 
-static int
-wants_kick(struct virtio_queue *q)
+static int wants_kick(struct virtio_queue *q)
 {
 	assert(q != NULL);
 	return !(q->vring.used->flags & VRING_USED_F_NO_NOTIFY);
 }
 
-static void
-kick_queue(struct virtio_device *dev, int qidx)
+static void kick_queue(struct virtio_device *dev, int qidx)
 {
 	assert(0 <= qidx && qidx < dev->num_queues);
 
@@ -780,30 +757,26 @@ kick_queue(struct virtio_device *dev, int qidx)
 	return;
 }
 
-static int
-is_matching_device(u16_t expected_sdid, u16_t vid, u16_t sdid)
+static int is_matching_device(u16_t expected_sdid, u16_t vid, u16_t sdid)
 {
 	return vid == VIRTIO_VENDOR_ID && sdid == expected_sdid;
 }
 
-static void
-virtio_irq_register(struct virtio_device *dev)
+static void virtio_irq_register(struct virtio_device *dev)
 {
 	int r;
 	if ((r = sys_irqsetpolicy(dev->irq, 0, &dev->irq_hook)) != OK)
 		panic("%s: Unable to register IRQ %d", dev->name, r);
 }
 
-static void
-virtio_irq_unregister(struct virtio_device *dev)
+static void virtio_irq_unregister(struct virtio_device *dev)
 {
 	int r;
 	if ((r = sys_irqrmpolicy(&dev->irq_hook)) != OK)
 		panic("%s: Unable to unregister IRQ %d", dev->name, r);
 }
 
-static int
-_supports(struct virtio_device *dev, int bit, int host)
+static int _supports(struct virtio_device *dev, int bit, int host)
 {
 	for (int i = 0; i < dev->num_features; i++) {
 		struct virtio_feature *f = &dev->features[i];
@@ -815,14 +788,12 @@ _supports(struct virtio_device *dev, int bit, int host)
 	panic("%s: Feature not found bit=%d", dev->name, bit);
 }
 
-int
-virtio_host_supports(struct virtio_device *dev, int bit)
+int virtio_host_supports(struct virtio_device *dev, int bit)
 {
 	return _supports(dev, bit, 1);
 }
 
-int
-virtio_guest_supports(struct virtio_device *dev, int bit)
+int virtio_guest_supports(struct virtio_device *dev, int bit)
 {
 	return _supports(dev, bit, 0);
 }

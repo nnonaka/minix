@@ -177,8 +177,7 @@ static const uint8_t linux_key_to_usb_map[] = {
 #endif
 };
 
-uint8_t
-linux_key_to_usb(u_int code)
+uint8_t linux_key_to_usb(u_int code)
 {
 	if (code >= __arraycount(linux_key_to_usb_map))
 		return 0x00;	/* No Event */

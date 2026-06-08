@@ -37,8 +37,7 @@ static struct {
 /*
  * Initialize the table of remote endpoints.
  */
-void
-mib_remote_init(void)
+void mib_remote_init(void)
 {
 	unsigned int i;
 
@@ -52,8 +51,7 @@ mib_remote_init(void)
  * The remote endpoint with the given table index has been determined to have
  * died.  Clean up all its mount points.
  */
-static void
-mib_down(unsigned int eid)
+static void mib_down(unsigned int eid)
 {
 	struct mib_node *node, *next_node;
 
@@ -78,8 +76,7 @@ mib_down(unsigned int eid)
  * the label in the given buffer.  If the label cannot be retrieved or does not
  * fit in the given buffer, return a negative error code.
  */
-static int
-mib_get_label(endpoint_t endpt, char * label, size_t labelsize)
+static int mib_get_label(endpoint_t endpt, char * label, size_t labelsize)
 {
 	char key[DS_MAX_KEYLEN];
 	int r;
@@ -106,8 +103,7 @@ mib_get_label(endpoint_t endpt, char * label, size_t labelsize)
 /*
  * Register a remote subtree, mounting it in the local tree as requested.
  */
-static void
-mib_do_register(endpoint_t endpt, const char * label, uint32_t rid,
+static void mib_do_register(endpoint_t endpt, const char * label, uint32_t rid,
 	uint32_t flags, unsigned int csize, unsigned int clen, const int * mib,
 	unsigned int miblen)
 {
@@ -194,8 +190,7 @@ mib_do_register(endpoint_t endpt, const char * label, uint32_t rid,
 /*
  * Process a mount point registration request from another service.
  */
-int
-mib_register(const message * m_in, int ipc_status)
+int mib_register(const message * m_in, int ipc_status)
 {
 	char label[DS_MAX_KEYLEN];
 
@@ -236,8 +231,7 @@ mib_register(const message * m_in, int ipc_status)
  * Deregister a previously registered remote subtree, unmounting it from the
  * local tree.
  */
-static void
-mib_do_deregister(endpoint_t endpt, uint32_t rid)
+static void mib_do_deregister(endpoint_t endpt, uint32_t rid)
 {
 	struct mib_node *node, **nodep;
 	unsigned int eid;
@@ -288,8 +282,7 @@ mib_do_deregister(endpoint_t endpt, uint32_t rid)
 /*
  * Process a mount point deregistration request from another service.
  */
-int
-mib_deregister(const message * m_in, int ipc_status)
+int mib_deregister(const message * m_in, int ipc_status)
 {
 
 	/* Same as for registration messages. */
@@ -313,8 +306,7 @@ mib_deregister(const message * m_in, int ipc_status)
  * with the name and description stored in the given buffers.  Otherwise,
  * return a negative error code.
  */
-int
-mib_remote_info(unsigned int eid, uint32_t rid, char * name, size_t namesize,
+int mib_remote_info(unsigned int eid, uint32_t rid, char * name, size_t namesize,
 	char * desc, size_t descsize)
 {
 	endpoint_t endpt;
@@ -375,8 +367,7 @@ mib_remote_info(unsigned int eid, uint32_t rid, char * name, size_t namesize,
  * the remote subtree does not exist, either because it is being deregistered
  * or because the remote service was restarted with loss of state.
  */
-ssize_t
-mib_remote_call(struct mib_call * call, struct mib_node * node,
+ssize_t mib_remote_call(struct mib_call * call, struct mib_node * node,
 	struct mib_oldp * oldp, struct mib_newp * newp)
 {
 	cp_grant_id_t name_grant, oldp_grant, newp_grant;

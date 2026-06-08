@@ -154,8 +154,7 @@ static void	wsevent_intr(void *);
 /*
  * Initialize a wscons_event queue.
  */
-void
-wsevent_init(struct wseventvar *ev, struct proc *p)
+void wsevent_init(struct wseventvar *ev, struct proc *p)
 {
 
 	if (ev->q != NULL) {
@@ -186,8 +185,7 @@ wsevent_init(struct wseventvar *ev, struct proc *p)
 /*
  * Tear down a wscons_event queue.
  */
-void
-wsevent_fini(struct wseventvar *ev)
+void wsevent_fini(struct wseventvar *ev)
 {
 	if (ev->q == NULL) {
 #ifdef DIAGNOSTIC
@@ -201,8 +199,7 @@ wsevent_fini(struct wseventvar *ev)
 	softint_disestablish(ev->sih);
 }
 
-static int
-wsevent_copyout_events(const struct wscons_event *events, int cnt,
+static int wsevent_copyout_events(const struct wscons_event *events, int cnt,
     struct uio *uio, int ver)
 {
 	int error;
@@ -225,8 +222,7 @@ wsevent_copyout_events(const struct wscons_event *events, int cnt,
  * User-level interface: read, poll.
  * (User cannot write an event queue.)
  */
-int
-wsevent_read(struct wseventvar *ev, struct uio *uio, int flags)
+int wsevent_read(struct wseventvar *ev, struct uio *uio, int flags)
 {
 	int s, n, cnt, error;
 	const int ver = ev->version;
@@ -279,8 +275,7 @@ wsevent_read(struct wseventvar *ev, struct uio *uio, int flags)
 	return (error);
 }
 
-int
-wsevent_poll(struct wseventvar *ev, int events, struct lwp *l)
+int wsevent_poll(struct wseventvar *ev, int events, struct lwp *l)
 {
 	int revents = 0;
 	int s = splwsevent();
@@ -296,8 +291,7 @@ wsevent_poll(struct wseventvar *ev, int events, struct lwp *l)
 	return (revents);
 }
 
-static void
-filt_wseventrdetach(struct knote *kn)
+static void filt_wseventrdetach(struct knote *kn)
 {
 	struct wseventvar *ev = kn->kn_hook;
 	int s;
@@ -307,8 +301,7 @@ filt_wseventrdetach(struct knote *kn)
 	splx(s);
 }
 
-static int
-filt_wseventread(struct knote *kn, long hint)
+static int filt_wseventread(struct knote *kn, long hint)
 {
 	struct wseventvar *ev = kn->kn_hook;
 
@@ -332,8 +325,7 @@ static const struct filterops wsevent_filtops = {
 	.f_event = filt_wseventread,
 };
 
-int
-wsevent_kqfilter(struct wseventvar *ev, struct knote *kn)
+int wsevent_kqfilter(struct wseventvar *ev, struct knote *kn)
 {
 	struct klist *klist;
 	int s;
@@ -360,8 +352,7 @@ wsevent_kqfilter(struct wseventvar *ev, struct knote *kn)
 /*
  * Wakes up all listener of the 'ev' queue.
  */
-void
-wsevent_wakeup(struct wseventvar *ev)
+void wsevent_wakeup(struct wseventvar *ev)
 {
 
 	selnotify(&ev->sel, 0, 0);
@@ -379,8 +370,7 @@ wsevent_wakeup(struct wseventvar *ev)
 /*
  * Soft interrupt handler: sends signal to async proc.
  */
-static void
-wsevent_intr(void *cookie)
+static void wsevent_intr(void *cookie)
 {
 	struct wseventvar *ev;
 
@@ -399,8 +389,7 @@ wsevent_intr(void *cookie)
  * all, returns ENOSPC and the queue is left intact; otherwise returns 0
  * and wakes up all listeners.
  */
-int
-wsevent_inject(struct wseventvar *ev, struct wscons_event *events,
+int wsevent_inject(struct wseventvar *ev, struct wscons_event *events,
     size_t nevents)
 {
 	size_t avail, i;
@@ -436,8 +425,7 @@ wsevent_inject(struct wseventvar *ev, struct wscons_event *events,
 	return 0;
 }
 
-int
-wsevent_setversion(struct wseventvar *ev, int vers)
+int wsevent_setversion(struct wseventvar *ev, int vers)
 {
 	if (ev == NULL)
 		return EINVAL;

@@ -198,9 +198,7 @@ static void sef_cb_signal_handler(int signo)
 #endif
 
 /* Returns 0 if no device found, or 1 if a device is found. */
-static int find_dev(devindp, capaddrp)
-int *devindp;
-u8_t *capaddrp;
+static int find_dev(int *devindp, u8_t *capaddrp)
 {
 	int r, devind, first;
 	u8_t capptr, type, next, subtype;

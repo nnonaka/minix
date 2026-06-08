@@ -41,8 +41,7 @@ extern int mra_Y_AX1_BX2_C(const int *, int,
  * multiple regression analysis
  * Y = AX1 + BX2 + C
  */
-int
-mra_Y_AX1_BX2_C(const int *y, int ys,
+int mra_Y_AX1_BX2_C(const int *y, int ys,
 		const int *x1, int x1s, const int *x2, int x2s,
 		int n, int scale,
 		int *a, int *b, int *c)

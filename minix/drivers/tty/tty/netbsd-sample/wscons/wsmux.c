@@ -147,8 +147,7 @@ struct wssrcops wsmux_srcops = {
 };
 
 /* From upper level */
-void
-wsmuxattach(int n)
+void wsmuxattach(int n)
 {
 }
 
@@ -191,8 +190,7 @@ wsmux_getmux(int n)
 /*
  * open() of the pseudo device from device table.
  */
-int
-wsmuxopen(dev_t dev, int flags, int mode, struct lwp *l)
+int wsmuxopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct wsmux_softc *sc;
 	struct wseventvar *evar;
@@ -241,8 +239,7 @@ wsmuxopen(dev_t dev, int flags, int mode, struct lwp *l)
 /*
  * Open of a mux via the parent mux.
  */
-int
-wsmux_mux_open(struct wsevsrc *me, struct wseventvar *evar)
+int wsmux_mux_open(struct wsevsrc *me, struct wseventvar *evar)
 {
 	struct wsmux_softc *sc = (struct wsmux_softc *)me;
 
@@ -263,8 +260,7 @@ wsmux_mux_open(struct wsevsrc *me, struct wseventvar *evar)
 }
 
 /* Common part of opening a mux. */
-void
-wsmux_do_open(struct wsmux_softc *sc, struct wseventvar *evar)
+void wsmux_do_open(struct wsmux_softc *sc, struct wseventvar *evar)
 {
 	struct wsevsrc *me;
 
@@ -300,8 +296,7 @@ wsmux_do_open(struct wsmux_softc *sc, struct wseventvar *evar)
 /*
  * close() of the pseudo device from device table.
  */
-int
-wsmuxclose(dev_t dev, int flags, int mode,
+int wsmuxclose(dev_t dev, int flags, int mode,
     struct lwp *l)
 {
 	int minr = minor(dev);
@@ -324,8 +319,7 @@ wsmuxclose(dev_t dev, int flags, int mode,
 /*
  * Close of a mux via the parent mux.
  */
-int
-wsmux_mux_close(struct wsevsrc *me)
+int wsmux_mux_close(struct wsevsrc *me)
 {
 	me->me_evp = NULL;
 	wsmux_do_close((struct wsmux_softc *)me);
@@ -333,8 +327,7 @@ wsmux_mux_close(struct wsevsrc *me)
 }
 
 /* Common part of closing a mux. */
-void
-wsmux_do_close(struct wsmux_softc *sc)
+void wsmux_do_close(struct wsmux_softc *sc)
 {
 	struct wsevsrc *me;
 
@@ -360,8 +353,7 @@ wsmux_do_close(struct wsmux_softc *sc)
 /*
  * read() of the pseudo device from device table.
  */
-int
-wsmuxread(dev_t dev, struct uio *uio, int flags)
+int wsmuxread(dev_t dev, struct uio *uio, int flags)
 {
 	int minr = minor(dev);
 	struct wsmux_softc *sc = wsmuxdevs[WSMUXDEV(minr)];
@@ -393,8 +385,7 @@ wsmuxread(dev_t dev, struct uio *uio, int flags)
 /*
  * ioctl of the pseudo device from device table.
  */
-int
-wsmuxioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
+int wsmuxioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	int u = WSMUXDEV(minor(dev));
 
@@ -404,8 +395,7 @@ wsmuxioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 /*
  * ioctl of a mux via the parent mux, continuation of wsmuxioctl().
  */
-int
-wsmux_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
+int wsmux_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 	       struct lwp *lwp)
 {
 	struct wsmux_softc *sc = device_private(dv);
@@ -578,8 +568,7 @@ wsmux_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 /*
  * poll() of the pseudo device from device table.
  */
-int
-wsmuxpoll(dev_t dev, int events, struct lwp *l)
+int wsmuxpoll(dev_t dev, int events, struct lwp *l)
 {
 	int minr = minor(dev);
 	struct wsmux_softc *sc = wsmuxdevs[WSMUXDEV(minr)];
@@ -602,8 +591,7 @@ wsmuxpoll(dev_t dev, int events, struct lwp *l)
 /*
  * kqfilter() of the pseudo device from device table.
  */
-int
-wsmuxkqfilter(dev_t dev, struct knote *kn)
+int wsmuxkqfilter(dev_t dev, struct knote *kn)
 {
 	int minr = minor(dev);
 	struct wsmux_softc *sc = wsmuxdevs[WSMUXDEV(minr)];
@@ -626,8 +614,7 @@ wsmuxkqfilter(dev_t dev, struct knote *kn)
 /*
  * Add mux unit as a child to muxsc.
  */
-int
-wsmux_add_mux(int unit, struct wsmux_softc *muxsc)
+int wsmux_add_mux(int unit, struct wsmux_softc *muxsc)
 {
 	struct wsmux_softc *sc, *m;
 
@@ -679,8 +666,7 @@ wsmux_create(const char *name, int unit)
 }
 
 /* Attach me as a child to sc. */
-int
-wsmux_attach_sc(struct wsmux_softc *sc, struct wsevsrc *me)
+int wsmux_attach_sc(struct wsmux_softc *sc, struct wsevsrc *me)
 {
 	int error;
 
@@ -749,8 +735,7 @@ wsmux_attach_sc(struct wsmux_softc *sc, struct wsevsrc *me)
 }
 
 /* Remove me from the parent. */
-void
-wsmux_detach_sc(struct wsevsrc *me)
+void wsmux_detach_sc(struct wsevsrc *me)
 {
 	struct wsmux_softc *sc = me->me_parent;
 
@@ -787,8 +772,7 @@ wsmux_detach_sc(struct wsevsrc *me)
 /*
  * Display ioctl() of a mux via the parent mux.
  */
-int
-wsmux_do_displayioctl(device_t dv, u_long cmd, void *data, int flag,
+int wsmux_do_displayioctl(device_t dv, u_long cmd, void *data, int flag,
 		      struct lwp *l)
 {
 	struct wsmux_softc *sc = device_private(dv);
@@ -837,8 +821,7 @@ wsmux_do_displayioctl(device_t dv, u_long cmd, void *data, int flag,
 /*
  * Set display of a mux via the parent mux.
  */
-int
-wsmux_evsrc_set_display(device_t dv, struct wsevsrc *ame)
+int wsmux_evsrc_set_display(device_t dv, struct wsevsrc *ame)
 {
 	struct wsmux_softc *muxsc = (struct wsmux_softc *)ame;
 	struct wsmux_softc *sc = device_private(dv);
@@ -858,8 +841,7 @@ wsmux_evsrc_set_display(device_t dv, struct wsevsrc *ame)
 	return wsmux_set_display(sc, displaydv);
 }
 
-int
-wsmux_set_display(struct wsmux_softc *sc, device_t displaydv)
+int wsmux_set_display(struct wsmux_softc *sc, device_t displaydv)
 {
 	device_t odisplaydv;
 	struct wsevsrc *me;

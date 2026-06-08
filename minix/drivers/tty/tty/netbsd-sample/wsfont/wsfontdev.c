@@ -43,15 +43,13 @@ __KERNEL_RCSID(0, "$NetBSD: wsfontdev.c,v 1.18 2017/06/23 01:57:40 macallan Exp 
 
 static int wsfont_isopen;
 
-void
-wsfontattach(int n)
+void wsfontattach(int n)
 {
 
 	wsfont_init();
 }
 
-static int
-wsfontopen(dev_t dev, int flag, int mode,
+static int wsfontopen(dev_t dev, int flag, int mode,
     struct lwp *l)
 {
 
@@ -61,8 +59,7 @@ wsfontopen(dev_t dev, int flag, int mode,
 	return (0);
 }
 
-static int
-wsfontclose(dev_t dev, int flag, int mode,
+static int wsfontclose(dev_t dev, int flag, int mode,
     struct lwp *l)
 {
 
@@ -70,8 +67,7 @@ wsfontclose(dev_t dev, int flag, int mode,
 	return (0);
 }
 
-static int
-wsfontioctl(dev_t dev, u_long cmd, void *data, int flag,
+static int wsfontioctl(dev_t dev, u_long cmd, void *data, int flag,
     struct lwp *l)
 {
 	char nbuf[64];

@@ -82,8 +82,7 @@ static struct rasops_info	*stamp_ri;
 /*
  * Initialize rasops_info struct for this colordepth.
  */
-void
-rasops24_init(struct rasops_info *ri)
+void rasops24_init(struct rasops_info *ri)
 {
 
 	if (ri->ri_rnum == 0) {
@@ -159,8 +158,7 @@ rasops24_makestamp1(struct rasops_info *ri, uint32_t *xstamp,
 /*
  * Recompute the blitting stamp.
  */
-static void
-rasops24_makestamp(struct rasops_info *ri, long attr)
+static void rasops24_makestamp(struct rasops_info *ri, long attr)
 {
 	int i;
 	uint32_t bg, fg, c1, c2, c3, c4;
@@ -207,8 +205,7 @@ rasops24_makestamp(struct rasops_info *ri, long attr)
 /*
  * Erase rows. This is nice and easy due to alignment.
  */
-static void
-rasops24_eraserows(void *cookie, int row, int num, long attr)
+static void rasops24_eraserows(void *cookie, int row, int num, long attr)
 {
 	struct rasops_info *ri = (struct rasops_info *)cookie;
 	int bytes, full, slop, cnt;
@@ -290,8 +287,7 @@ rasops24_eraserows(void *cookie, int row, int num, long attr)
 /*
  * Erase columns.
  */
-static void
-rasops24_erasecols(void *cookie, int row, int col, int num, long attr)
+static void rasops24_erasecols(void *cookie, int row, int col, int num, long attr)
 {
 	struct rasops_info *ri = (struct rasops_info *)cookie;
 	int height, slop1, slop2, full, cnt;

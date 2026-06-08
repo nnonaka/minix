@@ -184,8 +184,7 @@ schedulerstr(struct proc *scheduler)
 	return "KERNEL";
 }
 
-static void
-print_proc_name(struct proc *pp)
+static void print_proc_name(struct proc *pp)
 {
 	char *name = pp->p_name;
 	endpoint_t ep = pp->p_endpoint;
@@ -198,8 +197,7 @@ print_proc_name(struct proc *pp)
 	}
 }
 
-static void
-print_endpoint(endpoint_t ep)
+static void print_endpoint(endpoint_t ep)
 {
 	int proc_nr;
 	struct proc *pp = NULL;
@@ -231,8 +229,7 @@ print_endpoint(endpoint_t ep)
 	}
 }
 
-static void
-print_sigmgr(struct proc *pp)
+static void print_sigmgr(struct proc *pp)
 {
 	endpoint_t sig_mgr, bak_sig_mgr;
 	sig_mgr = priv(pp) ? priv(pp)->s_sig_mgr : NONE;

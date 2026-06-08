@@ -56,8 +56,7 @@ static int vt100_decmode(struct vt100base_data *, int, int);
 /*
  * scroll up within scrolling region
  */
-void
-wsemul_vt100_scrollup(struct vt100base_data *edp, int n)
+void wsemul_vt100_scrollup(struct vt100base_data *edp, int n)
 {
 	int help;
 
@@ -86,8 +85,7 @@ wsemul_vt100_scrollup(struct vt100base_data *edp, int n)
 /*
  * scroll down within scrolling region
  */
-void
-wsemul_vt100_scrolldown(struct vt100base_data *edp, int n)
+void wsemul_vt100_scrolldown(struct vt100base_data *edp, int n)
 {
 	int help;
 
@@ -116,8 +114,7 @@ wsemul_vt100_scrolldown(struct vt100base_data *edp, int n)
 /*
  * erase in display
  */
-void
-wsemul_vt100_ed(struct vt100base_data *edp, int arg)
+void wsemul_vt100_ed(struct vt100base_data *edp, int arg)
 {
 	int n;
 
@@ -162,8 +159,7 @@ wsemul_vt100_ed(struct vt100base_data *edp, int arg)
 /*
  * erase in line
  */
-void
-wsemul_vt100_el(struct vt100base_data *edp, int arg)
+void wsemul_vt100_el(struct vt100base_data *edp, int arg)
 {
 	switch (arg) {
 	    case 0: /* cursor to end */
@@ -188,8 +184,7 @@ wsemul_vt100_el(struct vt100base_data *edp, int arg)
 /*
  * handle commands after CSI (ESC[)
  */
-void
-wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
+void wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
 {
 	int n, help, flags, fgcol, bgcol;
 	long attr, bkgdattr;
@@ -650,8 +645,7 @@ wsemul_vt100_handle_csi(struct vt100base_data *edp, u_char c)
  * try to find replacements if the desired appearance
  * is not supported
  */
-static int
-vt100_selectattribute(struct vt100base_data *edp,
+static int vt100_selectattribute(struct vt100base_data *edp,
 	int flags, int fgcol, int bgcol, long *attr, long *bkgdattr)
 {
 	int error;
@@ -740,8 +734,7 @@ vt100_selectattribute(struct vt100base_data *edp,
  * handle device control sequences if the main state machine
  * told so by setting edp->dcstype to a nonzero value
  */
-void
-wsemul_vt100_handle_dcs(struct vt100base_data *edp)
+void wsemul_vt100_handle_dcs(struct vt100base_data *edp)
 {
 	int i, pos;
 
@@ -781,8 +774,7 @@ wsemul_vt100_handle_dcs(struct vt100base_data *edp)
 	edp->dcstype = 0;
 }
 
-static int
-vt100_ansimode(struct vt100base_data *edp, int nr, int op)
+static int vt100_ansimode(struct vt100base_data *edp, int nr, int op)
 {
 	int res = 0; /* default: unknown */
 
@@ -815,8 +807,7 @@ vt100_ansimode(struct vt100base_data *edp, int nr, int op)
 	return (res);
 }
 
-static int
-vt100_decmode(struct vt100base_data *edp, int nr, int op)
+static int vt100_decmode(struct vt100base_data *edp, int nr, int op)
 {
 	int res = 0; /* default: unknown */
 	int flags;

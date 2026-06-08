@@ -94,8 +94,7 @@ int computc_d(int, int);
 int comgetc_d(int);
 int comstatus_d(int);
 
-void
-direct_com_init()
+void direct_com_init()
 {
 	cominit_d(COM1_BASE, 115200);
 }
@@ -127,8 +126,7 @@ int direct_com_read_char(unsigned char *ch)
 /*
  * calculate divisor for a given speed
  */
-static int
-comspeed(long speed)
+static int comspeed(long speed)
 {
 	int x, err;
 
@@ -148,8 +146,7 @@ comspeed(long speed)
 /*
  * get a character
  */
-int
-comgetc_d(int combase)
+int comgetc_d(int combase)
 {
 	u_char stat, c;
 
@@ -177,8 +174,7 @@ comgetc_d(int combase)
 /*
  * output a character, return nonzero on success
  */
-int
-computc_d(int c, int combase)
+int computc_d(int c, int combase)
 {
 	u_char stat;
 	int timo;
@@ -218,8 +214,7 @@ computc_d(int c, int combase)
 /*
  * Initialize UART to known state.
  */
-int
-cominit_d(int combase, int speed)
+int cominit_d(int combase, int speed)
 {
 	int rate, err;
 
@@ -255,8 +250,7 @@ cominit_d(int combase, int speed)
 /*
  * return nonzero if input char available, do XON/XOFF handling
  */
-int
-comstatus_d(int combase)
+int comstatus_d(int combase)
 {
 	/* check if any preread input is already there */
 	if (serbuf_read != serbuf_write) return 1;

@@ -170,9 +170,7 @@ static void rtl_init(dpeth_t *dep)
 }
 
 #if 0
-static u16_t get_ee_word(dep, a)
-dpeth_t *dep;
-int a;
+static u16_t get_ee_word(dpeth_t *dep, int a)
 {
 	int b, i, cmd;
 	u16_t w;
@@ -215,8 +213,7 @@ int a;
 	return w;
 }
 
-static void ee_wen(dep)
-dpeth_t *dep;
+static void ee_wen(dpeth_t *dep)
 {
 	int b, i, cmd;
 
@@ -240,10 +237,7 @@ dpeth_t *dep;
 	micro_delay(1);			/* Is this required? */
 }
 
-static void set_ee_word(dep, a, w)
-dpeth_t *dep;
-int a;
-u16_t w;
+static void set_ee_word(dpeth_t *dep, int a, u16_t w)
 {
 	int b, i, cmd;
 
@@ -282,8 +276,7 @@ u16_t w;
 		panic("set_ee_word: device remains busy");
 }
 
-static void ee_wds(dep)
-dpeth_t *dep;
+static void ee_wds(dpeth_t *dep)
 {
 	int b, i, cmd;
 

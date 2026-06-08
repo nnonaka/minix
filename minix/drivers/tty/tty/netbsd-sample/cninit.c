@@ -53,8 +53,7 @@ __KERNEL_RCSID(0, "$NetBSD: cninit.c,v 1.11 2011/02/08 20:20:26 rmind Exp $");
 
 #include <dev/cons.h>
 
-void
-cninit(void)
+void cninit(void)
 {
 	struct consdev *cp;
 	struct consdev *bestMatch;

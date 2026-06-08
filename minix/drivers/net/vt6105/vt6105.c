@@ -279,8 +279,7 @@ int main(int argc, char *argv[]) {
 }
 
 /* Initialize the driver */
-static int
-NDR_init(unsigned int instance, netdriver_addr_t * addr, uint32_t * caps,
+static int NDR_init(unsigned int instance, netdriver_addr_t * addr, uint32_t * caps,
 	unsigned int * ticks __unused)
 {
 	int i, ret = 0;
@@ -347,8 +346,7 @@ static void NDR_stop(void) {
 }
 
 /* Set driver mode */
-static void
-NDR_set_mode(unsigned int mode, const netdriver_addr_t * mcast_list __unused,
+static void NDR_set_mode(unsigned int mode, const netdriver_addr_t * mcast_list __unused,
 	unsigned int mcast_count __unused)
 {
 	g_driver.mode = mode;

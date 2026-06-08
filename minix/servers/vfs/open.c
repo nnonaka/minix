@@ -688,8 +688,7 @@ int do_close(void)
 /*===========================================================================*
  *				close_fd				     *
  *===========================================================================*/
-int
-close_fd(struct fproc * rfp, int fd_nr, int may_suspend)
+int close_fd(struct fproc * rfp, int fd_nr, int may_suspend)
 {
 /* Perform the close(fd) system call. */
   register struct filp *rfilp;

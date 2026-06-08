@@ -87,8 +87,7 @@ struct	tty *constty = NULL;	/* virtual console output device */
 struct	consdev *cn_tab;	/* physical console device info */
 struct	vnode *cn_devvp[2];	/* vnode for underlying device. */
 
-int
-cnopen(dev_t dev, int flag, int mode, struct lwp *l)
+int cnopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	dev_t cndev;
 	int unit, error;
@@ -141,8 +140,7 @@ cnopen(dev_t dev, int flag, int mode, struct lwp *l)
 	return error;
 }
 
-int
-cnclose(dev_t dev, int flag, int mode, struct lwp *l)
+int cnclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct vnode *vp;
 	int unit, error;
@@ -163,8 +161,7 @@ cnclose(dev_t dev, int flag, int mode, struct lwp *l)
 	return error;
 }
 
-int
-cnread(dev_t dev, struct uio *uio, int flag)
+int cnread(dev_t dev, struct uio *uio, int flag)
 {
 	int error;
 
@@ -180,8 +177,7 @@ cnread(dev_t dev, struct uio *uio, int flag)
 	return cdev_read(dev, uio, flag);
 }
 
-int
-cnwrite(dev_t dev, struct uio *uio, int flag)
+int cnwrite(dev_t dev, struct uio *uio, int flag)
 {
 	int error;
 
@@ -191,8 +187,7 @@ cnwrite(dev_t dev, struct uio *uio, int flag)
 	return cdev_write(dev, uio, flag);
 }
 
-int
-cnioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
+int cnioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	int error;
 
@@ -222,8 +217,7 @@ cnioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 }
 
 /*ARGSUSED*/
-int
-cnpoll(dev_t dev, int events, struct lwp *l)
+int cnpoll(dev_t dev, int events, struct lwp *l)
 {
 	int error;
 
@@ -238,8 +232,7 @@ cnpoll(dev_t dev, int events, struct lwp *l)
 }
 
 /*ARGSUSED*/
-int
-cnkqfilter(dev_t dev, struct knote *kn)
+int cnkqfilter(dev_t dev, struct knote *kn)
 {
 	int error;
 
@@ -253,8 +246,7 @@ cnkqfilter(dev_t dev, struct knote *kn)
 	return cdev_kqfilter(dev, kn);
 }
 
-int
-cngetc(void)
+int cngetc(void)
 {
 	if (cn_tab == NULL)
 		return (0);
@@ -269,8 +261,7 @@ cngetc(void)
 	}
 }
 
-int
-cngetsn(char *cp, int size)
+int cngetsn(char *cp, int size)
 {
 	char *lp;
 	int c, len;
@@ -315,8 +306,7 @@ cngetsn(char *cp, int size)
 	}
 }
 
-void
-cnputc(int c)
+void cnputc(int c)
 {
 
 	if (cn_tab == NULL)
@@ -347,8 +337,7 @@ cnputc(int c)
 #endif
 }
 
-void
-cnpollc(int on)
+void cnpollc(int on)
 {
 	static int refcount = 0;
 
@@ -362,14 +351,12 @@ cnpollc(int on)
 		++refcount;
 }
 
-void
-nullcnpollc(dev_t dev, int on)
+void nullcnpollc(dev_t dev, int on)
 {
 
 }
 
-void
-cnbell(u_int pitch, u_int period, u_int volume)
+void cnbell(u_int pitch, u_int period, u_int volume)
 {
 
 	if (cn_tab == NULL || cn_tab->cn_bell == NULL)
@@ -377,16 +364,14 @@ cnbell(u_int pitch, u_int period, u_int volume)
 	(*cn_tab->cn_bell)(cn_tab->cn_dev, pitch, period, volume);
 }
 
-void
-cnflush(void)
+void cnflush(void)
 {
 	if (cn_tab == NULL || cn_tab->cn_flush == NULL)
 		return;
 	(*cn_tab->cn_flush)(cn_tab->cn_dev);
 }
 
-void
-cnhalt(void)
+void cnhalt(void)
 {
 	if (cn_tab == NULL || cn_tab->cn_halt == NULL)
 		return;
@@ -399,8 +384,7 @@ cnhalt(void)
  *
  * Call with tty_mutex held.
  */
-static bool
-cn_redirect(dev_t *devp, int is_read, int *error)
+static bool cn_redirect(dev_t *devp, int is_read, int *error)
 {
 	dev_t dev = *devp;
 

@@ -560,8 +560,7 @@ static struct device *w_part(devminor_t device)
 /*===========================================================================*
  *				check_dma				     *
  *===========================================================================*/
-static void
-check_dma(struct wini *wn)
+static void check_dma(struct wini *wn)
 {
 	u32_t dma_status, dma_base;
 	int id_dma, ultra_dma;
@@ -1215,8 +1214,7 @@ static ssize_t w_transfer(
 /*===========================================================================*
  *				com_out					     *
  *===========================================================================*/
-static int com_out(cmd)
-struct command *cmd;		/* Command block */
+static int com_out(struct command *cmd)
 {
 /* Output the command block to the winchester controller and return status */
 
@@ -1266,8 +1264,7 @@ struct command *cmd;		/* Command block */
 /*===========================================================================*
  *				com_out_ext				     *
  *===========================================================================*/
-static int com_out_ext(cmd)
-struct command *cmd;		/* Command block */
+static int com_out_ext(struct command *cmd)
 {
 /* Output the command block to the winchester controller and return status */
 
@@ -1497,8 +1494,7 @@ static int w_do_close(devminor_t minor)
 /*===========================================================================*
  *				com_simple				     *
  *===========================================================================*/
-static int com_simple(cmd)
-struct command *cmd;		/* Command block */
+static int com_simple(struct command *cmd)
 {
 /* A simple controller command, only one interrupt and no data-out phase. */
   int r;
@@ -1673,9 +1669,7 @@ static int at_intr_wait(void)
 /*===========================================================================*
  *				w_waitfor				     *
  *===========================================================================*/
-static int w_waitfor(mask, value)
-int mask;			/* status mask */
-int value;			/* required status */
+static int w_waitfor(int mask, int value)
 {
 /* Wait until controller is in the required state.  Return zero on timeout.
  */
@@ -1699,9 +1693,7 @@ int value;			/* required status */
 /*===========================================================================*
  *				w_waitfor_dma				     *
  *===========================================================================*/
-static int w_waitfor_dma(mask, value)
-unsigned int mask;		/* status mask */
-unsigned value;			/* required status */
+static int w_waitfor_dma(unsigned int mask, unsigned value)
 {
 /* Wait until controller is in the required state.  Return zero on timeout.
  */
@@ -2000,10 +1992,7 @@ static int atapi_transfer(
 /*===========================================================================*
  *				atapi_sendpacket			     *
  *===========================================================================*/
-static int atapi_sendpacket(packet, cnt, do_dma)
-u8_t *packet;
-unsigned cnt;
-int do_dma;
+static int atapi_sendpacket(u8_t *packet, unsigned cnt, int do_dma)
 {
 /* Send an Atapi Packet Command */
   struct wini *wn = w_wn;

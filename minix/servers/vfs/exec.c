@@ -531,12 +531,7 @@ static int is_script(struct vfs_exec_info *execi)
 /*===========================================================================*
  *				patch_stack				     *
  *===========================================================================*/
-static int patch_stack(vp, stack, stk_bytes, path, vsp)
-struct vnode *vp;		/* pointer for open script file */
-char stack[ARG_MAX];		/* pointer to stack image within VFS */
-size_t *stk_bytes;		/* size of initial stack */
-char path[PATH_MAX];		/* path to script file */
-vir_bytes *vsp;
+static int patch_stack(struct vnode *vp, char stack[ARG_MAX], size_t *stk_bytes, char path[PATH_MAX], vir_bytes *vsp)
 {
 /* Patch the argument vector to include the path name of the script to be
  * interpreted, and all strings on the #! line.  Returns the path name of

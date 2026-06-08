@@ -123,8 +123,7 @@ wsemul_dumb_attach(int console, const struct wsscreen_descr *type,
 	return (edp);
 }
 
-void
-wsemul_dumb_output(void *cookie, const u_char *data, u_int count,
+void wsemul_dumb_output(void *cookie, const u_char *data, u_int count,
     int kernel)
 {
 	struct wsemul_dumb_emuldata *edp = cookie;
@@ -203,8 +202,7 @@ wsemul_dumb_output(void *cookie, const u_char *data, u_int count,
 	(*edp->emulops->cursor)(edp->emulcookie, 1, edp->crow, edp->ccol);
 }
 
-void
-wsemul_dumb_detach(void *cookie, u_int *crowp, u_int *ccolp)
+void wsemul_dumb_detach(void *cookie, u_int *crowp, u_int *ccolp)
 {
 	struct wsemul_dumb_emuldata *edp = cookie;
 
@@ -214,8 +212,7 @@ wsemul_dumb_detach(void *cookie, u_int *crowp, u_int *ccolp)
 		free(edp);
 }
 
-void
-wsemul_dumb_resetop(void *cookie, enum wsemul_resetops op)
+void wsemul_dumb_resetop(void *cookie, enum wsemul_resetops op)
 {
 	struct wsemul_dumb_emuldata *edp = cookie;
 

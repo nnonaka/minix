@@ -17,8 +17,7 @@ static bitchunk_t acl_inuse[BITMAP_CHUNKS(NR_SYS_PROCS)];
 /*
  * Initialize ACL data structures.
  */
-void
-acl_init(void)
+void acl_init(void)
 {
 	int i;
 
@@ -33,8 +32,7 @@ acl_init(void)
  * Check whether a process is allowed to make a certain (zero-based) call.
  * Return OK or an error.
  */
-int
-acl_check(struct vmproc *vmp, int call)
+int acl_check(struct vmproc *vmp, int call)
 {
 
 	/* VM makes asynchronous calls to itself.  Always allow those. */
@@ -66,8 +64,7 @@ acl_check(struct vmproc *vmp, int call)
  * processes, no call mask need to be provided: it will simply be inherited in
  * that case.
  */
-void
-acl_set(struct vmproc *vmp, bitchunk_t *mask, int sys_proc)
+void acl_set(struct vmproc *vmp, bitchunk_t *mask, int sys_proc)
 {
 	int i;
 
@@ -106,8 +103,7 @@ acl_set(struct vmproc *vmp, bitchunk_t *mask, int sys_proc)
  * do not inherit an ACL, and will have to be assigned one before getting to
  * run.
  */
-void
-acl_fork(struct vmproc *vmp)
+void acl_fork(struct vmproc *vmp)
 {
 	if (vmp->vm_acl != USER_ACL)
 		vmp->vm_acl = NO_ACL;
@@ -117,8 +113,7 @@ acl_fork(struct vmproc *vmp)
  * A process has exited.  Decrease the reference count on its ACL entry, and
  * mark the process as having no ACL.
  */
-void
-acl_clear(struct vmproc *vmp)
+void acl_clear(struct vmproc *vmp)
 {
 	if (vmp->vm_acl != NO_ACL) {
 		if (vmp->vm_acl != USER_ACL)

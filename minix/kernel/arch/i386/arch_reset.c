@@ -27,8 +27,7 @@
 
 int cpu_has_tsc;
 
-void
-reset(void)
+void reset(void)
 {
         uint8_t b;
         /*

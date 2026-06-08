@@ -249,8 +249,7 @@ static void flush(register console_t *cons)
   //  UPDATE_CURSOR(cons, cur);
 }
 
-void
-wsdisplay_cnputc(dev_t dev, int i)
+void wsdisplay_cnputc(dev_t dev, int i)
 {
 	struct wsscreen_internal *dc;
 	u_char c = i;
@@ -266,8 +265,7 @@ wsdisplay_cnputc(dev_t dev, int i)
 /*
  * Callbacks for the emulation code.
  */
-void
-wsdisplay_emulbell(void *v)
+void wsdisplay_emulbell(void *v)
 {
 	struct wsscreen *scr = v;
 
@@ -281,8 +279,7 @@ wsdisplay_emulbell(void *v)
 	//				FWRITE, NULL);
 }
 
-void
-wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
+void wsdisplay_cnattach(const struct wsscreen_descr *type, void *cookie,
 	int ccol, int crow, long defattr)
 {
 	const struct wsemul_ops *wsemul;

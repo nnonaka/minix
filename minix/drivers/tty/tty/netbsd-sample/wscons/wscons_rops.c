@@ -54,8 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: wscons_rops.c,v 1.11 2005/12/11 12:24:12 christos Ex
  * Paint (or unpaint) the cursor.
  * Pays no lip service to hardware cursors.
  */
-void
-rcons_cursor(void *id, int on, int row, int col)
+void rcons_cursor(void *id, int on, int row, int col)
 {
 	struct rcons *rc = id;
 	int x, y;
@@ -91,8 +90,7 @@ rcons_cursor(void *id, int on, int row, int col)
 	rc->rc_bits ^= RC_CURSOR;
 }
 
-int
-rcons_mapchar(void *id, int uni, unsigned int *index)
+int rcons_mapchar(void *id, int uni, unsigned int *index)
 {
 
 	if (uni < 128) {
@@ -106,8 +104,7 @@ rcons_mapchar(void *id, int uni, unsigned int *index)
 /*
  * Actually write a string to the frame buffer.
  */
-void
-rcons_putchar(void *id, int row, int col, u_int uc, long attr)
+void rcons_putchar(void *id, int row, int col, u_int uc, long attr)
 {
 	struct rcons *rc = id;
 	int x, y, op;
@@ -126,8 +123,7 @@ rcons_putchar(void *id, int row, int col, u_int uc, long attr)
 /*
  * Possibly change to white-on-black or black-on-white modes.
  */
-void
-rcons_invert(void *id, int inverted)
+void rcons_invert(void *id, int inverted)
 {
 	struct rcons *rc = id;
 
@@ -144,8 +140,7 @@ rcons_invert(void *id, int inverted)
 /*
  * Copy columns (characters) in a row (line).
  */
-void
-rcons_copycols(void *id, int row, int srccol, int dstcol, int ncols)
+void rcons_copycols(void *id, int row, int srccol, int dstcol, int ncols)
 {
 	struct rcons *rc = id;
 	int y, srcx, dstx, nx;
@@ -163,8 +158,7 @@ rcons_copycols(void *id, int row, int srccol, int dstcol, int ncols)
 /*
  * Clear columns (characters) in a row (line).
  */
-void
-rcons_erasecols(void *id, int row, int startcol, int ncols, long fillattr)
+void rcons_erasecols(void *id, int row, int startcol, int ncols, long fillattr)
 {
 	struct rcons *rc = id;
 	int y, startx, nx, op;
@@ -184,8 +178,7 @@ rcons_erasecols(void *id, int row, int startcol, int ncols, long fillattr)
 /*
  * Copy rows (lines).
  */
-void
-rcons_copyrows(void *id, int srcrow, int dstrow, int nrows)
+void rcons_copyrows(void *id, int srcrow, int dstrow, int nrows)
 {
 	struct rcons *rc = id;
 	int srcy, dsty, ny;
@@ -202,8 +195,7 @@ rcons_copyrows(void *id, int srcrow, int dstrow, int nrows)
 /*
  * Erase rows (lines).
  */
-void
-rcons_eraserows(void *id, int startrow, int nrows, long fillattr)
+void rcons_eraserows(void *id, int startrow, int nrows, long fillattr)
 {
 	struct rcons *rc = id;
 	int starty, ny, op;
@@ -219,8 +211,7 @@ rcons_eraserows(void *id, int startrow, int nrows, long fillattr)
 	    (struct raster *) 0, 0, 0);
 }
 
-int
-rcons_allocattr(void *id, int fg, int bg, int flags, long *attrp)
+int rcons_allocattr(void *id, int fg, int bg, int flags, long *attrp)
 {
 	if (flags & (WSATTR_HILIT | WSATTR_BLINK |
 		     WSATTR_UNDERLINE | WSATTR_WSCOLORS))

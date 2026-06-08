@@ -94,8 +94,7 @@ static const struct wscons_syncops usl_syncops = {
 #endif
 static int wscompat_usl_synctimeout = WSCOMPAT_USL_SYNCTIMEOUT;
 
-static int
-usl_sync_init(struct wsscreen *scr, struct usl_syncdata **sdp,
+static int usl_sync_init(struct wsscreen *scr, struct usl_syncdata **sdp,
 	struct proc *p, int acqsig, int relsig, int frsig)
 {
 	struct usl_syncdata *sd;
@@ -123,8 +122,7 @@ usl_sync_init(struct wsscreen *scr, struct usl_syncdata **sdp,
 	return 0;
 }
 
-static void
-usl_sync_done(struct usl_syncdata *sd)
+static void usl_sync_done(struct usl_syncdata *sd)
 {
 	if (sd->s_flags & SF_DETACHPENDING) {
 		callout_stop(&sd->s_detach_ch);
@@ -138,8 +136,7 @@ usl_sync_done(struct usl_syncdata *sd)
 	kmem_intr_free(sd, sizeof(*sd));
 }
 
-static int
-usl_sync_check_sig(struct usl_syncdata *sd, int sig, int flags)
+static int usl_sync_check_sig(struct usl_syncdata *sd, int sig, int flags)
 {
 
 	mutex_enter(proc_lock);
@@ -157,8 +154,7 @@ usl_sync_check_sig(struct usl_syncdata *sd, int sig, int flags)
 	return 0;
 }
 
-static int
-usl_sync_check(void *vsd)
+static int usl_sync_check(void *vsd)
 {
 
 	struct usl_syncdata *sd = vsd;
@@ -175,8 +171,7 @@ usl_sync_get(struct wsscreen *scr)
 	return sd;
 }
 
-static int
-usl_detachproc(void *cookie, int waitok,
+static int usl_detachproc(void *cookie, int waitok,
     void (*callback)(void *, int, int), void *cbarg)
 {
 	struct usl_syncdata *sd = cookie;
@@ -201,8 +196,7 @@ usl_detachproc(void *cookie, int waitok,
 	return EAGAIN;
 }
 
-static int
-usl_detachack(struct usl_syncdata *sd, int ack)
+static int usl_detachack(struct usl_syncdata *sd, int ack)
 {
 	if (!(sd->s_flags & SF_DETACHPENDING)) {
 		printf("%s: not detaching\n", __func__);
@@ -218,8 +212,7 @@ usl_detachack(struct usl_syncdata *sd, int ack)
 	return 0;
 }
 
-static void
-usl_detachtimeout(void *arg)
+static void usl_detachtimeout(void *arg)
 {
 	struct usl_syncdata *sd = arg;
 
@@ -238,8 +231,7 @@ usl_detachtimeout(void *arg)
 	(void) usl_sync_check(sd);
 }
 
-static int
-usl_attachproc(void *cookie, int waitok,
+static int usl_attachproc(void *cookie, int waitok,
     void (*callback)(void *, int, int), void *cbarg)
 {
 	struct usl_syncdata *sd = cookie;
@@ -257,8 +249,7 @@ usl_attachproc(void *cookie, int waitok,
 	return EAGAIN;
 }
 
-static int
-usl_attachack(struct usl_syncdata *sd, int ack)
+static int usl_attachack(struct usl_syncdata *sd, int ack)
 {
 	if (!(sd->s_flags & SF_ATTACHPENDING)) {
 		printf("%s: not attaching\n", __func__);
@@ -274,8 +265,7 @@ usl_attachack(struct usl_syncdata *sd, int ack)
 	return 0;
 }
 
-static void
-usl_attachtimeout(void *arg)
+static void usl_attachtimeout(void *arg)
 {
 	struct usl_syncdata *sd = arg;
 
@@ -294,8 +284,7 @@ usl_attachtimeout(void *arg)
 	(void) usl_sync_check(sd);
 }
 
-int
-wsdisplay_usl_ioctl1(device_t dv, u_long cmd, void *data,
+int wsdisplay_usl_ioctl1(device_t dv, u_long cmd, void *data,
     int flag, struct lwp *l)
 {
 	struct wsdisplay_softc *sc = device_private(dv);
@@ -365,8 +354,7 @@ wsdisplay_usl_ioctl1(device_t dv, u_long cmd, void *data,
 	}
 }
 
-int
-wsdisplay_usl_ioctl2(struct wsdisplay_softc *sc, struct wsscreen *scr,
+int wsdisplay_usl_ioctl2(struct wsdisplay_softc *sc, struct wsscreen *scr,
 		     u_long cmd, void *data, int flag, struct lwp *l)
 {
 	struct proc *p = l->l_proc;

@@ -228,8 +228,7 @@ int usb_handle_msg(struct usb_driver *ud, message *msg)
 /*****************************************************************************
  *         usb_send_info                                                     *
  *****************************************************************************/
-int
-usb_send_info(long info_type, long info_value)
+int usb_send_info(long info_type, long info_value)
 {
 	int res;
 	message msg;

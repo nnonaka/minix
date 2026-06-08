@@ -59,8 +59,7 @@ struct boot_image image[NR_BOOT_PROCS];
 /*===========================================================================*
  *				kmessages_dmp				     *
  *===========================================================================*/
-void
-kmessages_dmp(void)
+void kmessages_dmp(void)
 {
   struct kmessages *kmess;		/* get copy of kernel messages */
   static char print_buf[_KMESS_BUF_SIZE+1]; /* this one is used to print */
@@ -90,8 +89,7 @@ kmessages_dmp(void)
 /*===========================================================================*
  *				monparams_dmp				     *
  *===========================================================================*/
-void
-monparams_dmp(void)
+void monparams_dmp(void)
 {
   char val[MULTIBOOT_PARAM_BUF_SIZE];
   char *e;
@@ -118,8 +116,7 @@ monparams_dmp(void)
 /*===========================================================================*
  *				irqtab_dmp				     *
  *===========================================================================*/
-void
-irqtab_dmp(void)
+void irqtab_dmp(void)
 {
   int i,r;
   struct irq_hook irq_hooks[NR_IRQ_HOOKS];
@@ -165,8 +162,7 @@ irqtab_dmp(void)
 /*===========================================================================*
  *				image_dmp				     *
  *===========================================================================*/
-void
-image_dmp(void)
+void image_dmp(void)
 {
   int m, r;
   struct boot_image *ip;
@@ -188,8 +184,7 @@ image_dmp(void)
 /*===========================================================================*
  *				kenv_dmp				     *
  *===========================================================================*/
-void
-kenv_dmp(void)
+void kenv_dmp(void)
 {
     struct kinfo kinfo;
     struct machine machine;
@@ -249,8 +244,7 @@ static char *s_traps_str(int flags)
 /*===========================================================================*
  *				privileges_dmp 				     *
  *===========================================================================*/
-void
-privileges_dmp(void)
+void privileges_dmp(void)
 {
   register struct proc *rp;
   static struct proc *oldrp = BEG_PROC_ADDR;
@@ -355,8 +349,7 @@ void proctab_dmp(void)
 /*===========================================================================*
  *				procstack_dmp  				     *
  *===========================================================================*/
-void
-procstack_dmp(void)
+void procstack_dmp(void)
 {
 /* Proc table dump, with stack */
 

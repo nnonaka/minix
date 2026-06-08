@@ -75,8 +75,7 @@ static struct rasops_info	*stamp_ri;
 /*
  * Initialize a 'rasops_info' descriptor for this depth.
  */
-void
-rasops32_init(struct rasops_info *ri)
+void rasops32_init(struct rasops_info *ri)
 {
 
 	if (ri->ri_rnum == 0) {
@@ -128,8 +127,7 @@ rasops32_init(struct rasops_info *ri)
 /*
  * Recompute the blitting stamp.
  */
-static void
-rasops32_makestamp(struct rasops_info *ri, long attr)
+static void rasops32_makestamp(struct rasops_info *ri, long attr)
 {
 	uint32_t fg, bg;
 	int i;

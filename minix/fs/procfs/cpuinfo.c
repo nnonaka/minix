@@ -81,8 +81,7 @@ static const char * x86_flag[] = {
 /*
  * Output a space-separated list of supported CPU flags.  x86 only.
  */
-static void
-print_x86_cpu_flags(u32_t * flags)
+static void print_x86_cpu_flags(u32_t * flags)
 {
 	int i, j;
 
@@ -99,8 +98,7 @@ print_x86_cpu_flags(u32_t * flags)
 /*
  * Print information for a single CPU.
  */
-static void
-print_cpu(struct cpu_info * cpu_info, unsigned id)
+static void print_cpu(struct cpu_info * cpu_info, unsigned id)
 {
 
 	buf_printf("%-16s: %d\n", "processor", id);
@@ -132,8 +130,7 @@ print_cpu(struct cpu_info * cpu_info, unsigned id)
 /*
  * Generate the contents of /proc/cpuinfo.
  */
-void
-root_cpuinfo(void)
+void root_cpuinfo(void)
 {
 	struct cpu_info cpu_info[CONFIG_MAX_CPUS];
 	struct machine machine;

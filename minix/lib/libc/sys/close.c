@@ -5,8 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-int
-close(int fd)
+int close(int fd)
 {
 	message m;
 

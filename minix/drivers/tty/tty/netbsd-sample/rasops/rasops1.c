@@ -60,8 +60,7 @@ static void	rasops1_putchar16(void *, int, int col, u_int, long);
 /*
  * Initialize rasops_info struct for this colordepth.
  */
-void
-rasops1_init(struct rasops_info *ri)
+void rasops1_init(struct rasops_info *ri)
 {
 
 	if ((ri->ri_font->fontwidth & 7) != 0) {
@@ -88,8 +87,7 @@ rasops1_init(struct rasops_info *ri)
 /*
  * Paint a single character. This is the generic version, this is ugly.
  */
-static void
-rasops1_putchar(void *cookie, int row, int col, u_int uc, long attr)
+static void rasops1_putchar(void *cookie, int row, int col, u_int uc, long attr)
 {
 	struct rasops_info *ri = (struct rasops_info *)cookie;
 	struct wsdisplay_font *font = PICK_FONT(ri, uc);

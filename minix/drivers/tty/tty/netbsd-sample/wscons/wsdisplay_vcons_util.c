@@ -46,8 +46,7 @@
 
 #include <dev/wscons/wsdisplay_vconsvar.h>
 
-void	
-vcons_replay_msgbuf(struct vcons_screen *scr)
+void vcons_replay_msgbuf(struct vcons_screen *scr)
 {
 	int status = scr->scr_status;
 	int rptr = msgbufp->msg_bufr;

@@ -39,8 +39,7 @@ extern char _kern_phys_base, _kern_vir_base, _kern_size,
 
 
 
-static void
-do_tag_cmdline(kinfo_t *cbi, struct multiboot_tag_string *tag_cmdline)
+static void do_tag_cmdline(kinfo_t *cbi, struct multiboot_tag_string *tag_cmdline)
 {
 #define BUF 1024
 	static char cmdline[BUF];
@@ -70,8 +69,7 @@ do_tag_cmdline(kinfo_t *cbi, struct multiboot_tag_string *tag_cmdline)
 	}
 }
 
-static void
-do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_fb)
+static void do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_fb)
 {
 	cbi->fb.framebuffer_addr = tag_fb->common.framebuffer_addr;
 	cbi->fb.framebuffer_pitch = tag_fb->common.framebuffer_pitch;
@@ -100,8 +98,7 @@ do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *tag_fb)
 	}
 }
 
-static void
-do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
+static void do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
 {
 	int k = cbi->module_count;
 	
@@ -111,8 +108,7 @@ do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
 	cbi->module_count++;
 }
 
-static void
-do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
+static void do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 {
 	struct multiboot_mmap_entry	*mmap;
 	uint32_t base_addr, length;
@@ -128,14 +124,12 @@ do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 	}
 }
 
-static void
-do_tag_efi_mmap(kinfo_t *cbi, struct multiboot_tag_efi_mmap *tag_efi_mmap)
+static void do_tag_efi_mmap(kinfo_t *cbi, struct multiboot_tag_efi_mmap *tag_efi_mmap)
 {
 	// TODO
 }
 
-static void
-do_tag_acpi_new(kinfo_t *cbi, struct multiboot_tag_new_acpi *tag_new_acpi)
+static void do_tag_acpi_new(kinfo_t *cbi, struct multiboot_tag_new_acpi *tag_new_acpi)
 {
 	cbi->rsdp_p = &tag_new_acpi->rsdp;
 }

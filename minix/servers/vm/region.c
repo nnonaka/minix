@@ -1381,8 +1381,7 @@ static void get_usage_info_vm(struct vm_usage_info *vui)
  * thread stacks, or if the process is messing with its stack in any way, or if
  * (currently) VFS decides to put the stack elsewhere, etcetera.
  */
-static int
-is_stack_region(struct vir_region * vr)
+static int is_stack_region(struct vir_region * vr)
 {
 
 	return (vr->vaddr == VM_STACKTOP - DEFAULT_STACK_LIMIT &&

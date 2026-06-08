@@ -429,8 +429,7 @@ void busy_delay_ms(int ms)
  * Return the number of clock ticks spent in each of a predefined number of
  * CPU states.
  */
-void
-get_cpu_ticks(unsigned int cpu, uint64_t ticks[CPUSTATES])
+void get_cpu_ticks(unsigned int cpu, uint64_t ticks[CPUSTATES])
 {
 	int i;
 

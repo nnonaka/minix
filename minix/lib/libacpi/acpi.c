@@ -15,8 +15,7 @@ static struct log log1 =
 
 static endpoint_t acpi_ep = NONE;
 
-int
-acpi_init(void)
+int acpi_init(void)
 {
 	int res;
 	res = ds_retrieve_label_endpt("acpi", &acpi_ep);
@@ -26,8 +25,7 @@ acpi_init(void)
 /*===========================================================================*
  *				IRQ handling				     *
  *===========================================================================*/
-int
-acpi_get_irq(unsigned bus, unsigned dev, unsigned pin)
+int acpi_get_irq(unsigned bus, unsigned dev, unsigned pin)
 {
 	int err;
 	message m;
@@ -58,8 +56,7 @@ acpi_get_irq(unsigned bus, unsigned dev, unsigned pin)
  * (pbnr) must be already known to acpi and it must map dev as the connection to
  * the secondary (sbnr) bus
  */
-void
-acpi_map_bridge(unsigned int pbnr, unsigned int dev, unsigned int sbnr)
+void acpi_map_bridge(unsigned int pbnr, unsigned int dev, unsigned int sbnr)
 {
 	int err;
 	message m;

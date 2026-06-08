@@ -1271,8 +1271,7 @@ static void select_restart_filps(void)
 /*===========================================================================*
  *				filp_status				     *
  *===========================================================================*/
-static void
-filp_status(struct filp *f, int status)
+static void filp_status(struct filp *f, int status)
 {
 /* Tell processes that need to know about the status of this filp. This
  * function MUST NOT block its calling thread.
@@ -1301,8 +1300,7 @@ filp_status(struct filp *f, int status)
 /*===========================================================================*
  *				restart_proc				     *
  *===========================================================================*/
-static void
-restart_proc(struct selectentry *se)
+static void restart_proc(struct selectentry *se)
 {
 /* Tell process about select results (if any) unless there are still results
  * pending. This function MUST NOT block its calling thread.
@@ -1353,8 +1351,7 @@ static void select_lock_filp(struct filp *f, int ops)
 /*
  * Dump the state of the entire select table, for debugging purposes.
  */
-void
-select_dump(void)
+void select_dump(void)
 {
 	struct selectentry *se;
 	struct filp *f;

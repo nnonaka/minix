@@ -12,8 +12,7 @@ static int yield_all;
 /*===========================================================================*
  *				mthread_getcontext			     *
  *===========================================================================*/
-int mthread_getcontext(ctx)
-ucontext_t *ctx;
+int mthread_getcontext(ucontext_t *ctx)
 {
 /* Retrieve this process' current state.*/
 
@@ -90,8 +89,7 @@ void mthread_init_scheduler(void)
 /*===========================================================================*
  *				mthread_suspend				     *
  *===========================================================================*/
-void mthread_suspend(state)
-mthread_state_t state;
+void mthread_suspend(mthread_state_t state)
 {
 /* Stop the current thread from running. There can be multiple reasons for
  * this; the process tries to lock a locked mutex (i.e., has to wait for it to
@@ -129,8 +127,7 @@ mthread_state_t state;
 /*===========================================================================*
  *				mthread_unsuspend			     *
  *===========================================================================*/
-void mthread_unsuspend(thread)
-mthread_thread_t thread; /* Thread to make runnable */
+void mthread_unsuspend(mthread_thread_t thread)
 {
 /* Mark the state of a thread runnable and add it to the run queue */
   mthread_tcb_t *tcb;

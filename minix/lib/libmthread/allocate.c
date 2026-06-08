@@ -31,9 +31,7 @@ static struct __mthread_attr default_attr = {	MTHREAD_STACK_MIN,
 /*===========================================================================*
  *				mthread_equal				     *
  *===========================================================================*/
-int mthread_equal(l, r)
-mthread_thread_t l;
-mthread_thread_t r;
+int mthread_equal(mthread_thread_t l, mthread_thread_t r)
 {
 /* Compare two thread ids */
 
@@ -75,8 +73,7 @@ void *arg;
 /*===========================================================================*
  *				mthread_detach				     *
  *===========================================================================*/
-int mthread_detach(detach)
-mthread_thread_t detach;
+int mthread_detach(mthread_thread_t detach)
 {
 /* Mark a thread as detached. Consequently, upon exit, resources allocated for
  * this thread are automatically freed.
@@ -103,8 +100,7 @@ mthread_thread_t detach;
 /*===========================================================================*
  *				mthread_exit				     *
  *===========================================================================*/
-void mthread_exit(value)
-void *value;
+void mthread_exit(void *value)
 {
 /* Make a thread stop running and store the result value. */
   mthread_tcb_t *tcb;
@@ -137,8 +133,7 @@ void *value;
 /*===========================================================================*
  *			mthread_find_tcb				     *
  *===========================================================================*/
-mthread_tcb_t * mthread_find_tcb(thread)
-mthread_thread_t thread;
+mthread_tcb_t * mthread_find_tcb(mthread_thread_t thread)
 {
   mthread_tcb_t *rt = NULL;
 
@@ -256,9 +251,7 @@ static void __attribute__((__constructor__, __used__)) mthread_init(void)
 /*===========================================================================*
  *				mthread_join				     *
  *===========================================================================*/
-int mthread_join(join, value)
-mthread_thread_t join;
-void **value;
+int mthread_join(mthread_thread_t join, void **value)
 {
 /* Wait for a thread to stop running and copy the result. */
 
@@ -443,8 +436,7 @@ void *arg;
 /*===========================================================================*
  *				mthread_thread_reset			     *
  *===========================================================================*/
-void mthread_thread_reset(thread)
-mthread_thread_t thread;
+void mthread_thread_reset(mthread_thread_t thread)
 {
 /* Reset the thread to its default values. Free the allocated stack space. */
 
@@ -486,8 +478,7 @@ mthread_thread_t thread;
 /*===========================================================================*
  *				mthread_thread_stop			     *
  *===========================================================================*/
-static void mthread_thread_stop(thread)
-mthread_thread_t thread;
+static void mthread_thread_stop(mthread_thread_t thread)
 {
 /* Stop thread from running. Deallocate resources. */
   mthread_tcb_t *stop_thread;

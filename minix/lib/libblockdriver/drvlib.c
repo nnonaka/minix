@@ -203,6 +203,7 @@ static void parse_part_table(
 	/* GPT Protective partition*/
 	if (pe->sysind == 0xEE) {
 		gptpartition(bdp, device, atapi, tmp_buf);
+		return;
 	}
 	part_limit = pe->lowsec + pe->size;
 	if (part_limit < pe->lowsec) part_limit = limit;
@@ -332,9 +333,7 @@ static void sort(struct part_entry *table)
 
 
 
-static int
-readsects(struct blockdriver *bdp, int device, daddr_t dblk, int num, u8_t *tmp_buf)
-
+static int readsects(struct blockdriver *bdp, int device, daddr_t dblk, int num, u8_t *tmp_buf)
 {
   iovec_t iovec1;
   u64_t position;
@@ -342,24 +341,22 @@ readsects(struct blockdriver *bdp, int device, daddr_t dblk, int num, u8_t *tmp_
 
   position = (u64_t)dblk * SECTOR_SIZE;
   iovec1.iov_addr = (vir_bytes) tmp_buf;
-  iovec1.iov_size = CD_SECTOR_SIZE;
+  iovec1.iov_size = (vir_bytes)num * SECTOR_SIZE;
   r = (*bdp->bdr_transfer)(device, FALSE /*do_write*/, position, SELF,
 	&iovec1, 1, BDEV_NOFLAGS);
-  if (r != CD_SECTOR_SIZE) {
+  if (r != (int)((vir_bytes)num * SECTOR_SIZE)) {
 	return -1;
   }
   return 0;
 }
 
-bool
-guid_is_nil(const struct uuid *u)
+bool guid_is_nil(const struct uuid *u)
 {
 	static const struct uuid nil = { .time_low = 0 };
 	return (memcmp(u, &nil, sizeof(*u)) == 0 ? true : false);
 }
 
-bool
-guid_is_equal(const struct uuid *a, const struct uuid *b)
+bool guid_is_equal(const struct uuid *a, const struct uuid *b)
 {
 	return (memcmp(a, b, sizeof(*a)) == 0 ? true : false);
 }
@@ -376,8 +373,7 @@ static const struct {
 	{ GPT_ENT_TYPE_MINIX_MFS,		FS_MINIXFS3 },
 };
 
-static int
-get_gptent_fstype(const struct gpt_ent *ep)
+static int get_gptent_fstype(const struct gpt_ent *ep)
 {
 	int fstype = FS_OTHER;
 	uint n;
@@ -391,8 +387,7 @@ get_gptent_fstype(const struct gpt_ent *ep)
 	return fstype;
 }
 
-static int
-check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
+static int check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 	struct gpt_hdr *gpth, u8_t *tmp_buf)
 {
 	const struct gpt_ent *ep;
@@ -405,7 +400,6 @@ check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 
 	/* read in gpt_hdr sector */
 	if (readsects(bdp, device, sector, 1, tmp_buf)) {
-		panic("Error reading GPT header.");
 		return -1;
 	}
 
@@ -443,23 +437,25 @@ check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 	}
 
 	if (crc != gpth->hdr_crc_table) {
-		panic("GPT table CRC invalid\n");
 		return -1;
 	}
 
 	return 0;
 }
 
-static int
-read_gpthder(struct blockdriver *bdp, int device, struct gpt_hdr *gpth,
+static int read_gpthder(struct blockdriver *bdp, int device, struct gpt_hdr *gpth,
 	u8_t *tmp_buf)
 {
 	daddr_t gptsector[2];
+	struct device *dv;
 	int i, error;
 
-	// TODO: set proper secondary gpt sector
+	dv = (*bdp->bdr_part)(device);
+	if (dv == NULL)
+		return -1;
+
 	gptsector[0] = GPT_HDR_BLKNO;
-	gptsector[1] = GPT_HDR_BLKNO;
+	gptsector[1] = (daddr_t)(dv->dv_size / SECTOR_SIZE) - 1;
 
 	for (i = 0; i < 2; i++) {
 		error = check_gpthdr(bdp, device, gptsector[i], gpth, tmp_buf);
@@ -543,9 +539,9 @@ static void gptpartition(
 
 		for (i = 0; j < GPTNPART && i < entries; i++) {
 			if (!guid_is_nil((const struct uuid *)ep[i].ent_type)) {
-				part[j].dv_base = ep[i].ent_lba_start;
-				part[j].dv_size = ep[i].ent_lba_end -
-				    ep[i].ent_lba_start + 1;
+				part[j].dv_base = (u64_t)ep[i].ent_lba_start * SECTOR_SIZE;
+				part[j].dv_size = (u64_t)(ep[i].ent_lba_end -
+				    ep[i].ent_lba_start + 1) * SECTOR_SIZE;
 				part[j].fstype = get_gptent_fstype(&ep[i]);
 				    
 				memcpy(&part[j].ent_guid, &ep[i].ent_guid, 

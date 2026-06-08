@@ -103,8 +103,7 @@ void list(void)
   exit(0);
 }
 
-int
-has_opt(char *mntopts, char *option)
+int has_opt(char *mntopts, char *option)
 {
 	char *optbuf, *opt;
 	int found = 0;
@@ -118,8 +117,7 @@ has_opt(char *mntopts, char *option)
 }
 
 
-int
-mount_all(void)
+int mount_all(void)
 {
 	struct fstab *fs;
 	int ro, mountflags;

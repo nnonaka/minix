@@ -500,8 +500,7 @@ reqdone:
 /*===========================================================================*
  *				pm_reboot				     *
  *===========================================================================*/
-void
-pm_reboot(void)
+void pm_reboot(void)
 {
 /* Perform the VFS side of the reboot call. This call is performed from the PM
  * process context.
@@ -722,8 +721,7 @@ void pm_exit(void)
 /*===========================================================================*
  *				pm_setgid				     *
  *===========================================================================*/
-void
-pm_setgid(endpoint_t proc_e, int egid, int rgid)
+void pm_setgid(endpoint_t proc_e, int egid, int rgid)
 {
   register struct fproc *tfp;
   int slot;
@@ -739,8 +737,7 @@ pm_setgid(endpoint_t proc_e, int egid, int rgid)
 /*===========================================================================*
  *				pm_setgroups				     *
  *===========================================================================*/
-void
-pm_setgroups(endpoint_t proc_e, int ngroups, gid_t *groups)
+void pm_setgroups(endpoint_t proc_e, int ngroups, gid_t *groups)
 {
   struct fproc *rfp;
   int slot;
@@ -760,8 +757,7 @@ pm_setgroups(endpoint_t proc_e, int ngroups, gid_t *groups)
 /*===========================================================================*
  *				pm_setuid				     *
  *===========================================================================*/
-void
-pm_setuid(endpoint_t proc_e, int euid, int ruid)
+void pm_setuid(endpoint_t proc_e, int euid, int ruid)
 {
   struct fproc *tfp;
   int slot;
@@ -945,8 +941,7 @@ core_exit:
 /*===========================================================================*
  *				 ds_event				     *
  *===========================================================================*/
-void
-ds_event(void)
+void ds_event(void)
 {
   char key[DS_MAX_KEYLEN];
   char *blkdrv_prefix = "drv.blk.";

@@ -54,8 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: wscons_rinit.c,v 1.8 2018/09/03 16:29:34 riastradh E
 
 void	rcons_initfont(struct rcons *, struct raster_font *);
 
-void
-rcons_initfont(struct rcons *rc, struct raster_font *fp)
+void rcons_initfont(struct rcons *rc, struct raster_font *fp)
 {
 #if !defined(MSBYTE_FIRST) && !defined(MSBIT_FIRST) /* XXX other cases */
 	static int initfontdone;
@@ -94,8 +93,7 @@ rcons_initfont(struct rcons *rc, struct raster_font *fp)
 #endif
 }
 
-void
-rcons_init(struct rcons *rc, int mrow, int mcol)
+void rcons_init(struct rcons *rc, int mrow, int mcol)
 {
 	struct raster *rp = rc->rc_sp;
 	int i;

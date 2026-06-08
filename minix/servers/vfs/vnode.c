@@ -61,8 +61,7 @@ void check_vnode_locks_by_me(struct fproc *rfp)
 /*===========================================================================*
  *				check_vnode_locks			     *
  *===========================================================================*/
-void
-check_vnode_locks(void)
+void check_vnode_locks(void)
 {
   struct vnode *vp;
   int count = 0;

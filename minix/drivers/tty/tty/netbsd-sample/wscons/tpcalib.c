@@ -55,22 +55,19 @@ extern int mra_Y_AX1_BX2_C(const int *, int,
 
 #define SCALE	(1024)
 
-int
-tpcalib_init(struct tpcalib_softc *sc)
+int tpcalib_init(struct tpcalib_softc *sc)
 {
 	tpcalib_reset(sc);
 	return (0);
 }
 
-void
-tpcalib_reset(struct tpcalib_softc *sc)
+void tpcalib_reset(struct tpcalib_softc *sc)
 {
 	/* This indicate 'raw mode'. No translation will be done. */
 	sc->sc_saved.samplelen = WSMOUSE_CALIBCOORDS_RESET;
 }
 
-void
-tpcalib_trans(struct tpcalib_softc *sc, int rawx, int rawy, int *x, int *y)
+void tpcalib_trans(struct tpcalib_softc *sc, int rawx, int rawy, int *x, int *y)
 {
 	if (sc->sc_saved.samplelen == WSMOUSE_CALIBCOORDS_RESET) {
 		/* This indicate 'raw mode'. No translation will be done. */
@@ -88,8 +85,7 @@ tpcalib_trans(struct tpcalib_softc *sc, int rawx, int rawy, int *x, int *y)
 	}
 }
 
-int
-tpcalib_ioctl(struct tpcalib_softc *sc, u_long cmd, void *data,
+int tpcalib_ioctl(struct tpcalib_softc *sc, u_long cmd, void *data,
     int flag, struct lwp *l)
 {
 	const struct wsmouse_calibcoords *d;

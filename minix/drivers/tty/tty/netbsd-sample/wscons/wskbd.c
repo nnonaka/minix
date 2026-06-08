@@ -356,8 +356,7 @@ static struct wskbd_internal wskbd_console_data;
 
 static void wskbd_update_layout(struct wskbd_internal *, kbd_t);
 
-static void
-wskbd_update_layout(struct wskbd_internal *id, kbd_t enc)
+static void wskbd_update_layout(struct wskbd_internal *id, kbd_t enc)
 {
 
 	if (enc & KB_METAESC)
@@ -369,8 +368,7 @@ wskbd_update_layout(struct wskbd_internal *id, kbd_t enc)
 /*
  * Print function (for parent devices).
  */
-int
-wskbddevprint(void *aux, const char *pnp)
+int wskbddevprint(void *aux, const char *pnp)
 {
 #if 0
 	struct wskbddev_attach_args *ap = aux;
@@ -385,8 +383,7 @@ wskbddevprint(void *aux, const char *pnp)
 	return (UNCONF);
 }
 
-int
-wskbd_match(device_t parent, cfdata_t match, void *aux)
+int wskbd_match(device_t parent, cfdata_t match, void *aux)
 {
 	struct wskbddev_attach_args *ap = aux;
 
@@ -405,8 +402,7 @@ wskbd_match(device_t parent, cfdata_t match, void *aux)
 	return (1);
 }
 
-void
-wskbd_attach(device_t parent, device_t self, void *aux)
+void wskbd_attach(device_t parent, device_t self, void *aux)
 {
 	struct wskbd_softc *sc = device_private(self);
 	struct wskbddev_attach_args *ap = aux;
@@ -506,8 +502,7 @@ wskbd_attach(device_t parent, device_t self, void *aux)
 		aprint_error_dev(self, "couldn't register as input device\n");
 }
 
-static bool
-wskbd_suspend(device_t dv, const pmf_qual_t *qual)
+static bool wskbd_suspend(device_t dv, const pmf_qual_t *qual)
 {
 	struct wskbd_softc *sc = device_private(dv);
 
@@ -517,8 +512,7 @@ wskbd_suspend(device_t dv, const pmf_qual_t *qual)
 	return true;
 }
 
-void
-wskbd_cnattach(const struct wskbd_consops *consops, void *conscookie,
+void wskbd_cnattach(const struct wskbd_consops *consops, void *conscookie,
 	const struct wskbd_mapdata *mapdata)
 {
 	KASSERT(!wskbd_console_initted);
@@ -536,8 +530,7 @@ wskbd_cnattach(const struct wskbd_consops *consops, void *conscookie,
 	wskbd_console_initted = 1;
 }
 
-void
-wskbd_cndetach(void)
+void wskbd_cndetach(void)
 {
 	KASSERT(wskbd_console_initted);
 
@@ -553,8 +546,7 @@ wskbd_cndetach(void)
 	wskbd_console_initted = 0;
 }
 
-static void
-wskbd_repeat(void *v)
+static void wskbd_repeat(void *v)
 {
 	struct wskbd_softc *sc = (struct wskbd_softc *)v;
 	int s = spltty();
@@ -588,8 +580,7 @@ wskbd_repeat(void *v)
 	splx(s);
 }
 
-int
-wskbd_activate(device_t self, enum devact act)
+int wskbd_activate(device_t self, enum devact act)
 {
 	struct wskbd_softc *sc = device_private(self);
 
@@ -606,8 +597,7 @@ wskbd_activate(device_t self, enum devact act)
  * that had the reference to wake us up again.  Then we blow away the
  * vnode and return (which will deallocate the softc).
  */
-int
-wskbd_detach(device_t self, int flags)
+int wskbd_detach(device_t self, int flags)
 {
 	struct wskbd_softc *sc = device_private(self);
 	struct wseventvar *evar;
@@ -660,8 +650,7 @@ wskbd_detach(device_t self, int flags)
 	return (0);
 }
 
-void
-wskbd_input(device_t dev, u_int type, int value)
+void wskbd_input(device_t dev, u_int type, int value)
 {
 	struct wskbd_softc *sc = device_private(dev);
 #if NWSDISPLAY > 0
@@ -725,8 +714,7 @@ wskbd_input(device_t dev, u_int type, int value)
  * event and put it in the queue.  If the queue is full, the
  * keystroke is lost (sorry!).
  */
-static void
-wskbd_deliver_event(struct wskbd_softc *sc, u_int type, int value)
+static void wskbd_deliver_event(struct wskbd_softc *sc, u_int type, int value)
 {
 	struct wseventvar *evar;
 	struct wscons_event event;
@@ -763,8 +751,7 @@ wskbd_deliver_event(struct wskbd_softc *sc, u_int type, int value)
 }
 
 #ifdef WSDISPLAY_COMPAT_RAWKBD
-void
-wskbd_rawinput(device_t dev, u_char *tbuf, int len)
+void wskbd_rawinput(device_t dev, u_char *tbuf, int len)
 {
 #if NWSDISPLAY > 0
 	struct wskbd_softc *sc = device_private(dev);
@@ -779,8 +766,7 @@ wskbd_rawinput(device_t dev, u_char *tbuf, int len)
 #endif /* WSDISPLAY_COMPAT_RAWKBD */
 
 #if NWSDISPLAY > 0
-static void
-wskbd_holdscreen(struct wskbd_softc *sc, int hold)
+static void wskbd_holdscreen(struct wskbd_softc *sc, int hold)
 {
 	int new_state;
 
@@ -812,8 +798,7 @@ wskbd_holdscreen(struct wskbd_softc *sc, int hold)
 }
 #endif
 
-static int
-wskbd_enable(struct wskbd_softc *sc, int on)
+static int wskbd_enable(struct wskbd_softc *sc, int on)
 {
 	int error;
 
@@ -845,8 +830,7 @@ wskbd_enable(struct wskbd_softc *sc, int on)
 }
 
 #if NWSMUX > 0
-int
-wskbd_mux_open(struct wsevsrc *me, struct wseventvar *evp)
+int wskbd_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 {
 	struct wskbd_softc *sc = (struct wskbd_softc *)me;
 
@@ -860,8 +844,7 @@ wskbd_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 }
 #endif
 
-int
-wskbdopen(dev_t dev, int flags, int mode, struct lwp *l)
+int wskbdopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct wskbd_softc *sc = device_lookup_private(&wskbd_cd, minor(dev));
 	struct wseventvar *evar;
@@ -906,8 +889,7 @@ wskbdopen(dev_t dev, int flags, int mode, struct lwp *l)
 	return (error);
 }
 
-int
-wskbd_do_open(struct wskbd_softc *sc, struct wseventvar *evp)
+int wskbd_do_open(struct wskbd_softc *sc, struct wseventvar *evp)
 {
 	sc->sc_base.me_evp = evp;
 	sc->sc_translating = 0;
@@ -915,8 +897,7 @@ wskbd_do_open(struct wskbd_softc *sc, struct wseventvar *evp)
 	return (wskbd_enable(sc, 1));
 }
 
-int
-wskbdclose(dev_t dev, int flags, int mode,
+int wskbdclose(dev_t dev, int flags, int mode,
     struct lwp *l)
 {
 	struct wskbd_softc *sc =
@@ -936,8 +917,7 @@ wskbdclose(dev_t dev, int flags, int mode,
 }
 
 #if NWSMUX > 0
-int
-wskbd_mux_close(struct wsevsrc *me)
+int wskbd_mux_close(struct wsevsrc *me)
 {
 	struct wskbd_softc *sc = (struct wskbd_softc *)me;
 
@@ -949,8 +929,7 @@ wskbd_mux_close(struct wsevsrc *me)
 }
 #endif
 
-int
-wskbdread(dev_t dev, struct uio *uio, int flags)
+int wskbdread(dev_t dev, struct uio *uio, int flags)
 {
 	struct wskbd_softc *sc =
 	    device_lookup_private(&wskbd_cd, minor(dev));
@@ -975,16 +954,14 @@ wskbdread(dev_t dev, struct uio *uio, int flags)
 	return (error);
 }
 
-int
-wskbdioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
+int wskbdioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	return (wskbd_do_ioctl(device_lookup(&wskbd_cd, minor(dev)),
 	    cmd, data, flag,l));
 }
 
 /* A wrapper around the ioctl() workhorse to make reference counting easy. */
-int
-wskbd_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
+int wskbd_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 	struct lwp *l)
 {
 	struct wskbd_softc *sc = device_private(dv);
@@ -997,8 +974,7 @@ wskbd_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 	return (error);
 }
 
-int
-wskbd_do_ioctl_sc(struct wskbd_softc *sc, u_long cmd, void *data, int flag,
+int wskbd_do_ioctl_sc(struct wskbd_softc *sc, u_long cmd, void *data, int flag,
 		  struct lwp *l)
 {
 
@@ -1042,8 +1018,7 @@ wskbd_do_ioctl_sc(struct wskbd_softc *sc, u_long cmd, void *data, int flag,
  * WSKBDIO ioctls, handled in both emulation mode and in ``raw'' mode.
  * Some of these have no real effect in raw mode, however.
  */
-static int
-wskbd_displayioctl(device_t dev, u_long cmd, void *data, int flag,
+static int wskbd_displayioctl(device_t dev, u_long cmd, void *data, int flag,
 	struct lwp *l)
 {
 #ifdef WSDISPLAY_SCROLLSUPPORT
@@ -1258,8 +1233,7 @@ getkeyrepeat:
 	return (error);
 }
 
-int
-wskbdpoll(dev_t dev, int events, struct lwp *l)
+int wskbdpoll(dev_t dev, int events, struct lwp *l)
 {
 	struct wskbd_softc *sc =
 	    device_lookup_private(&wskbd_cd, minor(dev));
@@ -1269,8 +1243,7 @@ wskbdpoll(dev_t dev, int events, struct lwp *l)
 	return (wsevent_poll(sc->sc_base.me_evp, events, l));
 }
 
-int
-wskbdkqfilter(dev_t dev, struct knote *kn)
+int wskbdkqfilter(dev_t dev, struct knote *kn)
 {
 	struct wskbd_softc *sc =
 	    device_lookup_private(&wskbd_cd, minor(dev));
@@ -1282,8 +1255,7 @@ wskbdkqfilter(dev_t dev, struct knote *kn)
 
 #if NWSDISPLAY > 0
 
-int
-wskbd_pickfree(void)
+int wskbd_pickfree(void)
 {
 	int i;
 	struct wskbd_softc *sc;
@@ -1312,8 +1284,7 @@ wskbd_set_console_display(device_t displaydv, struct wsevsrc *me)
 	return (&sc->sc_base);
 }
 
-int
-wskbd_set_display(device_t dv, struct wsevsrc *me)
+int wskbd_set_display(device_t dv, struct wsevsrc *me)
 {
 	struct wskbd_softc *sc = device_private(dv);
 	device_t displaydv = me != NULL ? me->me_dispdv : NULL;
@@ -1357,8 +1328,7 @@ wskbd_set_display(device_t dv, struct wsevsrc *me)
 #endif /* NWSDISPLAY > 0 */
 
 #if NWSMUX > 0
-int
-wskbd_add_mux(int unit, struct wsmux_softc *muxsc)
+int wskbd_add_mux(int unit, struct wsmux_softc *muxsc)
 {
 	struct wskbd_softc *sc = device_lookup_private(&wskbd_cd, unit);
 
@@ -1375,8 +1345,7 @@ wskbd_add_mux(int unit, struct wsmux_softc *muxsc)
 /*
  * Console interface.
  */
-int
-wskbd_cngetc(dev_t dev)
+int wskbd_cngetc(dev_t dev)
 {
 	static int num = 0;
 	static int pos;
@@ -1421,8 +1390,7 @@ wskbd_cngetc(dev_t dev)
 	}
 }
 
-void
-wskbd_cnpollc(dev_t dev, int poll)
+void wskbd_cnpollc(dev_t dev, int poll)
 {
 
 	if (!wskbd_console_initted)
@@ -1436,8 +1404,7 @@ wskbd_cnpollc(dev_t dev, int poll)
 	    (wskbd_console_data.t_consaccesscookie, poll);
 }
 
-void
-wskbd_cnbell(dev_t dev, u_int pitch, u_int period, u_int volume)
+void wskbd_cnbell(dev_t dev, u_int pitch, u_int period, u_int volume)
 {
 
 	if (!wskbd_console_initted)
@@ -1449,8 +1416,7 @@ wskbd_cnbell(dev_t dev, u_int pitch, u_int period, u_int volume)
 			volume);
 }
 
-static inline void
-update_leds(struct wskbd_internal *id)
+static inline void update_leds(struct wskbd_internal *id)
 {
 	int new_state;
 
@@ -1471,8 +1437,7 @@ update_leds(struct wskbd_internal *id)
 	}
 }
 
-static inline void
-update_modifier(struct wskbd_internal *id, u_int type, int toggle, int mask)
+static inline void update_modifier(struct wskbd_internal *id, u_int type, int toggle, int mask)
 {
 	if (toggle) {
 		if (type == WSCONS_EVENT_KEY_DOWN)
@@ -1486,8 +1451,7 @@ update_modifier(struct wskbd_internal *id, u_int type, int toggle, int mask)
 }
 
 #if NWSDISPLAY > 0
-static void
-change_displayparam(struct wskbd_softc *sc, int param, int updown,
+static void change_displayparam(struct wskbd_softc *sc, int param, int updown,
 	int wraparound)
 {
 	int res;
@@ -1509,8 +1473,7 @@ change_displayparam(struct wskbd_softc *sc, int param, int updown,
 }
 #endif
 
-static int
-internal_command(struct wskbd_softc *sc, u_int *type, keysym_t ksym,
+static int internal_command(struct wskbd_softc *sc, u_int *type, keysym_t ksym,
 	keysym_t ksym2)
 {
 #if NWSDISPLAY > 0 && defined(WSDISPLAY_SCROLLSUPPORT)
@@ -1672,8 +1635,7 @@ wskbd_hotkey_register(device_t self, void *cookie, wskbd_hotkey_plugin *hotkey)
 	return sc->sc_base.me_dv;
 }
 
-void
-wskbd_hotkey_deregister(device_t self)
+void wskbd_hotkey_deregister(device_t self)
 {
 	struct wskbd_softc *sc = device_private(self);
 
@@ -1683,8 +1645,7 @@ wskbd_hotkey_deregister(device_t self)
 	sc->sc_hotkeycookie = NULL;
 }
 
-static int
-wskbd_translate(struct wskbd_internal *id, u_int type, int value)
+static int wskbd_translate(struct wskbd_internal *id, u_int type, int value)
 {
 	struct wskbd_softc *sc = id->t_sc;
 	keysym_t ksym, res, *group;
@@ -1888,8 +1849,7 @@ wskbd_translate(struct wskbd_internal *id, u_int type, int value)
 	return (1);
 }
 
-void
-wskbd_set_evtrans(device_t dev, keysym_t *tab, int len)
+void wskbd_set_evtrans(device_t dev, keysym_t *tab, int len)
 {
 	struct wskbd_softc *sc = device_private(dev);
 

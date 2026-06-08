@@ -78,8 +78,7 @@ static struct rasops_info	*stamp_ri;
 /*
  * Initialize rasops_info struct for this colordepth.
  */
-void
-rasops2_init(struct rasops_info *ri)
+void rasops2_init(struct rasops_info *ri)
 {
 
 	if ((ri->ri_font->fontwidth & 3) != 0) {
@@ -120,8 +119,7 @@ rasops2_init(struct rasops_info *ri)
 /*
  * Recompute the blitting stamp.
  */
-static void
-rasops2_makestamp(struct rasops_info *ri, long attr)
+static void rasops2_makestamp(struct rasops_info *ri, long attr)
 {
 	int i;
 	uint32_t bg, fg;

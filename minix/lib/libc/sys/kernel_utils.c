@@ -36,8 +36,7 @@ get_minix_kerninfo(void)
  * is used by routines that set up the stack when executing a new program.
  * It is used for userland exec(2) and in various system services.
  */
-vir_bytes
-minix_get_user_sp(void)
+vir_bytes minix_get_user_sp(void)
 {
 	struct minix_kerninfo *ki;
 

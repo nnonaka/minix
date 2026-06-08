@@ -39,8 +39,7 @@
 #include <sys/poll.h>
 #include <errno.h>
 
-int
-poll(struct pollfd *p, nfds_t nfds, int timout)
+int poll(struct pollfd *p, nfds_t nfds, int timout)
 {
 	fd_set rd, wr, except;
 	struct timeval tv;

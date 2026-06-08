@@ -237,8 +237,7 @@ int main(void)
   return 0;
 }
 
-static void
-set_color(tty_t *tp, int color)
+static void set_color(tty_t *tp, int color)
 {
 	char buf[8];
 
@@ -248,8 +247,7 @@ set_color(tty_t *tp, int color)
 		CDEV_NONBLOCK, 0);
 }
 
-static void
-reset_color(tty_t *tp)
+static void reset_color(tty_t *tp)
 {
 	char buf[8];
 
@@ -337,8 +335,7 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *UNUSED(info))
   return(OK);
 }
 
-static void
-set_console_line(char term[CONS_ARG])
+static void set_console_line(char term[CONS_ARG])
 {
 /* Parse 'term' and redirect console output there. */
 	int i;
@@ -370,8 +367,7 @@ set_console_line(char term[CONS_ARG])
 	}
 }
 
-static void
-set_kernel_color(char color[CONS_ARG])
+static void set_kernel_color(char color[CONS_ARG])
 {
 	int def_color;
 
@@ -385,8 +381,7 @@ set_kernel_color(char color[CONS_ARG])
 	}
 }
 
-static void
-do_new_kmess(void)
+static void do_new_kmess(void)
 {
 /* Kernel wants to print a new message */
 	struct kmessages *kmess_ptr;	/* kmessages structure */

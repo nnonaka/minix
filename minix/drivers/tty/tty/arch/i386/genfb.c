@@ -97,8 +97,7 @@ static int genfb_enabled = 1;
 static struct genfb_softc *genfb_softc = NULL;
 
 
-int
-genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
+int genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 {
 	struct wsemuldisplaydev_attach_args aa;
 	prop_dictionary_t dict;
@@ -201,8 +200,7 @@ genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 	return 0;
 }
 
-static int
-genfb_ioctl(void *v, void *vs, u_long cmd, void *data, int flag)
+static int genfb_ioctl(void *v, void *vs, u_long cmd, void *data, int flag)
 {
 	struct vcons_data *vd = v;
 	struct genfb_softc *sc = vd->cookie;
@@ -345,8 +343,7 @@ genfb_mmap(void *v, void *vs, off_t offset, int prot)
 	return -1;
 }
 
-static void
-genfb_pollc(void *v, int on)
+static void genfb_pollc(void *v, int on)
 {
 #if 0
 	struct vcons_data *vd = v;
@@ -362,8 +359,7 @@ genfb_pollc(void *v, int on)
 #endif
 }
 
-static void
-genfb_init_screen(void *cookie, struct vcons_screen *scr,
+static void genfb_init_screen(void *cookie, struct vcons_screen *scr,
     int existing, long *defattr)
 {
 	struct genfb_softc *sc = cookie;
@@ -443,23 +439,20 @@ genfb_init_screen(void *cookie, struct vcons_screen *scr,
 }
 
 /* Returns the width of the display in millimeters, or 0 if not known. */
-static int
-genfb_calc_hsize(struct genfb_softc *sc)
+static int genfb_calc_hsize(struct genfb_softc *sc)
 {
 	return 0;
 }
 
 /* Return the minimum number of character columns based on DPI */
-static int
-genfb_calc_cols(struct genfb_softc *sc)
+static int genfb_calc_cols(struct genfb_softc *sc)
 {
 	const int hsize = genfb_calc_hsize(sc);
 
 	return MAX(RASOPS_DEFAULT_WIDTH, hsize / GENFB_CHAR_WIDTH_MM);
 }
 
-static int
-genfb_putcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
+static int genfb_putcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
 {
 #if 0
 	u_char *r, *g, *b;
@@ -501,8 +494,7 @@ genfb_putcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
 	return 0;
 }
 
-static int
-genfb_getcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
+static int genfb_getcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
 {
 #if 0
 	u_int index = cm->index;
@@ -525,8 +517,7 @@ genfb_getcmap(struct genfb_softc *sc, struct wsdisplay_cmap *cm)
 	return 0;
 }
 
-void
-genfb_restore_palette(struct genfb_softc *sc)
+void genfb_restore_palette(struct genfb_softc *sc)
 {
 #if 0
 	int i;
@@ -540,8 +531,7 @@ genfb_restore_palette(struct genfb_softc *sc)
 #endif
 }
 
-static void
-genfb_init_palette(struct genfb_softc *sc)
+static void genfb_init_palette(struct genfb_softc *sc)
 {
 #if 0
 	int i, j, tmp;
@@ -584,8 +574,7 @@ genfb_init_palette(struct genfb_softc *sc)
 }
 
 #if 0
-static int
-genfb_putpalreg(struct genfb_softc *sc, uint8_t idx, uint8_t r, uint8_t g,
+static int genfb_putpalreg(struct genfb_softc *sc, uint8_t idx, uint8_t r, uint8_t g,
     uint8_t b)
 {
 
@@ -598,33 +587,28 @@ genfb_putpalreg(struct genfb_softc *sc, uint8_t idx, uint8_t r, uint8_t g,
 }
 #endif
 
-void
-genfb_cnattach(void)
+void genfb_cnattach(void)
 {
 	genfb_cnattach_called = 1;
 }
 
-void
-genfb_disable(void)
+void genfb_disable(void)
 {
 	genfb_enabled = 0;
 }
 
-int
-genfb_is_console(void)
+int genfb_is_console(void)
 {
 	return genfb_cnattach_called;
 }
 
-int
-genfb_is_enabled(void)
+int genfb_is_enabled(void)
 {
 	return genfb_enabled;
 }
 
 #if 0
-int
-genfb_borrow(bus_addr_t addr, bus_space_handle_t *hdlp)
+int genfb_borrow(bus_addr_t addr, bus_space_handle_t *hdlp)
 {
 	struct genfb_softc *sc = genfb_softc;
 
@@ -633,8 +617,7 @@ genfb_borrow(bus_addr_t addr, bus_space_handle_t *hdlp)
 	return 0;
 }
 
-static void
-genfb_brightness_up(device_t dev)
+static void genfb_brightness_up(device_t dev)
 {
 	struct genfb_softc *sc = device_private(dev);
 
@@ -645,8 +628,7 @@ genfb_brightness_up(device_t dev)
 	    sc->sc_brightness->gpc_cookie, GENFB_BRIGHTNESS_STEP);
 }
 
-static void
-genfb_brightness_down(device_t dev)
+static void genfb_brightness_down(device_t dev)
 {
 	struct genfb_softc *sc = device_private(dev);
 
@@ -659,8 +641,7 @@ genfb_brightness_down(device_t dev)
 #endif
 
 #if 0
-void
-genfb_enable_polling(device_t dev)
+void genfb_enable_polling(device_t dev)
 {
 	struct genfb_softc *sc = device_private(dev);
 
@@ -673,8 +654,7 @@ genfb_enable_polling(device_t dev)
 	}
 }
 
-void
-genfb_disable_polling(device_t dev)
+void genfb_disable_polling(device_t dev)
 {
 	struct genfb_softc *sc = device_private(dev);
 

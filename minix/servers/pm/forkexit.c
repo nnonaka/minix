@@ -41,8 +41,7 @@ static void cleanup(register struct mproc *rmp);
 /*===========================================================================*
  *				do_fork					     *
  *===========================================================================*/
-int
-do_fork(void)
+int do_fork(void)
 {
 /* The process pointed to by 'mp' has forked.  Create a child process. */
   register struct mproc *rmp;	/* pointer to parent */
@@ -142,8 +141,7 @@ do_fork(void)
 /*===========================================================================*
  *				do_srv_fork				     *
  *===========================================================================*/
-int
-do_srv_fork(void)
+int do_srv_fork(void)
 {
 /* The process pointed to by 'mp' has forked.  Create a child process. */
   register struct mproc *rmp;	/* pointer to parent */
@@ -242,8 +240,7 @@ do_srv_fork(void)
 /*===========================================================================*
  *				do_exit					     *
  *===========================================================================*/
-int
-do_exit(void)
+int do_exit(void)
 {
  /* Perform the exit(status) system call. The real work is done by exit_proc(),
   * which is also called when a process is killed by a signal. System processes
@@ -264,8 +261,7 @@ do_exit(void)
 /*===========================================================================*
  *				exit_proc				     *
  *===========================================================================*/
-void
-exit_proc(
+void exit_proc(
 	register struct mproc *rmp,	/* pointer to the process to be terminated */
 	int exit_status,		/* the process' exit status (for parent) */
 	int dump_core			/* flag indicating whether to dump core */
@@ -471,8 +467,7 @@ void exit_restart(struct mproc *rmp)
 /*===========================================================================*
  *				do_wait4				     *
  *===========================================================================*/
-int
-do_wait4(void)
+int do_wait4(void)
 {
 /* A process wants to wait for a child to terminate. If a child is already
  * waiting, go clean it up and let this WAIT4 call terminate.  Otherwise,
@@ -566,8 +561,7 @@ do_wait4(void)
 /*===========================================================================*
  *				wait_test				     *
  *===========================================================================*/
-int
-wait_test(
+int wait_test(
 	struct mproc *rmp,			/* process that may be waiting */
 	struct mproc *child			/* process that may be waited for */
 )
@@ -590,8 +584,7 @@ wait_test(
 /*===========================================================================*
  *				zombify					     *
  *===========================================================================*/
-static void
-zombify(struct mproc *rmp)
+static void zombify(struct mproc *rmp)
 {
 /* Zombify a process. First check if the exiting process is traced by a process
  * other than its parent; if so, the tracer must be notified about the exit
@@ -626,8 +619,7 @@ zombify(struct mproc *rmp)
 /*===========================================================================*
  *				check_parent				     *
  *===========================================================================*/
-static void
-check_parent(
+static void check_parent(
 	struct mproc *child,			/* tells which process is exiting */
 	int try_cleanup			/* clean up the child when done? */
 )
@@ -728,8 +720,7 @@ static int tell_parent(struct mproc *child, vir_bytes addr)
 /*===========================================================================*
  *				tell_tracer				     *
  *===========================================================================*/
-static void
-tell_tracer(
+static void tell_tracer(
 	struct mproc *child			/* tells which process is exiting */
 )
 {
@@ -756,8 +747,7 @@ tell_tracer(
 /*===========================================================================*
  *				tracer_died				     *
  *===========================================================================*/
-static void
-tracer_died(
+static void tracer_died(
 	struct mproc *child			/* process being traced */
 )
 {
@@ -792,8 +782,7 @@ tracer_died(
 /*===========================================================================*
  *				cleanup					     *
  *===========================================================================*/
-static void
-cleanup(
+static void cleanup(
 	register struct mproc *rmp	/* tells which process is exiting */
 )
 {

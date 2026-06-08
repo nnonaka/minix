@@ -39,8 +39,7 @@
 #include <dev/rasops/rasops.h>
 #include <dev/wscons/wsconsio.h>
 
-int
-wsdisplayio_get_edid(device_t dev, struct wsdisplayio_edid_info *d)
+int wsdisplayio_get_edid(device_t dev, struct wsdisplayio_edid_info *d)
 {
 	prop_data_t edid_data;
 	int edid_size;
@@ -61,8 +60,7 @@ wsdisplayio_get_edid(device_t dev, struct wsdisplayio_edid_info *d)
 }
 
 /* convenience function to fill in stuff from rasops_info */
-int
-wsdisplayio_get_fbinfo(struct rasops_info *ri, struct wsdisplayio_fbinfo *fbi)
+int wsdisplayio_get_fbinfo(struct rasops_info *ri, struct wsdisplayio_fbinfo *fbi)
 {
 	fbi->fbi_width = ri->ri_width;
 	fbi->fbi_height = ri->ri_height;

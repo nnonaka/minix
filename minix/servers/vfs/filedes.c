@@ -310,8 +310,7 @@ void invalidate_filp_by_endpt(endpoint_t proc_e)
 /*===========================================================================*
  *				lock_filp				     *
  *===========================================================================*/
-void
-lock_filp(struct filp *filp, tll_access_t locktype)
+void lock_filp(struct filp *filp, tll_access_t locktype)
 {
   struct worker_thread *org_self;
   struct vnode *vp;
@@ -354,8 +353,7 @@ lock_filp(struct filp *filp, tll_access_t locktype)
 /*===========================================================================*
  *				unlock_filp				     *
  *===========================================================================*/
-void
-unlock_filp(struct filp *filp)
+void unlock_filp(struct filp *filp)
 {
   /* If this filp holds a soft lock on the vnode, we must be the owner */
   if (filp->filp_softlock != NULL)
@@ -379,8 +377,7 @@ unlock_filp(struct filp *filp)
 /*===========================================================================*
  *				unlock_filps				     *
  *===========================================================================*/
-void
-unlock_filps(struct filp *filp1, struct filp *filp2)
+void unlock_filps(struct filp *filp1, struct filp *filp2)
 {
 /* Unlock two filps that are tied to the same vnode. As a thread can lock a
  * vnode only once, unlocking the vnode twice would result in an error. */
@@ -410,8 +407,7 @@ unlock_filps(struct filp *filp1, struct filp *filp2)
 /*===========================================================================*
  *				close_filp				     *
  *===========================================================================*/
-int
-close_filp(struct filp * f, int may_suspend)
+int close_filp(struct filp * f, int may_suspend)
 {
 /* Close a file.  Will also unlock filp when done.  The 'may_suspend' flag
  * indicates whether the current process may be suspended closing a socket.

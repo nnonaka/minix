@@ -43,8 +43,7 @@ static struct inputdriver pckbd_tab = {
 /*
  * The watchdog timer function, implementing all but the actual reset.
  */
-static void
-kbd_watchdog(int arg __unused)
+static void kbd_watchdog(int arg __unused)
 {
 	kbd_watchdog_set = 0;
 	if (!kbdout.avail)
@@ -62,8 +61,7 @@ kbd_watchdog(int arg __unused)
 /*
  * Send queued data to the keyboard.
  */
-static void
-kbd_send(void)
+static void kbd_send(void)
 {
 	u32_t sb;
 	int r;
@@ -107,8 +105,7 @@ kbd_send(void)
 /*
  * Try to obtain input from the keyboard.
  */
-static int
-scan_keyboard(unsigned char *bp, int *isauxp)
+static int scan_keyboard(unsigned char *bp, int *isauxp)
 {
 	u32_t b, sb;
 	int r;
@@ -147,8 +144,7 @@ scan_keyboard(unsigned char *bp, int *isauxp)
  * Wait until the controller is ready.  Return TRUE on success, FALSE on
  * timeout.  Since this may discard input, only use during initialization.
  */
-static int
-kb_wait(void)
+static int kb_wait(void)
 {
 	spin_t spin;
 	u32_t status;
@@ -171,8 +167,7 @@ kb_wait(void)
 /*
  * Set the LEDs on the caps, num, and scroll lock keys.
  */
-static void
-set_leds(unsigned char ledmask)
+static void set_leds(unsigned char ledmask)
 {
 	if (kbdout.avail == 0)
 		kbdout.offset = 0;
@@ -194,8 +189,7 @@ set_leds(unsigned char ledmask)
 /*
  * Send a command to the keyboard.
  */
-static void
-kbc_cmd0(int cmd)
+static void kbc_cmd0(int cmd)
 {
 	int r;
 
@@ -207,8 +201,7 @@ kbc_cmd0(int cmd)
 /*
  * Send a command to the keyboard, including data.
  */
-static void
-kbc_cmd1(int cmd, int data)
+static void kbc_cmd1(int cmd, int data)
 {
 	int r;
 
@@ -223,8 +216,7 @@ kbc_cmd1(int cmd, int data)
 /*
  * Wait at most one second for a byte from the keyboard or the controller.
  */
-static int
-kbc_read(void)
+static int kbc_read(void)
 {
 	u32_t byte, status;
 	spin_t spin;
@@ -250,8 +242,7 @@ kbc_read(void)
 /*
  * Initialize the keyboard hardware.
  */
-static int
-kb_init(void)
+static int kb_init(void)
 {
 	int r, ccb;
 
@@ -324,8 +315,7 @@ kb_init(void)
 /*
  * Process a keyboard scancode.
  */
-static void
-kbd_process(unsigned char scode)
+static void kbd_process(unsigned char scode)
 {
 	int press, index, page, code;
 
@@ -370,8 +360,7 @@ kbd_process(unsigned char scode)
 /*
  * Process an auxiliary (mouse) scancode.
  */
-static void
-kbdaux_process(unsigned char scode)
+static void kbdaux_process(unsigned char scode)
 {
 	u32_t delta;
 	int i;
@@ -414,8 +403,7 @@ kbdaux_process(unsigned char scode)
 /*
  * Set keyboard LEDs.
  */
-static void
-pckbd_leds(unsigned int leds)
+static void pckbd_leds(unsigned int leds)
 {
 	unsigned char b;
 
@@ -430,8 +418,7 @@ pckbd_leds(unsigned int leds)
 /*
  * Process a keyboard interrupt.
  */
-static void
-pckbd_intr(unsigned int UNUSED(mask))
+static void pckbd_intr(unsigned int UNUSED(mask))
 {
 	unsigned char scode;
 	int isaux;
@@ -452,8 +439,7 @@ pckbd_intr(unsigned int UNUSED(mask))
 /*
  * Process a timer signal.
  */
-static void
-pckbd_alarm(clock_t stamp)
+static void pckbd_alarm(clock_t stamp)
 {
 	expire_timers(stamp);
 }
@@ -461,8 +447,7 @@ pckbd_alarm(clock_t stamp)
 /*
  * Initialize the driver.
  */
-static int
-pckbd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
+static int pckbd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
 {
 	int flags = INPUT_DEV_KBD;
 	/* Initialize the watchdog timer. */
@@ -485,8 +470,7 @@ pckbd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
 /*
  * Set callback routines and let SEF initialize.
  */
-static void
-pckbd_startup(void)
+static void pckbd_startup(void)
 {
 	sef_setcb_init_fresh(pckbd_init);
 
@@ -496,8 +480,7 @@ pckbd_startup(void)
 /*
  * PC keyboard/mouse driver task.
  */
-int
-main(void)
+int main(void)
 {
 	pckbd_startup();
 

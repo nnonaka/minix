@@ -48,8 +48,7 @@ static struct blockdriver vnd_dtab = {
 /*
  * Parse partition tables.
  */
-static void
-vnd_partition(void)
+static void vnd_partition(void)
 {
 	memset(state.part, 0, sizeof(state.part));
 	memset(state.subpart, 0, sizeof(state.subpart));
@@ -62,8 +61,7 @@ vnd_partition(void)
 /*
  * Open a device.
  */
-static int
-vnd_open(devminor_t minor, int access)
+static int vnd_open(devminor_t minor, int access)
 {
 	/* No sub/partition devices are available before initialization. */
 	if (state.fd == -1 && minor != 0)
@@ -106,8 +104,7 @@ vnd_open(devminor_t minor, int access)
 /*
  * Close a device.
  */
-static int
-vnd_close(devminor_t UNUSED(minor))
+static int vnd_close(devminor_t UNUSED(minor))
 {
 	if (state.openct == 0) {
 		printf("VND%u: closing already-closed device\n", instance);
@@ -126,8 +123,7 @@ vnd_close(devminor_t UNUSED(minor))
  * Copy a number of bytes from or to the caller, to or from the intermediate
  * buffer.  If the given endpoint is SELF, a local memory copy must be made.
  */
-static int
-vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t endpt,
+static int vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t endpt,
 	int do_write)
 {
 	struct vscp_vec vvec[SCPVEC_NR], *vvp;
@@ -208,8 +204,7 @@ vnd_advance(iovec_s_t *iov, size_t *iov_offp, size_t bytes)
 /*
  * Perform data transfer on the selected device.
  */
-static int
-vnd_transfer(devminor_t minor, int do_write, u64_t position,
+static int vnd_transfer(devminor_t minor, int do_write, u64_t position,
 	endpoint_t endpt, iovec_t *iovt, unsigned int nr_req, int flags)
 {
 	struct device *dv;
@@ -307,8 +302,7 @@ vnd_transfer(devminor_t minor, int do_write, u64_t position,
  * user provided a geometry, this will be used; otherwise, a geometry will be
  * computed.
  */
-static int
-vnd_layout(u64_t size, struct vnd_ioctl *vnd)
+static int vnd_layout(u64_t size, struct vnd_ioctl *vnd)
 {
 	u64_t sectors;
 
@@ -356,8 +350,7 @@ vnd_layout(u64_t size, struct vnd_ioctl *vnd)
 /*
  * Process I/O control requests.
  */
-static int
-vnd_ioctl(devminor_t UNUSED(minor), unsigned long request, endpoint_t endpt,
+static int vnd_ioctl(devminor_t UNUSED(minor), unsigned long request, endpoint_t endpt,
 	cp_grant_id_t grant, endpoint_t user_endpt)
 {
 	struct vnd_ioctl vnd;
@@ -516,8 +509,7 @@ vnd_part(devminor_t minor)
 /*
  * Return geometry information.
  */
-static void
-vnd_geometry(devminor_t UNUSED(minor), struct part_geom *part)
+static void vnd_geometry(devminor_t UNUSED(minor), struct part_geom *part)
 {
 	part->cylinders = state.geom.cylinders;
 	part->heads = state.geom.heads;
@@ -527,8 +519,7 @@ vnd_geometry(devminor_t UNUSED(minor), struct part_geom *part)
 /*
  * Initialize the device.
  */
-static int
-vnd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
+static int vnd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
 {
 	long v;
 
@@ -555,8 +546,7 @@ vnd_init(int UNUSED(type), sef_init_info_t *UNUSED(info))
 /*
  * Process an incoming signal.
  */
-static void
-vnd_signal(int signo)
+static void vnd_signal(int signo)
 {
 
 	/* In case of a termination signal, initiate driver shutdown. */
@@ -573,8 +563,7 @@ vnd_signal(int signo)
 /*
  * Set callbacks and initialize the System Event Framework (SEF).
  */
-static void
-vnd_startup(void)
+static void vnd_startup(void)
 {
 
 	/* Register init and signal callbacks. */
@@ -588,8 +577,7 @@ vnd_startup(void)
 /*
  * Driver task.
  */
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 
 	/* Initialize the driver. */

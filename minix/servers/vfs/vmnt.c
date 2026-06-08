@@ -41,8 +41,7 @@ void check_vmnt_locks_by_me(struct fproc *rfp)
 /*===========================================================================*
  *				check_vmnt_locks			     *
  *===========================================================================*/
-void
-check_vmnt_locks(void)
+void check_vmnt_locks(void)
 {
   struct vmnt *vmp;
   int count = 0;

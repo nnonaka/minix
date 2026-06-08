@@ -51,8 +51,7 @@ static const struct netdriver e1000_table = {
 /*
  * The e1000 driver.
  */
-int
-main(int argc, char * argv[])
+int main(int argc, char * argv[])
 {
 
 	env_setargs(argc, argv);
@@ -66,8 +65,7 @@ main(int argc, char * argv[])
 /*
  * Initialize the e1000 driver and device.
  */
-static int
-e1000_init(unsigned int instance, netdriver_addr_t * addr, uint32_t * caps,
+static int e1000_init(unsigned int instance, netdriver_addr_t * addr, uint32_t * caps,
 	unsigned int * ticks)
 {
 	e1000_t *e;
@@ -99,8 +97,7 @@ e1000_init(unsigned int instance, netdriver_addr_t * addr, uint32_t * caps,
 /*
  * Map flash memory.  This step is optional.
  */
-static void
-e1000_map_flash(e1000_t * e, int devind, int did)
+static void e1000_map_flash(e1000_t * e, int devind, int did)
 {
 	u32_t flash_addr, gfpreg, sector_base_addr;
 	size_t flash_size;
@@ -141,8 +138,7 @@ e1000_map_flash(e1000_t * e, int devind, int did)
 /*
  * Find a matching device.  Return TRUE on success.
  */
-static int
-e1000_probe(e1000_t * e, int skip)
+static int e1000_probe(e1000_t * e, int skip)
 {
 	int r, devind, ioflag;
 	u16_t vid, did, cr;
@@ -231,8 +227,7 @@ e1000_probe(e1000_t * e, int skip)
 /*
  * Reset the card.
  */
-static void
-e1000_reset_hw(e1000_t * e)
+static void e1000_reset_hw(e1000_t * e)
 {
 
 	/* Assert a Device Reset signal. */
@@ -245,8 +240,7 @@ e1000_reset_hw(e1000_t * e)
 /*
  * Initialize and return the card's ethernet address.
  */
-static void
-e1000_init_addr(e1000_t * e, netdriver_addr_t * addr)
+static void e1000_init_addr(e1000_t * e, netdriver_addr_t * addr)
 {
 	static char eakey[] = E1000_ENVVAR "#_EA";
 	static char eafmt[] = "x:x:x:x:x:x";
@@ -285,8 +279,7 @@ e1000_init_addr(e1000_t * e, netdriver_addr_t * addr)
 /*
  * Initialize receive and transmit buffers.
  */
-static void
-e1000_init_buf(e1000_t * e)
+static void e1000_init_buf(e1000_t * e)
 {
 	phys_bytes rx_desc_p, rx_buff_p;
 	phys_bytes tx_desc_p, tx_buff_p;
@@ -356,8 +349,7 @@ e1000_init_buf(e1000_t * e)
 /*
  * Initialize the hardware.  Return the ethernet address.
  */
-static void
-e1000_init_hw(e1000_t * e, netdriver_addr_t * addr)
+static void e1000_init_hw(e1000_t * e, netdriver_addr_t * addr)
 {
 	int r, i;
 
@@ -411,8 +403,7 @@ e1000_init_hw(e1000_t * e, netdriver_addr_t * addr)
 /*
  * Set receive mode.
  */
-static void
-e1000_set_mode(unsigned int mode, const netdriver_addr_t * mcast_list __unused,
+static void e1000_set_mode(unsigned int mode, const netdriver_addr_t * mcast_list __unused,
 	unsigned int mcast_count __unused)
 {
 	e1000_t *e;
@@ -440,8 +431,7 @@ e1000_set_mode(unsigned int mode, const netdriver_addr_t * mcast_list __unused,
 /*
  * Set hardware address.
  */
-static void
-e1000_set_hwaddr(const netdriver_addr_t * hwaddr)
+static void e1000_set_hwaddr(const netdriver_addr_t * hwaddr)
 {
 	e1000_t *e;
 	uint32_t addr_l, addr_h;
@@ -461,8 +451,7 @@ e1000_set_hwaddr(const netdriver_addr_t * hwaddr)
 /*
  * Try to send a packet.
  */
-static int
-e1000_send(struct netdriver_data * data, size_t size)
+static int e1000_send(struct netdriver_data * data, size_t size)
 {
 	e1000_t *e;
 	e1000_tx_desc_t *desc;
@@ -507,8 +496,7 @@ e1000_send(struct netdriver_data * data, size_t size)
 /*
  * Try to receive a packet.
  */
-static ssize_t
-e1000_recv(struct netdriver_data * data, size_t max)
+static ssize_t e1000_recv(struct netdriver_data * data, size_t max)
 {
 	e1000_t *e;
 	e1000_rx_desc_t *desc;
@@ -568,8 +556,7 @@ e1000_recv(struct netdriver_data * data, size_t max)
 /*
  * Return the link and media status.
  */
-static unsigned int
-e1000_get_link(uint32_t * media)
+static unsigned int e1000_get_link(uint32_t * media)
 {
 	uint32_t status, type;
 
@@ -603,8 +590,7 @@ e1000_get_link(uint32_t * media)
 /*
  * Handle an interrupt.
  */
-static void
-e1000_intr(unsigned int __unused mask)
+static void e1000_intr(unsigned int __unused mask)
 {
 	e1000_t *e;
 	u32_t cause;
@@ -633,8 +619,7 @@ e1000_intr(unsigned int __unused mask)
 /*
  * Do regular processing.
  */
-static void
-e1000_tick(void)
+static void e1000_tick(void)
 {
 	e1000_t *e;
 
@@ -650,8 +635,7 @@ e1000_tick(void)
 /*
  * Stop the card.
  */
-static void
-e1000_stop(void)
+static void e1000_stop(void)
 {
 	e1000_t *e;
 
@@ -665,8 +649,7 @@ e1000_stop(void)
 /*
  * Read from a register.
  */
-static uint32_t
-e1000_reg_read(e1000_t * e, uint32_t reg)
+static uint32_t e1000_reg_read(e1000_t * e, uint32_t reg)
 {
 	uint32_t value;
 
@@ -683,8 +666,7 @@ e1000_reg_read(e1000_t * e, uint32_t reg)
 /*
  * Write to a register.
  */
-static void
-e1000_reg_write(e1000_t * e, uint32_t reg, uint32_t value)
+static void e1000_reg_write(e1000_t * e, uint32_t reg, uint32_t value)
 {
 
 	/* Assume a sane register. */
@@ -697,8 +679,7 @@ e1000_reg_write(e1000_t * e, uint32_t reg, uint32_t value)
 /*
  * Set bits in a register.
  */
-static void
-e1000_reg_set(e1000_t * e, uint32_t reg, uint32_t value)
+static void e1000_reg_set(e1000_t * e, uint32_t reg, uint32_t value)
 {
 	uint32_t data;
 
@@ -712,8 +693,7 @@ e1000_reg_set(e1000_t * e, uint32_t reg, uint32_t value)
 /*
  * Clear bits in a register.
  */
-static void
-e1000_reg_unset(e1000_t * e, uint32_t reg, uint32_t value)
+static void e1000_reg_unset(e1000_t * e, uint32_t reg, uint32_t value)
 {
 	uint32_t data;
 
@@ -727,8 +707,7 @@ e1000_reg_unset(e1000_t * e, uint32_t reg, uint32_t value)
 /*
  * Read from EEPROM.
  */
-static u16_t
-eeprom_eerd(e1000_t * e, int reg)
+static u16_t eeprom_eerd(e1000_t * e, int reg)
 {
 	u32_t data;
 
@@ -746,8 +725,7 @@ eeprom_eerd(e1000_t * e, int reg)
 /*
  * Initialize ICH8 flash.
  */
-static int
-eeprom_ich_init(e1000_t * e)
+static int eeprom_ich_init(e1000_t * e)
 {
 	union ich8_hws_flash_status hsfsts;
 	int ret_val = -1;
@@ -818,8 +796,7 @@ eeprom_ich_init(e1000_t * e)
 /*
  * Start ICH8 flash cycle.
  */
-static int
-eeprom_ich_cycle(e1000_t * e, u32_t timeout)
+static int eeprom_ich_cycle(e1000_t * e, u32_t timeout)
 {
 	union ich8_hws_flash_ctrl hsflctl;
 	union ich8_hws_flash_status hsfsts;
@@ -850,8 +827,7 @@ eeprom_ich_cycle(e1000_t * e, u32_t timeout)
 /*
  * Read from ICH8 flash.
  */
-static u16_t
-eeprom_ich(e1000_t * e, int reg)
+static u16_t eeprom_ich(e1000_t * e, int reg)
 {
 	union ich8_hws_flash_status hsfsts;
 	union ich8_hws_flash_ctrl hsflctl;

@@ -113,8 +113,7 @@ static int  vcons_getwschar(struct vcons_screen *, struct wsdisplay_char *);
 static void vcons_lock(struct vcons_screen *);
 static void vcons_unlock(struct vcons_screen *);
 
-int
-vcons_init(struct vcons_data *vd, void *cookie, struct wsscreen_descr *def,
+int vcons_init(struct vcons_data *vd, void *cookie, struct wsscreen_descr *def,
     struct wsdisplay_accessops *ao)
 {
 	//ser_puts("vcons_init 1\n");
@@ -160,20 +159,17 @@ vcons_init(struct vcons_data *vd, void *cookie, struct wsscreen_descr *def,
 	return 0;
 }
 
-static void
-vcons_lock(struct vcons_screen *scr)
+static void vcons_lock(struct vcons_screen *scr)
 {
 	SCREEN_BUSY(scr);
 }
 
-static void
-vcons_unlock(struct vcons_screen *scr)
+static void vcons_unlock(struct vcons_screen *scr)
 {
 	SCREEN_IDLE(scr);
 }
 
-static void
-vcons_dummy_init_screen(void *cookie,
+static void vcons_dummy_init_screen(void *cookie,
     struct vcons_screen *scr, int exists,
     long *defattr)
 {
@@ -187,8 +183,7 @@ vcons_dummy_init_screen(void *cookie,
 	       "supposed to supply a replacement for proper operation\n");
 }
 
-static int
-vcons_alloc_buffers(struct vcons_data *vd, struct vcons_screen *scr)
+static int vcons_alloc_buffers(struct vcons_data *vd, struct vcons_screen *scr)
 {
 	struct rasops_info *ri = &scr->scr_ri;
 	int cnt, i;
@@ -230,8 +225,7 @@ vcons_alloc_buffers(struct vcons_data *vd, struct vcons_screen *scr)
 	return 0;
 }
 
-int
-vcons_init_screen(struct vcons_data *vd, struct vcons_screen *scr,
+int vcons_init_screen(struct vcons_data *vd, struct vcons_screen *scr,
     int existing, long *defattr)
 {
 	struct rasops_info *ri = &scr->scr_ri;
@@ -309,8 +303,7 @@ vcons_init_screen(struct vcons_data *vd, struct vcons_screen *scr,
 	return 0;
 }
 
-static int
-vcons_load_font(void *v, void *cookie, struct wsdisplay_font *f)
+static int vcons_load_font(void *v, void *cookie, struct wsdisplay_font *f)
 {
 	struct vcons_data *vd = v;
 	struct vcons_screen *scr = cookie;
@@ -403,8 +396,7 @@ vcons_load_font(void *v, void *cookie, struct wsdisplay_font *f)
 	return 0;
 }	
 
-static void
-vcons_do_switch(void *arg)
+static void vcons_do_switch(void *arg)
 {
 	struct vcons_data *vd = arg;
 	struct vcons_screen *scr, *oldscr;
@@ -470,8 +462,7 @@ vcons_do_switch(void *arg)
 		vd->switch_cb(vd->switch_cb_arg, 0, 0);
 }
 
-void
-vcons_redraw_screen(struct vcons_screen *scr)
+void vcons_redraw_screen(struct vcons_screen *scr)
 {
 	uint32_t *charptr = scr->scr_chars, c;
 	long *attrptr = scr->scr_attrs, a, last_a = 0, mask, cmp, acmp;
@@ -564,8 +555,7 @@ next:
 	vcons_unlock(scr);
 }
 
-static int
-vcons_ioctl(void *v, void *vs, u_long cmd, void *data, int flag)
+static int vcons_ioctl(void *v, void *vs, u_long cmd, void *data, int flag)
 {
 	struct vcons_data *vd = v;
 	int error = 0;
@@ -606,8 +596,7 @@ vcons_ioctl(void *v, void *vs, u_long cmd, void *data, int flag)
 	return error;
 }
 
-static int
-vcons_alloc_screen(void *v, const struct wsscreen_descr *type, void **cookiep,
+static int vcons_alloc_screen(void *v, const struct wsscreen_descr *type, void **cookiep,
     int *curxp, int *curyp, long *defattrp)
 {
 	struct vcons_data *vd = v;
@@ -646,8 +635,7 @@ vcons_alloc_screen(void *v, const struct wsscreen_descr *type, void **cookiep,
 	return 0;
 }
 
-static void
-vcons_free_screen(void *v, void *cookie)
+static void vcons_free_screen(void *v, void *cookie)
 {
 	struct vcons_data *vd = v;
 	struct vcons_screen *scr = cookie;
@@ -676,8 +664,7 @@ vcons_free_screen(void *v, void *cookie)
 		vd->active = NULL;
 }
 
-static int
-vcons_show_screen(void *v, void *cookie, int waitok,
+static int vcons_show_screen(void *v, void *cookie, int waitok,
     void (*cb)(void *, int, int), void *cb_arg)
 {
 	struct vcons_data *vd = v;
@@ -701,8 +688,7 @@ vcons_show_screen(void *v, void *cookie, int waitok,
 
 /* wrappers for rasops_info methods */
 
-static void
-vcons_copycols_buffer(void *cookie, int row, int srccol, int dstcol, int ncols)
+static void vcons_copycols_buffer(void *cookie, int row, int srccol, int dstcol, int ncols)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -726,8 +712,7 @@ vcons_copycols_buffer(void *cookie, int row, int srccol, int dstcol, int ncols)
 
 }
 
-static void
-vcons_copycols(void *cookie, int row, int srccol, int dstcol, int ncols)
+static void vcons_copycols(void *cookie, int row, int srccol, int dstcol, int ncols)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -741,8 +726,7 @@ vcons_copycols(void *cookie, int row, int srccol, int dstcol, int ncols)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_copycols_noread(void *cookie, int row, int srccol, int dstcol, int ncols)
+static void vcons_copycols_noread(void *cookie, int row, int srccol, int dstcol, int ncols)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -768,8 +752,7 @@ vcons_copycols_noread(void *cookie, int row, int srccol, int dstcol, int ncols)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_erasecols_buffer(void *cookie, int row, int startcol, int ncols, long fillattr)
+static void vcons_erasecols_buffer(void *cookie, int row, int startcol, int ncols, long fillattr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -793,8 +776,7 @@ vcons_erasecols_buffer(void *cookie, int row, int startcol, int ncols, long fill
 
 }
 
-static void
-vcons_erasecols(void *cookie, int row, int startcol, int ncols, long fillattr)
+static void vcons_erasecols(void *cookie, int row, int startcol, int ncols, long fillattr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -808,8 +790,7 @@ vcons_erasecols(void *cookie, int row, int startcol, int ncols, long fillattr)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_copyrows_buffer(void *cookie, int srcrow, int dstrow, int nrows)
+static void vcons_copyrows_buffer(void *cookie, int srcrow, int dstrow, int nrows)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -845,8 +826,7 @@ vcons_copyrows_buffer(void *cookie, int srcrow, int dstrow, int nrows)
 
 }
 
-static void
-vcons_copyrows(void *cookie, int srcrow, int dstrow, int nrows)
+static void vcons_copyrows(void *cookie, int srcrow, int dstrow, int nrows)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -860,8 +840,7 @@ vcons_copyrows(void *cookie, int srcrow, int dstrow, int nrows)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_copyrows_noread(void *cookie, int srcrow, int dstrow, int nrows)
+static void vcons_copyrows_noread(void *cookie, int srcrow, int dstrow, int nrows)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -888,8 +867,7 @@ vcons_copyrows_noread(void *cookie, int srcrow, int dstrow, int nrows)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_eraserows_buffer(void *cookie, int row, int nrows, long fillattr)
+static void vcons_eraserows_buffer(void *cookie, int row, int nrows, long fillattr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -913,8 +891,7 @@ vcons_eraserows_buffer(void *cookie, int row, int nrows, long fillattr)
 }
 
 
-static void
-vcons_eraserows(void *cookie, int row, int nrows, long fillattr)
+static void vcons_eraserows(void *cookie, int row, int nrows, long fillattr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -928,8 +905,7 @@ vcons_eraserows(void *cookie, int row, int nrows, long fillattr)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_putchar_buffer(void *cookie, int row, int col, u_int c, long attr)
+static void vcons_putchar_buffer(void *cookie, int row, int col, u_int c, long attr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -955,8 +931,7 @@ vcons_putchar_buffer(void *cookie, int row, int col, u_int c, long attr)
 #endif
 }
 
-static void
-vcons_putchar(void *cookie, int row, int col, u_int c, long attr)
+static void vcons_putchar(void *cookie, int row, int col, u_int c, long attr)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -970,8 +945,7 @@ vcons_putchar(void *cookie, int row, int col, u_int c, long attr)
 	vcons_unlock(scr);
 }
 
-static void
-vcons_cursor(void *cookie, int on, int row, int col)
+static void vcons_cursor(void *cookie, int on, int row, int col)
 {
 	struct rasops_info *ri = cookie;
 	struct vcons_screen *scr = ri->ri_hw;
@@ -989,8 +963,7 @@ vcons_cursor(void *cookie, int on, int row, int col)
 
 /* methods to read/write characters via ioctl() */
 
-static int
-vcons_putwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
+static int vcons_putwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
 {
 	long attr;
 	struct rasops_info *ri;
@@ -1021,8 +994,7 @@ vcons_putwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
 		return EINVAL;
 }
 
-static int
-vcons_getwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
+static int vcons_getwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
 {
 	int offset;
 	long attr;
@@ -1061,8 +1033,7 @@ vcons_getwschar(struct vcons_screen *scr, struct wsdisplay_char *wsc)
 
 #ifdef WSDISPLAY_SCROLLSUPPORT
 
-static void
-vcons_scroll(void *cookie, void *vs, int where)
+static void vcons_scroll(void *cookie, void *vs, int where)
 {
 	struct vcons_screen *scr = vs;
 
@@ -1082,8 +1053,7 @@ vcons_scroll(void *cookie, void *vs, int where)
 	}
 }
 
-static void
-vcons_do_scroll(struct vcons_screen *scr)
+static void vcons_do_scroll(struct vcons_screen *scr)
 {
 	int dist, from, to, num;
 	int r_offset, r_start;
@@ -1142,8 +1112,7 @@ vcons_do_scroll(struct vcons_screen *scr)
 
 #endif /* WSDISPLAY_SCROLLSUPPORT */
 
-void
-vcons_enable_polling(struct vcons_data *vd)
+void vcons_enable_polling(struct vcons_data *vd)
 {
 	struct vcons_screen *scr = vd->active;
 
@@ -1153,13 +1122,11 @@ vcons_enable_polling(struct vcons_data *vd)
 	}
 }
 
-void
-vcons_disable_polling(struct vcons_data *vd)
+void vcons_disable_polling(struct vcons_data *vd)
 {
 }
 
-void
-vcons_hard_switch(struct vcons_screen *scr)
+void vcons_hard_switch(struct vcons_screen *scr)
 {
 	struct vcons_data *vd = scr->scr_vd;
 	struct vcons_screen *oldscr = vd->active;

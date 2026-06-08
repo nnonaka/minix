@@ -50,8 +50,7 @@
 
 #define NBUCKETS 32
 
-static inline int
-attr2idx(long attr)
+static inline int attr2idx(long attr)
 {
 	if ((attr & 0xf0f0fff8) != 0)
 		return -1;
@@ -60,8 +59,7 @@ attr2idx(long attr)
 }
 
 /* first line, lines, width, attr */
-int
-glyphcache_init(glyphcache *gc, int first, int lines, int width,
+int glyphcache_init(glyphcache *gc, int first, int lines, int width,
     int cellwidth, int cellheight, long attr)
 {
 
@@ -82,8 +80,7 @@ glyphcache_init(glyphcache *gc, int first, int lines, int width,
 
 }
 
-int
-glyphcache_reconfig(glyphcache *gc, int cellwidth, int cellheight, long attr)
+int glyphcache_reconfig(glyphcache *gc, int cellwidth, int cellheight, long attr)
 {
 	int cache_lines, buckets, i, usedcells = 0, idx;
 	gc_bucket *b;
@@ -147,8 +144,7 @@ glyphcache_reconfig(glyphcache *gc, int cellwidth, int cellheight, long attr)
 	return 0;
 }
 
-void
-glyphcache_adapt(struct vcons_screen *scr, void *cookie)
+void glyphcache_adapt(struct vcons_screen *scr, void *cookie)
 {
 	glyphcache *gc = cookie;
 	struct rasops_info *ri = &scr->scr_ri;
@@ -162,8 +158,7 @@ glyphcache_adapt(struct vcons_screen *scr, void *cookie)
 			        ri->ri_font->fontheight, scr->scr_defattr);
 } 
 
-void
-glyphcache_wipe(glyphcache *gc)
+void glyphcache_wipe(glyphcache *gc)
 {
 	gc_bucket *b;
 	int i, j, idx;
@@ -196,8 +191,7 @@ glyphcache_wipe(glyphcache *gc)
  * call this only if glyphcache_try() returned GC_ADD
  * caller or gc_bitblt must make sure the glyph is actually completely drawn
  */
-int
-glyphcache_add(glyphcache *gc, int c, int x, int y)
+int glyphcache_add(glyphcache *gc, int c, int x, int y)
 {
 	gc_bucket *b = gc->gc_next;
 	int cell;
@@ -219,8 +213,7 @@ glyphcache_add(glyphcache *gc, int c, int x, int y)
 	return 0;
 }
 
-void
-glyphcache_underline(glyphcache *gc, int x, int y, long attr)
+void glyphcache_underline(glyphcache *gc, int x, int y, long attr)
 {
 	if (gc->gc_rectfill == NULL)
 		return;
@@ -235,8 +228,7 @@ glyphcache_underline(glyphcache *gc, int x, int y, long attr)
  * - GC_ADD when the glyph wasn't found but can be added
  * - GC_NOPE when the glyph can't be cached
  */
-int
-glyphcache_try(glyphcache *gc, int c, int x, int y, long attr)
+int glyphcache_try(glyphcache *gc, int c, int x, int y, long attr)
 {
 	int cell, cx, cy, idx, bi;
 	gc_bucket *b;

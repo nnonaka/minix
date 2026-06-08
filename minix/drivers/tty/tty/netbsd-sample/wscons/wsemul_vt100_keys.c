@@ -81,8 +81,7 @@ static const char *vt100_numpad[] = {
 	"\033Oy",	/* KP 9 */
 };
 
-int
-wsemul_vt100_translate(void *cookie, keysym_t in, const char **out)
+int wsemul_vt100_translate(void *cookie, keysym_t in, const char **out)
 {
 	struct wsemul_vt100_emuldata *edp = cookie;
 	struct vt100base_data *vd = &edp->bd;

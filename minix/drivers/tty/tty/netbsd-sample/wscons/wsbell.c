@@ -202,14 +202,12 @@ struct wssrcops wsbell_srcops = {
 };
 #endif
 
-int
-wsbell_match(device_t parent, cfdata_t match, void *aux)
+int wsbell_match(device_t parent, cfdata_t match, void *aux)
 {
 	return (1);
 }
 
-void
-wsbell_attach(device_t parent, device_t self, void *aux)
+void wsbell_attach(device_t parent, device_t self, void *aux)
 {
 	struct wsbell_softc *sc = device_private(self);
 	struct wsbelldev_attach_args *ap = aux;
@@ -251,8 +249,7 @@ wsbell_attach(device_t parent, device_t self, void *aux)
 	    bell_thread, sc, &sc->sc_bellthread, "%s", device_xname(self));
 }
 
-int
-wsbell_activate(device_t self, enum devact act)
+int wsbell_activate(device_t self, enum devact act)
 {
 	struct wsbell_softc *sc = device_private(self);
 
@@ -261,8 +258,7 @@ wsbell_activate(device_t self, enum devact act)
 	return (0);
 }
 
-int
-wsbell_detach(device_t self, int flags)
+int wsbell_detach(device_t self, int flags)
 {
 	struct wsbell_softc *sc = device_private(self);
 	struct wseventvar *evar;
@@ -319,15 +315,13 @@ wsbell_detach(device_t self, int flags)
 }
 
 #if NWSMUX > 0
-int
-wsbelldoopen(struct wsbell_softc *sc, struct wseventvar *evp)
+int wsbelldoopen(struct wsbell_softc *sc, struct wseventvar *evp)
 {
 	return (0);
 }
 
 /* A wrapper around the ioctl() workhorse to make reference counting easy. */
-int
-wsbelldoioctl(device_t dv, u_long cmd, void *data, int flag,
+int wsbelldoioctl(device_t dv, u_long cmd, void *data, int flag,
 	       struct lwp *l)
 {
 	struct wsbell_softc *sc = device_private(dv);
@@ -340,8 +334,7 @@ wsbelldoioctl(device_t dv, u_long cmd, void *data, int flag,
 	return (error);
 }
 
-int
-wsbell_do_ioctl(struct wsbell_softc *sc, u_long cmd, void *data,
+int wsbell_do_ioctl(struct wsbell_softc *sc, u_long cmd, void *data,
 		 int flag, struct lwp *l)
 {
 	struct wskbd_bell_data *ubdp, *kbdp;
@@ -406,8 +399,7 @@ getbell:
 }
 #endif
 
-static void
-bell_thread(void *arg)
+static void bell_thread(void *arg)
 {
 	struct wsbell_softc *sc = arg;
 	struct vbell_args *vb = &sc->sc_bell_args;
@@ -440,8 +432,7 @@ bell_thread(void *arg)
 	}
 }
 
-static inline void
-spkr_audio_play(struct wsbell_softc *sc, u_int pitch, u_int period, u_int volume)
+static inline void spkr_audio_play(struct wsbell_softc *sc, u_int pitch, u_int period, u_int volume)
 {
 
 	mutex_enter(&sc->sc_bellock);
@@ -454,8 +445,7 @@ spkr_audio_play(struct wsbell_softc *sc, u_int pitch, u_int period, u_int volume
 }
 
 #if NWSMUX > 0
-int
-wsbell_mux_open(struct wsevsrc *me, struct wseventvar *evp)
+int wsbell_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 {
 	struct wsbell_softc *sc = (struct wsbell_softc *)me;
 
@@ -465,8 +455,7 @@ wsbell_mux_open(struct wsevsrc *me, struct wseventvar *evp)
 	return wsbelldoopen(sc, evp);
 }
 
-int
-wsbell_mux_close(struct wsevsrc *me)
+int wsbell_mux_close(struct wsevsrc *me)
 {
 	struct wsbell_softc *sc = (struct wsbell_softc *)me;
 
@@ -484,8 +473,7 @@ int wsbell_bmajor = -1, wsbell_cmajor = -1;
 #include "ioconf.c"
 #endif
 
-static int
-wsbell_modcmd(modcmd_t cmd, void *arg)
+static int wsbell_modcmd(modcmd_t cmd, void *arg)
 {
 	int error = 0;
 

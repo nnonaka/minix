@@ -91,8 +91,7 @@ wsemul_pick(const char *name)
 	return (*ops);
 }
 
-void
-wsemul_drop(const struct wsemul_ops *ops)
+void wsemul_drop(const struct wsemul_ops *ops)
 {
 	struct wsemulentry *wep;
 
@@ -103,8 +102,7 @@ wsemul_drop(const struct wsemul_ops *ops)
 		}
 }
 
-int
-wsemul_add(const struct wsemul_ops *ops)
+int wsemul_add(const struct wsemul_ops *ops)
 {
 	struct wsemulentry *wep;
 
@@ -115,8 +113,7 @@ wsemul_add(const struct wsemul_ops *ops)
 	return 0;
 }
 
-int
-wsemul_remove(const struct wsemul_ops *ops)
+int wsemul_remove(const struct wsemul_ops *ops)
 {
 	struct wsemulentry *wep;
 

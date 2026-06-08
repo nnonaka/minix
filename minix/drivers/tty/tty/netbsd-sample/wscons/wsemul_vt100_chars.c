@@ -76,8 +76,7 @@ static const u_int16_t dectech2uni[128] = {
 	0x03be, 0x03c5, 0x03b6, 0x2190, 0x2191, 0x2192, 0x2193, 0x007f,
 };
 
-void
-vt100_initchartables(struct wsemul_vt100_emuldata *edp)
+void vt100_initchartables(struct wsemul_vt100_emuldata *edp)
 {
 	int i;
 	struct vt100base_data *vd = &edp->bd;
@@ -139,8 +138,7 @@ static const struct {
 	0x00e8, 0x00f4, 0x00e4, 0x00f6, 0x00fc, 0x00fb}},
 };
 
-void
-vt100_setnrc(struct wsemul_vt100_emuldata *edp, int nrc)
+void vt100_setnrc(struct wsemul_vt100_emuldata *edp, int nrc)
 {
 	int i;
 	struct vt100base_data *vd = &edp->bd;
