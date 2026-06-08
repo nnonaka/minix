@@ -390,7 +390,6 @@ static int get_gptent_fstype(const struct gpt_ent *ep)
 static int check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 	struct gpt_hdr *gpth, u8_t *tmp_buf)
 {
-	const struct gpt_ent *ep;
 	daddr_t entblk;
 	size_t size;
 	uint32_t crc;
@@ -418,12 +417,15 @@ static int check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 	if (gpth->hdr_lba_self != (uint64_t)sector)
 		return -1;
 
+	/* hdr_entsz must be non-zero and fit within our read buffer to avoid
+	 * division by zero and an infinite loop in the entry scan below. */
+	if (gpth->hdr_entsz == 0 || gpth->hdr_entsz > CD_SECTOR_SIZE)
+		return -1;
+
 	sectors = CD_SECTOR_SIZE/SECTOR_SIZE; /* sectors per buffer */
 	entries = CD_SECTOR_SIZE/gpth->hdr_entsz; /* entries per buffer */
 	entblk = gpth->hdr_lba_table;
 	crc = crc32(0, NULL, 0);
-
-	ep = (const struct gpt_ent *)tmp_buf;
 
 	for (entry = 0; entry < gpth->hdr_entries; entry += entries) {
 		size = MIN(CD_SECTOR_SIZE,
@@ -496,14 +498,10 @@ static void gptpartition(
 	u8_t *tmp_buf           	/* temporary buffer */
 )
 {
-	// TODO
 	struct gpt_hdr gpth;
 	struct device gpt_partitions[GPTNPART];
-	
-    struct device *dv;
+	struct device *dv;
 	struct device *part = gpt_partitions;
-
-	const struct gpt_ent *ep;
 	daddr_t entblk;
 	size_t size;
 	int sectors;
@@ -511,7 +509,9 @@ static void gptpartition(
 	uint32_t entry;
 	int i, j;
 	int par;
-	
+
+	memset(gpt_partitions, 0, sizeof(gpt_partitions));
+
 	if ((dv = (*bdp->bdr_part)(device)) == NULL) return;
 
 	if (read_gpthder(bdp, device, &gpth, tmp_buf)) {
@@ -524,7 +524,6 @@ static void gptpartition(
 	entblk = gpth.hdr_lba_table;
 
 	j = 0;
-	ep = (const struct gpt_ent *)tmp_buf;
 
 	for (entry = 0; entry < gpth.hdr_entries; entry += entries) {
 		size = MIN(CD_SECTOR_SIZE,
@@ -538,17 +537,19 @@ static void gptpartition(
 		entblk += sectors;
 
 		for (i = 0; j < GPTNPART && i < entries; i++) {
-			if (!guid_is_nil((const struct uuid *)ep[i].ent_type)) {
-				part[j].dv_base = (u64_t)ep[i].ent_lba_start * SECTOR_SIZE;
-				part[j].dv_size = (u64_t)(ep[i].ent_lba_end -
-				    ep[i].ent_lba_start + 1) * SECTOR_SIZE;
-				part[j].fstype = get_gptent_fstype(&ep[i]);
-				    
-				memcpy(&part[j].ent_guid, &ep[i].ent_guid, 
-					sizeof(ep[0].ent_guid));
-				memcpy(&part[j].ent_name, &ep[i].ent_name,
-					sizeof(ep[0].ent_name));
-				part[j].ent_attr = ep[i].ent_attr;
+			const struct gpt_ent *ent = (const struct gpt_ent *)
+			    ((const uint8_t *)tmp_buf + (size_t)i * gpth.hdr_entsz);
+			if (!guid_is_nil((const struct uuid *)ent->ent_type)) {
+				part[j].dv_base = (u64_t)ent->ent_lba_start * SECTOR_SIZE;
+				part[j].dv_size = (u64_t)(ent->ent_lba_end -
+				    ent->ent_lba_start + 1) * SECTOR_SIZE;
+				part[j].fstype = get_gptent_fstype(ent);
+
+				memcpy(&part[j].ent_guid, &ent->ent_guid,
+					sizeof(ent->ent_guid));
+				memcpy(&part[j].ent_name, &ent->ent_name,
+					sizeof(ent->ent_name));
+				part[j].ent_attr = ent->ent_attr;
 
 				j++;
 			}
