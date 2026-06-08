@@ -174,8 +174,10 @@ int mthread_cond_signal(mthread_cond_t *cond)
 	return(EINVAL);
 
   tcb = mthread_find_tcb(MAIN_THREAD);
-  if (tcb->m_state == MS_CONDITION && tcb->m_cond == *cond)
+  if (tcb->m_state == MS_CONDITION && tcb->m_cond == *cond) {
   	mthread_unsuspend(MAIN_THREAD);
+	return(0);
+  }
 
   for (t = (mthread_thread_t) 0; t < no_threads; t++) {
   	tcb = mthread_find_tcb(t);

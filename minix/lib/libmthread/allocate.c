@@ -190,10 +190,11 @@ static int mthread_increase_thread_pool(void)
 		while (i-- > old_no_threads)
 			free(new_tcb[i]);
 		if (old_no_threads > 0) {
-			new_tcb = realloc(threads, old_no_threads *
+			new_tcb = realloc(new_tcb, old_no_threads *
 			    sizeof(mthread_tcb_t *));
 			if (new_tcb == NULL)
 				mthread_panic("Unable to shrink tcb array");
+			threads = new_tcb;
 		} else
 			free(new_tcb);
   		return(-1);

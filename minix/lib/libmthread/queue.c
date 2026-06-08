@@ -113,7 +113,7 @@ mthread_thread_t mthread_queue_remove(mthread_queue_t *queue)
 		/* Find offset in queue */
 		random_tcb = queue->mq_head;
 		prev = random_tcb;
-		while (--offset_id > 0) {
+		while (offset_id-- > 0) {
 			prev = random_tcb;
 			random_tcb = random_tcb->m_next;
 		}
