@@ -234,7 +234,7 @@ static int get_acpi_rsdp(void)
 		memcpy((void *)&acpi_rsdp, (void *)kinfo.rsdp_p, 
 				sizeof(acpi_rsdp));
 		if (acpi_rsdp_test(&acpi_rsdp)) {
-			machine.acpi_rsdp = (phys_bytes)&acpi_rsdp;
+			machine.acpi_rsdp = vir2phys(&acpi_rsdp);
 			return 1;
 		}
 		printf("get_acpi_rsdp: acpi_rsdp_test failed.\n");
