@@ -413,7 +413,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	${RM} -f ${WORKSPEC}
 	cat ${WORKDIR}/etc/mtree/* |					\
 	    ${TOOL_SED} -e 's/ size=[0-9]*//' > ${WORKSPEC}
-	${HOST_SH} ${WORKDIR}/dev/MAKEDEV -s all ipty |			\
+	${HOST_SH} ${WORKDIR}/dev/MAKEDEV -s all ipty imgrd |			\
 	    ${TOOL_SED} -e '/^\. type=dir/d' -e 's,^\.,./dev,' >> ${WORKSPEC}
 	cat ${SPEC_IN} >> ${WORKSPEC}
 .if defined(SECONDARY_BOOT)
@@ -442,7 +442,7 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 		grep -v '/boot/minix/\.temp' > ${WRKMTREE}
 	${TOOL_TOPROTO} -i ${WRKMTREE} -b ${WORKDIR} -o ${WORKPROTO}
 	dd if=/dev/zero bs=${FSSIZE} count=1 > ${WORKFS}
-	${TOOL_MKFSMFS} -d \
+	${TOOL_MKFSMFS} -d -x 50 \
 		${WORKFS} \
 		${WORKPROTO}
 .endif #!defined(__MINIX)
