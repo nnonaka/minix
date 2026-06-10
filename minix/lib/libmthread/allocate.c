@@ -51,6 +51,8 @@ void *arg;
 /* Register procedure proc for execution in a thread. */
   mthread_thread_t thread;
 
+  mthread_init();	/* Ensure initialized; __constructor__ may not run in UEFI */
+
   if (proc == NULL)
 	return(EINVAL);
 
@@ -219,7 +221,7 @@ static int mthread_increase_thread_pool(void)
 /*===========================================================================*
  *				mthread_init				     *
  *===========================================================================*/
-static void __attribute__((__constructor__, __used__)) mthread_init(void)
+void __attribute__((__constructor__, __used__)) mthread_init(void)
 {
 /* Initialize thread system; allocate thread structures and start creating
  * threads.

@@ -98,7 +98,7 @@ void mthread_suspend(mthread_state_t state)
  * runnable itself), or the thread is dead.
  */
 
-  int continue_thread = 0;
+  volatile int continue_thread;
   mthread_tcb_t *tcb;
   ucontext_t *ctx;
 
@@ -108,12 +108,13 @@ void mthread_suspend(mthread_state_t state)
   ctx = &(tcb->m_context);
 
   /* Save current thread's context */
+  continue_thread = 0;
   if (mthread_getcontext(ctx) != 0)
 	mthread_panic("Couldn't save current thread's context");
-  
+
   /* We return execution here with setcontext/swapcontext, but also when we
    * simply return from the getcontext call. If continue_thread is non-zero, we
-   * are continuing the execution of this thread after a call from setcontext 
+   * are continuing the execution of this thread after a call from setcontext
    * or swapcontext.
    */
 
@@ -121,6 +122,10 @@ void mthread_suspend(mthread_state_t state)
   	continue_thread = 1;
 	mthread_schedule(); /* Let other thread run. */
   }
+  /* This volatile read forces GCC to use call+ret (not jmp) for the
+   * mthread_schedule() call above, keeping this stack frame alive so that
+   * when setcontext resumes us here, continue_thread still reads 1. */
+  (void) continue_thread;
 }
 
 

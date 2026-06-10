@@ -117,7 +117,8 @@ int mthread_cond_init(mthread_cond_t *cond, mthread_condattr_t *cattr)
 /* Initialize condition variable to a known state. cattr is ignored */
   struct __mthread_cond *c;
 
-  if (cond == NULL) 
+  mthread_init();
+  if (cond == NULL)
 	return(EINVAL);
   else if (cattr != NULL) 
   	return(ENOSYS);

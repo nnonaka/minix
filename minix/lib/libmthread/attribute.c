@@ -67,7 +67,8 @@ int mthread_attr_init(mthread_attr_t *attr)
 /* Initialize the attribute to a known state. */
   struct __mthread_attr *a;
 
-  if (attr == NULL) 
+  mthread_init();
+  if (attr == NULL)
   	return(EAGAIN);
   else if (mthread_attr_valid(attr)) 
   	return(EBUSY);

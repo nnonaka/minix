@@ -89,6 +89,7 @@ int mthread_mutex_init(mthread_mutex_t *mutex, mthread_mutexattr_t *mattr)
 
   struct __mthread_mutex *m;
 
+  mthread_init();
   if (mutex == NULL)
   	return(EAGAIN);
   else if (mattr != NULL)
