@@ -92,7 +92,7 @@ static void parse_part_table(struct blockdriver *bdp, int device,
 static void extpartition(struct blockdriver *bdp, int extdev,
 	unsigned long extbase, u8_t *tmp_buf);
 
-static void gptpartition(struct blockdriver *bdp, int device,
+static void gptpartition(struct blockdriver *bdp, int rddev, int device,
 	int atapi, u8_t *tmp_buf);
 
 static int get_part_table(struct blockdriver *bdp, int device,
@@ -202,7 +202,9 @@ static void parse_part_table(
 	pe = &table[par];
 	/* GPT Protective partition*/
 	if (pe->sysind == 0xEE) {
-		gptpartition(bdp, device, atapi, tmp_buf);
+		/* device-1 is the whole-disk minor (P_PRIMARY added 1); use it
+		 * for reads so bounds-checking passes on the unsized partition. */
+		gptpartition(bdp, device - 1, device, atapi, tmp_buf);
 		return;
 	}
 	part_limit = pe->lowsec + pe->size;
@@ -493,7 +495,8 @@ static int read_gpthder(struct blockdriver *bdp, int device, struct gpt_hdr *gpt
  *============================================================================*/
 static void gptpartition(
 	struct blockdriver *bdp,	/* device dependent entry points */
-	int device,             	/* extended partition to scan */
+	int rddev,              	/* whole-disk device for sector reads */
+	int device,             	/* first-partition device for entry writes */
 	int atapi,              	/* atapi device */
 	u8_t *tmp_buf           	/* temporary buffer */
 )
@@ -512,12 +515,12 @@ static void gptpartition(
 
 	memset(gpt_partitions, 0, sizeof(gpt_partitions));
 
-	if ((dv = (*bdp->bdr_part)(device)) == NULL) return;
-
-	if (read_gpthder(bdp, device, &gpth, tmp_buf)) {
+	if ((dv = (*bdp->bdr_part)(device)) == NULL)
 		return;
-	}
-	
+
+	if (read_gpthder(bdp, rddev, &gpth, tmp_buf))
+		return;
+
 	/* Find an array of devices. */
 	sectors = CD_SECTOR_SIZE/SECTOR_SIZE; /* sectors per buffer */
 	entries = CD_SECTOR_SIZE/gpth.hdr_entsz; /* entries per buffer */
@@ -530,10 +533,8 @@ static void gptpartition(
 		    (gpth.hdr_entries - entry) * gpth.hdr_entsz);
 		entries = size / gpth.hdr_entsz;
 		sectors = roundup(size, SECTOR_SIZE) / SECTOR_SIZE;
-		if (readsects(bdp, device, entblk, sectors, tmp_buf)) {
-			printf("Read GPT Entry failed\n");
+		if (readsects(bdp, rddev, entblk, sectors, tmp_buf))
 			return;
-		}
 		entblk += sectors;
 
 		for (i = 0; j < GPTNPART && i < entries; i++) {
