@@ -227,6 +227,11 @@ static void out_char(register console_t *cons, int i)
 	if (!wsdisplay_console_initted)
 		return;
 	dc = &wsdisplay_console_conf;
+	if (c == '\n' && (cons->c_tty->tty_termios.c_oflag & (OPOST|ONLCR))
+	                == (OPOST|ONLCR)) {
+		u_char cr = '\r';
+		(*dc->wsemul->output)(dc->wsemulcookie, &cr, 1, 1);
+	}
 	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
 
 }
