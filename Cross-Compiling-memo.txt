@@ -6,8 +6,6 @@ Cross-compiling memo
 
   Cross-building for x86
 
-    $ bash ./releasetools/x86_hdimage.sh 
-
   Using build.sh directly
 
     $ sh build.sh -U -u -mi386 -O ../build tools
