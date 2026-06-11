@@ -1,5 +1,5 @@
 
-INCSDIR= /usr/include/i386
+INCSDIR= /usr/include/amd64
 
 INCS=	archconst.h archtypes.h bios.h cmos.h \
 	diskparm.h elf.h fpu.h interrupt.h \
