@@ -88,7 +88,7 @@ u32_t tsc_64_to_micros(u64_t tsc)
 	tmp = tsc / calib_mhz;
 	if (ex64hi(tmp)) {
 		printf("tsc_64_to_micros: more than 2^32ms\n");
-		return ~0UL;
+		return ~0U;
 	} else {
 		return ex64lo(tmp);
 	}

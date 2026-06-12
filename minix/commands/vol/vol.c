@@ -265,12 +265,14 @@ void tape_inquire(char *name, int fd)
 		exit(1);
 	}
   } else {
+#if SSIZE_MAX <= INT32_MAX
 	if (mtget.mt_blksiz > SSIZE_MAX) {
 		fprintf(stderr,
 		"vol: %s: tape block size (%lu) is too large to handle\n",
 			name, (unsigned long) mtget.mt_blksiz);
 		exit(1);
 	}
+#endif
 	if (mtget.mt_blksiz == 0) {
 		variable = 1;
 	} else {

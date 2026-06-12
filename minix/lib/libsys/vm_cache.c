@@ -22,11 +22,11 @@ static int vm_cachecall(message *m, int call, void *addr, dev_t dev,
 
     if(ino_offset % PAGE_SIZE)
     	panic("inode offset %lld should be a multiple of pagesize %d\n",
-		ino_offset, PAGE_SIZE);
+		(long long)ino_offset, PAGE_SIZE);
 
     if(dev_offset % PAGE_SIZE)
     	panic("dev offset offset %lld should be a multiple of pagesize %d\n",
-		dev_offset, PAGE_SIZE);
+		(long long)dev_offset, PAGE_SIZE);
 
     memset(m, 0, sizeof(*m));
 

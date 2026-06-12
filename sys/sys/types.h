@@ -116,7 +116,10 @@ typedef int64_t		i64_t;
 
 #ifdef _NETBSD_SOURCE
 /* some Minix specific types that do not conflict with posix */
+#ifndef __defined_zone_t
+#define __defined_zone_t
 typedef uint32_t zone_t;      /* zone number */
+#endif
 typedef uint32_t block_t;     /* block number */
 typedef uint64_t block64_t;   /* block number, 64-bit */
 typedef uint32_t bit_t;       /* bit number in a bit map */

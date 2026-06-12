@@ -1,10 +1,6 @@
 #include <machine/asm.h>
 #include <ucontextoffsets.h>
 
-IMPORT(getuctx)
-IMPORT(setuctx)
-IMPORT(resumecontext)
-
 	.globl	_C_LABEL(__errno)
 
 /*
@@ -19,9 +15,7 @@ ENTRY(_getcontext)
 	/* Check null pointer */
 	testq	%rdi, %rdi
 	jnz	3f
-	PIC_PROLOGUE
 	call	PIC_PLT(_C_LABEL(__errno))
-	PIC_EPILOGUE
 	movl	$EFAULT, (%rax)
 	xorl	%eax, %eax
 	decl	%eax			/* return -1 */
@@ -34,11 +28,9 @@ ENTRY(_getcontext)
 	jz	5f			/* both set → skip getuctx */
 
 	/* Slow path: save signal mask and FPU state via PM/kernel */
-	PIC_PROLOGUE
 	pushq	%rdi			/* preserve ucp across call */
 	call	PIC_PLT(_C_LABEL(getuctx))	/* getuctx(ucp) */
 	popq	%rdi			/* restore ucp */
-	PIC_EPILOGUE
 
 5:	/* Save callee-saved GP registers, RIP, and RSP */
 	movq	0(%rsp), %rax		/* return address */
@@ -68,9 +60,7 @@ ENTRY(setcontext)
 	jnz	3f
 	movl	$EFAULT, %edx
 0:	pushq	%rdx			/* preserve errno value */
-	PIC_PROLOGUE
 	call	PIC_PLT(_C_LABEL(__errno))
-	PIC_EPILOGUE
 	popq	%rdx
 	movl	%edx, (%rax)
 	xorl	%eax, %eax
@@ -90,11 +80,9 @@ ENTRY(setcontext)
 	jz	5f			/* both set → skip setuctx */
 
 	/* Slow path: restore signal mask and FPU state via PM/kernel */
-	PIC_PROLOGUE
 	pushq	%rdi			/* preserve ucp across call */
 	call	PIC_PLT(_C_LABEL(setuctx))	/* setuctx(ucp) */
 	popq	%rdi			/* restore ucp */
-	PIC_EPILOGUE
 
 5:	/* Restore GP registers, RSP, then jump to saved RIP.
 	 * Load PC into %r11 (caller-saved scratch) before clobbering %rdi. */
@@ -131,7 +119,5 @@ ENTRY(setcontext)
 ENTRY(ctx_start)
 	call	*%r12			/* func(args): args already in RDI/RSI/... */
 	movq	%r13, %rdi		/* pass ucp to resumecontext */
-	PIC_PROLOGUE
 	call	PIC_PLT(_C_LABEL(resumecontext))
-	PIC_EPILOGUE
 	/* never reached */

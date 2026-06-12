@@ -89,6 +89,13 @@ bool cpu_uarea_free(void *);
 
 #endif	/* _KERNEL */
 
+#if defined(__minix)
+#include <x86/psl.h>
+/* User-modifiable EFLAGS bits (same encoding on i386 and amd64). */
+#define X86_FLAGS_USER (PSL_C | PSL_PF | PSL_AF | PSL_Z | \
+	PSL_N | PSL_D | PSL_V)
+#endif /* defined(__minix) */
+
 #else	/*	__x86_64__	*/
 
 #include <i386/cpu.h>

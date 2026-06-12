@@ -42,6 +42,7 @@ void get_cpu_ticks(unsigned int cpu, uint64_t ticks[MINIX_CPUSTATES]);
 int restore_fpu(struct proc *);
 void save_fpu(struct proc *);
 void save_local_fpu(struct proc *, int retain);
+struct sigframe_sigcontext; /* defined in machine/frame.h per arch */
 void fpu_sigcontext(struct proc *, struct sigframe_sigcontext *fr, struct
 	sigcontext *sc);
 

@@ -5,96 +5,168 @@
 #include "kernel/procoffsets.h"
 
 /*
- * offset to current process pointer right after trap, we assume we always have
- * error code on the stack
+ * pushaq / popaq: push/pop all 15 GP registers (all except %rsp).
+ * After pushaq the stack has 15 x 8 = 120 bytes of saved registers above the
+ * original stack pointer.
  */
-#define CURR_PROC_PTR		20
+#define pushaq	\
+	push	%rax	;\
+	push	%rcx	;\
+	push	%rdx	;\
+	push	%rbx	;\
+	push	%rbp	;\
+	push	%rsi	;\
+	push	%rdi	;\
+	push	%r8	;\
+	push	%r9	;\
+	push	%r10	;\
+	push	%r11	;\
+	push	%r12	;\
+	push	%r13	;\
+	push	%r14	;\
+	push	%r15
+
+#define popaq	\
+	pop	%r15	;\
+	pop	%r14	;\
+	pop	%r13	;\
+	pop	%r12	;\
+	pop	%r11	;\
+	pop	%r10	;\
+	pop	%r9	;\
+	pop	%r8	;\
+	pop	%rdi	;\
+	pop	%rsi	;\
+	pop	%rbp	;\
+	pop	%rbx	;\
+	pop	%rdx	;\
+	pop	%rcx	;\
+	pop	%rax
 
 /*
- * tests whether the interrupt was triggered in kernel. If so, jump to the
- * label. Displacement tell the macro ha far is the CS value saved by the trap
- * from the current %esp. The kernel code segment selector has the lower 3 bits
- * zeroed
+ * Offset of RFLAGS from %rsp after pushaq in an in-kernel interrupt handler.
+ * pushaq saves 15 regs x 8 = 120 bytes; RFLAGS is 2 x 8 = 16 bytes into the
+ * CPU-pushed interrupt frame, so it sits at 120 + 16 = 136 bytes from %rsp.
+ */
+#define KERNEL_IRQ_RFLAGS_OFF	136
+
+/*
+ * Offset from RSP to the proc_ptr slot at the top of the kernel stack,
+ * measured after a privilege-changing INT/exception.  The CPU pushes five
+ * 8-byte words (SS, RSP, RFLAGS, CS, RIP) before transferring control, so
+ * proc_ptr lives 40 bytes above the new RSP.
+ */
+#define CURR_PROC_PTR		40
+
+/*
+ * Test whether the interrupt came from kernel context.  If so, jump to label.
+ * displ is the byte offset from RSP to the saved CS at the point of the check.
+ * The kernel CS selector has the lower 3 bits (RPL/TI) cleared.
  */
 #define TEST_INT_IN_KERNEL(displ, label)	\
-	cmpl	$KERN_CS_SELECTOR, displ(%esp)	;\
+	cmpq	$KERN_CS_SELECTOR, displ(%rsp)	;\
 	je	label				;
 
 /*
- * saves the basic interrupt context (no error code) to the process structure
- *
- * displ is the displacement of %esp from the original stack after trap
- * pptr is the process structure pointer
- * tmp is an available temporary register
+ * Save the CPU-pushed interrupt frame (RIP/CS/RFLAGS/RSP/SS) from the kernel
+ * stack into the proc structure pointed to by pptr.  tmp is a scratch register.
+ * displ is the extra bytes pushed before SAVE_PROCESS_CTX was invoked (e.g.
+ * exception vector + error code = 16 bytes → displ=16).
  */
 #define SAVE_TRAP_CTX(displ, pptr, tmp)			\
-	movl	(0 + displ)(%esp), tmp			;\
-	movl	tmp, PCREG(pptr)			;\
-	movl	(4 + displ)(%esp), tmp			;\
-	movl	tmp, CSREG(pptr)			;\
-	movl	(8 + displ)(%esp), tmp			;\
-	movl	tmp, PSWREG(pptr)			;\
-	movl	(12 + displ)(%esp), tmp			;\
-	movl	tmp, SPREG(pptr)
+	movq	(0 + displ)(%rsp), tmp			;\
+	movq	tmp, PCREG(pptr)			;\
+	movq	(8 + displ)(%rsp), tmp			;\
+	movq	tmp, CSREG(pptr)			;\
+	movq	(16 + displ)(%rsp), tmp			;\
+	movq	tmp, PSWREG(pptr)			;\
+	movq	(24 + displ)(%rsp), tmp			;\
+	movq	tmp, SPREG(pptr)
 
 /*
- * restore kernel segments. %cs is already set and %fs, %gs are not used */
-#define RESTORE_KERNEL_SEGS	\
-	mov	$KERN_DS_SELECTOR, %si	;\
-	mov	%si, %ds	;\
-	mov	%si, %es	;\
-	movw	$0, %si		;\
-	mov	%si, %gs	;\
-	mov	%si, %fs	;
-
-#define SAVE_GP_REGS(pptr)	\
-	mov	%eax, AXREG(pptr)		;\
-	mov	%ecx, CXREG(pptr)		;\
-	mov	%edx, DXREG(pptr)		;\
-	mov	%ebx, BXREG(pptr)		;\
-	mov	%esi, SIREG(pptr)		;\
-	mov	%edi, DIREG(pptr)		;
-
-#define RESTORE_GP_REGS(pptr)	\
-	movl	AXREG(pptr), %eax		;\
-	movl	CXREG(pptr), %ecx		;\
-	movl	DXREG(pptr), %edx		;\
-	movl	BXREG(pptr), %ebx		;\
-	movl	SIREG(pptr), %esi		;\
-	movl	DIREG(pptr), %edi		;
+ * Restore kernel data segment selectors.  CS is already correct; FS/GS are
+ * not used by the kernel in flat 64-bit mode.
+ */
+#define RESTORE_KERNEL_SEGS				\
+	mov	$KERN_DS_SELECTOR, %si			;\
+	mov	%si, %ds				;\
+	mov	%si, %es				;\
+	movw	$0, %si				;\
+	mov	%si, %gs				;\
+	mov	%si, %fs				;
 
 /*
- * save the context of the interrupted process to the structure in the process
- * table. It pushses the %ebp to stack to get a scratch register. After %esi is
- * saved, we can use it to get the saved %ebp from stack and save it to the
- * final location
+ * Save/restore all GP registers except rbp (handled separately as the
+ * proc_ptr scratch register in SAVE_PROCESS_CTX) and rsp (in the CPU frame).
+ * Saving r12-r15 on every entry simplifies restore_user_context: both
+ * same-process returns and context switches use the same restore path.
+ */
+#define SAVE_GP_REGS(pptr)				\
+	mov	%rax, AXREG(pptr)			;\
+	mov	%rcx, CXREG(pptr)			;\
+	mov	%rdx, DXREG(pptr)			;\
+	mov	%rbx, BXREG(pptr)			;\
+	mov	%rsi, SIREG(pptr)			;\
+	mov	%rdi, DIREG(pptr)			;\
+	mov	%r8,  R8REG(pptr)			;\
+	mov	%r9,  R9REG(pptr)			;\
+	mov	%r10, R10REG(pptr)			;\
+	mov	%r11, R11REG(pptr)			;\
+	mov	%r12, R12REG(pptr)			;\
+	mov	%r13, R13REG(pptr)			;\
+	mov	%r14, R14REG(pptr)			;\
+	mov	%r15, R15REG(pptr)			;
+
+#define RESTORE_GP_REGS(pptr)				\
+	mov	AXREG(pptr),  %rax			;\
+	mov	CXREG(pptr),  %rcx			;\
+	mov	DXREG(pptr),  %rdx			;\
+	mov	BXREG(pptr),  %rbx			;\
+	mov	SIREG(pptr),  %rsi			;\
+	mov	DIREG(pptr),  %rdi			;\
+	mov	R8REG(pptr),  %r8			;\
+	mov	R9REG(pptr),  %r9			;\
+	mov	R10REG(pptr), %r10			;\
+	mov	R11REG(pptr), %r11			;\
+	mov	R12REG(pptr), %r12			;\
+	mov	R13REG(pptr), %r13			;\
+	mov	R14REG(pptr), %r14			;\
+	mov	R15REG(pptr), %r15			;
+
+/*
+ * Save the complete user context on a kernel entry caused by an interrupt or
+ * IPC trap.  On entry, %rbp is pushed first to obtain a scratch register,
+ * then the proc_ptr is loaded from the kernel stack top.
  *
- * displ is the stack displacement. In case of an exception, there are two extra
- * value on the stack - error code and the exception number
+ * displ = extra bytes already pushed before this macro (e.g. 16 for exception
+ * entry with vector + error code; 0 for plain IPC/IRQ entry).
+ *
+ * After SAVE_PROCESS_CTX the proc_ptr is in %rbp and all GP registers plus
+ * the interrupt frame have been copied into p_reg.
  */
-#define SAVE_PROCESS_CTX(displ, trapcode) \
-								\
-	cld /* set the direction flag to a known state */	;\
-								\
-	push	%ebp					;\
-							;\
-	movl	(CURR_PROC_PTR + 4 + displ)(%esp), %ebp	;\
-							\
-	SAVE_GP_REGS(%ebp)				;\
-        movl	$trapcode, P_KERN_TRAP_STYLE(%ebp)	;\
-	pop	%esi			/* get the orig %ebp and save it */ ;\
-	mov	%esi, BPREG(%ebp)			;\
-							\
-	RESTORE_KERNEL_SEGS				;\
-	SAVE_TRAP_CTX(displ, %ebp, %esi)		;
+#define SAVE_PROCESS_CTX(displ, trapcode)			\
+									\
+	cld /* set direction flag to a known state */			;\
+									\
+	push	%rbp						;\
+									\
+	movq	(CURR_PROC_PTR + 8 + displ)(%rsp), %rbp		;\
+									\
+	SAVE_GP_REGS(%rbp)					;\
+	movl	$trapcode, P_KERN_TRAP_STYLE(%rbp)			;\
+	pop	%rsi	/* recover the pushed %rbp and save it */	;\
+	mov	%rsi, BPREG(%rbp)				;\
+									\
+	RESTORE_KERNEL_SEGS					;\
+	SAVE_TRAP_CTX(displ, %rbp, %rsi)			;
 
 /*
- * clear the IF flag in eflags which are stored somewhere in memory, e.g. on
- * stack. iret or popf will load the new value later
+ * Clear the IF flag in a saved RFLAGS word stored in memory.  iret/popf will
+ * load the new value later.
  */
-#define CLEAR_IF(where)	\
-	mov	where, %eax						;\
-	andl	$0xfffffdff, %eax					;\
-	mov	%eax, where						;
+#define CLEAR_IF(where)					\
+	mov	where, %rax					;\
+	andq	$~(1 << 9), %rax				;\
+	mov	%rax, where					;
 
 #endif /* __SCONST_H__ */

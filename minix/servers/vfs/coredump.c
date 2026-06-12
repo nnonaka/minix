@@ -9,20 +9,20 @@
 #include <sys/elf_core.h>
 #include <machine/elf.h>
 
-static void fill_elf_header(Elf32_Ehdr *elf_header, int phnum);
-static void fill_prog_header(Elf32_Phdr *prog_header, Elf32_Word
-	p_type, Elf32_Off p_offset, Elf32_Addr p_vaddr, Elf32_Word p_flags,
-	Elf32_Word p_filesz, Elf32_Word p_memsz);
-static int get_memory_regions(Elf32_Phdr phdrs[]);
-static void fill_note_segment_and_entries_hdrs(Elf32_Phdr phdrs[],
-	Elf32_Nhdr nhdrs[]);
-static void adjust_offsets(Elf32_Phdr phdrs[], int phnum);
-static void dump_elf_header(struct filp *f, Elf32_Ehdr elf_header);
-static void dump_notes(struct filp *f, Elf32_Nhdr nhdrs[], int csig,
+static void fill_elf_header(Elf_Ehdr *elf_header, int phnum);
+static void fill_prog_header(Elf_Phdr *prog_header, Elf_Word
+	p_type, Elf_Off p_offset, Elf_Addr p_vaddr, Elf_Word p_flags,
+	Elf_Word p_filesz, Elf_Word p_memsz);
+static int get_memory_regions(Elf_Phdr phdrs[]);
+static void fill_note_segment_and_entries_hdrs(Elf_Phdr phdrs[],
+	Elf_Nhdr nhdrs[]);
+static void adjust_offsets(Elf_Phdr phdrs[], int phnum);
+static void dump_elf_header(struct filp *f, Elf_Ehdr elf_header);
+static void dump_notes(struct filp *f, Elf_Nhdr nhdrs[], int csig,
 	char *proc_name);
 static void dump_program_headers(struct filp *f, Elf_Phdr phdrs[], int
 	phnum);
-static void dump_segments(struct filp *f, Elf32_Phdr phdrs[], int
+static void dump_segments(struct filp *f, Elf_Phdr phdrs[], int
 	phnum);
 static void write_buf(struct filp *f, char *buf, size_t size);
 

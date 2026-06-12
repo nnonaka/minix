@@ -54,12 +54,12 @@ typedef unsigned long	psize_t;
 #define	PRIxPSIZE	"lx"
 #define	PRIuPSIZE	"lu"
 
+#endif/* _KERNEL */
+
 typedef long int	register_t;
 typedef int		register32_t;
 #define	PRIxREGISTER	"lx"
 #define	PRIxREGISTER32	"x"
-
-#endif/* _KERNEL */
 
 typedef unsigned long	vaddr_t;
 typedef unsigned long	vsize_t;

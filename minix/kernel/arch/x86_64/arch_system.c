@@ -500,9 +500,9 @@ struct proc * arch_finish_switch_to_user(void)
 	struct proc * p;
 
 #ifdef CONFIG_SMP
-	stk = (char *)tss[cpuid].sp0;
+	stk = (char *)tss[cpuid].rsp0;
 #else
-	stk = (char *)tss[0].sp0;
+	stk = (char *)tss[0].rsp0;
 #endif
 	/* set pointer to the process to run on the stack */
 	p = get_cpulocal_var(proc_ptr);

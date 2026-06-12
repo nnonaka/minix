@@ -1,40 +1,41 @@
-/* _cpuid() - interface to cpuid instruction */
-
+/* _cpuid() - interface to cpuid instruction (x86_64) */
 
 /* void _cpuid(u32_t *eax, u32_t *ebx, u32_t *ecx, u32_t *edx); */
-/* 0 for OK, nonzero for unsupported */
 
 #include <machine/asm.h>
 
 ENTRY(_cpuid)
-/* save work registers */
-	push	%ebp
-	push	%ebx
+	/* Save callee-saved registers used to hold the four pointer args.
+	 * cpuid clobbers rax/rbx/rcx/rdx; r12-r15 survive it. */
+	pushq	%rbx
+	pushq	%r12
+	pushq	%r13
+	pushq	%r14
+	pushq	%r15
 
-/* set eax parameter to cpuid and execute cpuid */
-	movl	12(%esp), %ebp
-	mov	(%ebp), %eax
-	movl	16(%esp), %ebp
-	mov	(%ebp), %ebx
-	movl	20(%esp), %ebp
-	mov	(%ebp), %ecx
-	movl	24(%esp), %ebp
-	mov	(%ebp), %edx
+	/* Stash output pointers in callee-saved registers. */
+	movq	%rdi, %r12		/* *eax */
+	movq	%rsi, %r13		/* *ebx */
+	movq	%rdx, %r14		/* *ecx */
+	movq	%rcx, %r15		/* *edx */
 
-.byte	0x0F, 0xA2	/* CPUID */
+	/* Load cpuid inputs from the caller-supplied pointers. */
+	movl	(%rdi), %eax
+	movl	(%rsi), %ebx
+	movl	(%rdx), %ecx
+	movl	(%rcx), %edx
 
-/* store results in pointer arguments */
-	movl	12(%esp), %ebp
-	movl	%eax, (%ebp)
-	movl	16(%esp), %ebp
-	movl	%ebx, (%ebp)
-	movl	20(%esp), %ebp
-	movl	%ecx, (%ebp)
-	movl	24(%esp), %ebp
-	movl	%edx, (%ebp)
+	cpuid
 
-/* restore registers */
-	pop	%ebx
-	pop	%ebp
+	/* Store cpuid results back through the saved pointers. */
+	movl	%eax, (%r12)
+	movl	%ebx, (%r13)
+	movl	%ecx, (%r14)
+	movl	%edx, (%r15)
 
+	popq	%r15
+	popq	%r14
+	popq	%r13
+	popq	%r12
+	popq	%rbx
 	ret

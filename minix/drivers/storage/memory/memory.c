@@ -364,7 +364,7 @@ static int m_char_open(devminor_t minor, int access, endpoint_t user_endpt)
   /* Check if the minor device number is ok. */
   if (minor < 0 || minor >= NR_DEVS || m_is_block(minor)) return ENXIO;
 
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
   if (minor == MEM_DEV)
   {
 	int r = sys_enable_iop(user_endpt);

@@ -1,8 +1,8 @@
-OUTPUT_ARCH("i386")
+OUTPUT_ARCH("i386:x86-64")
 ENTRY(__k_unpaged_MINIX)
 
 _kern_phys_base = 0x00400000;	/* phys 4MB aligned for convenient remapping */
-_kern_vir_base =  0xF0400000;	/* map kernel high for max. user vir space */
+_kern_vir_base  = 0xFFFFFFFF80400000;	/* kernel at -2GB (upper canonical half) */
 _kern_offset = (_kern_vir_base - _kern_phys_base);
 
 __k_unpaged__kern_offset = _kern_offset;
@@ -34,4 +34,10 @@ SECTIONS
 		_kern_size = __k_unpaged__kern_size;
 	}
 	_end = .;
+
+	/*
+	 * Aliases needed by unpaged_head.o (after objcopy --prefix-symbols):
+	 * call/movabs to kmain in head.S becomes __k_unpaged_kmain.
+	 */
+	PROVIDE(__k_unpaged_kmain = kmain);
 }

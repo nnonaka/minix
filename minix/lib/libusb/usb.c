@@ -36,7 +36,7 @@ int usb_send_urb(struct usb_urb* urb)
 	
 	if (gid == -1) {
 		printf("usb_send_urb: grant failed: "
-		      "cpf_grant_direct(%d,%p,%d)\n", hcd_ep, urb, urb->urb_size);
+		      "cpf_grant_direct(%d,%p,%zu)\n", hcd_ep, urb, urb->urb_size);
 		return EINVAL;
 	}
 	

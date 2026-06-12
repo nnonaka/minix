@@ -126,6 +126,29 @@ struct sigframe_siginfo {
 	ucontext_t	sf_uc;		/* actual saved ucontext */
 };
 
+#if defined(__minix)
+/*
+ * MINIX signal frame for x86_64.  Layout on the user stack when a signal
+ * handler is entered:
+ *
+ *   [frp+0]  sf_ra_sigreturn  — return address to __sigreturn trampoline
+ *   [frp+8]  sf_scp           — scp pointer; accessible as (%rsp) after
+ *                               handler ret, consumed by the trampoline
+ *   [frp+16] sf_code + pad    — FPE sub-code set by fpu_sigcontext()
+ *   [frp+24] sf_sc            — saved register context
+ *
+ * The kernel passes signal args in AMD64 ABI registers before entering the
+ * handler: rdi=signo, rsi=sf_code, rdx=sf_scp.
+ */
+struct sigframe_sigcontext {
+	uint64_t		sf_ra_sigreturn;  /* [frp+0] return to __sigreturn */
+	struct sigcontext      *sf_scp;           /* [frp+8] scp ptr for trampoline */
+	int			sf_code;          /* FPE sub-code */
+	int			_sf_pad;
+	struct sigcontext	sf_sc;            /* saved register context */
+};
+#endif /* __minix */
+
 #ifdef _KERNEL
 struct lwp;
 void buildcontext(struct lwp *, void *, void *);

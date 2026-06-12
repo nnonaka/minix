@@ -3,7 +3,7 @@
 #ifndef _PORTS_H
 #define _PORTS_H
 
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 
 /* Miscellaneous ports. */
 #define PCR		0x65	/* Planar Control Register */
@@ -12,6 +12,6 @@
 #define TIMER2          0x42	/* I/O port for timer channel 2 */
 #define TIMER_MODE      0x43	/* I/O port for timer mode control */
 
-#endif /* defined(__i386__) */
+#endif /* defined(__i386__) || defined(__x86_64__) */
 
 #endif /* _PORTS_H */

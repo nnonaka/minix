@@ -16,12 +16,12 @@ extern phys_bytes video_mem_vaddr;
 
 extern char *video_mem;
 
-static void setcr3(struct proc *p, u32_t cr3, u32_t *v)
+static void setcr3(struct proc *p, phys_bytes cr3, u64_t *v)
 {
-	/* Set process CR3. */
+	/* Set process CR3 (physical address of PML4) and its virtual alias. */
 	p->p_seg.p_cr3 = cr3;
 	assert(p->p_seg.p_cr3);
-	p->p_seg.p_cr3_v = v; 
+	p->p_seg.p_cr3_v = v;
 	if(p == get_cpulocal_var(ptproc)) {
 		write_cr3(p->p_seg.p_cr3);
 	}
@@ -42,11 +42,12 @@ int arch_do_vmctl(
 {
   switch(m_ptr->SVMCTL_PARAM) {
 	case VMCTL_GET_PDBR:
-		/* Get process page directory base reg (CR3). */
-		m_ptr->SVMCTL_VALUE = p->p_seg.p_cr3;
+		/* Get process page directory base reg (CR3 = PML4 physical). */
+		m_ptr->SVMCTL_PTROOT = p->p_seg.p_cr3;
 		return OK;
 	case VMCTL_SETADDRSPACE:
-		setcr3(p, m_ptr->SVMCTL_PTROOT, (u32_t *) m_ptr->SVMCTL_PTROOT_V);
+		setcr3(p, (phys_bytes)m_ptr->SVMCTL_PTROOT,
+		       (u64_t *) m_ptr->SVMCTL_PTROOT_V);
 		return OK;
 	case VMCTL_FLUSHTLB:
 	{

@@ -277,7 +277,7 @@ void netdriver_recv(void)
 			break;
 
 		if (r < 0)
-			panic("netdriver: driver reported receive failure: %d",
+			panic("netdriver: driver reported receive failure: %zd",
 			    r);
 
 		assert(r >= NDEV_ETH_PACKET_MIN && (size_t)r <= data->size);

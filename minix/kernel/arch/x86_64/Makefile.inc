@@ -1,6 +1,9 @@
 # Makefile for arch-dependent kernel code
 .include <bsd.own.mk>
 
+# x86_64 kernel must use kernel code model and no red zone
+CFLAGS += -mcmodel=kernel -mno-red-zone
+
 HERE=${.CURDIR}/arch/${MACHINE_ARCH}
 .PATH:	${HERE}
 
@@ -15,6 +18,34 @@ SYS_OBJS_UNPAGED=assert.o stacktrace.o
 assert.o:	${NETBSDSRCDIR}/minix/lib/libsys/assert.c
 stacktrace.o:	${NETBSDSRCDIR}/minix/lib/libsys/stacktrace.c
 
+# x86_64: the kernel lives at 0xFFFFFFFF80400000.  All objects linked into it
+# must use -mcmodel=kernel (R_X86_64_32S, sign-extended).  Pre-built library
+# archives (-lsys, -lexec, -lminc) use -mcmodel=small (R_X86_64_32,
+# zero-extended), which overflows at link time.
+#
+# Fix: compile fresh copies of every needed library object in the kernel
+# build context (which inherits CFLAGS += -mcmodel=kernel), then add them
+# to OBJS.kernel so the linker resolves those symbols BEFORE reaching the
+# archives.  The unpaged objects (MINLIB_OBJS_UNPAGED etc.) are already
+# compiled here for the unpaged section; we just also link them paged.
+
+# libexec — only two source files, both needed
+exec_elf.o:     ${NETBSDSRCDIR}/minix/lib/libexec/exec_elf.c
+exec_general.o: ${NETBSDSRCDIR}/minix/lib/libexec/exec_general.c
+CLEANFILES+=    exec_elf.o exec_general.o
+
+# libminc extras not already covered by MINC_OBJS_UNPAGED:
+#   init.o       — provides _minix_kerninfo / _minix_ipcvecs globals
+#   _errno.o     — provides errno + __errno()
+init.o:         ${NETBSDSRCDIR}/minix/lib/libc/sys/init.c
+_errno.o:       ${NETBSDSRCDIR}/lib/libc/gen/_errno.c
+CPPFLAGS._errno.c+= -I${NETBSDSRCDIR}/lib/libc/include -U_REENTRANT
+CLEANFILES+=    init.o _errno.o
+
+OBJS.kernel+=   ${MINLIB_OBJS_UNPAGED} ${MINC_OBJS_UNPAGED} \
+                ${SYS_OBJS_UNPAGED} \
+                exec_elf.o exec_general.o init.o _errno.o
+
 # objects we want unpaged from -lminc
 MINC_OBJS_UNPAGED= atoi.o \
 	printf.o subr_prf.o \
@@ -24,12 +55,12 @@ MINC_OBJS_UNPAGED= atoi.o \
 atoi.o:		${NETBSDSRCDIR}/minix/lib/libminc/atoi.c
 printf.o:	${NETBSDSRCDIR}/sys/lib/libsa/printf.c
 subr_prf.o:	${NETBSDSRCDIR}/sys/lib/libsa/subr_prf.c
-memcpy.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/memcpy.S
-memmove.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/memmove.S
-memset.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/memset.S
-strlen.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/strlen.S
-strcpy.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/strcpy.S
-strcmp.o:	${NETBSDSRCDIR}/common/lib/libc/arch/i386/string/strcmp.S
+memcpy.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/memcpy.S
+memmove.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/memmove.S
+memset.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/memset.S
+strlen.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/strlen.S
+strcpy.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/strcpy.S
+strcmp.o:	${NETBSDSRCDIR}/common/lib/libc/arch/${MACHINE_ARCH}/string/strcmp.S
 
 # the following is required by pre_init.c
 strncmp.o:	${NETBSDSRCDIR}/common/lib/libc/string/strncmp.c
@@ -58,7 +89,7 @@ CLEANFILES+=${unpaged_obj}.bin
 .if ${USE_BITCODE:Uno} == "yes"
 unpaged_${unpaged_obj}: ${unpaged_obj}
 	if file -b ${.OBJDIR}/${unpaged_obj} | grep -q '^LLVM'; then \
-		${LLC} -O1 -march=x86 -mcpu=i586 -filetype=obj -o ${.OBJDIR}/${unpaged_obj}.bin ${.OBJDIR}/${unpaged_obj}; \
+		${LLC} -O1 -march=x86-64 -mcpu=x86-64 -filetype=obj -o ${.OBJDIR}/${unpaged_obj}.bin ${.OBJDIR}/${unpaged_obj}; \
 	else \
 		cp ${.OBJDIR}/${unpaged_obj} ${.OBJDIR}/${unpaged_obj}.bin; \
 	fi
