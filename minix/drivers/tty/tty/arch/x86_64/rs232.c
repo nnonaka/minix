@@ -270,7 +270,7 @@ static int rs_write(register tty_t *tp, int try)
 	/* Copy from user space to the RS232 output buffer. */
 	if (tp->tty_outcaller == KERNEL) {
 		/* We're trying to print on kernel's behalf */
-		memcpy(rs->ohead, (char *) tp->tty_outgrant + tp->tty_outcum,
+		memcpy(rs->ohead, (char *)(uintptr_t) tp->tty_outgrant + tp->tty_outcum,
 			count);
 	} else {
 		if ((r = sys_safecopyfrom(tp->tty_outcaller, tp->tty_outgrant,

@@ -503,8 +503,8 @@ int close_filp(struct filp * f, int may_suspend)
 	f->filp_mode = FILP_CLOSED;
 	f->filp_count = 0;
   } else if (f->filp_count < 0) {
-	panic("VFS: invalid filp count: %d ino %llx/%llu", f->filp_count,
-	      vp->v_dev, vp->v_inode_nr);
+	panic("VFS: invalid filp count: %d ino %lx/%lu", f->filp_count,
+	      (unsigned long)vp->v_dev, (unsigned long)vp->v_inode_nr);
   } else {
 	unlock_vnode(f->filp_vno);
   }

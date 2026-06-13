@@ -172,9 +172,15 @@ Bits 11:0   → page offset
   `pt_writemap` because `flags` is `u32_t`.  Widening `flags` to `u64_t` throughout
   would enable NX support.
 - `freepde()` / `kern_start_pde` are i386 concepts used unconditionally in
-  `pt_init()` for kernel device-region virtual address assignment.  On x86_64 these
-  yield low virtual addresses (N × 2 MB).  Kernel device regions should be placed
-  in a dedicated portion of the address space once the kernel address layout is
-  finalised.
-- The linker error `strcspn undefined in libminc` is a pre-existing x86_64
-  `libminc` build issue unrelated to this port.
+  `pt_init()` for kernel device-region virtual address assignment.  Two
+  specific bugs:
+  1. `kern_start_pde = kernel_boot_info.vir_kern_start / ARCH_BIG_PAGE_SIZE`
+     (`pagetable.c:1493`) — on x86_64 `vir_kern_start` is `0xFFFFFFFF80400000`;
+     dividing by 2 MB gives `~0x7FFFFC02`, which overflows `int`.
+  2. `kernmap_pde = freepde()` (`pagetable.c:1564`) is called unconditionally
+     before the `sys_vmctl_get_mapping` loop.  The resulting virtual address
+     (`kernmap_pde × 2 MB`) is in the low user-space range, not the kernel
+     high half.
+  Fix: skip the `freepde()`-based device mapping on x86_64; device regions are
+  already accessible via the identity map (phys == virt for all low RAM), or
+  should be placed in a dedicated kernel-half range.

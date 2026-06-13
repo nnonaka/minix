@@ -134,6 +134,7 @@
 ./usr/lib/pkgconfig
 ./usr/lib/security
 ./usr/libdata
+./usr/libdata/ldscripts
 ./usr/libdata/debug
 ./usr/libdata/debug/bin
 ./usr/libdata/debug/lib

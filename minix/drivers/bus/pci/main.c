@@ -584,7 +584,7 @@ static int pci_ioctl(devminor_t minor, unsigned long request, endpoint_t endpt,
 #endif
 
 		map.vaddr_ret = vm_map_phys(user_endpt,
-			(void *)map.phys_offset, map.size);
+			(void *)(uintptr_t)map.phys_offset, map.size);
 		r = sys_safecopyto(endpt, grant, 0, (vir_bytes)&map,
 			sizeof(map));
 		break;

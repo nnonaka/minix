@@ -556,7 +556,7 @@ static int pty_slave_write(tty_t *tp, int try)
 	/* Copy from user space to the PTY output buffer. */
 	if (tp->tty_outcaller == KERNEL) {
 		/* We're trying to print on kernel's behalf */
-		memcpy(pp->ohead, (void *) tp->tty_outgrant + tp->tty_outcum,
+		memcpy(pp->ohead, (void *)(uintptr_t) tp->tty_outgrant + tp->tty_outcum,
 			count);
 	} else {
 		if ((s = sys_safecopyfrom(tp->tty_outcaller, tp->tty_outgrant,

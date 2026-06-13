@@ -35,6 +35,12 @@
 
 #include <sys/device.h>
 
+/* paddr_t is gated on _KERNEL/_KERNTYPES in machine/types.h; provide a
+ * fallback for MINIX driver userspace where neither is defined. */
+#if !defined(_KERNEL) && !defined(_KERNTYPES)
+typedef unsigned long paddr_t;
+#endif
+
 /*
  * WSDISPLAY interfaces
  */

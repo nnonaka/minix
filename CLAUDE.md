@@ -80,3 +80,10 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 
 ## Clang
 - x86_64-*-minix triple must be added manually in `external/bsd/llvm/dist/clang/lib/Basic/Targets.cpp`
+
+## Distribution sets
+- New arch port: create `distrib/sets/lists/minix-base/md.<machine>`, `minix-comp/md.<machine>`, `minix-debug/md.<machine>`; `md.i386` is the reference in each
+- Set file format: `./path  set-name  [tag]`; entries with a tag (e.g. `binutils`, `nls`, `llvmcmds`) are only included in the flist when the corresponding `MK*` var is in `MKEXTRAVARS` in `distrib/sets/mkvars.mk` AND is not "no"
+- `mkvars.mk` `MKEXTRAVARS` missing by default: `MKBINUTILS`, `MKLLVM`, `MKLLVMCMDS`, `MKNLS` — without them ldscripts/clang-headers/locale are silently omitted from the flist
+- MINIX sets (`minix-base` etc.) do not cover all NetBSD files installed to DESTDIR; use `SLOPPY_FLIST=YES` (allow extras, keep missing fatal) — already set in root Makefile checkflist call
+- `makeflist` manual test: `MACHINE=amd64 MACHINE_ARCH=x86_64 MACHINE_CPU=x86_64 ./makeflist -L base,x` from `distrib/sets/`; note MK* tag filtering only works correctly when nbmake provides the environment (not plain sh)

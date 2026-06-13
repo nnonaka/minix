@@ -9,7 +9,6 @@
 #include <minix/debug.h>
 #include <minix/bitmap.h>
 #include <minix/hash.h>
-#include <machine/multiboot.h>
 
 #include <sys/mman.h>
 
