@@ -1105,7 +1105,7 @@ static int record_bar(int devind, int bar_nr, int last)
 			bar | ((u64_t)bar_high << 32);
 		pcidev[devind].pd_bar[dev_bar_nr].pb_size= bar2;
 		pcidev[devind].pd_bar[dev_bar_nr].pb_nr= bar_nr;
-		if (bar == 0)
+		if ((bar | ((u64_t)bar_high << 32)) == 0)
 		{
 			pcidev[devind].pd_bar[dev_bar_nr].pb_flags |=
 				PBF_INCOMPLETE;
