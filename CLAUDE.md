@@ -70,9 +70,9 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `__msync13` (msync renamed by `sys/mman.h`): no-op — MINIX mmap does not cache writes
 
 ## Makefiles — MINIX guards
-- `.if defined(__MINIX)` does **not** work in Makefiles processed by `nbmake` during the tools/build phase — `__MINIX` is a C preprocessor symbol, not a make variable, so it is never defined in make variable scope
-- Use unconditional `?=` defaults instead (e.g. `USE_FILEMON?= no`), which can still be overridden from the command line
-- Reserve `#ifdef __minix` / `#ifdef __MINIX` guards for C/C++ source and header files only
+- `__MINIX` is a **make variable** (`__MINIX= yes`) set in `share/mk/sys.mk`; `.if defined(__MINIX)` works correctly in normal nbmake builds
+- Exception: Makefiles processed during the **tools/build phase** (before `sys.mk` is available) do not have `__MINIX` defined — use unconditional `?=` defaults (e.g. `USE_FILEMON?= no`) in those Makefiles
+- C preprocessor MINIX guards use lowercase: `#ifdef __minix` (not `__MINIX`)
 
 ## x86_64 kernel compilation
 - Kernel lives at `0xFFFFFFFF80400000`; all objects linked into it need `CFLAGS += -mcmodel=kernel -mno-red-zone` (in `minix/kernel/arch/x86_64/Makefile.inc`)
@@ -113,6 +113,12 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 ## EFI linker script (MINIX)
 - `elf_x86_64_minix_efi.lds` uses `ImageBase = 0`; do NOT add `FILEHDR PHDRS` to a PT_LOAD — linker tries to fit ELF headers before offset 0 and fails with "not enough room for program headers"
 - Correct PHDRS block: `{ text PT_LOAD; data PT_LOAD; dyn PT_DYNAMIC; }` — suppresses auto-PT_PHDR (no "PHDR segment not covered" warning) without conflicting with offset 0
+
+## EFI bootloader (sys/stand/efiboot)
+- Multiboot2 entry tag selection on EFI64: prefer `mpp_entry_elf64` (type-9, `MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI64`) over `mpp_entry` (type-3) under `#ifdef __LP64__` — type-3 points to `multiboot_entry32` (32-bit PM code), type-9 to `multiboot_entry64_efi` (64-bit LM code); jumping to 32-bit code in long mode faults immediately
+- `efi_gop_found()` returns NULL on headless/GOP-less systems; always null-check before dereferencing `gop->Mode`
+- EFI `FreePages(addr, n)`: `n` is a **page count**, not bytes — always use `EFI_SIZE_TO_PAGES(size)`; passing raw bytes frees ~16 MB instead of 1 page
+- Block I/O IoAlign allocation: use `blkbuf_size + IoAlign - 1` (not `roundup(blkbuf_size, IoAlign)`) — `roundup2(blkbuf, IoAlign)` advances the start pointer by up to `IoAlign-1` bytes, so the allocation must accommodate both the shift and the full transfer
 
 ## VM pagetable PTF flags
 - `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime

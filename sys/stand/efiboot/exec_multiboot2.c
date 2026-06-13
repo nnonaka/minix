@@ -488,8 +488,8 @@ mbi_cmdline(struct multiboot_package *mbp, void *buf)
 	size_t len;
 	const char fmt[] = "%s %s";
 
-	/* +1 for trailing \0 */
-	cmdlen = strlen(mbp->mbp_args) + 1;
+	/* strlen(file) + ' ' + strlen(args) + '\0' */
+	cmdlen = strlen(mbp->mbp_file) + 1 + strlen(mbp->mbp_args) + 1;
 	len = sizeof(*mbt) + cmdlen;
 
 	if (mbt) {
@@ -1257,10 +1257,19 @@ start_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
-			
+#ifdef __LP64__
+	/* Prefer the EFI64-specific entry point (tag type 9) on 64-bit builds;
+	 * it expects to be entered in long mode, unlike the type-3 entry which
+	 * is 32-bit protected-mode code. */
+	if (mpp->mpp_entry_elf64)
+		entry = mpp->mpp_entry_elf64->entry_addr;
+#endif
+
 	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
-	mode = gop->Mode->Mode;
-	efi_gop_setmode(mode);
+	if (gop != NULL) {
+		mode = gop->Mode->Mode;
+		efi_gop_setmode(mode);
+	}
 
 	/* Call ExitBootService if required */
 	if ((mpp->mpp_efi_bs == NULL) && (efi_exited == false))

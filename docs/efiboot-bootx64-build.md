@@ -259,3 +259,122 @@ OBJCOPY= objcopy
 | `sys/stand/efiboot/Makefile.efiboot` | Extend MINIX linker script selection to x86_64 |
 | `external/gpl3/binutils/dist/bfd/config.bfd` | Add `x86_64_pei_vec i386_pei_vec` to x86_64-minix targ_selvecs |
 
+## Runtime bug fixes *(code review)*
+
+Five correctness bugs found by code review and fixed in `exec_multiboot2.c`,
+`exec.c`, and `efiblock.c`.
+
+### 1. Wrong kernel entry point for EFI64 boot *(fixed)*
+
+**File:** `sys/stand/efiboot/exec_multiboot2.c` — `start_multiboot2()`
+
+`start_multiboot2()` selected the kernel entry address by checking only
+`mpp_entry` (Multiboot2 header tag type 3, the `MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS`
+non-EFI entry).  The MINIX x86_64 kernel provides its UEFI entry via tag type 9
+(`MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS_EFI64`) pointing to `multiboot_entry64_efi`,
+which expects to be entered in 64-bit long mode.  Tag type 3 points to
+`multiboot_entry32`, which is 32-bit protected-mode code.  The bootloader
+(`multiboot64.S`) jumps to the resolved address while still in long mode, so
+entering `multiboot_entry32` (32-bit code) in that state causes an immediate fault.
+
+The `mpp_entry_elf64` field was already parsed and stored at tag-scan time (line
+1398); it just was not consulted during entry selection.
+
+**Fix:** After the type-3 check, added a `#ifdef __LP64__` block that overwrites
+`entry` with `mpp_entry_elf64->entry_addr` when that tag is present:
+
+```c
+if (mpp->mpp_entry)
+    entry = mpp->mpp_entry->entry_addr;
+#ifdef __LP64__
+/* Prefer the EFI64-specific entry point (tag type 9) on 64-bit builds;
+ * it expects to be entered in long mode, unlike the type-3 entry which
+ * is 32-bit protected-mode code. */
+if (mpp->mpp_entry_elf64)
+    entry = mpp->mpp_entry_elf64->entry_addr;
+#endif
+```
+
+### 2. GOP NULL dereference on headless systems *(fixed)*
+
+**File:** `sys/stand/efiboot/exec_multiboot2.c` — `start_multiboot2()`
+
+`efi_gop_found()` returns NULL when no GOP framebuffer is present (headless
+server, serial console).  Immediately after the call, `gop->Mode->Mode` was
+dereferenced with no NULL check, crashing before the kernel was started.
+Every other GOP call site in the file correctly guards with `if (gop == NULL)`.
+
+**Fix:** Wrapped the `gop->Mode->Mode` read and `efi_gop_setmode()` call:
+
+```c
+if (gop != NULL) {
+    mode = gop->Mode->Mode;
+    efi_gop_setmode(mode);
+}
+```
+
+### 3. `mbi_cmdline` buffer too small — truncated kernel command line *(fixed)*
+
+**File:** `sys/stand/efiboot/exec_multiboot2.c` — `mbi_cmdline()`
+
+`cmdlen` was computed as `strlen(mbp->mbp_args) + 1`, counting only the args
+string.  The `snprintf` call used format `"%s %s"` to write
+`mbp_file + " " + mbp_args`, which requires
+`strlen(mbp_file) + 1 + strlen(mbp_args) + 1` bytes.  Both the heap allocation
+(`sizeof(*mbt) + cmdlen`) and the `snprintf` limit (`cmdlen`) were too small,
+silently truncating the file path.  The kernel received a garbled or empty
+cmdline, causing `root=` and other early-boot options to be lost.
+
+**Fix:**
+
+```c
+/* strlen(file) + ' ' + strlen(args) + '\0' */
+cmdlen = strlen(mbp->mbp_file) + 1 + strlen(mbp->mbp_args) + 1;
+```
+
+### 4. `FreePages` called with byte count instead of page count *(fixed)*
+
+**File:** `sys/stand/efiboot/exec.c` — `efi_efirng_alloc()`
+
+On EFI RNG failure the cleanup path called:
+
+```c
+uefi_call_wrapper(BS->FreePages, 2, addr, size);
+```
+
+`FreePages` takes a page count, not a byte count.  `size` is `EFI_PAGE_SIZE`
+(4096 bytes), so this attempted to free 4096 pages (~16 MB) starting at `addr`,
+corrupting the UEFI memory map.  The adjacent `AllocatePages` call already used
+`EFI_SIZE_TO_PAGES(size)` correctly.
+
+**Fix:**
+
+```c
+uefi_call_wrapper(BS->FreePages, 2, addr, EFI_SIZE_TO_PAGES(size));
+```
+
+### 5. `efiblock` IoAlign allocation undersized — heap overflow on aligned I/O *(fixed)*
+
+**File:** `sys/stand/efiboot/efiblock.c` — `efi_block_do_read_blockio()`
+
+When `IoAlign > 1`, `alloc_size` was computed as
+`roundup(blkbuf_size, IoAlign)` — rounding the transfer size up to the next
+alignment boundary.  However, `blkbuf_start = roundup2(blkbuf, IoAlign)` can
+advance the start pointer by up to `IoAlign - 1` bytes past `blkbuf`.
+`ReadBlocks` then writes `blkbuf_size` bytes starting at `blkbuf_start`, which
+may extend up to `IoAlign - 1` bytes past the end of the pool allocation,
+corrupting adjacent heap blocks.
+
+Example: `blkbuf_size = 512`, `IoAlign = 512`, `AllocatePool` returns an
+address ending in `0x01`.  `alloc_size = 512` (already a multiple), but
+`blkbuf_start` is `511` bytes into the allocation.  `ReadBlocks` writes 512
+bytes starting 511 bytes in — 511 bytes past the end of the 512-byte pool.
+
+**Fix:** Allocate `blkbuf_size + IoAlign - 1` bytes so that after the alignment
+shift there is always room for the full transfer:
+
+```c
+if (bdev->bio->Media->IoAlign > 1)
+    alloc_size = blkbuf_size + bdev->bio->Media->IoAlign - 1;
+```
+
