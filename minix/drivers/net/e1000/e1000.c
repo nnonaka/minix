@@ -143,7 +143,8 @@ static int e1000_probe(e1000_t * e, int skip)
 	int r, devind, ioflag;
 	u16_t vid, did, cr;
 	u32_t status;
-	u32_t base, size;
+	u64_t base;
+	u32_t size;
 	const char *dname;
 
 	E1000_DEBUG(3, ("%s: probe()\n", netdriver_name()));

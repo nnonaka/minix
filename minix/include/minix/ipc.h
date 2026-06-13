@@ -1720,11 +1720,11 @@ typedef struct {
 _ASSERT_MSG_SIZE(mess_notify);
 
 typedef struct {
-	int base;
-	size_t size;
+	uint64_t base;
+	uint32_t size;
 	uint32_t flags;
 
-	uint8_t padding[44];
+	uint8_t padding[40];
 } mess_pci_lsys_busc_get_bar;
 _ASSERT_MSG_SIZE(mess_pci_lsys_busc_get_bar);
 

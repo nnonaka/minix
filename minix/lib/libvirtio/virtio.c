@@ -186,7 +186,8 @@ err:
 
 static int init_device(int devind, struct virtio_device *dev)
 {
-	u32_t base, size;
+	u64_t base;
+	u32_t size;
 	int iof, r;
 
 	pci_reserve(devind);
@@ -202,7 +203,7 @@ static int init_device(int devind, struct virtio_device *dev)
 	}
 
 	if (base & 0xFFFF0000) {
-		printf("%s: IO port weird (%08x)", dev->name, base);
+		printf("%s: IO port weird (%08llx)", dev->name, (unsigned long long)base);
 		return EINVAL;
 	}
 

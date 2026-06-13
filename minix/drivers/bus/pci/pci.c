@@ -80,7 +80,7 @@ static struct pcidev
 	{
 		int pb_flags;
 		int pb_nr;
-		u32_t pb_base;
+		u64_t pb_base;
 		u32_t pb_size;
 	} pd_bar[BAM_NR];
 	int pd_bar_nr;
@@ -975,11 +975,12 @@ static void record_irq(int devind)
 static int record_bar(int devind, int bar_nr, int last)
 {
 	int reg, prefetch, type, dev_bar_nr, width;
-	u32_t bar, bar2;
+	u32_t bar, bar2, bar_high;
 	u16_t cmd;
 
 	/* Start by assuming that this is a 32-bit bar, taking up one DWORD. */
 	width = 1;
+	bar_high = 0;
 
 	reg= PCI_BAR+4*bar_nr;
 
@@ -1041,12 +1042,12 @@ static int record_bar(int devind, int bar_nr, int last)
 			}
 			width++;
 
-			bar2= __pci_attr_r32(devind, reg+4);
+			/* Save upper 32 bits before bar2 is reused for size. */
+			bar_high = __pci_attr_r32(devind, reg+4);
 
-			/* If the upper 32 bits of the BAR are not zero, the
-			 * memory is inaccessible to us; ignore the BAR.
-			 */
-			if (bar2 != 0)
+#if !defined(__x86_64__)
+			/* On 32-bit: BARs above 4 GB are inaccessible. */
+			if (bar_high != 0)
 			{
 				if (debug)
 				{
@@ -1056,7 +1057,7 @@ static int record_bar(int devind, int bar_nr, int last)
 
 				return width;
 			}
-
+#endif
 			break;
 
 		default:
@@ -1091,15 +1092,17 @@ static int record_bar(int devind, int bar_nr, int last)
 		bar2= (~bar2)+1;
 		if (debug)
 		{
-			printf("\tbar_%d: 0x%x bytes at 0x%x%s memory%s\n",
-				bar_nr, bar2, bar,
+			printf("\tbar_%d: 0x%x bytes at 0x%llx%s memory%s\n",
+				bar_nr, bar2,
+				(unsigned long long)(bar | ((u64_t)bar_high << 32)),
 				prefetch ? " prefetchable" : "",
 				type == PCI_TYPE_64 ? ", 64-bit" : "");
 		}
 
 		dev_bar_nr= pcidev[devind].pd_bar_nr++;
 		pcidev[devind].pd_bar[dev_bar_nr].pb_flags= 0;
-		pcidev[devind].pd_bar[dev_bar_nr].pb_base= bar;
+		pcidev[devind].pd_bar[dev_bar_nr].pb_base=
+			bar | ((u64_t)bar_high << 32);
 		pcidev[devind].pd_bar[dev_bar_nr].pb_size= bar2;
 		pcidev[devind].pd_bar[dev_bar_nr].pb_nr= bar_nr;
 		if (bar == 0)
@@ -1307,7 +1310,9 @@ static void complete_bars(void)
 				continue;
 			if (pcidev[i].pd_bar[j].pb_flags & PBF_INCOMPLETE)
 				continue;
-			base= pcidev[i].pd_bar[j].pb_base;
+			if (pcidev[i].pd_bar[j].pb_base > 0xFFFFFFFFULL)
+				continue;	/* 64-bit BAR above 4 GB */
+			base= (u32_t)pcidev[i].pd_bar[j].pb_base;
 			size= pcidev[i].pd_bar[j].pb_size;
 
 			if (base >= memgap_high)
@@ -1352,7 +1357,7 @@ static void complete_bars(void)
 				continue;
 			if (pcidev[i].pd_bar[j].pb_flags & PBF_INCOMPLETE)
 				continue;
-			base= pcidev[i].pd_bar[j].pb_base;
+			base= (u32_t)pcidev[i].pd_bar[j].pb_base;
 			size= pcidev[i].pd_bar[j].pb_size;
 			if (base >= iogap_high)
 				continue;
@@ -2378,7 +2383,7 @@ _pci_dev_name(u16_t vid, u16_t did)
 /*===========================================================================*
  *				_pci_get_bar				     *
  *===========================================================================*/
-int _pci_get_bar(int devind, int port, u32_t *base, u32_t *size,
+int _pci_get_bar(int devind, int port, u64_t *base, u32_t *size,
 	int *ioflag)
 {
 	int i, reg;

@@ -2064,7 +2064,8 @@ static void ahci_init(int devind)
 {
 	/* Initialize the device.
 	 */
-	u32_t base, size, cap, ghc, mask;
+	u64_t base;
+	u32_t size, cap, ghc, mask;
 	int r, port, ioflag;
 
 	if ((r = pci_get_bar(devind, PCI_BAR_6, &base, &size, &ioflag)) != OK)

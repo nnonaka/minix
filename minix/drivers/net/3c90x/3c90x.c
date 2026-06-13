@@ -646,7 +646,7 @@ static void xlbc_link_event(void)
  */
 static void xlbc_init_hw(int devind, netdriver_addr_t * addr)
 {
-	uint32_t bar;
+	u64_t bar;
 	uint16_t cr;
 	int r, io, irq;
 

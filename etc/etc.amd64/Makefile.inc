@@ -20,8 +20,8 @@ INSTALLATION_DIRS+= 	installation/cdrom
 # INSTALLATION_DIRS+= 	installation/ramdisk
 
 snap_md_post:
-	cd ${KERNSRCDIR}/arch/i386/stand/pxeboot && ${MAKE} release
-	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom '*.iso'
+#	cd ${KERNSRCDIR}/arch/i386/stand/pxeboot && ${MAKE} release
+#	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom '*.iso'
 #	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/miniroot '*.*'
 #	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/misc '*.*'
 #	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/ramdisk '*.*'

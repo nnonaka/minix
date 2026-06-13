@@ -89,7 +89,9 @@ instead of `SVMCTL_VALUE`.  `sys_vmctl_get_pdbr` was widened from `u32_t *` to
 | `minix/kernel/arch/earm/arch_do_vmctl.c` | Same |
 | `minix/lib/libsys/sys_vmctl.c` | Reads `SVMCTL_PTROOT` as `phys_bytes` |
 | `minix/kernel/arch/x86_64/memory.c` | Identity-map `createpde`, 4-level `vm_lookup`, `vm_lookup_range` |
-| `minix/servers/vm/pagetable.c` | All paging functions with `#ifdef __x86_64__` branches; `vm_allocpagedir()` defined |
+| `minix/servers/vm/pagetable.c` | All paging functions with `#ifdef __x86_64__` branches; `vm_allocpagedir()` defined; `pt_writemap` / `pt_ptalloc_in_range` flags widened to `u64_t` |
+| `minix/servers/vm/proto.h` | `pt_writemap` / `pt_ptalloc_in_range` declarations widened to `u64_t flags` |
+| `minix/servers/vm/arch/x86_64/pagetable.h` | Added `PTF_NOEXEC = AMD64_VM_NX`; updated `PTF_ALLFLAGS` to include it |
 
 ## Function-level changes in `pagetable.c`
 
@@ -141,6 +143,21 @@ kernel device regions via `pt_writemap`.
 
 **`pt_sanitycheck()` / `pt_assert()`** — x86_64 checks `pt_pml4` / `pt_pml4_phys`.
 
+## NX (no-execute) bit support
+
+`pt_writemap` and `pt_ptalloc_in_range` now accept `u64_t flags`, enabling
+bit 63 (`AMD64_VM_NX`) to be passed through to page-table entries.
+
+Changes:
+
+- `minix/servers/vm/arch/x86_64/pagetable.h`: `PTF_NOEXEC = AMD64_VM_NX`;
+  `PTF_ALLFLAGS` extended to include it (the `assert(!(flags & ~PTF_ALLFLAGS))`
+  in `pt_writemap` would otherwise reject NX flags).
+- `minix/servers/vm/pagetable.c`: both function signatures widened; i386/arm
+  paths use `(u32_t)flags` cast to avoid truncation warnings (all i386 PTF_*
+  flags fit in 32 bits).
+- `minix/servers/vm/proto.h`: declarations updated to match.
+
 ## Address space layout
 
 ```
@@ -168,19 +185,25 @@ Bits 11:0   → page offset
 - User space is capped at 512 GB (single PDPT).  Extending to 256 TB requires
   making `pt_pdpt` an array indexed by PML4 index and adjusting `pt_ptalloc`,
   `pt_writemap`, etc.
-- NX (no-execute) bit (`AMD64_VM_NX = 1ULL << 63`) is not propagated through
-  `pt_writemap` because `flags` is `u32_t`.  Widening `flags` to `u64_t` throughout
-  would enable NX support.
-- `freepde()` / `kern_start_pde` are i386 concepts used unconditionally in
-  `pt_init()` for kernel device-region virtual address assignment.  Two
-  specific bugs:
-  1. `kern_start_pde = kernel_boot_info.vir_kern_start / ARCH_BIG_PAGE_SIZE`
-     (`pagetable.c:1493`) — on x86_64 `vir_kern_start` is `0xFFFFFFFF80400000`;
-     dividing by 2 MB gives `~0x7FFFFC02`, which overflows `int`.
-  2. `kernmap_pde = freepde()` (`pagetable.c:1564`) is called unconditionally
-     before the `sys_vmctl_get_mapping` loop.  The resulting virtual address
-     (`kernmap_pde × 2 MB`) is in the low user-space range, not the kernel
-     high half.
-  Fix: skip the `freepde()`-based device mapping on x86_64; device regions are
-  already accessible via the identity map (phys == virt for all low RAM), or
-  should be placed in a dedicated kernel-half range.
+- `freepde()` / `kern_start_pde` in `pt_init()` had two x86_64-specific bugs,
+  both fixed in `pagetable.c`:
+
+  1. **`kern_start_pde` overflow** (`pagetable.c:1493`): `vir_kern_start /
+     ARCH_BIG_PAGE_SIZE` on x86_64 produces `~0x7FFFFC02`, which overflows
+     `int` (UB; accidentally gave -1022, causing the dependent loops to
+     execute 0 iterations — harmless but wrong).  Fixed by wrapping the
+     assignment in `#if !defined(__x86_64__)`.
+
+  2. **`kernmap_pde` wrong VA** (`pagetable.c:1564`): `freepde()` returns a
+     PD index within the kernel PD (rooted at `PML4[511]/PDPT[510]`).  The
+     old code computed `offset = kernmap_pde × 2 MB`, placing the device
+     region in the low user-space range.  Fixed with an `#ifdef __x86_64__`
+     block that computes:
+     ```c
+     vir_bytes kern_pd_base = vir_kern_start &
+         ~((vir_bytes)(ARCH_VM_DIR_ENTRIES * ARCH_BIG_PAGE_SIZE) - 1);
+     offset = kern_pd_base + (vir_bytes)kernmap_pde * ARCH_BIG_PAGE_SIZE;
+     ```
+     This aligns `vir_kern_start` down to the 1 GB PDPT boundary
+     (`0xFFFFFFFF80000000`) and adds the PD-index offset, giving a correct
+     kernel high-half VA that `ARCH_VM_PDE(offset)` can extract.

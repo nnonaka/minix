@@ -39,7 +39,7 @@ static phys_bytes kern_kernlen    = (phys_bytes) &_kern_size;
  * regular kernel object (high-virtual addresses).  The unpaged version
  * is used by pre_init(); the regular version is rebuilt by prot_init().
  */
-#define PG_IDENT_PD_MAX 8   /* covers 8 GB of identity-mapped physical RAM */
+#define PG_IDENT_PD_MAX 64  /* covers 64 GB of identity-mapped physical RAM */
 
 static u64_t pg_pml4[512]                    __aligned(4096);
 static u64_t pg_pdpt_low[512]                __aligned(4096);

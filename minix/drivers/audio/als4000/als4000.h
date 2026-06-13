@@ -102,7 +102,7 @@ typedef struct DEV_STRUCT {
 	u16_t vid;
 	u16_t did;
 	u32_t devind;
-	u32_t base[6];
+	vir_bytes base[6];
 	char irq;
 	char revision;
 	u32_t intr_status;

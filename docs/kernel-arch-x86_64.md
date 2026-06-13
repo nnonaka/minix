@@ -81,7 +81,7 @@ base, then jumps the VMA by `_kern_offset` for all normal sections:
 | `pg_pml4[512]` | root |
 | `pg_pdpt_low[512]` | PML4[0] — low canonical half |
 | `pg_pdpt_high[512]` | PML4[511] — high canonical half |
-| `pg_pd_ident[8][512]` | identity 2 MB pages, up to 8 GB |
+| `pg_pd_ident[64][512]` | identity 2 MB pages, up to 64 GB |
 | `pg_pd_kern[512]` | kernel 2 MB pages at −2 GB |
 | `pagetables[32][512]` | 4 KB page tables for `pg_map()` |
 
@@ -194,16 +194,39 @@ Tags (all 8-byte aligned):
 The information-request tag `size` field is 28 (8-byte header + 5 × 4-byte
 request fields), **not** including inter-tag alignment padding.
 
+## SMP AP trampoline (`trampoline.S`)
+
+APs start in 16-bit real mode and must reach the 64-bit `startup_ap_32` entry
+point in `mpx.S` (the name is misleading — it is 64-bit code).  The transition
+sequence:
+
+1. In 16-bit real mode: compute the physical address of `__ap_startup_64`
+   (the 64-bit stub within the trampoline page) as `CS × 16 + offset` and
+   store it in the `__ap_jmpvec` far-pointer slot.
+2. Load the BSP-prepared GDT (copied into `__ap_gdt_tab` by `copy_trampoline`)
+   and IDT via `lgdtl` / `lidtl`.
+3. Set `CR0.PE` — enter 32-bit protected mode.
+4. Set `CR4.PAE` — required for long mode.
+5. Load the BSP's PML4 physical address from `__ap_pt` into `CR3`.
+6. Set `EFER.LME` via `wrmsr` on MSR `0xC0000080`.
+7. Set `CR0.PG` — paging on; CPU enters IA-32e compatibility mode.
+8. `ljmpl *__ap_jmpvec` — reads the 6-byte far pointer
+   `{ phys_addr_of___ap_startup_64, KERN_CS_SELECTOR }`.  Loading the 64-bit
+   CS descriptor transitions the CPU to 64-bit long mode; RIP = physical
+   address of `__ap_startup_64` (identity-mapped, so VA = PA).
+9. **`__ap_startup_64`** (64-bit stub in the trampoline page): `movabs
+   $startup_ap_32, %rax; jmpq *%rax` — loads the full 64-bit kernel VA and
+   jumps there.
+
+The `ljmpl` must encode a 32-bit offset that fits in the low-memory trampoline
+page; it cannot encode the high-kernel VA of `startup_ap_32` directly.  The
+two-step approach (stub in trampoline → `movabs` to high VA) is the standard
+x86_64 SMP solution.
+
 ## Limitations / future work
 
-- **SMP trampoline**: `trampoline.S` is a verbatim i386 trampoline.  It
-  transitions real mode → 32-bit protected mode and jumps to `startup_ap_32`
-  (`mpx.S`).  There is no PAE enable, no 64-bit page table load, no
-  `EFER.LME`, no far jump into long mode.  AP cores will not boot until this
-  is rewritten to mirror the BSP's `multiboot_entry32` → long-mode path in
-  `head.S`.
-- **> 8 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (8) GB; increase
-  `PG_IDENT_PD_MAX` to support more RAM.
-- **NX bit**: page table entries do not set the NX/XD bit on data pages.
+- **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each
+  entry is a 512-entry PD covering 1 GB via 2 MB pages.  Increase
+  `PG_IDENT_PD_MAX` (and add more `pg_pdpt_low` entries) to support more RAM.
 
 *(APIC was ported in a prior session; see `docs/apic-x86_64.md`.)*
