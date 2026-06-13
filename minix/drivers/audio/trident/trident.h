@@ -97,7 +97,7 @@ typedef struct DEV_STRUCT {
 	u32_t intr_status;
 } DEV_STRUCT;
 
-void dev_mixer_write(u32_t *base, u32_t reg, u32_t val);
-u32_t dev_mixer_read(u32_t *base, u32_t reg);
+void dev_mixer_write(vir_bytes *base, u32_t reg, u32_t val);
+u32_t dev_mixer_read(vir_bytes *base, u32_t reg);
 
 #endif

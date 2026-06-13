@@ -654,7 +654,7 @@ void lsi(char **clist)
 	ino = bit;
 	do {
 		devread(inoblock(ino), inooff(ino), (char *) ip, INODE_SIZE);
-		printf("inode %lu:\n", ino);
+		printf("inode %llu:\n", (unsigned long long)ino);
 		printf("    mode   = %6o", ip->i_mode);
 		if (input(buf, 80)) ip->i_mode = atoo(buf);
 		printf("    nlinks = %6u", ip->i_nlinks);
@@ -806,7 +806,7 @@ void chkilist(void)
 		devread(inoblock(ino), inooff(ino), (char *) &mode,
 			sizeof(mode));
 		if (mode != I_NOT_ALLOC) {
-			printf("mode inode %lu not cleared", ino);
+			printf("mode inode %llu not cleared", (unsigned long long)ino);
 			if (yes(". clear")) devwrite(inoblock(ino),
 				inooff(ino), nullbuf, INODE_SIZE);
 		}
@@ -832,7 +832,7 @@ void counterror(ino_t ino)
   }
   devread(inoblock(ino), inooff(ino), (char *) &inode, INODE_SIZE);
   count[ino] += inode.i_nlinks;	/* it was already subtracted; add it back */
-  printf("%5lu %5u %5u", ino, (unsigned) inode.i_nlinks, count[ino]);
+  printf("%5llu %5u %5u", (unsigned long long)ino, (unsigned) inode.i_nlinks, count[ino]);
   if (yes(" adjust")) {
 	if ((inode.i_nlinks = count[ino]) == 0) {
 		fatal("internal error (counterror)");
@@ -892,7 +892,7 @@ void list(ino_t ino, d_inode *ip)
 	firstlist = 0;
 	printf(" inode permission link   size name\n");
   }
-  printf("%6lu ", ino);
+  printf("%6llu ", (unsigned long long)ino);
   switch (ip->i_mode & I_TYPE) {
       case I_REGULAR:		putchar('-');	break;
       case I_DIRECTORY:		putchar('d');	break;
@@ -978,7 +978,7 @@ int chkdots(ino_t ino, off_t pos, dir_struct *dp, ino_t exp)
 	printf("bad %s in ", printable_name);
 	printpath(1, 0);
 	printf("%s is linked to %u ", printable_name, dp->d_inum);
-	printf("instead of %lu)", exp);
+	printf("instead of %llu)", (unsigned long long)exp);
 	setbit(spec_imap, (bit_nr) ino);
 	setbit(spec_imap, (bit_nr) dp->d_inum);
 	setbit(spec_imap, (bit_nr) exp);
@@ -1369,7 +1369,7 @@ int chkinode(ino_t ino, d_inode *ip)
 {
   if (ino == ROOT_INODE && (ip->i_mode & I_TYPE) != I_DIRECTORY) {
 	printf("root inode is not a directory ");
-	printf("(ino = %lu, mode = %o)\n", ino, ip->i_mode);
+	printf("(ino = %llu, mode = %o)\n", (unsigned long long)ino, ip->i_mode);
 	fatal("");
   }
   if (ip->i_nlinks == 0) {
@@ -1403,7 +1403,7 @@ int descendtree(dir_struct *dp)
   stk.st_next = ftop;
   ftop = &stk;
   if (bitset(spec_imap, (bit_nr) ino)) {
-	printf("found inode %lu: ", ino);
+	printf("found inode %llu: ", (unsigned long long)ino);
 	printpath(0, 1);
   }
   visited = bitset(imap, (bit_nr) ino);

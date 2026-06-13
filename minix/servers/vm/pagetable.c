@@ -1477,7 +1477,7 @@ void pt_init(void)
 	phys_bytes mypdbr; /* PML4 physical address */
 #elif defined(__i386__)
 	int global_bit_ok = 0;
-	u32_t mypdbr; /* Page Directory Base Register (cr3) value */
+	phys_bytes mypdbr; /* Page Directory Base Register (cr3) value */
 #elif defined(__arm__)
 	u32_t myttbr;
 #endif

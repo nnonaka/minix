@@ -91,8 +91,8 @@ static void cch_check(void)
 	    req_nr != REQ_PUTNODE && req_nr != REQ_READSUPER &&
 	    req_nr != REQ_MOUNTPOINT && req_nr != REQ_UNMOUNT &&
 	    req_nr != REQ_SYNC && req_nr != REQ_LOOKUP) {
-		printf("MFS(%d) inode(%lu) cc: %d req_nr: %d\n", sef_self(),
-			inode[i].i_num, inode[i].i_count - cch[i], req_nr);
+		printf("MFS(%d) inode(%llu) cc: %d req_nr: %d\n", sef_self(),
+			(unsigned long long)inode[i].i_num, inode[i].i_count - cch[i], req_nr);
 	}
 	  
 	cch[i] = inode[i].i_count;
