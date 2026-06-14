@@ -21,6 +21,8 @@ This document describes the fixes applied on the `dev-efi3` branch.
 | `minix/kernel/arch/x86_64/mpx.S` | Removed now-duplicate macro definitions |
 | `minix/kernel/arch/x86_64/include/hw_intr.h` | Fixed hardcoded i386 include path |
 | `minix/kernel/arch/x86_64/apic.c` | Fixed MMIO base address types |
+| `minix/kernel/arch/x86_64/acpi.c` | Full 64-bit XSDT table addresses |
+| `minix/kernel/arch/x86_64/mb2_acpi2.c` | Deleted (unused experimental XSDT parser) |
 | `minix/kernel/proto.h` | Added forward declaration for `struct sigframe_sigcontext` |
 
 ---
@@ -185,6 +187,56 @@ not in the amd64 equivalent.  Using an undeclared struct tag in a function
 prototype creates a declaration scoped to the parameter list, which Clang
 rejects with `-Werror,-Wvisibility`.  A file-scope forward declaration was
 added immediately before the `fpu_sigcontext` prototype.
+
+---
+
+## acpi.c — Full 64-bit XSDT Support
+
+The APIC/SMP code discovers LAPICs and I/O APICs by walking the ACPI MADT,
+which it locates through `acpi.c`.  On UEFI x86_64, ACPI is revision 2: the
+RSDP points at an **XSDT** whose entries are 64-bit physical addresses, unlike
+the legacy **RSDT** with 32-bit entries.
+
+`acpi.c` already read the XSDT for `revision == 2`, but immediately narrowed
+every entry back to 32 bits before storing it:
+
+```diff
+-	sdt_count = (s - sizeof(struct acpi_sdt_header)) / sizeof(u64_t);
+-	for (i = 0; i < sdt_count; i++) {
+-		rsdt.data[i] = (u32_t)xsdt.data[i];	/* truncates >4 GB tables */
+-	}
++	sdt_count = (s - sizeof(struct acpi_sdt_header)) / sizeof(u64_t);
+```
+
+The whole lookup path was 32-bit too (`rsdt.data[]` is `u32_t[]`,
+`acpi_phys2vir` took/returned `u32_t`), so any table the firmware placed above
+4 GB was silently corrupted.  Since `phys_bytes` is `unsigned long` (64-bit) on
+amd64, the truncation was the only barrier.
+
+The fix makes the resolved table address the single source of truth and keeps
+it full-width:
+
+- Added `phys_bytes base` to the per-table `sdt_trans[]` record.
+- A unified post-read loop selects each entry as a full `phys_bytes`
+  (`rsdt.data[i]` for RSDT, `xsdt.data[i]` for XSDT — no down-cast) and stores
+  it in `sdt_trans[i].base`.
+- `acpi_get_table_base()` returns `sdt_trans[i].base` instead of
+  `(phys_bytes)rsdt.data[i]`.
+- `acpi_phys2vir(u32_t)` widened to `acpi_phys2vir(phys_bytes)`; the
+  header-read error format changed `0x%x` → `0x%lx`.
+
+`sdt_count` stays bounded by `MAX_RSDT` (35): `acpi_read_sdt_at()` rejects an
+XSDT whose length overflows the `xsdt.data[MAX_RSDT]` read buffer.
+
+The unused, debug-laden experimental parser `mb2_acpi2.c` (a standalone
+`acpi2_init()` that was never compiled or called) was deleted.
+
+**Limitation:** before VM is running, `acpi_phys_copy` reads a physical address
+*as* a virtual one via the boot identity/direct map.  The address path is now
+correct for >4 GB tables, but actually reaching such a table also requires that
+high range to be mapped at access time.  On QEMU/OVMF, firmware keeps ACPI
+tables in low reclaim memory (<4 GB), so this works today; truly-high tables
+would need a temporary mapping in `acpi_phys_copy`.
 
 ---
 
