@@ -325,6 +325,51 @@ bytes are the zero high half of a sub-1 MB physical address, and the clobbered
 fields (`__ap_idt.limit`, `__ap_jmpvec`) are rewritten afterward — but fragile.
 Reserved `.space 10` for each to match the struct.
 
+## EFI64 boot bring-up — first successful boot (2026-06)
+
+The UEFI/multiboot2 path had never run to completion; fixing it surfaced one
+fault at a time from the loader hand-off through `arch_init`.  In order:
+
+1. **Multiboot2 header out of search window** — `ld` defaulted to a 2 MB
+   max-page-size, pushing the first `PT_LOAD` (and the header in
+   `.unpaged_text`) to file offset `0x200000`, past the loader's 32 KB
+   `MULTIBOOT_SEARCH`.  Fix: link the kernel with `-Wl,-z,max-page-size=0x1000`
+   (`minix/kernel/Makefile`).  See `docs/kernel-build-x86_64-fixes.md`.
+
+2. **NULL trampoline in the loader** — `efi_md_init()` (copies the
+   `multiboot64`/`startprog64` trampolines into allocated memory and sets the
+   function pointers) was never called from `efi_main()` in
+   `sys/stand/efiboot/efiboot.c`.  `multiboot64` stayed at its `.quad 0`
+   initializer, so `(*multiboot64)()` jumped through NULL to address 0.  Fix:
+   call `efi_md_init()` before `boot()`.  (Latent because the multiboot2 path
+   never reached the jump before.)
+
+3. **EFI64 entry emitted into `.unpaged_data`** — in `head.S` the `.code64`
+   directive does *not* switch sections back after the preceding `.data`
+   block, so `multiboot_entry64_efi` landed in `.unpaged_data`.  It happened to
+   work (boot map is RWX) but is wrong; add an explicit `.text` before the
+   entry.
+
+4. **Boot identity map too small (16 MB)** — `multiboot_entry64_efi`'s boot
+   page tables identity-mapped only 0–16 MB, but the EFI loader places the
+   multiboot info struct (via `AllocateAnyPages`) well above that (~2 GB on
+   OVMF).  `pre_init()` dereferences it in `get_parameters_mb2()` before
+   building the full map → triple fault.  Fix: identity-map the low **4 GB** in
+   the boot tables (4 PD pages, `boot_pd_low` enlarged to 4 pages).
+
+5. **`lldt` #GP in `prot_init`** — on x86_64 an LDT descriptor is a 16-byte
+   system descriptor, but the code built an 8-byte one at `gdt[LDT_INDEX]`, so
+   `lldt LDT_SELECTOR` faulted (#GP, error = the LDT selector `0x28`).  x86_64
+   uses a flat GDT with no per-process LDT, so the fix is `x86_lldt(0)` (null
+   LDTR) and dropping the bogus descriptor (`protect.c`).  The TSS descriptor
+   is already correctly built as 16 bytes (`tss_init`).
+
+6. **ACPI XSDT alignment padding** — see `docs/apic-x86_64.md`.
+
+7. **LAPIC MMIO unmapped after `prot_init`** — see `docs/apic-x86_64.md`.
+
+The boot now reaches APIC initialization.
+
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each

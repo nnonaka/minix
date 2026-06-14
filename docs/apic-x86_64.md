@@ -231,6 +231,20 @@ XSDT whose length overflows the `xsdt.data[MAX_RSDT]` read buffer.
 The unused, debug-laden experimental parser `mb2_acpi2.c` (a standalone
 `acpi2_init()` that was never compiled or called) was deleted.
 
+### XSDT struct alignment padding (#GP at first boot)
+
+When the EFI64 path first reached `acpi_init()`, the table loop took a #GP
+(non-canonical address) in `memcpy` reading `xsdt.data[i]`.  `struct
+acpi_sdt_header` is exactly 36 bytes (4-aligned), but `struct acpi_xsdt`'s
+`u64_t data[]` forces 8-byte alignment, so the compiler inserted **4 bytes of
+padding** after the header — `data[]` started at struct offset 40.  The
+on-disk XSDT packs its 64-bit table pointers immediately after the header
+(offset 36).  `memcpy`'ing the raw table into the struct therefore misaligned
+every entry by 4 bytes, yielding mangled non-canonical addresses → #GP when
+dereferenced.  Fix: mark the struct `__packed` so `data[]` sits at offset 36.
+Unaligned 64-bit reads are fine on x86.  (The RSDT's `u32_t data[]` is
+naturally 4-aligned and needs no packing.)
+
 **Limitation:** before VM is running, `acpi_phys_copy` reads a physical address
 *as* a virtual one via the boot identity/direct map.  The address path is now
 correct for >4 GB tables, but actually reaching such a table also requires that
@@ -246,6 +260,15 @@ would need a temporary mapping in `acpi_phys_copy`.
   physically below 4 GB and identity-mapped by the x86_64 kernel, so the
   addresses currently fit in 32 bits.  Nonetheless, using `vir_bytes` is
   correct and avoids latent bugs if the mapping ever moves.
+
+- **`pg_identity()` must cover the MMIO hole.**  At first boot, APIC init took a
+  page fault at `0xFEE00080`: `prot_init()` replaces the head.S boot map with
+  `pg_identity()`, which only mapped RAM up to `mem_high_phys` (~2 GB on the
+  test VM) — leaving the LAPIC at `0xFEE00000` (~4 GB) unmapped.  Fix: in
+  `pg_utils.c`, `pg_identity()` always maps at least the low **4 GB**
+  (`if (num_pds < 4) num_pds = 4;`), so the LAPIC/IOAPIC/video MMIO is
+  reachable.  Pages above `mem_high_phys` are already mapped uncacheable
+  (`PG_PWT | PG_PCD`).
 
 - `iret` is illegal in 64-bit mode; `iretq` pops a 64-bit RIP, CS, RFLAGS,
   RSP, SS frame.

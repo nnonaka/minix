@@ -31,10 +31,18 @@ static struct acpi_rsdt {
 	u32_t			data[MAX_RSDT];
 } rsdt;
 
+/*
+ * Packed: the 36-byte acpi_sdt_header would otherwise get 4 bytes of padding
+ * before the 8-byte-aligned u64_t data[], but the on-disk XSDT packs its
+ * 64-bit table pointers immediately after the header (offset 36).  Without
+ * __packed, memcpy()ing the raw table misaligns every entry by 4 bytes,
+ * yielding non-canonical addresses and a #GP when they are dereferenced.
+ * (The RSDT's u32_t data[] is naturally 4-aligned, so it needs no packing.)
+ */
 static struct acpi_xsdt {
 	struct acpi_sdt_header	hdr;
 	u64_t			data[MAX_RSDT];
-} xsdt;
+} __packed xsdt;
 
 static struct {
 	char		signature [ACPI_SDT_SIGNATURE_LEN + 1];
