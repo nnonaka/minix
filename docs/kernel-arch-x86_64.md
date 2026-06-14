@@ -246,6 +246,85 @@ their first interrupt.
 memcpy(&__ap_idt_tab, idt, sizeof(idt));
 ```
 
+### LP64 porting bugs in the SMP path *(fixed)*
+
+The generic SMP core and the AP trampoline data layout were copied verbatim
+from i386, where pointers and the gate/pointer descriptors happen to be
+32-bit / 8-byte / 6-byte.  On x86_64 (LP64, long-mode descriptors) four of
+those assumptions break.  All four are latent until `CONFIG_SMP` is enabled —
+a UP kernel uses `#define cpuid 0` from `kernel.h` and never sends scheduling
+IPIs — so they did not surface during single-CPU bring-up.
+
+#### 1. `cpuid` macro truncates the kernel stack VA (`arch_smp.h`)
+
+```c
+/* before — correct on i386 (pointer == u32_t), broken on x86_64 */
+#define cpuid (((u32_t *)(((u32_t)get_stack_frame() + (K_STACK_SIZE - 1)) \
+                          & ~(K_STACK_SIZE - 1)))[-1])
+```
+
+`get_stack_frame()` returns a `reg_t` (64-bit) pointing into the kernel stack
+at `0xFFFFFFFF80xxxxxx`.  The `(u32_t)` cast truncated it to `0x80xxxxxx`,
+which dereferences to an invalid low VA.  Separately, `tss_init()` stores the
+cpu id as a full `reg_t` at `kernel_stack_top - sizeof(reg_t)`
+(`protect.c`: `*((reg_t *)(rsp0 + 1*sizeof(reg_t))) = cpu`), but the macro
+read a `u32_t` at `stack_top - 4` — the high (always-zero) half of that slot.
+So every CPU evaluated `cpuid == 0`, folding all per-CPU TSS, scheduling, and
+cycle-accounting state onto CPU 0.
+
+```c
+/* after — vir_bytes arithmetic (no truncation), reg_t read (full 8-byte slot) */
+#define cpuid (((reg_t *)(((vir_bytes)get_stack_frame() + (K_STACK_SIZE - 1)) \
+                          & ~(K_STACK_SIZE - 1)))[-1])
+```
+
+`reg_t *` with `[-1]` reads `stack_top - 8`, matching where `tss_init` writes.
+
+#### 2. `sched_ipi_data.data` truncates a kernel pointer (`smp.c`)
+
+The scheduling-IPI mailbox passed a `struct proc *` between CPUs through a
+`u32_t` field:
+
+```c
+struct sched_ipi_data {
+        volatile u32_t flags;
+        volatile u32_t data;          /* before: truncates a 64-bit proc ptr */
+};
+...
+sched_ipi_data[cpu].data = (u32_t) p;             /* loses high 32 bits */
+p = (struct proc *)sched_ipi_data[cpu].data;      /* zero-extends → bad addr */
+```
+
+`struct proc` objects live in the kernel image at `0xFFFFFFFF80xxxxxx`.  The
+receiver reconstructed `0x0000000080xxxxxx` and dereferenced it in
+`smp_sched_handler` on the first stop/vm-inhibit/migration IPI.  Fix: widen
+the field to `vir_bytes` and store `(vir_bytes) p`; the readback already casts
+back to `struct proc *`.
+
+#### 3. AP IDT trampoline buffer was half-size (`trampoline.S`)
+
+```asm
+LABEL(__ap_idt_tab)
+.space IDT_SIZE*DESC_SIZE        /* before: 256 * 8 = 2048 bytes */
+```
+
+`DESC_SIZE` (8) is the *segment* descriptor size, correct for the GDT
+(`struct segdesc_s`).  But long-mode *gate* descriptors (`struct gatedesc_s`,
+the IDT element type) are 16 bytes, so `sizeof(idt) = 256 * 16 = 4096`.
+`copy_trampoline()`'s `memcpy(&__ap_idt_tab, idt, sizeof(idt))` therefore
+overflowed the 2048-byte buffer by 2048 bytes into adjacent trampoline memory
+on every AP boot.  Fix: add a `GATE_DESC_SIZE` (16) macro in `archconst.h`
+and reserve `IDT_SIZE*GATE_DESC_SIZE`.
+
+#### 4. Descriptor-table pointer slots were 8 bytes, not 10 (`trampoline.S`)
+
+`__ap_gdt` / `__ap_idt` hold `struct desctableptr_s` = `{ u16 limit; u64 base; }`
+= 10 bytes packed, but were reserved as `.space 8`.  Writing `.base` overflowed
+2 bytes into the next field.  This was *benign in practice* — the overflow
+bytes are the zero high half of a sub-1 MB physical address, and the clobbered
+fields (`__ap_idt.limit`, `__ap_jmpvec`) are rewritten afterward — but fragile.
+Reserved `.space 10` for each to match the struct.
+
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each

@@ -130,6 +130,16 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `copy_trampoline()` in `arch_smp.c` copies both GDT and IDT into the trampoline page; the `__ap_idt_tab` source must be `idt` not `gdt` — using `gdt` fills the AP IDT with segment descriptors and causes a triple-fault on the first interrupt on every AP
 - `startup_ap_32` in `mpx.S` is 64-bit code despite the name (historical artifact from i386 port); it is called from the `.code64` stub `__ap_startup_64` in `trampoline.S`
 - `__ap_jmpvec` is a 6-byte far pointer `{ u32_t phys_addr, u16_t selector }` filled at runtime in real mode; `arch_smp.c:copy_trampoline()` uses `ap_lin_addr()` to pre-fill `__ap_gdt.base` / `__ap_idt.base` but NOT `__ap_jmpvec` — that is computed in 16-bit assembly as `CS*16 + offset`
+- x86_64 descriptor sizes differ: segment descriptor `struct segdesc_s` = `DESC_SIZE` (8 bytes, GDT element); long-mode gate descriptor `struct gatedesc_s` = 16 bytes (`GATE_DESC_SIZE`, IDT element); `struct desctableptr_s` = 10 bytes packed (u16 limit + u64 base). Trampoline `.space` reservations must use the right one — `__ap_idt_tab` needs `IDT_SIZE*GATE_DESC_SIZE`, not `*DESC_SIZE`
+- `cpuid` macro (`arch/x86_64/include/arch_smp.h`) must use `(vir_bytes)` for the stack arithmetic and read a `reg_t` (`[-1]` on a `reg_t *`), not i386's `u32_t` — cpu id is stored as a full `reg_t` at `kernel_stack_top - sizeof(reg_t)` by `tss_init`; the `u32_t` version truncates the kernel stack VA and reads the zero high half
+- Any kernel pointer (`struct proc *` etc.) stored in a struct or passed between CPUs must be `vir_bytes`/`uintptr_t`, never `u32_t` (e.g. `sched_ipi_data.data` in `smp.c`) — these SMP bugs are latent under UP (`#define cpuid 0`, no scheduling IPIs)
+
+## Port documentation (docs/)
+- Per-subsystem x86_64 port notes live in `docs/*-x86_64*.md` (e.g. `kernel-arch-x86_64.md`, `apic-x86_64.md`, `vm-x86_64-port.md`, `kernel-build-x86_64-fixes.md`); add new kernel/SMP findings to `docs/kernel-arch-x86_64.md`, matching its before/after code-block style
+
+## /code-review on this repo
+- No GitHub PRs exist (`origin` = github.com/nnonaka/minix); review the diff against base branch `uefiboot` (= `origin/uefiboot`), or review a subsystem holistically when the topic is broader than the diff
+- Local `HEAD` is typically NOT pushed — for GitHub citation links use the latest pushed SHA (`git branch -r --contains <sha>` to confirm; usually `origin/uefiboot`), not local HEAD, or links 404
 
 ## Distribution sets
 - New arch port: create `distrib/sets/lists/minix-base/md.<machine>`, `minix-comp/md.<machine>`, `minix-debug/md.<machine>`; `md.i386` is the reference in each

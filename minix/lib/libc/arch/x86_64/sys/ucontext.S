@@ -45,7 +45,7 @@ ENTRY(_getcontext)
 	movq	%r15, R15(%rdi)		/* save R15 */
 	movl	$MCF_MAGIC, MAGIC(%rdi)	/* mark context valid */
 	xorl	%eax, %eax		/* return 0 */
-	jmp	*PC(%rdi)		/* return to caller via saved RIP */
+	ret				/* pop return address, restore RSP, return 0 */
 
 
 /*
