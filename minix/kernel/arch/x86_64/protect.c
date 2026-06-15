@@ -203,7 +203,17 @@ int tss_init(unsigned cpu, void * kernel_stack)
 {
 	struct tss_s *t = &tss[cpu];
 	int index = TSS_INDEX(cpu);
-	phys_bytes tss_phys = vir2phys(t);
+	/*
+	 * The TSS descriptor base must be the TSS's KERNEL-VIRTUAL (linear)
+	 * address, NOT its physical address.  The TSS lives in the kernel image
+	 * (.bss) at a low physical address inside 0x400000-0x600000; using the
+	 * physical address only works while that range is identity-mapped, but
+	 * loading VM splits that identity 2MB page (see pg_map), so the physical
+	 * alias stops pointing at the TSS.  The kernel-virtual address stays
+	 * mapped by pg_mapkernel, so the CPU can always read rsp0 on a ring3->0
+	 * trap.
+	 */
+	u64_t tss_lin = (u64_t)(vir_bytes) t;
 	struct segdesc_s *tssgdt = &gdt[index];
 
 	/*
@@ -211,12 +221,13 @@ int tss_init(unsigned cpu, void * kernel_stack)
 	 * Slot 0: standard 8-byte descriptor with base[31:0] and limit.
 	 * Slot 1: low 4 bytes = base[63:32], high 4 bytes = reserved.
 	 */
-	init_param_dataseg(tssgdt, tss_phys, sizeof(*t), INTR_PRIVILEGE);
+	init_param_dataseg(tssgdt, (phys_bytes) tss_lin, sizeof(*t),
+		INTR_PRIVILEGE);
 	tssgdt->access = PRESENT | (INTR_PRIVILEGE << DPL_SHIFT) | TSS_TYPE;
 
 	/* Second slot: base[63:32] in its lowest 32 bits, rest zero. */
 	memset(&gdt[index + 1], 0, sizeof(gdt[index + 1]));
-	*(u32_t *)&gdt[index + 1] = (u32_t)(tss_phys >> 32);
+	*(u32_t *)&gdt[index + 1] = (u32_t)(tss_lin >> 32);
 
 	/* Build TSS (64-bit layout — no legacy segment registers). */
 	memset(t, 0, sizeof(*t));

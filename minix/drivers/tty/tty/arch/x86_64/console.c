@@ -109,7 +109,7 @@ void scr_init(tty_t *tp)
 	default:
 		cons_sw = &ser_cons_sw;
 	}
-	
+
 	cons_sw->sw_init(tp);
 }
 

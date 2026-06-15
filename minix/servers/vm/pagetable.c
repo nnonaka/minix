@@ -62,10 +62,17 @@ struct vmproc *vmprocess = &vmproc[VM_PROC_NR];
 #else
 #ifdef __arm__
 # define SPAREPAGES 150
-# define STATIC_SPAREPAGES 140 
+# define STATIC_SPAREPAGES 140
+#elif defined(__x86_64__)
+/* x86_64 has 4-level page tables: mapping a region can allocate a PDPT, PD,
+ * PT-pointer page and PT (up to 4 pages) versus i386's single PT, so the
+ * bootstrap spare pool drains much faster while VM brings up its dynamic
+ * allocator.  Use a larger static pool. */
+# define SPAREPAGES 200
+# define STATIC_SPAREPAGES 190
 #else
 # define SPAREPAGES 20
-# define STATIC_SPAREPAGES 15 
+# define STATIC_SPAREPAGES 15
 #endif /* __arm__ */
 #endif
 
@@ -578,15 +585,25 @@ static int pt_ptalloc(pt_t *pt, int pdpte, int pde, u64_t flags)
 	assert(pde   >= 0 && pde   < ARCH_VM_DIR_ENTRIES);
 	assert(!(flags & ~(PTF_ALLFLAGS)));
 
-	/* Allocate PD page for this PDPT entry if not yet present. */
+	/* Allocate PD page for this PDPT entry if not yet present.
+	 * vm_allocpagedir()/vm_allocpage() below map a page, which can re-enter
+	 * pt_ptalloc() for this same pdpte (recursive allocation).  If the
+	 * recursion already populated pt_pd[pdpte]/pt_pt[pdpte], we must keep its
+	 * version and free ours — otherwise overwriting it with a freshly-zeroed
+	 * page loses the recursion's PDE/PT-pointer pairing and corrupts the
+	 * pt_pd vs pt_pt consistency the asserts below rely on. */
 	if(!pt->pt_pd[pdpte]) {
 		u64_t *pd;
 		if(!(pd = vm_allocpagedir(&pd_phys)))
 			return ENOMEM;
-		memset(pd, 0, VM_PAGE_SIZE);
-		pt->pt_pd[pdpte] = pd;
-		pt->pt_pdpt[pdpte] = (pd_phys & ARCH_VM_ADDR_MASK) |
-			ARCH_VM_PDE_PRESENT | ARCH_VM_PTE_USER | ARCH_VM_PTE_RW;
+		if(pt->pt_pd[pdpte]) {
+			vm_freepages((vir_bytes)pd, 1);
+		} else {
+			memset(pd, 0, VM_PAGE_SIZE);
+			pt->pt_pdpt[pdpte] = (pd_phys & ARCH_VM_ADDR_MASK) |
+				ARCH_VM_PDE_PRESENT | ARCH_VM_PTE_USER | ARCH_VM_PTE_RW;
+			pt->pt_pd[pdpte] = pd;
+		}
 	}
 
 	/* Allocate the PT-pointer array for this PDPT entry if not yet present.
@@ -596,12 +613,23 @@ static int pt_ptalloc(pt_t *pt, int pdpte, int pde, u64_t flags)
 		u64_t **arr;
 		if(!(arr = (u64_t **)vm_allocpage(&dummy, VMP_PAGETABLE)))
 			return ENOMEM;
-		memset(arr, 0, VM_PAGE_SIZE);
-		pt->pt_pt[pdpte] = arr;
+		if(pt->pt_pt[pdpte]) {
+			vm_freepages((vir_bytes)arr, 1);
+		} else {
+			memset(arr, 0, VM_PAGE_SIZE);
+			pt->pt_pt[pdpte] = arr;
+		}
 	}
 
-	assert(!(pt->pt_pd[pdpte][pde] & ARCH_VM_PDE_PRESENT));
-	assert(!pt->pt_pt[pdpte][pde]);
+	/* Allocating the PD/pointer-array pages above (or the PT page below) maps
+	 * memory, which can recursively re-enter pt_ptalloc() for this exact
+	 * (pdpte,pde) slot and fully create it.  If so, we're done — don't
+	 * re-allocate (that would trip the asserts / leak). */
+	if((pt->pt_pd[pdpte][pde] & ARCH_VM_PDE_PRESENT) || pt->pt_pt[pdpte][pde]) {
+		assert((pt->pt_pd[pdpte][pde] & ARCH_VM_PDE_PRESENT) &&
+			pt->pt_pt[pdpte][pde]);
+		return OK;
+	}
 
 	/* Allocate the PT page itself. */
 	if(!(p = (u64_t *)vm_allocpage(&pt_phys, VMP_PAGETABLE)))
@@ -1479,6 +1507,13 @@ void pt_init(void)
 	int m = kernel_boot_info.kern_mod;
 #if defined(__x86_64__)
 	phys_bytes mypdbr; /* PML4 physical address */
+	/* Bounce buffers: VM cannot dereference the bootstrap page tables
+	 * directly (they live in the kernel image, whose low identity alias is
+	 * occupied by VM's own program), so copy each level from physical via
+	 * the kernel (sys_vircopy from NONE). */
+	static u64_t pml4buf[ARCH_VM_DIR_ENTRIES];
+	static u64_t pdptbuf[ARCH_PDPT_ENTRIES];
+	static u64_t pdbuf[ARCH_VM_DIR_ENTRIES];
 #elif defined(__i386__)
 	int global_bit_ok = 0;
 	phys_bytes mypdbr; /* Page Directory Base Register (cr3) value */
@@ -1562,28 +1597,35 @@ void pt_init(void)
 
 	/* Now reserve another pde for kernel's own mappings. */
 	{
+#ifndef __x86_64__
 		int kernmap_pde;
+#endif
 		phys_bytes addr, len;
 		int flags, pindex = 0;
 		vir_bytes offset = 0;
 
-		kernmap_pde = freepde();
 #ifdef __x86_64__
-		/* kernmap_pde is a PD index within the kernel PD (PML4[511]/PDPT[510]).
-		 * Convert to a kernel virtual address by adding the PD's base VA,
-		 * which is vir_kern_start rounded down to the 1 GB PDPT boundary. */
-		{
-			vir_bytes kern_pd_base = kernel_boot_info.vir_kern_start &
-				~((vir_bytes)(ARCH_VM_DIR_ENTRIES * ARCH_BIG_PAGE_SIZE) - 1);
-			offset = kern_pd_base + (vir_bytes)kernmap_pde * ARCH_BIG_PAGE_SIZE;
-		}
+		/* Map the kernel-provided regions (the user-shared usermapped area
+		 * that holds minix_kerninfo, plus device windows) just above the
+		 * user address space.  They MUST be reachable from user mode: on
+		 * x86_64 the kernel high half lives under the supervisor PML4[511]
+		 * (kern_pml4_hi), so anything mapped there (as i386 does) is
+		 * inaccessible to user processes because the U/S bit is ANDed across
+		 * all four paging levels.  VM_DATATOP is in the user half (PML4[0],
+		 * which pt_new() marks USER) and above all normal user allocations.
+		 * Page tables are allocated on demand by pt_ptalloc(), so no PDE
+		 * pre-reservation (freepde) is needed here. */
+		offset = VM_DATATOP;
 #else
+		kernmap_pde = freepde();
 		offset = kernmap_pde * ARCH_BIG_PAGE_SIZE;
 #endif
 
 		while(sys_vmctl_get_mapping(pindex, &addr, &len,
 			&flags) == OK)  {
+#ifndef __x86_64__
 			int usedpde;
+#endif
 			vir_bytes vir;
 			if(pindex >= MAX_KERNMAPPINGS)
                 		panic("VM: too many kernel mappings: %d", pindex);
@@ -1631,12 +1673,14 @@ void pt_init(void)
 			pindex++;
 			kernmappings++;
 
+#ifndef __x86_64__
 			usedpde = ARCH_VM_PDE(offset);
 			while(usedpde > kernmap_pde) {
 				int newpde = freepde();
 				assert(newpde == kernmap_pde+1);
 				kernmap_pde = newpde;
 			}
+#endif
 		}
 	}
 
@@ -1650,54 +1694,61 @@ void pt_init(void)
 	 * This allocation will happen without using any page table, and just
 	 * uses spare pages.
 	 */
-        newpt = &vmprocess->vm_pt;
-	if(pt_new(newpt) != OK)
-		panic("vm pt_new failed");
-
 	/* Get our current pagedir so we can see it. */
 #if defined(__x86_64__)
 	if(sys_vmctl_get_pdbr(SELF, &mypdbr) != OK)
 		panic("VM: sys_vmctl_get_pdbr failed");
+
+	/* Capture the kernel's high PML4 entry BEFORE pt_new(): pt_new() calls
+	 * pt_mapkernel(), which needs kern_pml4_hi.  Copy our PML4 from physical
+	 * via the kernel (sys_vircopy from NONE); we cannot dereference it
+	 * directly (see pml4buf comment above). */
+	if(sys_vircopy(NONE, mypdbr, SELF, (vir_bytes) pml4buf,
+		sizeof(pml4buf), 0) != OK)
+		panic("VM: pml4 copy failed");
+	kern_pml4_hi = pml4buf[511];
 #elif defined(__i386__)
 	if(sys_vmctl_get_pdbr(SELF, &mypdbr) != OK)
+		panic("VM: sys_vmctl_get_pdbr failed");
 #elif defined(__arm__)
 	if(sys_vmctl_get_pdbr(SELF, &myttbr) != OK)
-#endif
-#if !defined(__x86_64__)
 		panic("VM: sys_vmctl_get_pdbr failed");
 #endif
 
+        newpt = &vmprocess->vm_pt;
+	if(pt_new(newpt) != OK)
+		panic("vm pt_new failed");
+
 #if defined(__x86_64__)
-	/* On x86_64, kernel identity-maps all physical RAM (phys == virt for low RAM).
-	 * Walk PML4→PDPT→PD to find VM's PT pages and copy them into newpt.
-	 * PML4[511] is the kernel high PDPT; save it for pt_mapkernel().
+	/* Walk PML4→PDPT→PD (copied from physical via the kernel) to find VM's
+	 * user PT pages and replicate them into newpt.  PML4[511] (kernel high)
+	 * was already saved into kern_pml4_hi above.
 	 */
 	{
-		const u64_t *mypml4 = (const u64_t *)mypdbr;
 		int pml4i, pdpte_i, pde_i;
-
-		kern_pml4_hi = mypml4[511];
 
 		/* Walk only user-space PML4 entries (0..510; 511 = kernel high). */
 		for(pml4i = 0; pml4i < 511; pml4i++) {
-			const u64_t *pdpt;
-			if(!(mypml4[pml4i] & AMD64_VM_PRESENT)) continue;
-			pdpt = (const u64_t *)(mypml4[pml4i] & ARCH_VM_ADDR_MASK);
+			if(!(pml4buf[pml4i] & AMD64_VM_PRESENT)) continue;
+			if(sys_vircopy(NONE, pml4buf[pml4i] & ARCH_VM_ADDR_MASK,
+				SELF, (vir_bytes) pdptbuf, sizeof(pdptbuf), 0) != OK)
+				panic("VM: pdpt copy failed");
 
 			for(pdpte_i = 0; pdpte_i < ARCH_PDPT_ENTRIES; pdpte_i++) {
-				const u64_t *pd;
-				if(!(pdpt[pdpte_i] & AMD64_VM_PRESENT)) continue;
-				if(pdpt[pdpte_i] & AMD64_VM_PS) continue; /* 1 GB page */
-				pd = (const u64_t *)(pdpt[pdpte_i] & ARCH_VM_ADDR_MASK);
+				if(!(pdptbuf[pdpte_i] & AMD64_VM_PRESENT)) continue;
+				if(pdptbuf[pdpte_i] & AMD64_VM_PS) continue; /* 1 GB page */
+				if(sys_vircopy(NONE, pdptbuf[pdpte_i] & ARCH_VM_ADDR_MASK,
+					SELF, (vir_bytes) pdbuf, sizeof(pdbuf), 0) != OK)
+					panic("VM: pd copy failed");
 
 				for(pde_i = 0; pde_i < ARCH_VM_DIR_ENTRIES; pde_i++) {
 					phys_bytes ptaddr_kern, ptaddr_us;
-					if(!(pd[pde_i] & AMD64_VM_PRESENT)) continue;
-					if(pd[pde_i] & AMD64_VM_PS) continue; /* 2 MB page */
+					if(!(pdbuf[pde_i] & AMD64_VM_PRESENT)) continue;
+					if(pdbuf[pde_i] & AMD64_VM_PS) continue; /* 2 MB page */
 
 					if(pt_ptalloc(newpt, pdpte_i, pde_i, 0) != OK)
 						panic("pt_init: pt_ptalloc failed");
-					ptaddr_kern = pd[pde_i] & ARCH_VM_ADDR_MASK;
+					ptaddr_kern = pdbuf[pde_i] & ARCH_VM_ADDR_MASK;
 					ptaddr_us   = newpt->pt_pd[pdpte_i][pde_i] & ARCH_VM_ADDR_MASK;
 					if(sys_abscopy(ptaddr_kern, ptaddr_us, VM_PAGE_SIZE) != OK)
 						panic("pt_init: abscopy failed");
@@ -1909,9 +1960,15 @@ void pt_free(pt_t *pt)
 		}
 		if(pt->pt_pd[pdpte])
 			vm_freepages((vir_bytes)pt->pt_pd[pdpte], 1);
+		pt->pt_pd[pdpte] = NULL;
+		pt->pt_pt[pdpte] = NULL;
 	}
-	if(pt->pt_pdpt) vm_freepages((vir_bytes)pt->pt_pdpt, 1);
-	/* pt_pml4 is never freed (same policy as i386 pt_dir — never reallocated). */
+	/* pt_pml4 AND pt_pdpt are never freed: pt_new() allocates them once and
+	 * reuses them (it recovers pt_pdpt's physical address from the kept
+	 * pt_pml4[0] entry).  Freeing pt_pdpt here while leaving the pointer
+	 * non-NULL made the next pt_new() (e.g. VMPPARAM_CLEAR reusing the slot)
+	 * memset() a freed, unmapped page -> "pagefault in VM".  Same persistent
+	 * per-slot policy as i386 pt_dir. */
 #else
 	int i;
 

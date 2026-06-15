@@ -473,7 +473,7 @@ check_misc_flags:
 #endif
 	
 	restart_local_timer();
-	
+
 	/*
 	 * restore_user_context() carries out the actual mode switch from kernel
 	 * to userspace. This function does not return

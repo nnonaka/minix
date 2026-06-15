@@ -122,7 +122,13 @@ void do_get_irq(message *m)
 	unsigned dev = ((struct acpi_get_irq_req *)m)->dev;
 	unsigned pin = ((struct acpi_get_irq_req *)m)->pin;
 
-	assert(dev < PCI_MAX_DEVICES && pin < PCI_MAX_PINS);
+	/* TEMP debug + graceful handling: a bad dev/pin should not crash ACPI. */
+	if (!(dev < PCI_MAX_DEVICES && pin < PCI_MAX_PINS)) {
+		printf("ACPI: do_get_irq: out of range bus=%u dev=%u pin=%u\n",
+			bus, dev, pin);
+		((struct acpi_get_irq_resp *)m)->irq = -1;
+		return;
+	}
 
 	bridge = find_bridge(&pci_root_bridge, -1, -1, bus);
 

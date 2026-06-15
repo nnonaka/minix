@@ -19,11 +19,14 @@ ENTRY(_cpuid)
 	movq	%rdx, %r14		/* *ecx */
 	movq	%rcx, %r15		/* *edx */
 
-	/* Load cpuid inputs from the caller-supplied pointers. */
+	/* Load cpuid inputs from the caller-supplied pointers.  Only %eax (leaf)
+	 * and %ecx (subleaf) are read by the cpuid instruction; %ebx/%edx are
+	 * outputs only.  Crucially we must NOT also do "movl (%rcx),%edx" here:
+	 * the preceding "movl (%rdx),%ecx" is a 32-bit write that zero-extends
+	 * and clobbers %rcx (the *edx pointer), so dereferencing %rcx afterwards
+	 * faults.  The pointers are already saved in r12-r15 for the stores. */
 	movl	(%rdi), %eax
-	movl	(%rsi), %ebx
 	movl	(%rdx), %ecx
-	movl	(%rcx), %edx
 
 	cpuid
 
