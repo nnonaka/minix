@@ -370,6 +370,109 @@ fault at a time from the loader hand-off through `arch_init`.  In order:
 
 The boot now reaches APIC initialization.
 
+## EFI64 bring-up — reaching userland exec (2026-06)
+
+Continuing from APIC init, the boot was carried through VM adopting the
+per-process page tables and into userland: `exec` works and `init` runs
+`/etc/rc`, starting drivers (acpi, pci, pckbd, floppy, at_wini) and services.
+Two themes dominated.
+
+### Theme 1: 64-bit addresses truncated through 32-bit IPC message fields
+
+A user virtual address with bit 31 set (e.g. a stack address `0xefffXXXX`,
+since the MINIX user stack top is `0xF0000000`) stored into a 32-bit `int`
+message field and read back into a `vir_bytes` is **sign-extended into the
+kernel half** (`0xffffffffefffXXXX`).  The receiver then rejects it as a
+kernel address.  Three instances, all in `minix/include/minix/com.h`
+(+`ipc.h`):
+
+1. **`VPF_ADDR`** (`VM_PAGEFAULT` fault address, kernel→VM): `m1_i1` →
+   `m1_ull1`.  Symptom: a normal demand-paged stack-growth fault (`cr2` was
+   correct) became a kernel-half address in VM, which SIGSEGV'd the faulting
+   server.
+2. **`SVMCTL_MRG_ADDR`** (kernel→VM memory-request address, the `vm_suspend`
+   path): `m2_i2` → `m2_ll1`.  Tell-tale: the *source* address
+   `SVMCTL_MRG_ADDR2` was already a 64-bit `m2_l2`; only the primary address
+   was left 32-bit.
+3. **`VFS_PM_PS_STR` / `VFS_PM_NEWPS_STR`** (`ps_strings` pointer, VFS↔PM exec
+   reply): `m7_i5` → a new pointer field **`m7_p3`** added to `mess_7`
+   (`ipc.h`, consuming padding; i386 size stays 56 bytes via alignment).  Note
+   `VFS_PM_PC`/`VFS_PM_NEWSP` already used pointer fields (`m7_p1`/`m7_p2`), so
+   `ip`/`sp` survived while `ps_str` was truncated.
+
+This pattern is **systemic**: audit any `m*_i*` field carrying an address.
+Downstream typed structs (`mess_rs_pm_exec_restart`, `mess_lsys_krn_sys_exec`)
+already use `vir_bytes ps_str`.
+
+### Theme 2: the demand-paged kernel copy (the exec stack frame)
+
+The single biggest blocker.  `lin_lin_copy()` (`arch/x86_64/memory.c`) copies
+between address spaces using `createpde()`, which returns **0** for a
+not-present process page (e.g. a child's demand-zero stack during the exec
+frame copy).  The old code relied on `PHYS_COPY_CATCH` to detect a bad page,
+but with `dstptr == 0` the copy touches **virtual address 0**, whose caught
+fault address is `0` — *indistinguishable from the `if(addr)` "no fault"
+sentinel*.  So the copy silently "succeeded" writing nowhere, VM was never
+asked to fault the page in, and every later access got a fresh zero page.
+Text/data escaped this only because the ELF loader pre-allocates them (present
+→ real phys).  The user-visible effect: the first user process (`sh`) found
+`ps_strings->ps_argvstr == 0` and `#PF`'d in crt0.
+
+Fix — detect not-present explicitly so `virtual_copy_f()` routes through
+`vm_suspend()`:
+
+```c
+srcptr = createpde(srcproc, srclinaddr, &chunk, 0, &changed);
+dstptr = createpde(dstproc, dstlinaddr, &chunk, 1, &changed);
+if (srcproc && !srcptr) return EFAULT_SRC;   /* not-present -> ask VM */
+if (dstproc && !dstptr) return EFAULT_DST;
+```
+
+(`createpde` returns `phys_to_kacc(phys)` = `DM_BASE + phys` for present
+pages, never 0, so `!ptr` cleanly means not-present.)
+
+### Other fixes folded in
+
+- **`pt_free()` freed `pt_pdpt` but left the pointer non-NULL**
+  (`servers/vm/pagetable.c`).  `pt_new()` allocates the PML4+PDPT once and
+  reuses them (recovering the PDPT phys from the kept `pt_pml4[0]`); the stale
+  non-NULL `pt_pdpt` made the next `pt_new()` `memset` a freed/unmapped page →
+  "pagefault in VM" on `VMPPARAM_CLEAR` slot reuse (exec).  Fix: keep
+  `pt_pdpt` (never free, same policy as `pt_pml4`) and NULL the freed
+  `pt_pd[]`/`pt_pt[]` slots.
+
+- **`SYS_DEVIO`/`VDEVIO`/`SDEVIO`/`IOPENABLE`/`READBIOS` were i386-only**
+  (`kernel/system.c` `map()` calls + `system/Makefile.inc` `do_devio.c`/
+  `do_vdevio.c` sources).  amd64 has identical x86 port I/O; gate them
+  `__i386__ || __x86_64__`.  Symptom: "Unused kernel call 21" and tty/driver
+  `sys_inb`/`sys_outb` failures.
+
+- **`arch_proc_init()` truncated `ip`/`sp`/`ps_str` to `u32_t`**
+  (`do_exec.c` casts + `proto.h` + all three `arch/*/memory.c`): widen to
+  `vir_bytes`.  Latent for sh (values < 4 GB) but a real LP64 bug.
+
+- **VFS computes `ps_str` authoritatively** (`servers/vfs/exec.c` `pm_exec`):
+  the `ps_strings` struct always sits at the top of the (possibly relocated)
+  frame, so `*ps_str = vsp + frame_len - sizeof(struct ps_strings)` rather
+  than echoing the caller's guess (robust against stale-libc callers and
+  script/dynamic frame relocation).
+
+- **libc stack frame** (`stack_utils.c`, `execve.c`): `vsp` widened `int` →
+  `vir_bytes`; argc occupies a pointer-sized cell so `argv[]` starts
+  `sizeof(char *)` in, and `ps_argvstr = vsp + sizeof(char *)`.
+
+## Known-open: userland console output (no login prompt)
+
+Boot reaches the boot-ramdisk rc and stalls at the first userland console
+write (`echo`).  `do_write` reaches the tty driver with a valid console tty
+(minor 0), `handle_events` runs `tty_devread` (`kb_read`) fine, then
+`(*tty_devwrite)(tp,0)` hangs before the framebuffer `cons_write` body —
+`boot_mode==1` should select `fb_cons_sw` (rasops → GOP framebuffer), and the
+QEMU graphical window shows blank/frozen/garbage.  Headless serial login is
+additionally blocked by design: `rs232.c` skips the `cttyline` serial line for
+userland ("in use by kernel"), so the kernel and userland cannot share it.
+Not yet root-caused.
+
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each
