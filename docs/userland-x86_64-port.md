@@ -156,3 +156,42 @@ x86 assembly).
 **Files changed:**
 - `sys/arch/amd64/stand/Makefile` — removed `mbr` from `SUBDIR`
 - `sys/arch/amd64/stand/boot/Makefile` — set `SUBDIR=` (empty, skips `biosboot`)
+
+---
+
+## 10. libc setjmp — misaligned stack into `__sigprocmask14` (runtime SIGSEGV)
+
+**Files:** `lib/libc/arch/x86_64/gen/__setjmp14.S`, `__sigsetjmp14.S`
+
+`setjmp`/`sigsetjmp` save the signal mask by calling the C `__sigprocmask14`.
+On entry `%rsp` is 16-byte aligned **minus 8** (the return address); these asm
+stubs called `__sigprocmask14` without realigning, so at the `call` `%rsp ≡ 8
+(mod 16)` — a SysV-ABI violation. MINIX's C `sigprocmask` zeroes its on-stack
+`message` with **aligned SSE** (`movaps`), which `#GP`s (→ SIGSEGV) on a
+misaligned stack. (`__longjmp14`/`__siglongjmp14` were accidentally fine — they
+`push` a register before the call.) i386 has no `movaps` alignment requirement,
+so it was amd64-only. Symptom: `awk` (and any `setjmp` user) SIGSEGV in
+`__sigprocmask14` during multiuser startup.
+
+**Fix:** bracket the call with `subq $8,%rsp` / `addq $8,%rsp`:
+```asm
+	subq	$8,%rsp
+	call	PIC_PLT(_C_LABEL(__sigprocmask14))
+	addq	$8,%rsp
+```
+
+---
+
+## 11. libc ioctl — `request_save` truncated on LP64 (runtime abort)
+
+**File:** `minix/lib/libc/sys/ioctl.c`
+
+`ioctl()` saved the request code in an `int` (`int r, request_save;`) while the
+parameter is `unsigned long request`. Network ioctl codes are `_IOWR(...)`,
+which set bit 31 (`IOC_IN` = `0x80000000`). On LP64 the signed `int` **sign-
+extends** that into `0xFFFFFFFF8…` when passed to `ioctl_convert_if_from_minix`'s
+`unsigned long request` parameter, so the `case SIOCIFGCLONERS:`/`SIOCGIFMEDIA`
+comparisons miss and it hits `default: assert(0)`. Symptom: `ifconfig -C`
+SIGABRT. i386 is immune (`unsigned long` is 32-bit there, no sign extension).
+
+**Fix:** `request_save` → `unsigned long` (matching `request`).

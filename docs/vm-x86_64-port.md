@@ -251,6 +251,29 @@ Bits 11:0   → page offset
 
 ## Known limitations / future work
 
+- **Physical memory is capped at the low 4 GB.**  `alloc.c` sizes its core
+  arrays statically for 4 GB of pages:
+
+  ```c
+  #define NUMBER_PHYSICAL_PAGES (int)(0x100000000ULL/VM_PAGE_SIZE) /* 1M pages */
+  static bitchunk_t free_pages_bitmap[PAGE_BITMAP_CHUNKS];
+  ... pagemap[NUMBER_PHYSICAL_PAGES];
+  ```
+
+  These are indexed by page number, so any RAM at a physical address ≥ 4 GB
+  overruns them and corrupts VM's own data.  This bites with QEMU `-m 4G` (and
+  above), where firmware splits RAM across the 4 GB boundary at the PCI hole and
+  places the remainder above 4 GB.  `mem_init()` now **clamps/skips** chunks
+  that reach past `NUMBER_PHYSICAL_PAGES` before handing them to `free_mem()`:
+
+  ```c
+  if (base >= NUMBER_PHYSICAL_PAGES)            continue;       /* skip */
+  if (base + size > NUMBER_PHYSICAL_PAGES)      size = NUMBER_PHYSICAL_PAGES - base;
+  ```
+
+  Effect: a `-m 4G` config boots and uses the RAM below the hole (~3 GB usable);
+  the portion above 4 GB is ignored.  Full >4 GB support would require making
+  `free_pages_bitmap[]`/`pagemap[]` dynamic (sized from the actual top of RAM).
 - User space is capped at 512 GB (single PDPT).  Extending to 256 TB requires
   making `pt_pdpt` an array indexed by PML4 index and adjusting `pt_ptalloc`,
   `pt_writemap`, etc.
