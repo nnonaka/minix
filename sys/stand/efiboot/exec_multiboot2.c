@@ -37,6 +37,14 @@
 
 #include <i386/multiboot2.h>
 
+/*
+ * Headroom reserved in the multiboot2 info buffer so the MMAP/EFI_MMAP tags
+ * can grow between the sizing and fill passes (the EFI memory map gains
+ * descriptors from intervening allocations).  One page is far more than the
+ * handful of descriptors that can appear in practice.
+ */
+#define MB2_MBI_RESERVE	4096
+
 extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
 extern char twiddle_toggle;
 //extern u_long load_offset;
@@ -1218,8 +1226,14 @@ start_multiboot2(struct multiboot_package *mbp)
 			goto fail;
 	}
 
-	/* Add extra 256 for mmap reserve */
-	mpp->mpp_mbi_len = len + MULTIBOOT_TAG_ALIGN + 256;
+	/*
+	 * The MMAP/EFI_MMAP tags re-read the EFI memory map on the fill pass,
+	 * and the alloc() below (plus LibMemoryMap's own pool allocations)
+	 * adds descriptors between the sizing and fill passes, so those tags
+	 * legitimately grow.  Reserve a page of headroom in the buffer and let
+	 * the fill pass spill into it instead of panicking on any growth.
+	 */
+	mpp->mpp_mbi_len = len + MULTIBOOT_TAG_ALIGN + MB2_MBI_RESERVE;
 	mpp->mpp_mbi = alloc(mpp->mpp_mbi_len);
 	if (mpp->mpp_mbi == NULL) {
 		printf("Failed to allocate mbi\n");
@@ -1233,10 +1247,11 @@ start_multiboot2(struct multiboot_package *mbp)
 			goto fail;
 
 		/*
-		 * It may shrink because of failure when filling
-		 * structures, but it should not grow.
+		 * The fill pass may grow relative to the sizing pass (memory
+		 * map changes); only the reserved headroom is guaranteed, so
+		 * panic only if we would overrun the allocated buffer.
 		 */
-		if (alen > len)
+		if (alen > len + MB2_MBI_RESERVE)
 			panic("multiboot2 info size mismatch");
 	}
 
