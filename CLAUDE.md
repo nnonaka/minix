@@ -165,6 +165,7 @@ Sequence of faults fixed to get the UEFI/multiboot2 path running (details: `docs
 - **ACPI `struct acpi_xsdt` must be `__packed`**: the 36-byte `acpi_sdt_header` + 8-aligned `u64_t data[]` gets 4 bytes padding (data at offset 40), but the on-disk XSDT packs entries at offset 36 → `memcpy` misaligns every table pointer → #GP (non-canonical) reading `xsdt.data[i]`
 
 ## Booting/testing under QEMU (x86_64 UEFI)
+- **The user builds the live image and runs QEMU themselves** — do NOT rebuild the live image or launch QEMU. Build/install only the component(s) under change (`nbmake-amd64 -C <dir> [install]`), then hand off to the user to rebuild the image and boot; they paste back the serial/console log. When a fix needs runtime verification, prepare the change and tell the user what to test, rather than driving the boot
 - Live image: `build/distrib/amd64/liveimage/emuimage/Minix-3.4.0-x86_64-live.img`; OVMF at `/usr/share/OVMF/OVMF_CODE_4M.fd` + a writable copy of `OVMF_VARS_4M.fd`
 - Boot modules (kernel, tty, vm, etc. — see `boot.cfg` `multiboot2`/`load` lines) require rebuilding the live image to take effect; standalone servers/drivers (at_wini, ffs) can be swapped into the image's `/service`
 - **q35 has no legacy IDE**: its disk is AHCI/SATA, so `at_wini` (legacy-IDE only, ports 0x1F0/0x170) reads 0x00 status and fails IDENTIFY → root won't mount. Use a legacy-IDE disk (`-machine pc` + `-drive if=ide`) until an AHCI driver exists
