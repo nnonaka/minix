@@ -199,3 +199,117 @@ typedef unsigned long paddr_t;
   otherwise leave `paddr_t` undefined.
 - Kernel builds on both arches already have `paddr_t` from their own include
   chain; neither branch interferes.
+
+## AHCI / SATA bring-up on q35/UEFI *(fixed)*
+
+q35 (the default UEFI machine on QEMU/KVM) has **no legacy IDE**: its disk is
+AHCI/SATA, so `at_wini` (legacy PIO, ports 0x1F0/0x170) reads 0x00 status and
+fails IDENTIFY. Booting from disk under pure UEFI therefore requires the `ahci`
+driver, which had several latent LP64 bugs that only surfaced on amd64. The
+driver is started in place of `at_wini` by `ahci=yes` (ramdisk `rc`); the disk
+is the built-in q35 SATA controller at PCI 00:1f.2, port 0.
+
+Full chain of fixes (all in `minix/drivers/storage/ahci/ahci.c` unless noted).
+Note PCI interrupt routing (ACPI `_PRT` + IOAPIC GSI) is a prerequisite and is
+documented in `apic-x86_64.md`.
+
+### `iovec_s_t` type pun — the root-mount blocker
+
+`bdr_transfer` (libblockdriver) passes an `iovec_t`, whose `iov_addr`
+(`vir_bytes`, 64-bit) holds **either** a local virtual address (when
+`endpt == SELF`) **or** a grant ID. `at_wini` reads `iov_addr` directly. AHCI
+instead cast the vector to `iovec_s_t *` and read `iov_grant`:
+
+```c
+struct { vir_bytes iov_addr;  vir_bytes iov_size; } iovec_t;     /* offset 0: 8 bytes */
+struct { cp_grant_id_t iov_grant; vir_bytes iov_size; } iovec_s_t; /* offset 0: 4 bytes */
+```
+
+On **i386** `iov_addr` and `iov_grant` are both 4 bytes at offset 0, so the pun
+was harmless. On **amd64** `iov_grant` is the *low 32 bits* of the 64-bit
+`iov_addr`, and the SELF path then sign-extended it:
+
+```diff
+-static int setup_prdt(... iovec_s_t *iovec ...)
++static int setup_prdt(... iovec_t *iovec ...)
+ ...
+-	if (endpt == SELF)
+-		vvec[i].vv_addr = (vir_bytes) iovec[i].iov_grant;
+-	else
+-		vvec[i].vv_grant = iovec[i].iov_grant;
++	if (endpt == SELF)
++		vvec[i].vv_addr = iovec[i].iov_addr;
++	else
++		vvec[i].vv_grant = (cp_grant_id_t) iovec[i].iov_addr;
+```
+
+A SELF buffer at a high user address (`0xefbae000`, bit 31 set) became
+`0xffffffffefbae000`, so `sys_vumap` → VM `handle_memory` found no region and
+returned `EFAULT`. This hit the **partition-table read at open** (drvlib
+`partition()` issues a `SELF` transfer into a high `mmap`'d buffer), so the
+device never opened and root never mounted. Grants kept working throughout
+because grant IDs are small positive ints (no high bits, no sign extension).
+
+The fix changes `sum_iovec`, `setup_prdt`, and `port_transfer` parameters from
+`iovec_s_t *` to `iovec_t *` and drops the `(iovec_s_t *)` cast in
+`ahci_transfer`. `iov_size` is at the same offset in both structs, so the
+size-summing path was unaffected.
+
+### DMA descriptor 64-bit address fields
+
+The AHCI HBA structures carry 64-bit physical addresses as low/high DWORD
+pairs, but the driver wrote only the low half and hardcoded the upper half to
+0. On amd64 `phys_bytes` is 64-bit, so any buffer above 4 GB (or, with
+`alloc_contig`, anywhere) would DMA to the wrong address.
+
+| Field | Location | Fix |
+|-------|----------|-----|
+| PRDT `DBAU` (data base, 63:32) | `ct_set_prdt` | was `*p++ = 0` → `*p++ = (u32_t)((u64_t)prdt->vp_addr >> 32)` |
+| Cmd-list header `CTBAU` (63:32) | `port_set_cmd` | added `cl[3] = (u32_t)((u64_t)ps->ct_phys[cmd] >> 32)` |
+| Port `FBU` (FIS base, 63:32) | `port_alloc` | `port_write(ps, AHCI_PORT_FBU, (u32_t)((u64_t)ps->fis_phys >> 32))` |
+| Port `CLBU` (cmd-list base, 63:32) | `port_alloc` | `port_write(ps, AHCI_PORT_CLBU, (u32_t)((u64_t)ps->cl_phys >> 32))` |
+
+The `(u64_t)` cast before `>> 32` keeps the shift well-defined on i386 (where
+`phys_bytes` is 32-bit, the cast yields 0). Below 4 GB the upper halves are 0,
+identical to the old behaviour, so there is no i386 regression. Above 4 GB they
+program correctly on S64A-capable controllers (QEMU's ICH9 AHCI supports it).
+
+### Device detection without a connect-change interrupt
+
+Detection keyed solely on the **PxIS.PCS** bit (Port Connect *change* Status).
+On QEMU's ich9 the disk is present and stable from power-on, so no
+connect-change is ever latched (`PxIS.PCS == 0`) even though `PxSSTS.DET == 3`
+plainly shows an established device. The spin-up-timeout path then wrongly
+concluded `STATE_NO_DEV`.
+
+```diff
+-		if (port_read(ps, AHCI_PORT_IS) & AHCI_PORT_IS_PCS) {
++		if ((port_read(ps, AHCI_PORT_IS) & AHCI_PORT_IS_PCS) ||
++			(port_read(ps, AHCI_PORT_SSTS) & AHCI_PORT_SSTS_DET_MASK)
++				== AHCI_PORT_SSTS_DET_PHY) {
+ 			/* device is present; poll it instead of giving up */
+ 			ps->state = STATE_WAIT_DEV;
+ 			...
+```
+
+This generalises the existing "bad controller, no interrupt" (VirtualBox)
+fallback to any controller that presents `SSTS.DET == DET_PHY` without raising
+the connect interrupt.
+
+### PCI command register
+
+`pci_reserve()` adds the device's I/O/memory/IRQ to the driver's privileges but
+does **not** touch the PCI command register. `ahci_init` now explicitly enables
+memory space + bus mastering and clears the Interrupt-Disable bit (bit 10),
+rather than relying on firmware state:
+
+```c
+u16_t cr = pci_attr_r16(devind, PCI_CR);
+cr |= PCI_CR_MEM_EN | PCI_CR_MAST_EN;	/* mem space + busmaster (DMA) */
+cr &= ~PCI_CR_INT_DIS;			/* enable INTx */
+pci_attr_w16(devind, PCI_CR, cr);
+```
+
+`PCI_CR_INT_DIS` (0x0400) is defined locally in `ahci.c` (it is not in
+`machine/pci.h`). On OVMF this is a no-op (CR is already `0x0007`), but it is
+correct not to depend on firmware leaving INTx/bus-master enabled.
