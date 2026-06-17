@@ -135,17 +135,6 @@ truncating MMIO BARs above 4 GB on x86_64.
   `pb_base` is set to `bar | ((u64_t)bar_high << 32)`.  On i386 the original
   "ignore BAR if high bits set" guard is kept via `#if !defined(__x86_64__)`.
 - `complete_bars()` 32-bit gap loops: skip BARs with `pb_base > 0xFFFFFFFFULL`.
-- **`PBF_INCOMPLETE` fix** (`pci.c:1108`): the incomplete check was
-  `if (bar == 0)`, testing only the low 32 bits.  A 64-bit BAR whose firmware
-  address has its low DWORD equal to zero (e.g. a BAR at exactly `0x100000000`)
-  has `bar == 0` but `bar_high == 1`, so `pb_base = 0x100000000`.  The old
-  check wrongly set `PBF_INCOMPLETE`, and `complete_bars()` then skipped it
-  (because `pb_base > 0xFFFFFFFF`), leaving `PBF_INCOMPLETE` set forever;
-  `_pci_get_bar()` returned `EINVAL` and the device failed to initialise.
-  Fixed by testing the full 64-bit combined value:
-  ```c
-  if ((bar | ((u64_t)bar_high << 32)) == 0)
-  ```
 - `_pci_get_bar()` / `pci_get_bar()` / `syslib.h` declaration: `u32_t *base`
   → `u64_t *base`
 - All callers widened: `ahci.c`, `atl2.c`, `3c90x.c`, `e1000.c`, `ip1000.c`,

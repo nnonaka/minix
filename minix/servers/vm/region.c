@@ -256,7 +256,7 @@ void map_sanitycheck(const char *file, int line)
 int map_ph_writept(struct vmproc *vmp, struct vir_region *vr,
 	struct phys_region *pr)
 {
-	u64_t flags = PTF_PRESENT | PTF_USER;
+	int flags = PTF_PRESENT | PTF_USER;
 	struct phys_block *pb = pr->ph;
 
 	assert(vr);

@@ -223,29 +223,6 @@ page; it cannot encode the high-kernel VA of `startup_ap_32` directly.  The
 two-step approach (stub in trampoline → `movabs` to high VA) is the standard
 x86_64 SMP solution.
 
-### arch_smp.c — AP IDT table copy bug *(fixed)*
-
-`copy_trampoline()` prepares the GDT and IDT for APs before copying the
-trampoline to low memory.  The original code had a copy-paste error:
-
-```c
-memcpy(&__ap_gdt_tab, gdt, sizeof(gdt));
-memcpy(&__ap_idt_tab, gdt, sizeof(idt));  /* BUG: gdt instead of idt */
-```
-
-The second `memcpy` used `gdt` as the source instead of `idt`, so every AP
-received GDT descriptors in its IDT slot.  The first exception or external
-interrupt on any AP (timer, NMI, page-fault) resolved the vector number
-through a GDT entry, produced a garbage CS:EIP gate, and triggered an
-immediate triple-fault.  SMP never became functional: all APs would die on
-their first interrupt.
-
-**Fix** (`arch_smp.c:90`): source changed to `idt`.
-
-```c
-memcpy(&__ap_idt_tab, idt, sizeof(idt));
-```
-
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each

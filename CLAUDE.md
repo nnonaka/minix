@@ -94,7 +94,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 ## PCI BAR addresses
 - `pci_get_bar()` signature: `u64_t *base, u32_t *size` — callers must declare `u64_t base` (not `u32_t`)
 - `pb_base` in `bus/pci/pci.c` struct is now `u64_t`; `complete_bars()` skips BARs with `pb_base > 0xFFFFFFFFULL`
-- `PBF_INCOMPLETE` check must test the full 64-bit base: `(bar | ((u64_t)bar_high << 32)) == 0` — checking only `bar == 0` wrongly marks a BAR at an exact 4 GB multiple (bar=0, bar_high≠0) as unallocated
 
 ## Format strings — dev_t / ino_t / off_t (cross-arch)
 - `dev_t` and `ino_t` are `uint64_t` = `unsigned long long` on i386, `unsigned long` on amd64
@@ -117,13 +116,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 ## VM pagetable PTF flags
 - `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime
 - When widening `pt_writemap` / `pt_ptalloc_in_range` flags to `u64_t`, cast `(u32_t)flags` in the i386/arm branch to silence truncation warnings (all i386 PTF_ values fit in 32 bits)
-- `PTF_NOEXEC` (bit 63 = `AMD64_VM_NX`) must NOT be set in a PDE — a PDE with NX=1 blocks instruction-fetch from all 512 PTEs under it regardless of per-PTE NX; strip it in `pt_ptalloc`: `(u64_t)flags & ~PTF_NOEXEC`
-- Full NX propagation chain must be `u64_t` throughout: `pt_flags` callback in `memtype.h`, all six `mem_*.c` implementations, `flags` variable in `region.c:map_ph_writept`, and `kern_mappings[].flags` struct field — any `int` in this chain silently truncates bit 63
-
-## SMP AP startup (x86_64)
-- `copy_trampoline()` in `arch_smp.c` copies both GDT and IDT into the trampoline page; the `__ap_idt_tab` source must be `idt` not `gdt` — using `gdt` fills the AP IDT with segment descriptors and causes a triple-fault on the first interrupt on every AP
-- `startup_ap_32` in `mpx.S` is 64-bit code despite the name (historical artifact from i386 port); it is called from the `.code64` stub `__ap_startup_64` in `trampoline.S`
-- `__ap_jmpvec` is a 6-byte far pointer `{ u32_t phys_addr, u16_t selector }` filled at runtime in real mode; `arch_smp.c:copy_trampoline()` uses `ap_lin_addr()` to pre-fill `__ap_gdt.base` / `__ap_idt.base` but NOT `__ap_jmpvec` — that is computed in 16-bit assembly as `CS*16 + offset`
 
 ## Distribution sets
 - New arch port: create `distrib/sets/lists/minix-base/md.<machine>`, `minix-comp/md.<machine>`, `minix-debug/md.<machine>`; `md.i386` is the reference in each

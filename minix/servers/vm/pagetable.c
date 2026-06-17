@@ -95,7 +95,7 @@ static struct {
 	phys_bytes	phys_addr;	/* Physical addr. */
 	phys_bytes	len;		/* Length in bytes. */
 	vir_bytes	vir_addr;	/* Offset in page table. */
-	u64_t		flags;
+	int		flags;
 } kern_mappings[MAX_KERNMAPPINGS];
 int kernmappings = 0;
 
@@ -616,12 +616,8 @@ static int pt_ptalloc(pt_t *pt, int pdpte, int pde, u64_t flags)
 	for(i = 0; i < ARCH_VM_PT_ENTRIES; i++)
 		p[i] = 0;
 
-	/* Write PDE: present, writable, user, pointing to PT page.
-	 * PTF_NOEXEC must not propagate to the PDE — a PDE with NX=1 blocks
-	 * execution for every page in the 2 MB region, even those with NX=0
-	 * in their PTE.  NX is enforced per-page at the PTE level. */
-	pt->pt_pd[pdpte][pde] = (pt_phys & ARCH_VM_ADDR_MASK) |
-		((u64_t)flags & ~PTF_NOEXEC) |
+	/* Write PDE: present, writable, user, pointing to PT page. */
+	pt->pt_pd[pdpte][pde] = (pt_phys & ARCH_VM_ADDR_MASK) | (u64_t)flags |
 		ARCH_VM_PDE_PRESENT | ARCH_VM_PTE_USER | ARCH_VM_PTE_RW;
 
 	return OK;
@@ -1617,7 +1613,7 @@ void pt_init(void)
 
 #if defined(__i386__) || defined(__x86_64__)
 			if(flags & VMMF_GLO)
-				kern_mappings[pindex].flags |= PTF_GLOBAL;
+				kern_mappings[pindex].flags |= (u32_t)PTF_GLOBAL;
 #endif
 
 			if(addr % VM_PAGE_SIZE)
