@@ -2,8 +2,6 @@
 
 ## Build
 - `nbmake-amd64` builds x86_64 MINIX; `nbmake-i386` for i386
-- `nbmake-amd64` is NOT on PATH in non-interactive shells and `$TOOLDIR` is unset there; `export TOOLDIR=$(ls -d "$PWD"/../build/tooldir.Linux-*-x86_64)` then run `$TOOLDIR/bin/nbmake-amd64`
-- Iterate one component: `$TOOLDIR/bin/nbmake-amd64 -C <dir>` builds, `... -C <dir> install` stages into `build/destdir.amd64` (binary lands in `destdir.amd64/service/<name>` for servers/drivers). Boot modules still need a live-image rebuild to take effect (see QEMU section); standalone `/service` drivers can be swapped into the image
 - Architecture naming split: kernel/headers use `amd64` (sys/arch/amd64/), libc/minix use `x86_64` (minix/include/arch/x86_64/, minix/lib/libc/arch/x86_64/)
 
 ## Assembly (PIC)
@@ -101,14 +99,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - Fixed instances (all `com.h`/`ipc.h`): `VPF_ADDR` `m1_i1`→`m1_ull1`; `SVMCTL_MRG_ADDR` `m2_i2`→`m2_ll1`; `VFS_PM_PS_STR`/`VFS_PM_NEWPS_STR` `m7_i5`→ new pointer field `m7_p3` added to `mess_7` (steal from padding; i386 stays 56 bytes by alignment)
 - Adding a field to a `mess_N`: consume `padding[]` so existing field offsets don't move; keep i386 size 56 (`_ASSERT_MSG_SIZE` enforces it on i386 only)
 
-## LP64: libblockdriver iovec — read iov_addr, never iov_grant
-- `bdr_transfer` hands the driver an `iovec_t` whose `iov_addr` (`vir_bytes`, 64-bit) holds a **local address** when `endpt==SELF`, else a **grant ID**; `at_wini` is the reference (reads `iov_addr`)
-- Casting to `iovec_s_t` and reading `iov_grant` works on i386 (both 4 bytes at offset 0) but on amd64 `iov_grant` is the low 32 bits and `(vir_bytes)(cp_grant_id_t)` **sign-extends** a SELF address with bit 31 set (user space `0x?0000000`–`0xF0000000`) → `0xffffffff…`, failing `sys_vumap`/VM `handle_memory` with EFAULT (was THE ahci root-mount bug; surfaces only on the SELF partition-table read at open)
-
-## LP64: fixed-width hardware descriptors & size-bound buffers
-- DMA/hardware descriptor structs read by devices use **fixed 32-bit** address fields — declare them `u32_t`, never `phys_bytes` (8 bytes on amd64 inflates the struct). e.g. at_wini IDE bus-master PRD `struct prdte.prdte_base` must be `u32_t` (entry must stay 8 bytes); guard/bail to PIO for buffers >4GB
-- Buffers sized for a `message` or a struct grow on amd64: `message` is 96 bytes (vs 64 i386). VM `vfs.c STATELEN` must be `sizeof(message)` (FDLOOKUP stores a whole message); VM `slaballoc.c SLABSIZES` cap (200→max 207B) was too small for amd64 structs (`vfs_request_node` = 224B) → bump to 256
-
 ## Kernel cross-address-space copy / demand paging (x86_64)
 - `lin_lin_copy` (`arch/x86_64/memory.c`): `createpde()` returns **0** for a not-present process page; you MUST `return EFAULT_SRC/DST` on `!ptr` so `virtual_copy_f` routes through `vm_suspend` (VM faults the page in). Do NOT rely on `PHYS_COPY_CATCH` — a not-present dst makes the copy touch vaddr 0, whose caught fault addr `0` == the `if(addr)` "no fault" sentinel, so the copy silently writes nowhere. This was THE exec-frame-copy bug (child got `ps_argvstr==0`)
 - `createpde` returns `phys_to_kacc(phys)` (=`DM_BASE+phys`, never 0) for present pages, so `!ptr` cleanly means not-present
@@ -163,19 +153,6 @@ Sequence of faults fixed to get the UEFI/multiboot2 path running (details: `docs
 - **`pg_identity()` (pg_utils.c) must cover ≥ low 4 GB** (`if (num_pds < 4) num_pds = 4`) — it only mapped RAM (`mem_high_phys`), leaving the LAPIC `0xFEE00000` / IOAPIC `0xFEC00000` MMIO hole unmapped → #PF in APIC init after `prot_init` replaces the head.S boot map
 - **No LDT on x86_64**: `prot_init` must `x86_lldt(0)` (null LDTR), not load an 8-byte LDT descriptor — a real LDT descriptor is 16-byte (system) in long mode; the 8-byte one #GPs (`lldt`, error = LDT selector 0x28). Flat GDT, no per-process LDT
 - **ACPI `struct acpi_xsdt` must be `__packed`**: the 36-byte `acpi_sdt_header` + 8-aligned `u64_t data[]` gets 4 bytes padding (data at offset 40), but the on-disk XSDT packs entries at offset 36 → `memcpy` misaligns every table pointer → #GP (non-canonical) reading `xsdt.data[i]`
-
-## Booting/testing under QEMU (x86_64 UEFI)
-- Live image: `build/distrib/amd64/liveimage/emuimage/Minix-3.4.0-x86_64-live.img`; OVMF at `/usr/share/OVMF/OVMF_CODE_4M.fd` + a writable copy of `OVMF_VARS_4M.fd`
-- Boot modules (kernel, tty, vm, etc. — see `boot.cfg` `multiboot2`/`load` lines) require rebuilding the live image to take effect; standalone servers/drivers (at_wini, ffs) can be swapped into the image's `/service`
-- **q35 has no legacy IDE**: its disk is AHCI/SATA, so `at_wini` (legacy-IDE only, ports 0x1F0/0x170) reads 0x00 status and fails IDENTIFY → root won't mount. Use a legacy-IDE disk (`-machine pc` + `-drive if=ide`) until an AHCI driver exists
-- `-serial file:LOG` captures kernel/driver output; `-no-reboot` makes a triple-fault/panic exit QEMU (vs reboot loop)
-- Background QEMU via the Bash tool reports "completed" while the VM keeps running → stale procs hold the image write-lock; `pkill -9 qemu-system-x86` and use unique image/serial/vars filenames per run
-
-## Console routing (x86_64) — serial vs framebuffer
-- `tty/arch/x86_64/console.c scr_init` picks the console backend by `kinfo.boot_mode`: UEFI (1) → `fb_cons_sw` (framebuffer), else `ser_cons_sw`. amd64 has no `bios_console.c` (i386-only, BIOS text mode)
-- `etc/ttys`/`etc.amd64/ttys` run getty on `console` (=ttyc0=framebuffer under UEFI), with `tty00` (serial) **off** → **rc/login output goes to the GFX window, not serial**
-- Serial only carries **kernel/driver `printf`** (kernel console = `consdev=com0`); a quiet serial after driver init usually means userland is live on the framebuffer, not a hang
-- `fb_console.c` has `DUP_CONS_TO_SER=1` (mirrors console→serial); i386 `bios_console.c` has it `0`
 
 ## VM pagetable PTF flags
 - `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime

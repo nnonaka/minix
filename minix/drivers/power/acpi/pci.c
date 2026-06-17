@@ -175,33 +175,28 @@ static ACPI_STATUS get_pci_irq_routing(struct pci_bridge * bridge)
 {
 	ACPI_STATUS status;
 	ACPI_BUFFER abuff;
+	char buff[4096];
 	ACPI_PCI_ROUTING_TABLE *tbl;
 	ACPI_DEVICE_INFO *info;
 	int i;
 
-	/* Let ACPICA allocate a buffer of exactly the required size. A fixed
-	 * buffer is fragile: the _PRT on some chipsets (e.g. q35) exceeds 4 KB,
-	 * which made AcpiGetIrqRoutingTable fail with AE_BUFFER_OVERFLOW and
-	 * left every PCI interrupt unrouted. */
-	abuff.Length = ACPI_ALLOCATE_BUFFER;
-	abuff.Pointer = NULL;
+	abuff.Length = sizeof(buff);
+	abuff.Pointer = buff;
 
 	status = AcpiGetIrqRoutingTable(bridge->handle, &abuff);
-	if (ACPI_FAILURE(status))
-		return AE_OK;
-
-	info = NULL;
-	status = AcpiGetObjectInfo(bridge->handle, &info);
 	if (ACPI_FAILURE(status)) {
-		ACPI_FREE(abuff.Pointer);
-		return status;
+		return AE_OK;
 	}
+
+	info = abuff.Pointer;
+	status = AcpiGetObjectInfo(bridge->handle, &info);
+	if (ACPI_FAILURE(status))
+		return status;
 	/*
 	 * Decode the device number (upper half of the address) and attach the
 	 * new bridge in the children list of its parent
 	 */
 	bridge->device = info->Address >> 16;
-	ACPI_FREE(info);
 	if (bridge != &pci_root_bridge) {
 		bridge->parent->children[bridge->device] = bridge;
 		bridge->primary_bus = bridge->secondary_bus = -1;
@@ -238,7 +233,6 @@ static ACPI_STATUS get_pci_irq_routing(struct pci_bridge * bridge)
 		}
 	}
 
-	ACPI_FREE(abuff.Pointer);
 	return AE_OK;
 }
 

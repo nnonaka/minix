@@ -7,4 +7,5 @@ menu=Start MINIX 3 in single user mode:modules on; load hd0b:/boot/minix_default
 menu=Drop to boot prompt:prompt
 clear=1
 timeout=10
-default=1
+default=2
+
