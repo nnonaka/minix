@@ -10,13 +10,4 @@
 
 ENTRY(__sigreturn)
 	movq	(%rsp), %rdi		/* scp pointer left by kernel */
-	/*
-	 * The handler was entered with %rsp%16==8 (kernel-aligned frame) and
-	 * its `ret` added 8, so we arrive here with %rsp 16-byte aligned.  A C
-	 * function expects %rsp%16==8 at entry; realign before tail-calling
-	 * sigreturn, otherwise its stack-allocated message (zeroed with movaps)
-	 * and the sigprocmask() it runs fault (#GP -> SIGSEGV) on the misaligned
-	 * stack.  Affects every program whose signal handler returns.
-	 */
-	subq	$8, %rsp
 	jmp	PIC_PLT(_C_LABEL(sigreturn))
