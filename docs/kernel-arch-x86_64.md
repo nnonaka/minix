@@ -137,28 +137,6 @@ not from STAR's low 32 bits.
   written as hi/lo pair through `ia32_msr_write`.
 - `INTEL_MSR_SYSENTER_ESP` / `EIP` are also written as full 64-bit values
   (hi/lo), not truncated to 32 bits.
-- `AMD_MSR_FMASK` (`0xC0000084`) **must** be programmed. `SYSCALL` clears
-  exactly the RFLAGS bits set in FMASK; left at its power-on value of 0 it
-  clears nothing, so the user-space `IF` (interrupts enabled) carries straight
-  into the kernel and the **entire syscall/IPC path runs with interrupts on**.
-  A device IRQ can then `mini_notify()` → `enqueue()` a process while the kernel
-  is walking/editing the run queues, corrupting them. i386 is immune because it
-  enters through an INT/interrupt gate, which clears `IF` in hardware.
-
-```c
-/* before: FMASK never written -> IF stays set through SYSCALL */
-
-/* after (setup_sysenter_syscall): mask NT|AC|DF|IF|TF like NetBSD/amd64 */
-ia32_msr_write(AMD_MSR_FMASK, 0, 0x44700);
-/*   NT 0x4000 | AC 0x40000 | DF 0x400 | IF 0x200 | TF 0x100 */
-```
-
-  `SYSRET` restores RFLAGS from `r11` (which holds the user value with `IF`
-  set), so interrupts resume on return to user. Symptom before the fix: the
-  `runqueues_ok` "double sched" assert (`proc.c` `dequeue`/`enqueue`) firing
-  intermittently once `DEBUG_SANITYCHECKS` was enabled — a false-looking
-  double (proc linked once but `p_found` already set) because an IRQ moved a
-  process between queues mid-check. With the fix the system boots to multiuser.
 
 ## klib.S — AMD64 ABI register conventions
 
