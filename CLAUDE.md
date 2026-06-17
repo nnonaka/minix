@@ -27,11 +27,6 @@
 - `minix/lib/libminc/Makefile` adds `-D_LIBMINC` to all files; strtoul.c and strtol.c also get `-D_STANDALONE`
 - Headers with MINIX-specific types must use `(defined(_LIBMINC) || !defined(_STANDALONE))` — not just `!defined(_STANDALONE)` — to match `signal.h`'s pattern and work under the libminc combination
 
-## libc build / relink
-- The installed `libc.a`/`libc.so` is built from **`lib/libc`** (it pulls `minix/lib/libc/sys` in via `.PATH`); `nbmake-amd64 -C minix/lib/libc` does NOT update it — build `-C lib/libc`
-- Statically-linked servers/tools must be rebuilt to pick up a libc change; a live-image repackage alone won't relink them
-- `lib/libc/stdlib/malloc.c` (phkmalloc) compiles in two configs: libc, and libminc with `-D_LIBSYS` (→ `MALLOC_NO_SYSCALLS`); edits must build in both — guard syscall/`write`-using code with `#ifndef MALLOC_NO_SYSCALLS`. VM links this malloc statically: never add `write(2)`/IPC to it (a write from inside VM mid-alloc deadlocks VFS)
-
 ## pthread on MINIX (OpenSolaris/CDDL ports)
 MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 ```c
@@ -85,7 +80,7 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - Kernel lives at `0xFFFFFFFF80400000`; all objects linked into it need `CFLAGS += -mcmodel=kernel -mno-red-zone` (in `minix/kernel/arch/x86_64/Makefile.inc`)
 - Pre-built library archives (`-lsys`, `-lexec`, `-lminc`) use `-mcmodel=small` → `R_X86_64_32` overflows at link time; fix: compile fresh copies in the kernel build and add to `OBJS.kernel` so they shadow the archives (see `Makefile.inc` OBJS.kernel block)
 - After changing `CFLAGS` in `Makefile.inc`, run `nbmake-amd64 -C minix/kernel cleandir` before rebuilding — stale cached `.o` files from the old model cause phantom relocation errors
-- `phys_bytes` is `unsigned long` (64-bit on amd64); `phys_clicks` is `unsigned int` (32-bit). Use `vir_bytes` for kernel virtual addresses like `_kern_vir_base = 0xFFFFFFFF80400000`. A function returning a page number must return `phys_clicks`/`phys_bytes`, never `int` — an `int` `NO_MEM` return sign-extends into the 64-bit caller and bypasses `== NO_MEM` checks (was the VM `findbit` boot-to-login bug)
+- `phys_bytes` is `u32_t` (32-bit); use `vir_bytes` (`unsigned long`, 64-bit) for kernel virtual addresses like `_kern_vir_base = 0xFFFFFFFF80400000`
 - Kernel link needs `-Wl,-z,max-page-size=0x1000` (in `minix/kernel/Makefile`, guarded `MACHINE_ARCH == "x86_64"`) — ld defaults to 2 MB max-page-size for x86-64, padding the first `PT_LOAD` to file offset `0x200000` so the multiboot2 header (in `.unpaged_text`) lands ~2 MB in, outside the EFI loader's 32 KB `MULTIBOOT_SEARCH` → "not a multiboot2 kernel". 4 KB page size puts the header at file offset `0x1008`; section addresses are pinned by `kernel.lds` so only the file offset changes. i386 is unaffected (elf_i386 defaults to 4 KB). Details: `docs/kernel-build-x86_64-fixes.md`
 - The info-request tag `size` in `head.S` differs by arch (amd64=28 spec-correct excluding pad, i386=32 includes pad) but is not a boot factor — consumers advance with `roundup(size, 8)`, same next-tag offset either way
 
@@ -176,13 +171,6 @@ Sequence of faults fixed to get the UEFI/multiboot2 path running (details: `docs
 - **q35 has no legacy IDE**: its disk is AHCI/SATA, so `at_wini` (legacy-IDE only, ports 0x1F0/0x170) reads 0x00 status and fails IDENTIFY → root won't mount. Use a legacy-IDE disk (`-machine pc` + `-drive if=ide`) until an AHCI driver exists
 - `-serial file:LOG` captures kernel/driver output; `-no-reboot` makes a triple-fault/panic exit QEMU (vs reboot loop)
 - Background QEMU via the Bash tool reports "completed" while the VM keeps running → stale procs hold the image write-lock; `pkill -9 qemu-system-x86` and use unique image/serial/vars filenames per run
-
-## Debugging crashes (x86_64)
-- Symbolize a panic/coredump stack (`vm 8 0x..`, `kernel on CPU 0: 0x..`, `<prog> <pid> 0x..`) with `$TOOLDIR/bin/x86_64-elf64-minix-addr2line -f -e <binary> <hex...>` — servers/userland are static non-PIE (text at 0x400000) so raw addresses map directly; gives function names even with line info stripped
-- Binaries: kernel `build/destdir.amd64/usr/sbin/kernel` (symbols via `nm kernel`, not `kernel.debug`), servers `build/destdir.amd64/service/<name>`, tools in `destdir.amd64/usr/{bin,sbin}`
-- Do NOT hand-roll `nm`+`awk` symbolization: awk's doubles lose precision on 64-bit kernel addresses (`0xffffffff8...`)
-- LP64 crash signatures: `0xffffffffffffffff`/`...fffe` = a sign-extended `int` used as a 64-bit value (missing prototype, or `int` return into pointer/`phys_bytes`); a small addr like `0x17` = NULL-struct base + field offset
-- Read-back-verify catches bad pages at the source: a temporary "write a sentinel, read it back" check in `vm_memset` (kernel) / `vm_allocpages` (VM) / `alloc_pages` pinpointed a non-RAM ROM page and a garbage page number during the boot-to-login corruption hunt
 
 ## Console routing (x86_64) — serial vs framebuffer
 - `tty/arch/x86_64/console.c scr_init` picks the console backend by `kinfo.boot_mode`: UEFI (1) → `fb_cons_sw` (framebuffer), else `ser_cons_sw`. amd64 has no `bios_console.c` (i386-only, BIOS text mode)
