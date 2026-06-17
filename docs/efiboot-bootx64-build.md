@@ -196,55 +196,9 @@ The override must come after `.include "${.CURDIR}/../Makefile.efiboot"` because
 `bsd.init.mk` (included from `Makefile.efiboot`) unconditionally sets
 `OBJCOPY= ${TOOLDIR}/bin/...`.
 
-### 9. PHDR linker warning / "not enough room for program headers" *(fixed)*
-
-**File:** `sys/external/bsd/gnu-efi/dist/gnuefi/elf_x86_64_minix_efi.lds`
-
-`x86_64-elf64-minix-ld` emitted `PHDR segment not covered by LOAD segment`
-because with `ImageBase = 0` the ELF auto-generated PT_PHDR is not covered by
-any explicit PT_LOAD.
-
-The fix adds a `PHDRS` block with explicit segment names (suppressing the
-auto-generated PT_PHDR) and assigns each SECTIONS entry to a named segment:
-
-```
-PHDRS
-{
-  text PT_LOAD;
-  data PT_LOAD;
-  dyn  PT_DYNAMIC;
-}
-```
-
-`FILEHDR PHDRS` must **not** be added to the text entry: with `ImageBase = 0`
-the linker would try to fit the ELF header and program-header table before
-`.hash` at offset 0, producing a fatal `not enough room for program headers`
-error.  Without `FILEHDR`, no PT_PHDR is generated and the link succeeds cleanly.
-
-Section assignments added: `:text` on `.hash`, `.gnu.hash`, `.eh_frame`,
-`.text`, `.reloc`; `:data` on `.data`, `.note.gnu.build-id`, `.rela`,
-`.dynsym`, `.dynstr`; `:data :dyn` on `.dynamic`.
-
-### 10. Cross-objcopy PE support *(config.bfd updated; toolchain rebuild needed)*
-
-**File:** `external/gpl3/binutils/dist/bfd/config.bfd`
-
-The `x86_64-*-minix*` entry in `config.bfd` was extended to include PE/COFF
-targets:
-
-```
-targ_selvecs="i386_elf32_minix_vec i386_elf32_vec iamcu_elf32_vec x86_64_pei_vec i386_pei_vec"
-```
-
-This change takes effect only after rebuilding the cross-toolchain.  Until
-then, the host-`objcopy` override in `bootx64/Makefile` remains necessary:
-
-```makefile
-# MINIX cross-objcopy lacks PE/COFF support; override after bsd includes
-.if defined(__MINIX)
-OBJCOPY= objcopy
-.endif
-```
+The long-term fix is to add `x86_64_pei_vec` and `i386_pei_vec` to the
+`x86_64-*-minix*` entry in `external/gpl3/binutils/dist/bfd/config.bfd` and
+rebuild the cross tools.
 
 ## Files changed
 
@@ -255,7 +209,28 @@ OBJCOPY= objcopy
 | `sys/stand/efiboot/bootx64/efibootx64.c` | Fix include path; add `efi_dcache_flush`, `efi_boot_kernel`, `efi_md_show`, `multiboot2` |
 | `sys/arch/amd64/include/param.h` | Add `DEV_BSHIFT`, `DEV_BSIZE`, `BLKDEV_IOSIZE`, `MAXPHYS` for x86_64 |
 | `sys/external/bsd/gnu-efi/dist/gnuefi/reloc_x86_64.c` | Replace `<elf.h>` with portable headers; add `_relocate` prototype |
-| `sys/external/bsd/gnu-efi/dist/gnuefi/elf_x86_64_minix_efi.lds` | New: MINIX-specific EFI linker script; PHDRS block added |
+| `sys/external/bsd/gnu-efi/dist/gnuefi/elf_x86_64_minix_efi.lds` | New: MINIX-specific EFI linker script |
 | `sys/stand/efiboot/Makefile.efiboot` | Extend MINIX linker script selection to x86_64 |
-| `external/gpl3/binutils/dist/bfd/config.bfd` | Add `x86_64_pei_vec i386_pei_vec` to x86_64-minix targ_selvecs |
 
+## Known issues / future work
+
+- **PHDR linker warning**: `ld` emits `bootx64.efi.so.tmp: error: PHDR segment
+  not covered by LOAD segment` during the link step. This is harmless — the ELF
+  `.so` is only an intermediate artefact before `objcopy` converts it to PE/COFF.
+  The warning can be suppressed by adding a `PHDRS` command to
+  `elf_x86_64_minix_efi.lds`.
+
+- **Cross-objcopy PE support**: The MINIX cross-toolchain `objcopy` should gain
+  `pei-x86-64` support. Add `x86_64_pei_vec` (and `i386_pei_vec`) to
+  `targ_selvecs` in the `x86_64-*-minix*` stanza of
+  `external/gpl3/binutils/dist/bfd/config.bfd`, then rebuild cross tools.
+
+- **`efi_boot_kernel` wrong for native 64-bit kernel** (latent): The
+  `efi_boot_kernel` implementation calls `startprog64`, which transitions from
+  EFI 64-bit mode → 32-bit protected mode before jumping to the kernel entry
+  point.  This is the NetBSD i386-compat path and is incorrect for a native
+  64-bit MINIX kernel (which enters directly in long mode via the EFI64 entry
+  tag).  The MINIX primary boot path goes through `exec_multiboot2` →
+  `multiboot2()` → `multiboot64` (stays in 64-bit mode throughout), so
+  `efi_boot_kernel` is not currently exercised and this is a latent bug rather
+  than an active blocker.

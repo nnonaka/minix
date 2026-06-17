@@ -2,7 +2,7 @@
 
 .include <bsd.own.mk>
 
-INSTIMGBASE=	Minix-${DISTRIBVER}-x86_64-install	# gives ${IMGBASE}.img
+INSTIMGBASE=	Minix-${DISTRIBVER}-i386-install	# gives ${IMGBASE}.img
 
 INSTIMAGEMB?=	1900			# for all installation binaries
 
@@ -10,10 +10,10 @@ INSTIMAGEMB?=	1900			# for all installation binaries
 PRIMARY_BOOT=		bootxx_minixfs3
 SECONDARY_BOOT=		boot_monitor
 #SECONDARY_BOOT_ARG=	# unnecessary
-EFIBOOT=		${WORKDIR}/usr/mdec/bootx64.efi
+EFIBOOT=		${WORKDIR}/usr/mdec/bootia32.efi
 
 USE_MBR=		yes
-USE_GPT=        yes
+USE_GPT=        no
 USE_GPTMBR=		no
 
 CLEANFILES+=	boot.cfg

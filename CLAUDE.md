@@ -81,27 +81,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 ## Clang
 - x86_64-*-minix triple must be added manually in `external/bsd/llvm/dist/clang/lib/Basic/Targets.cpp`
 
-## IPC message structs (x86_64)
-- `_ASSERT_MSG_SIZE` is a no-op on x86_64 (see `minix/include/arch/x86_64/include/ipcconst.h`); enforced at 56 bytes only on i386; `_MSG_PAYLOAD_SIZE` = 88 on x86_64
-- Design cross-arch structs to be exactly 56 bytes on i386; they will fit within the 88-byte x86_64 payload automatically
-- `uint64_t` has align 4 on i386 and align 8 on x86_64 — a struct with `uint64_t`+`uint32_t`+`uint32_t`+`padding[40]` is 56 bytes on both
-
-## PCI BAR addresses
-- `pci_get_bar()` signature: `u64_t *base, u32_t *size` — callers must declare `u64_t base` (not `u32_t`)
-- `pb_base` in `bus/pci/pci.c` struct is now `u64_t`; `complete_bars()` skips BARs with `pb_base > 0xFFFFFFFFULL`
-
-## MMIO driver base widening (LP64)
-- Full chain: struct `u32_t base[6]` → `vir_bytes base[6]`; `u32_t *base` params → `vir_bytes *base`; `u32_t base0 = base[0]` → `vir_bytes base0 = base[0]`; `io.h` `my_in*/my_out*` port params `u32_t` → `vir_bytes`; cast `(u32_t)reg` → `(vir_bytes)reg`
-- Audio drivers (als4000, cmi8738, cs4281, trident) share identical io.h structure — all four widened; ip1000 and vt6105 also widened
-
-## EFI linker script (MINIX)
-- `elf_x86_64_minix_efi.lds` uses `ImageBase = 0`; do NOT add `FILEHDR PHDRS` to a PT_LOAD — linker tries to fit ELF headers before offset 0 and fails with "not enough room for program headers"
-- Correct PHDRS block: `{ text PT_LOAD; data PT_LOAD; dyn PT_DYNAMIC; }` — suppresses auto-PT_PHDR (no "PHDR segment not covered" warning) without conflicting with offset 0
-
-## VM pagetable PTF flags
-- `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime
-- When widening `pt_writemap` / `pt_ptalloc_in_range` flags to `u64_t`, cast `(u32_t)flags` in the i386/arm branch to silence truncation warnings (all i386 PTF_ values fit in 32 bits)
-
 ## Distribution sets
 - New arch port: create `distrib/sets/lists/minix-base/md.<machine>`, `minix-comp/md.<machine>`, `minix-debug/md.<machine>`; `md.i386` is the reference in each
 - Set file format: `./path  set-name  [tag]`; entries with a tag (e.g. `binutils`, `nls`, `llvmcmds`) are only included in the flist when the corresponding `MK*` var is in `MKEXTRAVARS` in `distrib/sets/mkvars.mk` AND is not "no"

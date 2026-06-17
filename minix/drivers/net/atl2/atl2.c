@@ -483,7 +483,7 @@ static int atl2_probe(int skip)
  */
 static void atl2_init_hw(int devind, netdriver_addr_t * addr)
 {
-	u64_t bar;
+	uint32_t bar;
 	int r, flag;
 
 	/* Initialize global state. */

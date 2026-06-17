@@ -247,7 +247,7 @@ char *pci_dev_name(u16_t vid, u16_t did);
 char *pci_slot_name(int devind);
 int pci_set_acl(struct rs_pci *rs_pci);
 int pci_del_acl(endpoint_t proc_ep);
-int pci_get_bar(int devind, int port, u64_t *base, u32_t *size, int
+int pci_get_bar(int devind, int port, u32_t *base, u32_t *size, int
 	*ioflag);
 
 /* Profiling. */

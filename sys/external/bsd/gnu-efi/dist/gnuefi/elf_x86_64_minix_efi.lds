@@ -3,24 +3,18 @@
 OUTPUT_FORMAT("elf64-x86-64-minix", "elf64-x86-64-minix", "elf64-x86-64-minix")
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(_start)
-PHDRS
-{
-  text PT_LOAD;
-  data PT_LOAD;
-  dyn  PT_DYNAMIC;
-}
 SECTIONS
 {
   . = 0;
   ImageBase = .;
   /* .hash and/or .gnu.hash MUST come first! */
-  .hash : { *(.hash) } :text
-  .gnu.hash : { *(.gnu.hash) } :text
+  .hash : { *(.hash) }
+  .gnu.hash : { *(.gnu.hash) }
   . = ALIGN(4096);
   .eh_frame :
   {
     *(.eh_frame)
-  } :text
+  }
   . = ALIGN(4096);
   .text :
   {
@@ -29,14 +23,14 @@ SECTIONS
    *(.text.*)
    *(.gnu.linkonce.t.*)
    . = ALIGN(16);
-  } :text
+  }
   _etext = .;
   _text_size = . - _text;
   . = ALIGN(4096);
   .reloc :
   {
    *(.reloc)
-  } :text
+  }
   . = ALIGN(4096);
   .data :
   {
@@ -54,24 +48,24 @@ SECTIONS
    *(.bss)
    *(COMMON)
    *(.rel.local)
-  } :data
-  .note.gnu.build-id : { *(.note.gnu.build-id) } :data
+  }
+  .note.gnu.build-id : { *(.note.gnu.build-id) }
 
   _edata = .;
   _data_size = . - _etext;
   . = ALIGN(4096);
-  .dynamic  : { *(.dynamic) } :data :dyn
+  .dynamic  : { *(.dynamic) }
   . = ALIGN(4096);
   .rela :
   {
     *(.rela.data*)
     *(.rela.got)
     *(.rela.stab)
-  } :data
+  }
   . = ALIGN(4096);
-  .dynsym   : { *(.dynsym) } :data
+  .dynsym   : { *(.dynsym) }
   . = ALIGN(4096);
-  .dynstr   : { *(.dynstr) } :data
+  .dynstr   : { *(.dynstr) }
   . = ALIGN(4096);
   .ignored.reloc :
   {

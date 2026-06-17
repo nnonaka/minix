@@ -676,7 +676,7 @@ static int pt_ptalloc(pt_t *pt, int pde, u32_t flags)
  *			    pt_ptalloc_in_range		     		     *
  *===========================================================================*/
 int pt_ptalloc_in_range(pt_t *pt, vir_bytes start, vir_bytes end,
-	u64_t flags, int verify)
+	u32_t flags, int verify)
 {
 /* Allocate all the page tables in the range specified. */
 #ifdef __x86_64__
@@ -724,7 +724,7 @@ int pt_ptalloc_in_range(pt_t *pt, vir_bytes start, vir_bytes end,
 				return EFAULT;
 			}
 			assert(!pt->pt_dir[pde]);
-			if((r=pt_ptalloc(pt, pde, (u32_t)flags)) != OK) {
+			if((r=pt_ptalloc(pt, pde, flags)) != OK) {
 				/* Couldn't do (complete) mapping.
 				 * Don't bother freeing any previously
 				 * allocated page tables, they're
@@ -1032,7 +1032,7 @@ int pt_writemap(struct vmproc * vmp,
 			vir_bytes v,
 			phys_bytes physaddr,
 			size_t bytes,
-			u64_t flags,
+			u32_t flags,
 			u32_t writemapflags)
 {
 /* Write mapping into page table. Allocate a new page table if necessary. */
@@ -1159,9 +1159,9 @@ int pt_writemap(struct vmproc * vmp,
 
 		/* Entry we will write. */
 #if defined(__i386__)
-		entry = (physaddr & ARCH_VM_ADDR_MASK) | (u32_t)flags;
+		entry = (physaddr & ARCH_VM_ADDR_MASK) | flags;
 #elif defined(__arm__)
-		entry = (physaddr & ARM_VM_PTE_MASK) | (u32_t)flags;
+		entry = (physaddr & ARM_VM_PTE_MASK) | flags;
 #endif
 
 		if(verify) {
@@ -1490,9 +1490,7 @@ void pt_init(void)
 	kern_size = kern_mb_mod->mod_end - kern_mb_mod->mod_start;
 	assert(!(kern_mb_mod->mod_start % ARCH_BIG_PAGE_SIZE));
 	assert(!(kernel_boot_info.vir_kern_start % ARCH_BIG_PAGE_SIZE));
-#if !defined(__x86_64__)
 	kern_start_pde = kernel_boot_info.vir_kern_start / ARCH_BIG_PAGE_SIZE;
-#endif
 
         /* Get ourselves spare pages. */
         sparepages_mem = (vir_bytes) static_sparepages;
@@ -1561,21 +1559,10 @@ void pt_init(void)
 		int kernmap_pde;
 		phys_bytes addr, len;
 		int flags, pindex = 0;
-		vir_bytes offset = 0;
+		u32_t offset = 0;
 
 		kernmap_pde = freepde();
-#ifdef __x86_64__
-		/* kernmap_pde is a PD index within the kernel PD (PML4[511]/PDPT[510]).
-		 * Convert to a kernel virtual address by adding the PD's base VA,
-		 * which is vir_kern_start rounded down to the 1 GB PDPT boundary. */
-		{
-			vir_bytes kern_pd_base = kernel_boot_info.vir_kern_start &
-				~((vir_bytes)(ARCH_VM_DIR_ENTRIES * ARCH_BIG_PAGE_SIZE) - 1);
-			offset = kern_pd_base + (vir_bytes)kernmap_pde * ARCH_BIG_PAGE_SIZE;
-		}
-#else
 		offset = kernmap_pde * ARCH_BIG_PAGE_SIZE;
-#endif
 
 		while(sys_vmctl_get_mapping(pindex, &addr, &len,
 			&flags) == OK)  {

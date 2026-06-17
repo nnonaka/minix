@@ -77,38 +77,43 @@ include the `acpi` service in the ramdisk image.
 | `minix/drivers/net/fxp/fxp.c` | Format string fixes |
 | `minix/drivers/net/lance/lance.c` | Pointer cast via `uintptr_t`; format string fixes |
 
-## Format string mismatches in storage drivers *(fixed)*
+## Remaining Issues
 
-On x86_64, `u64_t` is `unsigned long`, not `unsigned long long`.  `%llu` /
-`%llx` with a `u64_t` argument causes a `-Wformat` error.  All five cases were
-fixed by replacing with `PRIu64` / `PRIx64` macros (and `#include <inttypes.h>`
-where missing):
+### Format string mismatches in storage drivers
 
-| File | Line | Was | Fix |
-|------|------|-----|-----|
-| `minix/drivers/storage/ahci/ahci.c` | 392, 1426 | `%llu` | `%"PRIu64"` |
-| `minix/drivers/storage/ahci/ahci.c` | 1154 | `%llx` | `%"PRIx64"` |
-| `minix/drivers/storage/virtio_blk/virtio_blk.c` | 279 | `%016llx` | `%016"PRIx64"` |
-| `minix/drivers/storage/virtio_blk/virtio_blk.c` | 365 | `%llu` | `%"PRIu64"` |
-| `minix/drivers/storage/filter/driver.c` | 776 | `%llx` | `%"PRIx64"` (inside `#if DEBUG2`) |
+On x86_64, `u64_t` is `unsigned long`, not `unsigned long long`.  Any `%llu` /
+`%llx` used with a `u64_t` argument causes a `-Wformat` warning (treated as
+error under `-Werror`) and potentially wrong output.
 
-### MMIO virtual address truncation in ip1000 and vt6105 *(fixed)*
+| File | Line | Format | Argument type | Fix |
+|------|------|--------|---------------|-----|
+| `minix/drivers/storage/ahci/ahci.c` | 392, 1426 | `%llu` | `u64_t` (lba_count × sector_size) | `PRIu64` or `(unsigned long long)` cast |
+| `minix/drivers/storage/ahci/ahci.c` | 1154 | `%llx` | `u64_t pos` | `PRIx64` or cast |
+| `minix/drivers/storage/virtio_blk/virtio_blk.c` | 279 | `%016llx` | `u64_t position` | `PRIx64` |
+| `minix/drivers/storage/virtio_blk/virtio_blk.c` | 365 | `%llu` | `u64_t sector` | `PRIu64` |
+| `minix/drivers/storage/filter/driver.c` | 776 | `%llx` | `u64_t pos` | `PRIx64` (inside `#if DEBUG2`) |
 
-Both drivers called `vm_map_phys()` to map device MMIO and stored the 64-bit
-virtual address via an explicit `(u32_t)` cast, silently discarding the upper
-32 bits.  The truncated address was then used for all register accesses.
+### MMIO virtual address truncation in ip1000 and vt6105
 
-**Fix applied**: widened the entire MMIO address chain from `u32_t` to
-`vir_bytes` (`unsigned long`, 64-bit on x86_64) throughout both drivers:
+Both drivers have identical structure.  `pci_get_bar()` returns the device's
+physical BAR address; the driver then calls `vm_map_phys()` to obtain a virtual
+address and stores the result as:
 
-- `NDR_driver.base[6]` (`ip1000.h`, `vt6105.h`): `u32_t` → `vir_bytes`
-- `base0` locals and `*base` parameters in all functions (`ip1000.c`, `vt6105.c`)
-- `read_eeprom`, `read_phy_reg`, `write_phy_reg` base parameters (`ip1000.c`)
-- Assignment: `pdev->base[i] = (vir_bytes)reg` (removing the truncating cast)
-- `my_inb/inw/inl/outb/outw/outl` `port` parameters (`ip1000/io.h`, `vt6105/io.h`)
+```c
+pdev->base[i] = (u32_t)reg;   /* reg = vm_map_phys(...) */
+```
 
-The `(volatile u8_t *)(port)` casts inside the io.h functions continue to work
-correctly once `port` carries the full 64-bit VA.
+`pdev->base` is declared `u32_t base[6]`.  On x86_64, `vm_map_phys()` returns
+a 64-bit virtual address; the explicit `(u32_t)` cast silently discards the
+upper 32 bits.  Subsequent MMIO accesses via `ndr_in8(base[0], ...)` / `ndr_out8`
+then go to the truncated address.
+
+Fix: change `base[6]` to `vir_bytes base[6]` (or `uintptr_t`) in the per-device
+struct and remove the `(u32_t)` cast.
+
+Affected files:
+- `minix/drivers/net/ip1000/ip1000.c:690`
+- `minix/drivers/net/vt6105/vt6105.c:494`
 
 ### Already-correct drivers
 
@@ -119,26 +124,12 @@ correctly once `port` carries the full 64-bit VA.
 | `dec21140A` | Uses I/O ports, not MMIO; all bus addresses are `u32_t` matching the hardware |
 | `at_wini`, `floppy`, `virtio_net`, `dpeth` | No format or cast issues found |
 
-## PCI BAR address widening *(fixed)*
+## Deferred Work
 
-`pb_base` in `bus/pci/pci.c`, the IPC reply field
-`mess_pci_lsys_busc_get_bar.base`, and `pci_get_bar()` were all 32-bit,
-truncating MMIO BARs above 4 GB on x86_64.
-
-**Fix applied**:
-
-- `mess_pci_lsys_busc_get_bar.base`: `int` → `uint64_t`; `size_t size` →
-  `uint32_t size`; `padding[44]` → `padding[40]` (maintains 56-byte size on
-  i386; fits within 88-byte x86_64 payload)
-- `pb_base` in `pci.c` struct: `u32_t` → `u64_t`
-- `record_bar()`: `bar_high` saves the upper 32-bit DWORD for 64-bit BARs;
-  `pb_base` is set to `bar | ((u64_t)bar_high << 32)`.  On i386 the original
-  "ignore BAR if high bits set" guard is kept via `#if !defined(__x86_64__)`.
-- `complete_bars()` 32-bit gap loops: skip BARs with `pb_base > 0xFFFFFFFFULL`.
-- `_pci_get_bar()` / `pci_get_bar()` / `syslib.h` declaration: `u32_t *base`
-  → `u64_t *base`
-- All callers widened: `ahci.c`, `atl2.c`, `3c90x.c`, `e1000.c`, `ip1000.c`,
-  `vt6105.c`, `als4000.c`, `cmi8738.c`, `cs4281.c`, `trident.c`
-- Audio driver MMIO chain also fixed: `io.h` `port` params, `base[6]` struct
-  field, `*base` / scalar `base` function params, and `(vir_bytes)reg` cast
-  throughout `als4000`, `cmi8738`, `cs4281`, `trident`
+**PCI BAR address widening**: `pb_base` in `bus/pci/pci.c` is `u32_t`, the IPC
+reply field `mess_pci_lsys_busc_get_bar.base` in `ipc.h` is `int`, and
+`pci_get_bar()` in `libsys/pci_get_bar.c` takes `u32_t *base`. On x86_64, MMIO
+BARs above 4 GB would be silently truncated. All PCI MMIO drivers (`ahci`,
+`at_wini`, `e1000`, etc.) store the BAR result in `u32_t` locals. Widening
+requires changing the IPC message struct, `pci.c`, `pci_get_bar.c`, and every
+caller — tracked as a follow-up.

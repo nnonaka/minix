@@ -14,7 +14,6 @@
 #define PTF_USER         AMD64_VM_USER
 #define PTF_GLOBAL       AMD64_VM_GLOBAL
 #define PTF_NOCACHE      (AMD64_VM_PWT | AMD64_VM_PCD)
-#define PTF_NOEXEC       AMD64_VM_NX
 
 #define ARCH_VM_DIR_ENTRIES      AMD64_VM_PT_ENTRIES   /* 512 PD entries per PD page */
 #define ARCH_PDPT_ENTRIES        AMD64_VM_PT_ENTRIES   /* 512 PDPT entries */
@@ -30,8 +29,8 @@
 #define ARCH_VM_BIGPAGE          AMD64_VM_PS            /* large page flag (2MB) */
 #define ARCH_VM_PT_ENTRIES       AMD64_VM_PT_ENTRIES   /* 512 PT entries per PT page */
 
-/* All valid PTF flags (PTF_NOEXEC = bit 63, u64_t only). */
-#define PTF_ALLFLAGS (PTF_READ|PTF_WRITE|PTF_PRESENT|PTF_USER|PTF_GLOBAL|PTF_NOCACHE|PTF_NOEXEC)
+/* All valid PTF flags. */
+#define PTF_ALLFLAGS (PTF_READ|PTF_WRITE|PTF_PRESENT|PTF_USER|PTF_GLOBAL|PTF_NOCACHE)
 
 /* Pagefault error code interpretation. */
 #define PFERR_NOPAGE(e)  (!((e) & AMD64_VM_PFE_P))

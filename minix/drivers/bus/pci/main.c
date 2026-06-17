@@ -461,8 +461,7 @@ static void do_attr_w32(message *mp)
 static void do_get_bar(message *mp)
 {
 	int r, devind, port, ioflag;
-	u64_t base;
-	u32_t size;
+	u32_t base, size;
 
 	devind= mp->m_lsys_pci_busc_get_bar.devind;
 	port= mp->m_lsys_pci_busc_get_bar.port;
