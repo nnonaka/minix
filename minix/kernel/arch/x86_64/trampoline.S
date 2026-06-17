@@ -69,16 +69,16 @@ LABEL(__ap_id)
 LABEL(__ap_pt)
 .space 4
 LABEL(__ap_gdt)
-.space 10			/* struct desctableptr_s: u16 limit + u64 base */
+.space 8
 LABEL(__ap_idt)
-.space 10			/* struct desctableptr_s: u16 limit + u64 base */
+.space 8
 LABEL(__ap_jmpvec)		/* 6-byte far pointer for long-mode entry */
 .long	0			/* 32-bit offset: phys addr of __ap_startup_64 (runtime) */
 .word	KERN_CS_SELECTOR	/* 16-bit selector: 64-bit kernel code segment */
 LABEL(__ap_gdt_tab)
 .space GDT_SIZE*DESC_SIZE
 LABEL(__ap_idt_tab)
-.space IDT_SIZE*GATE_DESC_SIZE	/* gate descriptors are 16 bytes in long mode */
+.space IDT_SIZE*DESC_SIZE
 
 /*
  * 64-bit stub: executed immediately after the far jump into long mode.

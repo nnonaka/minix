@@ -42,8 +42,11 @@ int mthread_equal(mthread_thread_t l, mthread_thread_t r)
 /*===========================================================================*
  *				mthread_create				     *
  *===========================================================================*/
-int mthread_create(mthread_thread_t *threadid, mthread_attr_t *tattr,
-    void *(*proc)(void *), void *arg)
+int mthread_create(threadid, tattr, proc, arg)
+mthread_thread_t *threadid;
+mthread_attr_t *tattr;
+void *(*proc)(void *);
+void *arg;
 {
 /* Register procedure proc for execution in a thread. */
   mthread_thread_t thread;
@@ -229,7 +232,10 @@ void __attribute__((__constructor__, __used__)) mthread_init(void)
   no_threads = 0;
   used_threads = 0;
   need_reset = 0;
-  running_main_thread = 1;	/* guarded by 'initialized'; re-entrants return early */
+  running_main_thread = 1;	/* mthread_init can only be called from the
+				 * main thread. Calling it from a thread will
+				 * not enter this clause.
+				 */
 
   if (mthread_getcontext(&(mainthread.m_context)) == -1)
 	mthread_panic("Couldn't save state for main thread");
@@ -302,7 +308,9 @@ int mthread_join(mthread_thread_t join, void **value)
 /*===========================================================================*
  *				mthread_once				     *
  *===========================================================================*/
-int mthread_once(mthread_once_t *once, void (*proc)(void))
+int mthread_once(once, proc)
+mthread_once_t *once;
+void (*proc)(void);
 {
 /* Run procedure proc just once */
 
@@ -329,8 +337,11 @@ mthread_thread_t mthread_self(void)
 /*===========================================================================*
  *				mthread_thread_init			     *
  *===========================================================================*/
-static void mthread_thread_init(mthread_thread_t thread, mthread_attr_t *tattr,
-    void *(*proc)(void *), void *arg)
+static void mthread_thread_init(thread, tattr, proc, arg)
+mthread_thread_t thread;
+mthread_attr_t *tattr;
+void *(*proc)(void *);
+void *arg;
 {
 /* Initialize a thread so that it, when unsuspended, will run the given
  * procedure with the given parameter. The thread is marked as runnable.

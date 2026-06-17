@@ -33,8 +33,7 @@
 #define LDT_SELECTOR SEG_SELECTOR(LDT_INDEX)
 #define TSS_SELECTOR(cpu)	SEG_SELECTOR(TSS_INDEX(cpu))
 
-#define DESC_SIZE	8	/* segment descriptor (struct segdesc_s) */
-#define GATE_DESC_SIZE	16	/* long-mode gate descriptor (struct gatedesc_s) */
+#define DESC_SIZE	8
 
 /* Privileges. */
 #define INTR_PRIVILEGE       0	/* kernel and interrupt handlers */
