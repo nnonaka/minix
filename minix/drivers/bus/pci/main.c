@@ -461,8 +461,7 @@ static void do_attr_w32(message *mp)
 static void do_get_bar(message *mp)
 {
 	int r, devind, port, ioflag;
-	u64_t base;
-	u32_t size;
+	u32_t base, size;
 
 	devind= mp->m_lsys_pci_busc_get_bar.devind;
 	port= mp->m_lsys_pci_busc_get_bar.port;
@@ -585,7 +584,7 @@ static int pci_ioctl(devminor_t minor, unsigned long request, endpoint_t endpt,
 #endif
 
 		map.vaddr_ret = vm_map_phys(user_endpt,
-			(void *)(uintptr_t)map.phys_offset, map.size);
+			(void *)map.phys_offset, map.size);
 		r = sys_safecopyto(endpt, grant, 0, (vir_bytes)&map,
 			sizeof(map));
 		break;

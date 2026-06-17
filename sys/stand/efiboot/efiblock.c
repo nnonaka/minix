@@ -136,12 +136,12 @@ efi_block_do_read_blockio(struct efi_block_dev *bdev, UINT64 off, void *buf,
 	blkbuf_offset = off % bdev->bio->Media->BlockSize;
 	blkbuf_size = (lba_end - lba_start + 1) * bdev->bio->Media->BlockSize;
 
-	/* Reserve room for both the alignment shift and the full transfer.
-	 * roundup2(blkbuf, IoAlign) can advance blkbuf_start by up to
-	 * IoAlign-1 bytes, so the allocation must be blkbuf_size + IoAlign-1. */
 	alloc_size = blkbuf_size;
-	if (bdev->bio->Media->IoAlign > 1)
-		alloc_size = blkbuf_size + bdev->bio->Media->IoAlign - 1;
+	if (bdev->bio->Media->IoAlign > 1) {
+		alloc_size = (blkbuf_size + bdev->bio->Media->IoAlign - 1) /
+		    bdev->bio->Media->IoAlign *
+		    bdev->bio->Media->IoAlign;
+	}
 
 	blkbuf = AllocatePool(alloc_size);
 	if (blkbuf == NULL) {

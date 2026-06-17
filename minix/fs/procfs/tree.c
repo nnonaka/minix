@@ -207,7 +207,7 @@ static void construct_pid_dirs(void)
 		make_stat(&stat, i, NO_INDEX);
 
 		node = add_inode(root, name, i, &stat, nr_pid_entries,
-		    (cbdata_t)(uintptr_t)pid);
+		    (cbdata_t)pid);
 
 		if (node == NULL)
 			out_of_inodes();

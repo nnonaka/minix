@@ -27,7 +27,7 @@ int srv_execve(int proc_e, char *exec, size_t exec_len, char *progname,
 	char overflow = 0;	/* No overflow yet. */
 	char *frame;
 	struct ps_strings *psp;
-	vir_bytes vsp = 0;	/* (virtual) Stack pointer in new address space. */
+	int vsp = 0;	/* (virtual) Stack pointer in new address space. */
 
 	int r;
 

@@ -346,36 +346,6 @@ void proctab_dmp(void)
 }
 #endif				/* defined(__arm__) */
 
-#if defined(__x86_64__)
-void proctab_dmp(void)
-{
-/* Proc table dump */
-
-  register struct proc *rp;
-  static struct proc *oldrp = BEG_PROC_ADDR;
-  int r;
-
-  /* First obtain a fresh copy of the current process table. */
-  if ((r = sys_getproctab(proc)) != OK) {
-      printf("IS: warning: couldn't get copy of process table: %d\n", r);
-      return;
-  }
-
-  printf("\n-nr-----gen---endpoint-name--- -prior-quant- -user----sys-rtsflags-from/to-\n");
-
-  PROCLOOP(rp, oldrp)
-	printf(" %5d %10d ", _ENDPOINT_G(rp->p_endpoint), rp->p_endpoint);
-	printf("%-8.8s %5u %5u %6u %6u ",
-	       rp->p_name,
-	       rp->p_priority,
-	       rp->p_quantum_size_ms,
-	       rp->p_user_time, rp->p_sys_time);
-	PRINTRTS(rp);
-	printf("\n");
-  }
-}
-#endif				/* defined(__x86_64__) */
-
 /*===========================================================================*
  *				procstack_dmp  				     *
  *===========================================================================*/

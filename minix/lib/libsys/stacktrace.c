@@ -6,12 +6,11 @@ Created:	Jan 19, 1993 by Philip Homburg
 Copyright 1995 Philip Homburg
 */
 
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <minix/sysutil.h>
 
-typedef uintptr_t reg_t;
+typedef unsigned int reg_t;
 
 extern reg_t get_bp(void);
 

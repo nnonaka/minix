@@ -183,18 +183,14 @@ static int vfs_memmap(struct exec_info *execi,
  *				pm_exec					     *
  *===========================================================================*/
 int pm_exec(vir_bytes path, size_t path_len, vir_bytes frame, size_t frame_len,
-	vir_bytes *pc, vir_bytes *newsp, vir_bytes *ps_str)
+	vir_bytes *pc, vir_bytes *newsp, vir_bytes *UNUSED(ps_str))
 {
 /* Perform the execve(name, argv, envp) call.  The user library builds a
  * complete stack image, including pointers, args, environ, etc.  The stack
  * is copied to a buffer inside VFS, and then to the new core image.
  *
- * ps_str is computed here (output) from the final stack pointer rather than
- * trusting the value the caller's libc guessed: VFS may relocate the frame
- * (scripts via patch_stack, dynamic binaries via aux vectors), and on LP64 a
- * caller built against a stale libc may have computed it wrongly.  The
- * ps_strings struct always sits at the very top of the frame, so its address
- * is authoritative as (vsp + frame_len - sizeof(struct ps_strings)).
+ * ps_str is not currently used, but may be if the ps_strings structure has to
+ * be moved to another location.
  */
   int r;
   vir_bytes vsp;
@@ -374,10 +370,6 @@ int pm_exec(vir_bytes path, size_t path_len, vir_bytes frame, size_t frame_len,
 
   /* Return new stack pointer to caller */
   *newsp = vsp;
-
-  /* The ps_strings struct sits at the top of the (possibly relocated) frame.
-   * Compute its address authoritatively rather than echoing the caller's. */
-  *ps_str = vsp + frame_len - sizeof(struct ps_strings);
 
   clo_exec(fp);
 
@@ -669,7 +661,7 @@ static int insert_arg(char stack[ARG_MAX], size_t *stk_bytes, char *arg,
 	}
 
 	/* set argv[0] correctly */
-	((char **) stack)[1] = (char *)(*vsp + a0 - arg_len);
+	((char **) stack)[1] = (char *) a0 - arg_len + *vsp;
 
 	/* Update stack pointer in the process address space. */
 	*vsp -= offset;

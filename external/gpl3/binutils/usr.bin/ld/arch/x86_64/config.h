@@ -34,7 +34,7 @@
 
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
-/* #undef ENABLE_NLS */
+#define ENABLE_NLS 1
 
 /* Additional extension a shared object might have. */
 /* #undef EXTRA_SHLIB_EXTENSION */

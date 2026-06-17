@@ -96,10 +96,7 @@ static phys_bytes dma_buf_phys;
 
 struct prdte
 {
-	u32_t prdte_base;	/* IDE bus-master PRD: 32-bit physical address.
-				 * MUST be u32_t (not phys_bytes) so the entry
-				 * stays exactly 8 bytes as the hardware expects;
-				 * phys_bytes is 64-bit on amd64 (LP64). */
+	phys_bytes prdte_base;
 	u16_t prdte_count;
 	u8_t prdte_reserved;
 	u8_t prdte_flags;
@@ -966,7 +963,7 @@ static int error_dma(const struct wini *wn)
 	u32_t v;
 
 #define DMAERR(msg) \
-	printf("at_wini%ld: bad DMA: %s. Disabling DMA for drive %td.\n",	\
+	printf("at_wini%ld: bad DMA: %s. Disabling DMA for drive %d.\n",	\
 		w_instance, msg, wn - wini);				\
 	printf("at_wini%ld: workaround: set %s=1 in boot monitor.\n", \
 		w_instance, NO_DMA_VAR); \
@@ -1392,14 +1389,6 @@ static int setup_dma(
 	size = 0;
 	offset = 0;
 	while (i < pcount) {
-		/* The IDE bus-master can only address 32 bits. If sys_vumap
-		 * handed us a buffer above 4GB, we cannot DMA to it; bail so
-		 * the caller falls back to PIO instead of truncating. */
-		if ((u64_t)pvec[i].vp_addr + offset > 0xFFFFFFFFULL) {
-			printf("setup_dma: buffer above 4GB, no DMA\n");
-			errno = EINVAL;
-			return 0;
-		}
 		prdt[j].prdte_base = pvec[i].vp_addr + offset;
 		bytes = pvec[i].vp_size - offset;
 		

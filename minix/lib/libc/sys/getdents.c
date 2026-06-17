@@ -5,7 +5,7 @@
 #include <string.h>
 #include <dirent.h>
 
-int getdents(int fd, char *buffer, size_t nbytes)
+ssize_t getdents(int fd, char *buffer, size_t nbytes)
 {
   message m;
 

@@ -350,7 +350,7 @@ distribution buildworld: .PHONY .MAKE
 .if defined(DESTDIR) && ${DESTDIR} != "" && ${DESTDIR} != "/"
 	${MAKEDIRTARGET} . postinstall-fix-obsolete
 	${MAKEDIRTARGET} . postinstall-fix-obsolete_stand
-	${MAKEDIRTARGET} distrib/sets checkflist SLOPPY_FLIST=YES
+	${MAKEDIRTARGET} distrib/sets checkflist
 .endif
 	@echo   "make ${.TARGET} started at:  ${START_TIME}"
 	@printf "make ${.TARGET} finished at: " && date
@@ -506,7 +506,6 @@ do-tools: .PHONY .MAKE
 
 do-lib: .PHONY .MAKE
 	${MAKEDIRTARGET} lib build_install
-	${MAKEDIRTARGET} minix/lib build_install
 
 do-compat-lib: .PHONY .MAKE
 	${MAKEDIRTARGET} compat build_install BOOTSTRAP_SUBDIRS="../../../lib"

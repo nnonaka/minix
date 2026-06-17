@@ -29,7 +29,7 @@ static void netdriver_portb(struct netdriver_data * data, size_t off, long port,
 		assert(chunk > 0);
 
 		if ((r = sys_sdevio(req, port, data->endpt,
-		    (void *)(uintptr_t)data->iovec[i].iov_grant, chunk, off)) != OK)
+		    (void *)data->iovec[i].iov_grant, chunk, off)) != OK)
 			panic("netdriver: port I/O failed: %d", r);
 
 		i++;

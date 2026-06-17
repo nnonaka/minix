@@ -139,11 +139,6 @@
 	.popsection
 #endif /* __STDC__ */
 
-#if defined(__minix)
-#define IMPORT(sym)		\
-	.extern _C_LABEL(sym)
-#endif /* defined(__minix) */
-
 #else	/*	__x86_64__	*/
 
 #include <i386/asm.h>

@@ -521,7 +521,7 @@ static void fxp_init_buf(fxp_t *fp)
 	alloc_bufsize= tot_bufsize;
 	alloc_buf= alloc_contig(alloc_bufsize, AC_ALIGN4K, &ph);
 	if (alloc_buf == NULL)
-		panic("fxp_init_buf: unable to alloc_contig size: %zu",
+		panic("fxp_init_buf: unable to alloc_contig size: %d",
 			alloc_bufsize);
 
 	buf= (phys_bytes)alloc_buf;

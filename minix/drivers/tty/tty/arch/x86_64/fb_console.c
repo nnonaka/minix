@@ -1,9 +1,8 @@
-/*
+/* 
  * dummy serial console output
  * TODO complete fb console
  */
 
-#define _KERNTYPES
 #include <minix/drivers.h>
 #include <termios.h>
 #include <assert.h>
@@ -156,7 +155,7 @@ static int cons_write(register struct tty *tp, int try)
 	if (count > sizeof(buf)) count = sizeof(buf);
 	if (tp->tty_outcaller == KERNEL) {
 		/* We're trying to print on kernel's behalf */
-		memcpy(buf, (char *)(uintptr_t) tp->tty_outgrant + tp->tty_outcum, count);
+		memcpy(buf, (char *) tp->tty_outgrant + tp->tty_outcum, count);
 	} else {
 		if ((result = sys_safecopyfrom(tp->tty_outcaller,
 				tp->tty_outgrant, tp->tty_outcum,
@@ -391,7 +390,7 @@ static void fb_scr_init(tty_t *tp)
 
 	printf("sc: width=%d, height=%d, depth=%d\n", sc->sc_width, sc->sc_height, sc->sc_depth);
 	printf("    stride=%d, size=%zu\n", sc->sc_stride, sc->sc_fbsize);
-	printf("    paddr=%lx, vaddr=%p\n", kfb->framebuffer_addr, sc->sc_fbaddr);
+	printf("    paddr=%llx, vaddr=%p\n", kfb->framebuffer_addr, sc->sc_fbaddr);
 	
 
 	//rcons_allocattr(&dc->dc_rcons, 0, 0, 0, &defattr);

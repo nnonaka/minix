@@ -26,7 +26,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define _KERNTYPES
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: wsdisplay_vcons.c,v 1.39.4.1 2019/08/15 12:21:27 martin Exp $");
 

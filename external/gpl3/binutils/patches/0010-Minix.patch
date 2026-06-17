@@ -1,13 +1,13 @@
 diff -rNU3 dist-9/bfd/config.bfd dist-10/bfd/config.bfd
 --- dist-9/bfd/config.bfd	2026-06-11 15:43:38.157739943 +0900
-+++ dist-10/bfd/config.bfd	2026-06-13 19:25:16.342927464 +0900
++++ dist-10/bfd/config.bfd	2026-06-11 15:47:55.144027802 +0900
 @@ -659,6 +659,11 @@
      targ_defvec=x86_64_elf64_cloudabi_vec
      want64=true
      ;;
 +  x86_64-*-minix*)
 +    targ_defvec=x86_64_elf64_minix_vec
-+    targ_selvecs="i386_elf32_minix_vec i386_elf32_vec iamcu_elf32_vec x86_64_pei_vec i386_pei_vec"
++    targ_selvecs="i386_elf32_minix_vec i386_elf32_vec iamcu_elf32_vec"
 +    want64=true
 +    ;;
    x86_64-*-darwin*)
@@ -15,7 +15,7 @@ diff -rNU3 dist-9/bfd/config.bfd dist-10/bfd/config.bfd
      targ_selvecs="i386_mach_o_vec mach_o_le_vec mach_o_be_vec mach_o_fat_vec pef_vec pef_xlib_vec sym_vec"
 diff -rNU3 dist-9/bfd/configure dist-10/bfd/configure
 --- dist-9/bfd/configure	2026-06-11 15:43:38.149739809 +0900
-+++ dist-10/bfd/configure	2026-06-11 21:20:58.680693309 +0900
++++ dist-10/bfd/configure	2026-06-11 15:47:55.145027818 +0900
 @@ -14945,6 +14945,7 @@
      x86_64_elf64_vec)		 tb="$tb elf64-x86-64.lo $elfxx_x86 elf64.lo $elf"; target_size=64 ;;
      x86_64_elf64_cloudabi_vec)	 tb="$tb elf64-x86-64.lo $elfxx_x86 elf64.lo $elf"; target_size=64 ;;
@@ -26,7 +26,7 @@ diff -rNU3 dist-9/bfd/configure dist-10/bfd/configure
      x86_64_mach_o_vec)		 tb="$tb mach-o-x86-64.lo" ;;
 diff -rNU3 dist-9/bfd/elf64-x86-64.c dist-10/bfd/elf64-x86-64.c
 --- dist-9/bfd/elf64-x86-64.c	2020-01-18 22:55:47.000000000 +0900
-+++ dist-10/bfd/elf64-x86-64.c	2026-06-11 21:20:58.681693326 +0900
++++ dist-10/bfd/elf64-x86-64.c	2026-06-11 19:35:37.248775359 +0900
 @@ -5214,6 +5214,20 @@
  
  #include "elf64-target.h"
@@ -50,7 +50,7 @@ diff -rNU3 dist-9/bfd/elf64-x86-64.c dist-10/bfd/elf64-x86-64.c
  #undef  TARGET_LITTLE_SYM
 diff -rNU3 dist-9/bfd/targets.c dist-10/bfd/targets.c
 --- dist-9/bfd/targets.c	2026-06-11 15:43:38.150739826 +0900
-+++ dist-10/bfd/targets.c	2026-06-11 21:20:58.681693326 +0900
++++ dist-10/bfd/targets.c	2026-06-11 15:47:55.146027835 +0900
 @@ -921,6 +921,7 @@
  extern const bfd_target x86_64_elf64_vec;
  extern const bfd_target x86_64_elf64_cloudabi_vec;
@@ -69,7 +69,7 @@ diff -rNU3 dist-9/bfd/targets.c dist-10/bfd/targets.c
  	&x86_64_mach_o_vec,
 diff -rNU3 dist-9/ld/configure.tgt dist-10/ld/configure.tgt
 --- dist-9/ld/configure.tgt	2026-06-11 15:43:38.156739926 +0900
-+++ dist-10/ld/configure.tgt	2026-06-11 21:20:58.682693342 +0900
++++ dist-10/ld/configure.tgt	2026-06-11 15:47:55.147027852 +0900
 @@ -984,6 +984,9 @@
  			;;
  x86_64-*-cloudabi*)	targ_emul=elf_x86_64_cloudabi
@@ -82,14 +82,14 @@ diff -rNU3 dist-9/ld/configure.tgt dist-10/ld/configure.tgt
  			targ_extra_libpath="elf_i386 elf_iamcu elf_x86_64 elf_l1om elf_k1om"
 diff -rNU3 dist-9/ld/emulparams/elf_x86_64_minix.sh dist-10/ld/emulparams/elf_x86_64_minix.sh
 --- dist-9/ld/emulparams/elf_x86_64_minix.sh	1970-01-01 09:00:00.000000000 +0900
-+++ dist-10/ld/emulparams/elf_x86_64_minix.sh	2026-06-11 21:20:58.682693342 +0900
++++ dist-10/ld/emulparams/elf_x86_64_minix.sh	2026-06-11 15:47:55.147027852 +0900
 @@ -0,0 +1,3 @@
 +source_sh ${srcdir}/emulparams/elf_x86_64.sh
 +source_sh ${srcdir}/emulparams/elf_minix.sh
 +OUTPUT_FORMAT="elf64-x86-64-minix"
 diff -rNU3 dist-9/ld/Makefile.in dist-10/ld/Makefile.in
 --- dist-9/ld/Makefile.in	2026-06-11 15:43:38.157739943 +0900
-+++ dist-10/ld/Makefile.in	2026-06-11 21:20:58.683693359 +0900
++++ dist-10/ld/Makefile.in	2026-06-11 15:47:55.147027852 +0900
 @@ -967,6 +967,7 @@
  	eelf_x86_64.c \
  	eelf_x86_64_cloudabi.c \

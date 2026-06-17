@@ -42,7 +42,6 @@ void get_cpu_ticks(unsigned int cpu, uint64_t ticks[MINIX_CPUSTATES]);
 int restore_fpu(struct proc *);
 void save_fpu(struct proc *);
 void save_local_fpu(struct proc *, int retain);
-struct sigframe_sigcontext; /* defined in machine/frame.h per arch */
 void fpu_sigcontext(struct proc *, struct sigframe_sigcontext *fr, struct
 	sigcontext *sc);
 
@@ -216,7 +215,7 @@ void do_ser_debug(void);
 int arch_get_params(char *parm, int max);
 void memory_init(void);
 void mem_clear_mapcache(void);
-void arch_proc_init(struct proc *pr, vir_bytes, vir_bytes, vir_bytes, char *);
+void arch_proc_init(struct proc *pr, u32_t, u32_t, u32_t, char *);
 int arch_do_vmctl(message *m_ptr, struct proc *p);
 int vm_contiguous(const struct proc *targetproc, vir_bytes vir_buf,
 	size_t count);

@@ -151,7 +151,7 @@ generate_efirng(void)
 
 	/* Fill the page with whatever the EFI RNG will do.  */
 	if (efi_rng((void *)(uintptr_t)addr, size)) {
-		uefi_call_wrapper(BS->FreePages, 2, addr, EFI_SIZE_TO_PAGES(size));
+		uefi_call_wrapper(BS->FreePages, 2, addr, size);
 		return;
 	}
 

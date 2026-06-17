@@ -341,7 +341,7 @@ static void exec_bootproc(struct vmproc *vmp, struct boot_image *ip)
 	char overflow = 0;	/* No overflow yet. */
 	struct ps_strings *psp;
 
-	vir_bytes vsp = 0;	/* (virtual) Stack pointer in new address space. */
+	int vsp = 0;	/* (virtual) Stack pointer in new address space. */
 	char *argv[] = { ip->proc_name, NULL };
 	char *envp[] = { NULL };
 	char *path = ip->proc_name;
@@ -407,7 +407,7 @@ static void exec_bootproc(struct vmproc *vmp, struct boot_image *ip)
 
 	if(sys_exec(vmp->vm_endpoint, (vir_bytes)vsp,
 		   (vir_bytes)execi->progname, execi->pc,
-		   vsp + ((char *)psp - frame)) != OK)
+		   vsp + ((int)psp - (int)frame)) != OK)
 		panic("vm: boot process exec of process %s (ep=%d) failed\n",
 			execi->progname,vmp->vm_endpoint);
 

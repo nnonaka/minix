@@ -37,14 +37,6 @@
 
 #include <i386/multiboot2.h>
 
-/*
- * Headroom reserved in the multiboot2 info buffer so the MMAP/EFI_MMAP tags
- * can grow between the sizing and fill passes (the EFI memory map gains
- * descriptors from intervening allocations).  One page is far more than the
- * handful of descriptors that can appear in practice.
- */
-#define MB2_MBI_RESERVE	4096
-
 extern const char bootprog_name[], bootprog_rev[], bootprog_kernrev[];
 extern char twiddle_toggle;
 //extern u_long load_offset;
@@ -496,8 +488,8 @@ mbi_cmdline(struct multiboot_package *mbp, void *buf)
 	size_t len;
 	const char fmt[] = "%s %s";
 
-	/* strlen(file) + ' ' + strlen(args) + '\0' */
-	cmdlen = strlen(mbp->mbp_file) + 1 + strlen(mbp->mbp_args) + 1;
+	/* +1 for trailing \0 */
+	cmdlen = strlen(mbp->mbp_args) + 1;
 	len = sizeof(*mbt) + cmdlen;
 
 	if (mbt) {
@@ -1226,14 +1218,8 @@ start_multiboot2(struct multiboot_package *mbp)
 			goto fail;
 	}
 
-	/*
-	 * The MMAP/EFI_MMAP tags re-read the EFI memory map on the fill pass,
-	 * and the alloc() below (plus LibMemoryMap's own pool allocations)
-	 * adds descriptors between the sizing and fill passes, so those tags
-	 * legitimately grow.  Reserve a page of headroom in the buffer and let
-	 * the fill pass spill into it instead of panicking on any growth.
-	 */
-	mpp->mpp_mbi_len = len + MULTIBOOT_TAG_ALIGN + MB2_MBI_RESERVE;
+	/* Add extra 256 for mmap reserve */
+	mpp->mpp_mbi_len = len + MULTIBOOT_TAG_ALIGN + 256;
 	mpp->mpp_mbi = alloc(mpp->mpp_mbi_len);
 	if (mpp->mpp_mbi == NULL) {
 		printf("Failed to allocate mbi\n");
@@ -1247,11 +1233,10 @@ start_multiboot2(struct multiboot_package *mbp)
 			goto fail;
 
 		/*
-		 * The fill pass may grow relative to the sizing pass (memory
-		 * map changes); only the reserved headroom is guaranteed, so
-		 * panic only if we would overrun the allocated buffer.
+		 * It may shrink because of failure when filling
+		 * structures, but it should not grow.
 		 */
-		if (alen > len + MB2_MBI_RESERVE)
+		if (alen > len)
 			panic("multiboot2 info size mismatch");
 	}
 
@@ -1272,19 +1257,10 @@ start_multiboot2(struct multiboot_package *mbp)
 
 	if (mpp->mpp_entry)
 		entry = mpp->mpp_entry->entry_addr;
-#ifdef __LP64__
-	/* Prefer the EFI64-specific entry point (tag type 9) on 64-bit builds;
-	 * it expects to be entered in long mode, unlike the type-3 entry which
-	 * is 32-bit protected-mode code. */
-	if (mpp->mpp_entry_elf64)
-		entry = mpp->mpp_entry_elf64->entry_addr;
-#endif
-
+			
 	gop = (EFI_GRAPHICS_OUTPUT_PROTOCOL *)efi_gop_found();
-	if (gop != NULL) {
-		mode = gop->Mode->Mode;
-		efi_gop_setmode(mode);
-	}
+	mode = gop->Mode->Mode;
+	efi_gop_setmode(mode);
 
 	/* Call ExitBootService if required */
 	if ((mpp->mpp_efi_bs == NULL) && (efi_exited == false))

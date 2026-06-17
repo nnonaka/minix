@@ -98,7 +98,7 @@ void phys_insb(u16_t port, phys_bytes buf, size_t count);
 void phys_insw(u16_t port, phys_bytes buf, size_t count);
 void phys_outsb(u16_t port, phys_bytes buf, size_t count);
 void phys_outsw(u16_t port, phys_bytes buf, size_t count);
-u64_t read_cr3(void);
+u32_t read_cr3(void);
 void reload_cr3(void);
 void i386_invlpg(phys_bytes linaddr);
 vir_bytes phys_memset(phys_bytes ph, u32_t c, phys_bytes bytes);
@@ -163,17 +163,35 @@ void refresh_tlb(void);
 /* multiboot.c */
 void multiboot_init(void);
 
-/* protect.c — 64-bit TSS (Intel SDM Vol.3 7.7) */
+/* protect.c */
 struct tss_s {
-  u32_t reserved0;
-  u64_t rsp0;      /* kernel stack pointer for ring 0 */
-  u64_t rsp1;
-  u64_t rsp2;
-  u64_t reserved1;
-  u64_t ist[7];    /* IST1–IST7 (interrupt stack table) */
-  u64_t reserved2;
-  u16_t reserved3;
-  u16_t iobase;    /* I/O permission bitmap offset (sizeof(tss_s) = no bitmap) */
+  reg_t backlink;
+  reg_t sp0;                    /* stack pointer to use during interrupt */
+  reg_t ss0;                    /*   "   segment  "  "    "        "     */
+  reg_t sp1;
+  reg_t ss1;
+  reg_t sp2;
+  reg_t ss2;
+  reg_t cr3;
+  reg_t ip;
+  reg_t flags;
+  reg_t ax;
+  reg_t cx;
+  reg_t dx;
+  reg_t bx;
+  reg_t sp;
+  reg_t bp;
+  reg_t si;
+  reg_t di;
+  reg_t es;
+  reg_t cs;
+  reg_t ss;
+  reg_t ds;
+  reg_t fs;
+  reg_t gs;
+  reg_t ldt;
+  u16_t trap;
+  u16_t iobase;
 /* u8_t iomap[0]; */
 } __attribute__((packed));
 
@@ -187,7 +205,7 @@ phys_bytes alloc_lowest(kinfo_t *cbi, phys_bytes len);
 void vm_enable_paging(void);
 void cut_memmap(kinfo_t *cbi, phys_bytes start, phys_bytes end);
 phys_bytes pg_roundup(phys_bytes b);
-void pg_info(reg_t *, u64_t **);
+void pg_info(reg_t *, u32_t **);
 void pg_clear(void);
 void pg_identity(kinfo_t *);
 phys_bytes pg_load(void);
@@ -209,7 +227,6 @@ void idt_reload(void);
 
 EXTERN void * k_stacks_start;
 extern void * k_stacks;
-extern u64_t k_percpu_stacks[CONFIG_MAX_CPUS]; /* kernel stack top per CPU */
 
 #define get_k_stack_top(cpu)	((void *)(((char*)(k_stacks)) \
 					+ 2 * ((cpu) + 1) * K_STACK_SIZE))

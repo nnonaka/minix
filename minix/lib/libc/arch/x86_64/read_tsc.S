@@ -1,19 +1,42 @@
-/* read_tsc / read_host_time_ns — x86_64 */
+/*  */
+/* sections */
 #include <machine/asm.h>
 
-/* void read_tsc(unsigned long *high, unsigned long *low); */
-/* Read the cycle counter.  RDTSC puts result in EDX:EAX. */
+/**===========================================================================* */
+/* PUBLIC void read_tsc(unsigned long *high, unsigned long *low); */
+/* Read the cycle counter of the CPU. Pentium and up.  */
 ENTRY(read_tsc)
-	rdtsc				/* EDX:EAX = TSC */
-	movl	%edx, (%rdi)		/* *high = edx */
-	movl	%eax, (%rsi)		/* *low  = eax */
+	push	%edx
+	push	%eax
+.byte	0x0f	/* this is the RDTSC instruction  */
+.byte	0x31	/* it places the TSC in EDX:EAX */
+	push	%ebp
+	movl	16(%esp), %ebp
+	movl	%edx, (%ebp)
+	movl	20(%esp), %ebp
+	movl	%eax, (%ebp)
+	pop	%ebp
+	pop	%eax
+	pop	%edx
 	ret
 
-/* void read_host_time_ns(unsigned long *high, unsigned long *low); */
-/* Access real-time in ns from host in VMware (ECX=0x10001 selects it). */
+/**===========================================================================* */
+/* PUBLIC void read_host_time_ns(unsigned long *high, unsigned long *low); */
+/* access real time in ns from host in vmware. */
 ENTRY(read_host_time_ns)
-	movl	$0x10001, %ecx
-	rdtsc				/* EDX:EAX = host time ns */
-	movl	%edx, (%rdi)		/* *high = edx */
-	movl	%eax, (%rsi)		/* *low  = eax */
-	ret
+        pushl   %edx
+        pushl   %eax
+        pushl   %ecx
+        movl    $0x10001, %ecx
+.byte	0x0f	/* this is the RDTSC instruction  */
+.byte	0x31	/* it places the TSC in EDX:EAX */
+        pushl   %ebp
+        movl    20(%esp), %ebp
+        movl    %edx, (%ebp)
+        movl    24(%esp), %ebp
+        movl    %eax, (%ebp)
+        popl    %ebp
+        popl    %ecx
+        popl    %eax
+        popl    %edx
+        ret
