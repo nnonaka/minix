@@ -143,21 +143,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `mb2_acpi2.c` (standalone experimental `acpi2_init()`) was unused (not in `Makefile.inc`, never called) and is deleted — don't resurrect it; `acpi.c` is the one wired into APIC/SMP/poweroff
 - Details: `docs/apic-x86_64.md` (ACPI feeds MADT/APIC discovery)
 
-## FFS / UFS2 filesystem (minix/fs/ffs, minix/sbin/{newfs,fsck}_ffs)
-- Port of NetBSD `sys/ufs/ffs` as a MINIX userspace FS server modeled on `minix/fs/ext2` (libfsdriver `fsdriver_task` + libminixfs `lmfs_*`), NOT a build of the kernel `sys/ufs` code; on-disk format is **UFS2 only, native little-endian**
-- On-disk layout vendored, trimmed, into `minix/fs/ffs/ffs_disk.h` (struct fs/cg/ufs2_dinode/direct + macros from `sys/ufs/{ffs/fs.h,ufs/dinode.h,ufs/dir.h}`); verified against NetBSD/amd64: `sizeof(struct fs)`=1376 (`fs_magic`@1372), `ufs2_dinode`=256 (`di_db`@112, `di_ib`@208), `fs_sblockloc`@1000
-- **Fragment = lmfs cache block**: `lmfs_set_blocksize(fs->fs_fsize)`; UFS frag/block/cg-bitmap addresses map 1:1 onto cache block numbers (`block64_t`); a full block = `fs_frag` consecutive cache blocks; indirect blocks (`fs_bsize`) are read one fragment at a time
-- Fragments occur **only in the direct-block range**: `ffs_blksize` returns full `bsize` for every `lbn >= UFS_NDADDR`, so all indirect-addressed and metadata blocks are whole blocks; only the last *direct* block can be a fragment (this keeps `ffs_balloc` tractable)
-- VM second-level cache is **disabled** (`lmfs_may_use_vmcache(0)`): fragment relocation in `ffs_realloccg` moves data between device blocks; device-block-keyed caching stays coherent without per-block VM invalidation
-- Cylinder groups are read/modified/written through a contiguous malloc'd `fs_bsize` bounce buffer assembled from the `fs_frag` cache blocks (`ffs_read_cg`/`ffs_write_cg` in balloc.c); fragment accounting (`cg_frsum`/`cg_cs`/`fs_cstotal`/`fs_csp[]`) maintained exactly as NetBSD via the `fragtbl`/`around`/`inside` tables + `ffs_fragacct` so images stay fsck-clean
-- `read_super` must do the full **`SBLOCKSEARCH`** (65536 → 8192 → 0 → 256K) and accept **both** `FS_UFS2_MAGIC` (0x19540119) and `FS_UFS2EA_MAGIC` (0x19012038), validating `fs_sblockloc == offset`; `write_super` writes back to the discovered offset. Real-world gotcha: `nbmakefs -t ffs -o version=2` writes the superblock at **8192** with the **UFS2EA** magic, while standard `newfs` uses 65536 / plain UFS2 (our `newfs_ffs` does the latter)
-- `ffs_isblock` (`cp[h]==0xff`, "already free") vs `ffs_isfreeblock` (`cp[h]==0`, "fully allocated") have *opposite* meaning — the whole-block double-free guard in `ffs_blkfree` must use `ffs_isblock`; using `ffs_isfreeblock` there silently skips every directory's block free (leak)
-- Directories are grown one full `fs_bsize` block at a time, subdivided into empty `UFS_DIRBLKSIZ` (512-byte) entry chunks; entry add/delete in `path.c:search_dir` and `read.c:fs_getdents` iterate per-DIRBLKSIZ so no `direct` ever crosses a 512-byte boundary (fsck requirement)
-- `mount -t ffs` needs no `mount_ffs` binary: MINIX libc `minix_mount` execs `/service/ffs` (set entry `./service/ffs`); the server binary is the whole mount mechanism
-- **Host regression test**: `minix/fs/ffs/test/` compiles the real server `.c` files against a shim (`compat/`, `shim.c`) over an image file and exercises the actual read/write path on the build host (no MINIX boot needed) — `sh run.sh`. This is how the server, `newfs_ffs` and `fsck_ffs` were validated and how the `ffs_isblock` leak was found
-- `fsck_ffs` is a **read-only** consistency checker (no repair): superblock geometry + per-cg bitmap recount vs `cg_cs`/`fs_cs`/`fs_cstotal` + root inode sanity; exits 4 on inconsistency
-- Details: `docs/ffs-ufs2-port.md`
-
 ## Port documentation (docs/)
 - Per-subsystem x86_64 port notes live in `docs/*-x86_64*.md` (e.g. `kernel-arch-x86_64.md`, `apic-x86_64.md`, `vm-x86_64-port.md`, `kernel-build-x86_64-fixes.md`); add new kernel/SMP findings to `docs/kernel-arch-x86_64.md`, matching its before/after code-block style
 
