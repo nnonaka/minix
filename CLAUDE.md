@@ -189,6 +189,8 @@ Sequence of faults fixed to get the UEFI/multiboot2 path running (details: `docs
 - `etc/ttys`/`etc.amd64/ttys` run getty on `console` (=ttyc0=framebuffer under UEFI), with `tty00` (serial) **off** → **rc/login output goes to the GFX window, not serial**
 - Serial only carries **kernel/driver `printf`** (kernel console = `consdev=com0`); a quiet serial after driver init usually means userland is live on the framebuffer, not a hang
 - `fb_console.c` has `DUP_CONS_TO_SER=1` (mirrors console→serial); i386 `bios_console.c` has it `0`
+- `fb_console.c out_char` must call the vt100 emulator with the `kernel` flag **0** for userland tty output/echo — `wsemul_vt100_output` drops `ESC` (`"ESC in kernel output ignored"`) and forces every byte through `output_normal` when `kernel!=0`, so escape sequences (`\E[31m` colors, `\E[K` clr-to-eol, cursor moves, `vi`) print literally as `[31m`/`[K` (ESC invisible). Only the kernel-console path `wsdisplay_cnputc` uses `kernel=1`. Was wrong in both arch `fb_console.c` (hardcoded `1` everywhere); symptom surfaced first as Backspace showing `[K` (libedit emits clr-to-eol on `^H`)
+- Console TERM is **`wsvt25`** (set in `etc/ttys`+`etc/rc.minix`), not `vt100`: keyboard.c emits CSI-form arrows (`\E[A`) + function keys (`\E[11~`), matching wsvt25/vt220 terminfo; the termcap `vt100` entry's `\EOA`/`\EOP` (application-mode) would break arrows/F-keys. `wsvt25` resolves via `/usr/share/terminfo/terminfo.cdb` (libterminfo `_PATH_TERMINFO`), not the small `/etc/termcap`
 
 ## VM pagetable PTF flags
 - `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime

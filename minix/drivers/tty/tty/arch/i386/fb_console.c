@@ -230,9 +230,12 @@ static void out_char(register console_t *cons, int i)
 	if (c == '\n' && (cons->c_tty->tty_termios.c_oflag & (OPOST|ONLCR))
 	                == (OPOST|ONLCR)) {
 		u_char cr = '\r';
-		(*dc->wsemul->output)(dc->wsemulcookie, &cr, 1, 1);
+		(*dc->wsemul->output)(dc->wsemulcookie, &cr, 1, 0);
 	}
-	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 1);
+	/* kernel=0: this is userland tty output/echo, so the vt100 emulator
+	 * must interpret escape sequences (colors, cursor, clr-to-eol, etc.).
+	 * Only the kernel console path (wsdisplay_cnputc) uses kernel=1. */
+	(*dc->wsemul->output)(dc->wsemulcookie, &c, 1, 0);
 
 }
 
