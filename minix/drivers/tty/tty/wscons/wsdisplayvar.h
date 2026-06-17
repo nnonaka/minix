@@ -35,15 +35,9 @@
 
 #include <sys/device.h>
 
-/* Ensure paddr_t is defined. i386 machine/types.h provides it in userspace;
- * amd64 gates it on _KERNEL/_KERNTYPES, so provide a fallback for MINIX
- * userspace drivers. */
-#if !defined(_I386_MACHTYPES_H_) && !defined(_X86_64_TYPES_H_)
-#include <machine/types.h>
-#endif
-#if defined(__x86_64__) && \
-    !defined(_KERNEL) && !defined(_KMEMUSER) && !defined(_KERNTYPES) && \
-    !defined(_STANDALONE)
+/* paddr_t is gated on _KERNEL/_KERNTYPES in machine/types.h; provide a
+ * fallback for MINIX driver userspace where neither is defined. */
+#if !defined(_KERNEL) && !defined(_KERNTYPES)
 typedef unsigned long paddr_t;
 #endif
 

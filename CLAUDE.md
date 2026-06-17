@@ -51,11 +51,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - MINIX does not support mbuf; `paddr_t` in `sys/mbuf.h` is only defined under `_KERNEL` on amd64, causing "unknown type name 'paddr_t'" in userspace
 - Fix: wrap `#include <sys/mbuf.h>` with `#ifndef __minix` / `#endif` — the files typically don't use mbuf types directly
 
-## paddr_t in wscons / userspace drivers
-- On amd64, `machine/types.h` defines `paddr_t` only under `_KERNEL || _KMEMUSER || _KERNTYPES || _STANDALONE`; MINIX userspace drivers get nothing
-- Fix pattern for headers needing `paddr_t`: `#include <machine/types.h>` (guarded by `!defined(_I386_MACHTYPES_H_) && !defined(_X86_64_TYPES_H_)`), then add amd64 userspace fallback `typedef unsigned long paddr_t` under `defined(__x86_64__) && !defined(_KERNEL) && !defined(_KMEMUSER) && !defined(_KERNTYPES) && !defined(_STANDALONE)`
-- i386 userspace always gets `paddr_t` as `__uint64_t` from `machine/types.h` (no fallback needed)
-
 ## ZFS / osnet
 - `MKZFS` defaults to `yes` for `MACHINE == "amd64"` in `share/mk/bsd.own.mk`; guarded with `!defined(__MINIX)` — MINIX does not support ZFS
 - All `external/cddl/osnet/` lib builds are gated on `MKZFS != "no"`; no MINIX code depends on them
@@ -95,19 +90,9 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `pci_get_bar()` signature: `u64_t *base, u32_t *size` — callers must declare `u64_t base` (not `u32_t`)
 - `pb_base` in `bus/pci/pci.c` struct is now `u64_t`; `complete_bars()` skips BARs with `pb_base > 0xFFFFFFFFULL`
 
-## Format strings — dev_t / ino_t / off_t (cross-arch)
-- `dev_t` and `ino_t` are `uint64_t` = `unsigned long long` on i386, `unsigned long` on amd64
-- `off_t` (`__off_t`) is `long long` on both arches
-- Safe portable pattern: use `%llu`/`%llx` with `(unsigned long long)` cast, or `%lld` with `(long long)` cast — never bare `%lu`/`%ld` for these types
-
 ## MMIO driver base widening (LP64)
 - Full chain: struct `u32_t base[6]` → `vir_bytes base[6]`; `u32_t *base` params → `vir_bytes *base`; `u32_t base0 = base[0]` → `vir_bytes base0 = base[0]`; `io.h` `my_in*/my_out*` port params `u32_t` → `vir_bytes`; cast `(u32_t)reg` → `(vir_bytes)reg`
 - Audio drivers (als4000, cmi8738, cs4281, trident) share identical io.h structure — all four widened; ip1000 and vt6105 also widened
-- When widening audio driver `.c` functions, also update: `.h` declarations (`dev_mixer_read`/`dev_mixer_write`) and `mixer.c` definitions (`get_set_volume`, `dev_set_default_volume`) — three files per driver
-
-## phys_bytes vs u32_t pointer mismatch
-- `phys_bytes` is `unsigned long`; `u32_t` is `unsigned int` — same 32-bit size on i386 but different types; `&u32_t_var` passed to `phys_bytes *` gives `-Wincompatible-pointer-types`
-- Declare variables as `phys_bytes` (not `u32_t`) when passing to system APIs like `sys_vmctl_get_pdbr()`
 
 ## EFI linker script (MINIX)
 - `elf_x86_64_minix_efi.lds` uses `ImageBase = 0`; do NOT add `FILEHDR PHDRS` to a PT_LOAD — linker tries to fit ELF headers before offset 0 and fails with "not enough room for program headers"

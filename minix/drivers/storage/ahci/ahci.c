@@ -389,9 +389,9 @@ static int atapi_read_capacity(struct port_state *ps, int cmd)
 	}
 
 	dprintf(V_INFO,
-		("%s: medium detected (%u byte sectors, %llu MB size)\n",
+		("%s: medium detected (%u byte sectors, %lu MB size)\n",
 		ahci_portname(ps), ps->sector_size,
-		(unsigned long long)(ps->lba_count * ps->sector_size / (1024*1024))));
+		ps->lba_count * ps->sector_size / (1024*1024)));
 
 	return OK;
 }
@@ -1151,8 +1151,8 @@ static ssize_t port_transfer(struct port_state *ps, u64_t pos, u64_t eof,
 	if ((r = sum_iovec(ps, endpt, iovec, nr_req, &size)) != OK)
 		return r;
 
-	dprintf(V_REQ, ("%s: %s for %lu bytes at pos %llx\n",
-		ahci_portname(ps), write ? "write" : "read", size, (unsigned long long)pos));
+	dprintf(V_REQ, ("%s: %s for %lu bytes at pos %lx\n",
+		ahci_portname(ps), write ? "write" : "read", size, pos));
 
 	assert(ps->state == STATE_GOOD_DEV);
 	assert(ps->flags & FLAG_HAS_MEDIUM);
@@ -1423,9 +1423,9 @@ static void port_id_check(struct port_state *ps, int success)
 		}
 
 		if (ps->flags & FLAG_HAS_MEDIUM)
-			printf(", %u byte sectors, %llu MB size",
+			printf(", %u byte sectors, %lu MB size",
 				ps->sector_size,
-				(unsigned long long)(ps->lba_count * ps->sector_size / (1024*1024)));
+				ps->lba_count * ps->sector_size / (1024*1024));
 
 		printf("\n");
 	}

@@ -358,7 +358,7 @@ struct buf *new_block(register struct inode *rip, off_t position)
   r = lmfs_get_block_ino(&bp, rip->i_dev, b, NO_READ, rip->i_num,
 	rounddown(position, rip->i_sp->s_block_size));
   if (r != OK)
-	panic("ext2: error getting block (%llu,%u): %d", (unsigned long long)rip->i_dev, b, r);
+	panic("ext2: error getting block (%lu,%u): %d", rip->i_dev, b, r);
   zero_block(bp);
   return(bp);
 }
