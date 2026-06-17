@@ -93,28 +93,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - Design cross-arch structs to be exactly 56 bytes on i386; they will fit within the 88-byte x86_64 payload automatically
 - `uint64_t` has align 4 on i386 and align 8 on x86_64 — a struct with `uint64_t`+`uint32_t`+`uint32_t`+`padding[40]` is 56 bytes on both
 
-## LP64: addresses through 32-bit message fields (x86_64) — SYSTEMIC
-- A 64-bit virtual address with bit 31 set (user addr `0xefffXXXX`; user stack top is `0xF0000000`) stored into a 32-bit `int` field (`m*_i*`) and read back into a `vir_bytes` is **sign-extended into the kernel half** (`0xffffffffefffXXXX`) → rejected as a kernel address
-- Use a 64-bit field (`m*_ll1`, `m*ull1`) or a pointer field (`m*_p*`, 64-bit on amd64) for any message macro carrying an address/pointer; audit `m*_i*` macros in `com.h`
-- Fixed instances (all `com.h`/`ipc.h`): `VPF_ADDR` `m1_i1`→`m1_ull1`; `SVMCTL_MRG_ADDR` `m2_i2`→`m2_ll1`; `VFS_PM_PS_STR`/`VFS_PM_NEWPS_STR` `m7_i5`→ new pointer field `m7_p3` added to `mess_7` (steal from padding; i386 stays 56 bytes by alignment)
-- Adding a field to a `mess_N`: consume `padding[]` so existing field offsets don't move; keep i386 size 56 (`_ASSERT_MSG_SIZE` enforces it on i386 only)
-
-## Kernel cross-address-space copy / demand paging (x86_64)
-- `lin_lin_copy` (`arch/x86_64/memory.c`): `createpde()` returns **0** for a not-present process page; you MUST `return EFAULT_SRC/DST` on `!ptr` so `virtual_copy_f` routes through `vm_suspend` (VM faults the page in). Do NOT rely on `PHYS_COPY_CATCH` — a not-present dst makes the copy touch vaddr 0, whose caught fault addr `0` == the `if(addr)` "no fault" sentinel, so the copy silently writes nowhere. This was THE exec-frame-copy bug (child got `ps_argvstr==0`)
-- `createpde` returns `phys_to_kacc(phys)` (=`DM_BASE+phys`, never 0) for present pages, so `!ptr` cleanly means not-present
-
-## exec / process setup (x86_64)
-- `arch_proc_init(pr, ip, sp, ps_str, name)` params are `vir_bytes` (were `u32_t` — truncating on LP64); prototype in `proto.h`, defs in all three `arch/*/memory.c`; `do_exec.c` passes `(vir_bytes)` not `(u32_t)`
-- VFS computes `ps_str` authoritatively in `pm_exec` (`vsp + frame_len - sizeof(struct ps_strings)`) instead of echoing the caller's value — robust vs stale-libc callers and script/dynamic frame relocation
-- libc `stack_utils.c`/`execve.c`: `vsp` is `vir_bytes`; argc cell is pointer-sized so `argv[]` starts `sizeof(char *)` in and `ps_argvstr = vsp + sizeof(char *)`
-- amd64 crt0 ELF entry is asm `__start` (`lib/csu/arch/amd64/crt0.S`): `movq %rbx,%rdx; jmp ___start` — kernel passes `ps_strings` in `p_reg.bx` (RBX); the C `___start` reads it as its 3rd arg (RDX)
-
-## VM pt_free / pt_new (x86_64)
-- `pt_new` allocates PML4+PDPT once and reuses them (recovers PDPT phys from the kept `pt_pml4[0]`); `pt_free` must therefore **keep `pt_pdpt`** (never free, like `pt_pml4`) and NULL the freed `pt_pd[]`/`pt_pt[]` slots. Freeing `pt_pdpt` while leaving the pointer non-NULL made the next `pt_new` `memset` a freed page → "pagefault in VM" on `VMPPARAM_CLEAR` (exec) slot reuse
-
-## Kernel device-I/O calls (x86_64)
-- `SYS_DEVIO`/`VDEVIO`/`SDEVIO`/`IOPENABLE`/`READBIOS` are needed on amd64 (same x86 port I/O as i386); register in `kernel/system.c` and build `do_devio.c`/`do_vdevio.c` in `kernel/system/Makefile.inc` under `__i386__ || __x86_64__`. Missing → "Unused kernel call 21" and tty/driver `sys_inb`/`sys_outb` failures
-
 ## PCI BAR addresses
 - `pci_get_bar()` signature: `u64_t *base, u32_t *size` — callers must declare `u64_t base` (not `u32_t`)
 - `pb_base` in `bus/pci/pci.c` struct is now `u64_t`; `complete_bars()` skips BARs with `pb_base > 0xFFFFFFFFULL`
