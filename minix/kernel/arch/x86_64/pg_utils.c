@@ -46,15 +46,6 @@ static u64_t pg_pdpt_low[512]                __aligned(4096);
 static u64_t pg_pdpt_high[512]               __aligned(4096);
 static u64_t pg_pd_ident[PG_IDENT_PD_MAX][512] __aligned(4096);
 static u64_t pg_pd_kern[512]                 __aligned(4096);
-/* Direct-map PDs: map physical RAM at DM_BASE under PML4[511] (the kernel high
- * PDPT, pg_pdpt_high, shared by every address space via kern_pml4_hi).  This is
- * how the kernel reaches arbitrary physical memory (page-table walks, phys
- * copies) while running on any process's CR3 — the low identity map exists only
- * in the bootstrap pg_pml4, not in VM-built per-process tables.  Separate from
- * pg_pd_ident because pg_map() splits those when loading boot processes. */
-static u64_t pg_pd_dm[PG_IDENT_PD_MAX][512]  __aligned(4096);
-/* PML4[511] base, PDPT[0]: must match PHYS_DIRECTMAP_BASE in memory.c. */
-#define PG_DIRECTMAP_BASE  0xFFFFFF8000000000ULL
 
 /* Page tables (level 1) for 4KB-page mappings used by pg_map() */
 #define PG_PAGETABLES 32
@@ -209,42 +200,18 @@ void pg_identity(kinfo_t *cbi)
 	if (num_pds < 4) num_pds = 4;
 	if (num_pds > PG_IDENT_PD_MAX) num_pds = PG_IDENT_PD_MAX;
 
-	/* PML4[0] → pg_pdpt_low.  PG_USER on the upper levels (PML4E/PDPTE) is
-	 * required so that user processes loaded in the low half (pg_map sets
-	 * PG_USER on the PD/PT it creates) are reachable: the effective privilege
-	 * is the AND of every walk level.  The 2MB identity leaves below stay
-	 * supervisor (no PG_USER), so kernel memory is not exposed to userspace. */
-	pg_pml4[0] = vir2phys(pg_pdpt_low) | PG_PRESENT | PG_WRITE | PG_USER;
+	/* PML4[0] → pg_pdpt_low */
+	pg_pml4[0] = vir2phys(pg_pdpt_low) | PG_PRESENT | PG_WRITE;
 
 	for (i = 0; i < num_pds; i++) {
 		/* pdpt_low[i] → pg_pd_ident[i] */
-		pg_pdpt_low[i] = vir2phys(pg_pd_ident[i]) |
-			PG_PRESENT | PG_WRITE | PG_USER;
+		pg_pdpt_low[i] = vir2phys(pg_pd_ident[i]) | PG_PRESENT | PG_WRITE;
 
 		for (j = 0; j < 512; j++) {
 			u64_t flags = PG_PRESENT | PG_WRITE | PG_PS;
 			if (phys >= cbi->mem_high_phys)
 				flags |= PG_PWT | PG_PCD;
 			pg_pd_ident[i][j] = phys | flags;
-			phys += PAGE_2MB;
-		}
-	}
-
-	/*
-	 * Physical direct map at DM_BASE (PML4[511], PDPT[0..num_pds-1]).  Lives
-	 * in pg_pdpt_high, which pg_mapkernel() wires to PML4[511]; that entry is
-	 * shared into every process via kern_pml4_hi, so the kernel can reach any
-	 * physical address through DM_BASE+pa on any CR3.  Uses its own PD pages
-	 * (pg_pd_dm), never split by pg_map().  Kernel-only (no PG_USER).
-	 */
-	phys = 0;
-	for (i = 0; i < num_pds; i++) {
-		pg_pdpt_high[i] = vir2phys(pg_pd_dm[i]) | PG_PRESENT | PG_WRITE;
-		for (j = 0; j < 512; j++) {
-			u64_t flags = PG_PRESENT | PG_WRITE | PG_PS;
-			if (phys >= cbi->mem_high_phys)
-				flags |= PG_PWT | PG_PCD;
-			pg_pd_dm[i][j] = phys | flags;
 			phys += PAGE_2MB;
 		}
 	}
@@ -359,16 +326,10 @@ void pg_map(phys_bytes phys, vir_bytes vaddr, vir_bytes vaddr_end,
 			pd[pd_i] = ph | PG_PRESENT | PG_WRITE | PG_USER;
 		} else {
 			/*
-			 * PT already allocated; recover its KERNEL-virtual
-			 * address.  Page tables come from the kernel-image
-			 * pagetables[] pool, so convert phys->virt via the kernel
-			 * offset.  Do NOT use the low identity alias: mapping a
-			 * user vaddr in 0x400000-0x600000 splits the 2MB identity
-			 * page that covers the kernel image, unmapping the pool's
-			 * identity address and faulting on the next PT write.
+			 * PT already allocated; recover its virtual address.
+			 * Physical address == virtual address in the identity map.
 			 */
-			pt = (u64_t *)(kern_vir_start +
-			    ((pd[pd_i] & PG_PHYS_MASK) - kern_phys_start));
+			pt = (u64_t *)(vir_bytes)(pd[pd_i] & PG_PHYS_MASK);
 		}
 
 		pt[pt_i] = (source & PG_PHYS_MASK) | PG_PRESENT | PG_WRITE | PG_USER;

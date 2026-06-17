@@ -4,12 +4,6 @@
 # x86_64 kernel must use kernel code model and no red zone
 CFLAGS += -mcmodel=kernel -mno-red-zone
 
-# The kernel must NOT use MMX/SSE/x87: it doesn't save or restore the FPU/vector
-# register state for its own execution, and SSE is the x86_64 codegen default
-# (so the compiler would otherwise emit e.g. movaps for struct copies, which
-# also #GPs on the kernel's unaligned stack locals).  Force integer-only code.
-CFLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -msoft-float
-
 HERE=${.CURDIR}/arch/${MACHINE_ARCH}
 .PATH:	${HERE}
 
@@ -48,17 +42,9 @@ _errno.o:       ${NETBSDSRCDIR}/lib/libc/gen/_errno.c
 CPPFLAGS._errno.c+= -I${NETBSDSRCDIR}/lib/libc/include -U_REENTRANT
 CLEANFILES+=    init.o _errno.o
 
-# libsys objects the kernel pulls in: shadow-compile so they get the kernel
-# CFLAGS (-mcmodel=kernel and, crucially, -mno-sse) instead of the SSE-enabled
-# -mcmodel=small versions in libsys.a — the kernel must never execute SSE.
-cpuavg.o:       ${NETBSDSRCDIR}/minix/lib/libsys/cpuavg.c
-vm_procctl.o:   ${NETBSDSRCDIR}/minix/lib/libsys/vm_procctl.c
-CLEANFILES+=    cpuavg.o vm_procctl.o
-
 OBJS.kernel+=   ${MINLIB_OBJS_UNPAGED} ${MINC_OBJS_UNPAGED} \
                 ${SYS_OBJS_UNPAGED} \
-                exec_elf.o exec_general.o init.o _errno.o \
-                cpuavg.o vm_procctl.o
+                exec_elf.o exec_general.o init.o _errno.o
 
 # objects we want unpaged from -lminc
 MINC_OBJS_UNPAGED= atoi.o \

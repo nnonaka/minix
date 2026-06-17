@@ -63,12 +63,9 @@
  * argc, the NULL terminator for argv as well as one for
  * environ, the ELF Aux vectors, executable name and the
  * ps_strings struct. */
-/* The argc cell is stored pointer-sized on the stack (see minix_stack_fill:
- * "*fpw++ = argc" with fpw a char **), so reserve sizeof(void *) for it, not
- * sizeof(int).  On LP64 these differ; getting it wrong misplaces argv[]. */
 #define STACK_MIN_SZ \
 ( \
-	sizeof(void *) + sizeof(void *) * 2 + \
+	sizeof(int) + sizeof(void *) * 2 + \
 	sizeof(AuxInfo) * PMEF_AUXVECTORS + PMEF_EXECNAMELEN1 + \
 	sizeof(struct ps_strings) \
 )
@@ -121,7 +118,7 @@ void minix_stack_params(const char *path, char * const *argv, char * const *envp
  *****************************************************************************/
 void minix_stack_fill(const char *path, int argc, char * const *argv,
 	int envc, char * const *envp, size_t stack_size, char *frame,
-	vir_bytes *vsp, struct ps_strings **psp)
+	int *vsp, struct ps_strings **psp)
 {
 	char * const *p;
 
@@ -168,11 +165,7 @@ void minix_stack_fill(const char *path, int argc, char * const *argv,
 	/* Fill in the ps_string struct*/
 	*psp = (struct ps_strings *) fp;
 
-	/* argc occupies a pointer-sized cell at the base of the frame (see the
-	 * "*fpw++ = argc" above), so argv[] starts sizeof(char *) in, not
-	 * sizeof(argc) — they differ on LP64 and the old value put argv[] in the
-	 * middle of the argc cell, corrupting argv pointers on x86_64. */
-	(*psp)->ps_argvstr = (char **)(*vsp + sizeof(char *));
+	(*psp)->ps_argvstr = (char **)(*vsp + sizeof(argc));
 	(*psp)->ps_nargvstr = argc;
 	(*psp)->ps_envstr = (*psp)->ps_argvstr + argc + 1;
 	(*psp)->ps_nenvstr = envc;

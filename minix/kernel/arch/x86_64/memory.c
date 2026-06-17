@@ -39,28 +39,6 @@ void mem_clear_mapcache(void)
 	 */
 }
 
-/* Kernel-high physical direct map base; must match PG_DIRECTMAP_BASE in
- * pg_utils.c (PML4[511], PDPT[0]). */
-#define PHYS_DIRECTMAP_BASE  0xFFFFFF8000000000ULL
-
-/*
- * Translate a physical address to a kernel-accessible (dereferenceable) virtual
- * address via the direct map (pg_utils.c pg_identity()).  The direct map lives
- * under PML4[511] and is shared into every address space through kern_pml4_hi,
- * so this works on any process's CR3.  The low identity map (phys == virt) only
- * exists in the bootstrap pg_pml4, not in VM-built per-process page tables, so
- * it cannot be used for physical access once processes are running.
- */
-phys_bytes phys_to_kacc(phys_bytes pa)
-{
-	return (phys_bytes)(PHYS_DIRECTMAP_BASE + pa);
-}
-
-static const u64_t *pt_vaddr(phys_bytes pa)
-{
-	return (const u64_t *)(vir_bytes) phys_to_kacc(pa);
-}
-
 /*
  * createpde — resolve a linear address to a kernel-accessible virtual address.
  *
@@ -83,22 +61,14 @@ static phys_bytes createpde(
 {
 	phys_bytes offset;
 
-	if (!pr) {
-		/* Caller passed a physical address (NONE/PHYS_SEG).  Make it
-		 * kernel-accessible (high alias for the kernel image). */
-		return phys_to_kacc(linaddr);
-	}
-
-	if (pr == get_cpulocal_var(ptproc) || iskernelp(pr)) {
-		/* Already a virtual address in the current page table. */
+	if (!pr || pr == get_cpulocal_var(ptproc) || iskernelp(pr)) {
+		/* Physical address, or process already in current page table. */
 		return linaddr;
 	}
 
-	/* Walk process 4-level page table.  Page-table pages are reached via
-	 * phys_to_kacc(), not the raw physical address, and the resolved data
-	 * address is returned the same way (see phys_to_kacc comment). */
+	/* Walk process 4-level page table via identity map (phys == virt). */
 	{
-		const u64_t *pml4 = pt_vaddr((phys_bytes) pr->p_seg.p_cr3);
+		const u64_t *pml4 = (const u64_t *)pr->p_seg.p_cr3;
 		u64_t pml4e, pdpte, pde, pte;
 		const u64_t *pdpt, *pd, *pt;
 
@@ -106,7 +76,7 @@ static phys_bytes createpde(
 		if (!(pml4e & AMD64_VM_PRESENT))
 			return 0;
 
-		pdpt  = pt_vaddr(pml4e & AMD64_VM_ADDR_MASK);
+		pdpt  = (const u64_t *)(pml4e & AMD64_VM_ADDR_MASK);
 		pdpte = pdpt[AMD64_VM_PDPT(linaddr)];
 		if (!(pdpte & AMD64_VM_PRESENT))
 			return 0;
@@ -115,10 +85,10 @@ static phys_bytes createpde(
 			                  ~((phys_bytes)((1ULL << 30) - 1));
 			offset = linaddr & ((1ULL << 30) - 1);
 			*bytes = MIN(*bytes, (phys_bytes)(1ULL << 30) - offset);
-			return phys_to_kacc(base + offset);
+			return base + offset;
 		}
 
-		pd  = pt_vaddr(pdpte & AMD64_VM_ADDR_MASK);
+		pd  = (const u64_t *)(pdpte & AMD64_VM_ADDR_MASK);
 		pde = pd[AMD64_VM_PD(linaddr)];
 		if (!(pde & AMD64_VM_PRESENT))
 			return 0;
@@ -127,16 +97,16 @@ static phys_bytes createpde(
 			                  ~((phys_bytes)AMD64_VM_OFFSET_MASK_2MB);
 			offset = linaddr & AMD64_VM_OFFSET_MASK_2MB;
 			*bytes = MIN(*bytes, (phys_bytes)AMD64_BIG_PAGE_SIZE - offset);
-			return phys_to_kacc(base + offset);
+			return base + offset;
 		}
 
-		pt  = pt_vaddr(pde & AMD64_VM_ADDR_MASK);
+		pt  = (const u64_t *)(pde & AMD64_VM_ADDR_MASK);
 		pte = pt[AMD64_VM_PT(linaddr)];
 		if (!(pte & AMD64_VM_PRESENT))
 			return 0;
 		offset = linaddr & (AMD64_PAGE_SIZE - 1);
 		*bytes = MIN(*bytes, (phys_bytes)AMD64_PAGE_SIZE - offset);
-		return phys_to_kacc((pte & AMD64_VM_ADDR_MASK) + offset);
+		return (pte & AMD64_VM_ADDR_MASK) + offset;
 	}
 }
 
@@ -201,17 +171,6 @@ static int lin_lin_copy(struct proc *srcproc, vir_bytes srclinaddr,
 		srcptr = createpde(srcproc, srclinaddr, &chunk, 0, &changed);
 		dstptr = createpde(dstproc, dstlinaddr, &chunk, 1, &changed);
 		/* changed is never set to 1 on x86_64; no CR3 reload needed. */
-
-		/* createpde() returns 0 when a process page is not present (e.g. a
-		 * demand-zero stack page during an exec frame copy).  We MUST detect
-		 * that explicitly here and return EFAULT_SRC/DST so virtual_copy_f()
-		 * asks VM to fault the page in.  We cannot rely on the PHYS_COPY_CATCH
-		 * fault below: a not-present page makes the copy touch virtual address
-		 * 0, whose fault yields a caught address of 0 — indistinguishable from
-		 * "no fault" in the `if(addr)` test, so the copy would silently succeed
-		 * writing nowhere and the page would never be mapped. */
-		if (srcproc && !srcptr) return EFAULT_SRC;
-		if (dstproc && !dstptr) return EFAULT_DST;
 
 		/* Check for overflow. */
 		if (srcptr + chunk < srcptr) return EFAULT_SRC;
@@ -307,25 +266,10 @@ phys_bytes umap_virtual(
 /*===========================================================================*
  *                              vm_lookup                                    *
  *===========================================================================*/
-/*
- * Return a kernel-accessible virtual pointer for a page-table page located at
- * physical address pa.  We cannot blindly treat pa as a virtual address via
- * the low identity map: loading a user process (pg_map) overwrites the low
- * identity alias of the kernel-image virtual range, and the bootstrap page
- * tables (pg_pml4 etc.) live in the kernel image.  Reach those through the
- * stable high kernel alias (pg_mapkernel); other page tables (free RAM) still
- * use the identity map.
- *
- * TODO: replace the identity-map page-table access with a proper physical
- * direct-map window (cf. i386's phys_get32) so this is robust for all PTs.
- */
 int vm_lookup(const struct proc *proc, const vir_bytes virtual,
  phys_bytes *physical, u32_t *ptent)
 {
-	/* Walk the 4-level page table.  Page-table pages are reached via
-	 * pt_vaddr() (kernel-image high alias or identity), not the raw
-	 * physical address, because the low identity alias of the kernel image
-	 * is clobbered once user processes are mapped in. */
+	/* Walk the 4-level page table via the identity map (phys == virt). */
 	const u64_t *pml4, *pdpt, *pd, *pt;
 	u64_t pml4e, pdpte, pde_v, pte_v;
 
@@ -334,12 +278,12 @@ int vm_lookup(const struct proc *proc, const vir_bytes virtual,
 	assert(!isemptyp(proc));
 	assert(HASPT(proc));
 
-	pml4  = pt_vaddr((phys_bytes) proc->p_seg.p_cr3);
+	pml4  = (const u64_t *)proc->p_seg.p_cr3;
 	pml4e = pml4[AMD64_VM_PML4(virtual)];
 	if (!(pml4e & AMD64_VM_PRESENT))
 		return EFAULT;
 
-	pdpt  = pt_vaddr(pml4e & AMD64_VM_ADDR_MASK);
+	pdpt  = (const u64_t *)(pml4e & AMD64_VM_ADDR_MASK);
 	pdpte = pdpt[AMD64_VM_PDPT(virtual)];
 	if (!(pdpte & AMD64_VM_PRESENT))
 		return EFAULT;
@@ -351,7 +295,7 @@ int vm_lookup(const struct proc *proc, const vir_bytes virtual,
 		return OK;
 	}
 
-	pd    = pt_vaddr(pdpte & AMD64_VM_ADDR_MASK);
+	pd    = (const u64_t *)(pdpte & AMD64_VM_ADDR_MASK);
 	pde_v = pd[AMD64_VM_PD(virtual)];
 	if (!(pde_v & AMD64_VM_PRESENT))
 		return EFAULT;
@@ -363,7 +307,7 @@ int vm_lookup(const struct proc *proc, const vir_bytes virtual,
 		return OK;
 	}
 
-	pt    = pt_vaddr(pde_v & AMD64_VM_ADDR_MASK);
+	pt    = (const u64_t *)(pde_v & AMD64_VM_ADDR_MASK);
 	pte_v = pt[AMD64_VM_PT(virtual)];
 	if (!(pte_v & AMD64_VM_PRESENT))
 		return EFAULT;
@@ -598,8 +542,8 @@ void memory_init(void)
 /*===========================================================================*
  *				arch_proc_init				     *
  *===========================================================================*/
-void arch_proc_init(struct proc *pr, const vir_bytes ip, const vir_bytes sp,
-	const vir_bytes ps_str, char *name)
+void arch_proc_init(struct proc *pr, const u32_t ip, const u32_t sp,
+	const u32_t ps_str, char *name)
 {
 	arch_proc_reset(pr);
 	strlcpy(pr->p_name, name, sizeof(pr->p_name));
@@ -720,18 +664,13 @@ int arch_phys_map_reply(const int index, const vir_bytes addr)
 {
 #ifdef USE_APIC
 	if (index == lapic_mapping_index && lapic_addr) {
-		/* Only remember the vaddr VM mapped the LAPIC at.  The switch to
-		 * it (lapic_addr = lapic_addr_vaddr) happens in arch_enable_paging()
-		 * once we run on VM-managed page tables — by then the boot identity
-		 * mapping of the LAPIC MMIO is gone.  Switching here (with
-		 * lapic_addr_vaddr still 0) left lapic_addr = 0, so the timer EOI
-		 * wrote to 0x0b0 and faulted. */
-		lapic_addr_vaddr = addr;
+		lapic_addr = lapic_addr_vaddr;
+		lapic_eoi_addr = LAPIC_EOI;
 		return OK;
 	} else if (ioapic_enabled && index >= ioapic_first_index &&
 		   index <= ioapic_last_index) {
 		int i = index - ioapic_first_index;
-		io_apic[i].vaddr = addr;
+		io_apic[i].addr = io_apic[i].vaddr;
 		return OK;
 	}
 #endif
@@ -748,12 +687,7 @@ int arch_phys_map_reply(const int index, const vir_bytes addr)
 			minix_ipcvecs_syscall, minix_ipcvecs_softint;
 		extern vir_bytes usermapped_offset;
 
-		/* On x86_64 the usermapped region is mapped into the user half
-		 * (below the kernel's high link address), so addr < usermapped_start;
-		 * usermapped_offset wraps (mod 2^64) but FIXEDPTR(ptr) = addr +
-		 * (ptr - usermapped_start) still resolves to the correct user
-		 * address.  Only require a non-zero user mapping. */
-		assert(addr);
+		assert(addr > (vir_bytes)&usermapped_start);
 		usermapped_offset = addr - (vir_bytes)&usermapped_start;
 #define FIXEDPTR(ptr) (void *)((vir_bytes)(ptr) + usermapped_offset)
 #define FIXPTR(ptr)   ptr = FIXEDPTR(ptr)

@@ -69,11 +69,10 @@ IMPORT(multiboot_init)
 /*			hardware interrupt handlers (IRQs)		     */
 /*===========================================================================*/
 
-/* Pass irq as first argument per AMD64 ABI (%edi), not on the stack as on
- * i386 — irq_handle(int) reads %rdi, so a pushed arg leaves it garbage. */
 #define PIC_IRQ_HANDLER(irq)						\
-	movl	$irq, %edi						;\
-	call	_C_LABEL(irq_handle)					;
+	push	$irq							;\
+	call	_C_LABEL(irq_handle)					;\
+	add	$8, %rsp						;
 
 #define hwint_master(irq) \
 	TEST_INT_IN_KERNEL(8, 0f)					;\
