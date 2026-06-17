@@ -3,7 +3,7 @@
 #ifndef _INTERRUPT_H
 #define _INTERRUPT_H
 
-#if defined(__x86_64__)
+#if defined(__i386__)
 
 /* 8259A interrupt controller ports. */
 #define INT_CTL         0x20	/* I/O port for interrupt controller */

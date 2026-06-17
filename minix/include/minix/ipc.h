@@ -2672,9 +2672,7 @@ typedef struct noxfer_message {
 } message __ALIGNED(16);
 
 /* Ensure the complete union respects the IPC assumptions. */
-#if !defined(__x86_64__)
 typedef int _ASSERT_message[/* CONSTCOND */sizeof(message) == 64 ? 1 : -1];
-#endif
 
 /* The following defines provide names for useful members. */
 #define m1_i1  m_m1.m1i1
