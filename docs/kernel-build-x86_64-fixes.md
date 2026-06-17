@@ -160,56 +160,6 @@ The shadow-object approach avoids this by keeping two separately-compiled
 copies: the archives serve userspace, the kernel-built objects serve the
 kernel binary.
 
-## Multiboot2 header pushed out of the search window
-
-Symptom: `bootx64.efi` loads, then the EFI boot loader prints
-
-```
-hd0b:/boot/minix_default/kernel is not a multiboot2 kernel
-multiboot2 returned
-```
-
-Cause: `probe_multiboot2()` in `sys/stand/efiboot/exec_multiboot2.c` scans only
-the first `MULTIBOOT_SEARCH` (32 KB) of the file for the multiboot2 magic
-(`0xe85250d6`) — as the spec requires the header to live there. The header is
-emitted in `.unpaged_text` (vaddr `0x400000`) by `arch/x86_64/head.S`, but
-`ld` defaults `max-page-size` to **2 MB** for x86-64. To keep
-`p_offset ≡ p_vaddr (mod max-page-size)`, it padded the first `PT_LOAD`
-segment to **file offset 0x200000**, so the magic sat ~2 MB into the file —
-far outside the 32 KB window. (i386 never hits this: `elf_i386` defaults to a
-4 KB page size, so the first segment lands at file offset `0x1000`.)
-
-Fix: force a 4 KB max-page-size for the kernel link.
-
-```makefile
-# In minix/kernel/Makefile
-.if ${MACHINE_ARCH} == "x86_64"
-LDFLAGS+= -Wl,-z,max-page-size=0x1000
-.endif
-```
-
-Section virtual/physical addresses are pinned by `kernel.lds`, so only the
-**file offset** changes — nothing about where segments load moves. After the
-relink:
-
-```
-$ readelf -l kernel | grep -A1 LOAD
-  LOAD  0x0000000000001000 0x0000000000400000 0x0000000000400000  R E
-  LOAD  0x0000000000006000 0x0000000000405000 0x0000000000405000  RW
-  LOAD  0x0000000000009000 0xffffffff80478000 0x0000000000478000  RWE
-```
-
-The multiboot2 header now lands at file offset `0x1008`, well inside the 32 KB
-search window. Note the relaxed alignment also lets `ld` split the old single
-R/W/E `PT_LOAD` into separate R+E / RW segments — harmless, as the EFI loader's
-`loadfile` loads each segment by its `p_paddr`.
-
-Note: the info-request tag's `size` field differs between arches (amd64 = 28,
-i386 = 32) but is *not* a boot factor. Per spec `size` excludes the trailing
-8-byte alignment pad, so 28 is correct; i386's 32 folds the pad in. Every
-consumer advances with `roundup(size, 8)`, so both put the next tag at the same
-offset (+32).
-
 ## Result
 
 After all fixes the kernel binary is an ELF64 `EXEC` for `Advanced Micro

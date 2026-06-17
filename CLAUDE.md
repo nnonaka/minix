@@ -79,8 +79,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - Pre-built library archives (`-lsys`, `-lexec`, `-lminc`) use `-mcmodel=small` → `R_X86_64_32` overflows at link time; fix: compile fresh copies in the kernel build and add to `OBJS.kernel` so they shadow the archives (see `Makefile.inc` OBJS.kernel block)
 - After changing `CFLAGS` in `Makefile.inc`, run `nbmake-amd64 -C minix/kernel cleandir` before rebuilding — stale cached `.o` files from the old model cause phantom relocation errors
 - `phys_bytes` is `u32_t` (32-bit); use `vir_bytes` (`unsigned long`, 64-bit) for kernel virtual addresses like `_kern_vir_base = 0xFFFFFFFF80400000`
-- Kernel link needs `-Wl,-z,max-page-size=0x1000` (in `minix/kernel/Makefile`, guarded `MACHINE_ARCH == "x86_64"`) — ld defaults to 2 MB max-page-size for x86-64, padding the first `PT_LOAD` to file offset `0x200000` so the multiboot2 header (in `.unpaged_text`) lands ~2 MB in, outside the EFI loader's 32 KB `MULTIBOOT_SEARCH` → "not a multiboot2 kernel". 4 KB page size puts the header at file offset `0x1008`; section addresses are pinned by `kernel.lds` so only the file offset changes. i386 is unaffected (elf_i386 defaults to 4 KB). Details: `docs/kernel-build-x86_64-fixes.md`
-- The info-request tag `size` in `head.S` differs by arch (amd64=28 spec-correct excluding pad, i386=32 includes pad) but is not a boot factor — consumers advance with `roundup(size, 8)`, same next-tag offset either way
 
 ## Kernel config macros
 - Use `#if CONFIG_FOO` (not `#ifdef CONFIG_FOO`) when the macro may be defined as `0` — `#ifdef` is truthy even for `CONFIG_FOO=0` and causes calls to guarded-away functions
