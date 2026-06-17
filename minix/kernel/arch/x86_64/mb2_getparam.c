@@ -111,11 +111,14 @@ static void do_tag_module(kinfo_t *cbi, struct multiboot_tag_module *tag_module)
 static void do_tag_mmap(kinfo_t *cbi, struct multiboot_tag_mmap *tag_mmap)
 {
 	struct multiboot_mmap_entry	*mmap;
-	uint32_t base_addr, length;
-	
+	u64_t base_addr, length;	/* NB: mmap->addr/len are 64-bit; an
+					 * uint32_t here truncated phys addresses
+					 * >4GB (and lengths), feeding bogus low
+					 * addresses to add_memmap(). */
+
 	for (mmap = tag_mmap->entries;
 			(caddr_t)mmap < (caddr_t)tag_mmap + tag_mmap->size;
-			mmap = (struct multiboot_mmap_entry *) 
+			mmap = (struct multiboot_mmap_entry *)
 				((caddr_t) mmap + tag_mmap->entry_size)) {
 		if(mmap->type != MULTIBOOT_MEMORY_AVAILABLE) continue;
 		base_addr = mmap->addr;
@@ -241,8 +244,16 @@ void get_parameters_mb2(u32_t ebx, kinfo_t *cbi)
 		 * occupied by the kernel and boot modules.
 		 */
 		cut_memmap(cbi,
-			cbi->module_list[m].mod_start, 
+			cbi->module_list[m].mod_start,
 			cbi->module_list[m].mod_end);
 	}
+
+	/* The legacy 0xA0000-0x100000 region (VGA framebuffer + option/BIOS
+	 * ROM shadow) is not usable RAM on PC platforms even when the firmware
+	 * memory map reports it as available: under QEMU those pages are
+	 * ROM/MMIO and silently drop writes, so any page handed to VM from here
+	 * stays full of garbage and corrupts whatever structure lands on it
+	 * (slabs, page tables, user heaps).  Carve it out of usable memory. */
+	cut_memmap(cbi, 0xA0000, 0x100000);
 }
 

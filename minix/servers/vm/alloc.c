@@ -335,8 +335,10 @@ void mem_init(struct memory *chunks)
 		 */
 		if (base >= NUMBER_PHYSICAL_PAGES)
 			continue;
-		if (base + size > NUMBER_PHYSICAL_PAGES)
-			size = NUMBER_PHYSICAL_PAGES - base;
+		/* overflow-safe: phys_clicks is 32-bit, so base+size could
+		 * wrap; compare against the headroom instead. */
+		if (size > (phys_clicks)NUMBER_PHYSICAL_PAGES - base)
+			size = (phys_clicks)NUMBER_PHYSICAL_PAGES - base;
 
 		from = CLICK2ABS(base);
 		to = CLICK2ABS(base+size)-1;
@@ -381,8 +383,14 @@ void memstats(int *nodes, int *pages, int *largest)
 	}
 }
 
-static int findbit(int low, int startscan, int pages, int memflags, int *len)
+static phys_clicks findbit(int low, int startscan, int pages, int memflags,
+	int *len)
 {
+	/* NB: return type is phys_clicks, NOT int.  NO_MEM is
+	 * (phys_clicks)MAP_NONE; returning it through an int and assigning to a
+	 * 64-bit phys_bytes sign-extended it (0xFFFFFFFF_FFFFFFFE), so the
+	 * caller's `== NO_MEM` test (zero-extended 32-bit) missed it and used a
+	 * garbage page number.  Returning phys_clicks keeps it 32-bit/unsigned. */
 	int run_length = 0, i;
 	int freerange_start = startscan;
 
