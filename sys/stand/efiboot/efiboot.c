@@ -104,6 +104,13 @@ efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 	efi_rng_probe();
 	efi_gop_probe();
 
+	/*
+	 * Copy the startprog64 / multiboot64 trampolines into allocated
+	 * memory and set their function pointers.  Without this the pointers
+	 * stay NULL and (*multiboot64)()/(*startprog64)() jump to address 0.
+	 */
+	efi_md_init();
+
 	boot();
 
 	return EFI_SUCCESS;
