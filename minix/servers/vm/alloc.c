@@ -320,30 +320,12 @@ void mem_init(struct memory *chunks)
   /* Use the chunks of physical memory to allocate holes. */
   for (i=NR_MEMS-1; i>=0; i--) {
   	if (chunks[i].size > 0) {
-		phys_clicks base = chunks[i].base;
-		phys_clicks size = chunks[i].size;
-		phys_bytes from, to;
-
-		/*
-		 * VM can only manage the low 4GB of physical memory: the
-		 * free_pages_bitmap[] and pagemap[] arrays are statically sized
-		 * for NUMBER_PHYSICAL_PAGES (= 4GB worth of pages). With more
-		 * than ~3GB configured, firmware places RAM above the 4GB
-		 * boundary (around the PCI hole); indexing those page numbers
-		 * would overrun the arrays and corrupt VM's own data. Skip or
-		 * clamp any chunk that reaches beyond the 4GB boundary.
-		 */
-		if (base >= NUMBER_PHYSICAL_PAGES)
-			continue;
-		if (base + size > NUMBER_PHYSICAL_PAGES)
-			size = NUMBER_PHYSICAL_PAGES - base;
-
-		from = CLICK2ABS(base);
-		to = CLICK2ABS(base+size)-1;
+		phys_bytes from = CLICK2ABS(chunks[i].base),
+			to = CLICK2ABS(chunks[i].base+chunks[i].size)-1;
 		if(first || from < mem_low) mem_low = from;
 		if(first || to > mem_high) mem_high = to;
-		free_mem(base, size);
-		total_pages += size;
+		free_mem(chunks[i].base, chunks[i].size);
+		total_pages += chunks[i].size;
 		first = 0;
 	}
   }

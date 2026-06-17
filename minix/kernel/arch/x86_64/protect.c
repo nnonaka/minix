@@ -182,16 +182,6 @@ void setup_sysenter_syscall(void)
 			((u32_t)USER_CS_SELECTOR << 16) | (u32_t)KERN_CS_SELECTOR,
 			0);
 
-		/* FMASK: RFLAGS bits cleared on SYSCALL entry. IF (0x200) is
-		 * essential -- without it the kernel runs the syscall/IPC path
-		 * with interrupts enabled (unlike the i386 INT-gate entry, which
-		 * clears IF in hardware), so a device IRQ can deliver a
-		 * notification and enqueue() a process mid-scheduling, corrupting
-		 * the run queues. Also mask TF/DF/NT/AC like NetBSD/amd64.
-		 *   NT 0x4000 | AC 0x40000 | DF 0x400 | IF 0x200 | TF 0x100
-		 */
-		ia32_msr_write(AMD_MSR_FMASK, 0, 0x44700);
-
 		/* LSTAR: 64-bit RIP for SYSCALL entry, per CPU */
 #define set_lstar_cpu(forcpu) if(cpu == forcpu) {				\
 		  u64_t rip = (u64_t)(vir_bytes)ipc_entry_syscall_cpu ## forcpu; \
