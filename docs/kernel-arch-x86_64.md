@@ -483,29 +483,17 @@ pages, never 0, so `!ptr` cleanly means not-present.)
   `vir_bytes`; argc occupies a pointer-sized cell so `argv[]` starts
   `sizeof(char *)` in, and `ps_argvstr = vsp + sizeof(char *)`.
 
-## Physical memory map (multiboot2) — usable-RAM fixes
+## Known-open: userland console output (no login prompt)
 
-`get_parameters_mb2()` builds `cbi->memmap` (the kernel's free-RAM list, later
-fed to VM) from the multiboot2 mmap tag.  Two fixes were needed before VM could
-be trusted with the memory it hands out — both caused VM to place structures on
-**non-RAM physical pages**, whose writes vanish, producing pervasive corruption
-(details in `vm-x86_64-port.md`):
-
-- **`do_tag_mmap()` truncated 64-bit addresses.**  `base_addr`/`length` were
-  `uint32_t`, truncating the firmware `mmap->addr`/`len` (folding a >4 GB region
-  down to a bogus low address that overlaps real low RAM).  Use `u64_t`.
-
-- **Legacy ROM hole left in usable RAM.**  Firmware reports `0xA0000–0x100000`
-  (VGA framebuffer + option/BIOS-ROM shadow) as available, but under QEMU those
-  pages are ROM/MMIO and silently drop writes.  `get_parameters_mb2()` already
-  carves out the kernel and boot modules with `cut_memmap()`; it now also does
-  `cut_memmap(cbi, 0xA0000, 0x100000)`.  Symptom before the fix: kernel
-  `vm_memset` zeroing a page at `ph=0xff000` left it `0xffffffff` (the
-  read-back-verify that found it).
-
-With these (plus the VM `findbit()` LP64 fix), MINIX/amd64 boots to a multiuser
-login prompt and working root shell.  (The earlier "no login prompt" stall was a
-symptom of this corruption, not a separate console bug.)
+Boot reaches the boot-ramdisk rc and stalls at the first userland console
+write (`echo`).  `do_write` reaches the tty driver with a valid console tty
+(minor 0), `handle_events` runs `tty_devread` (`kb_read`) fine, then
+`(*tty_devwrite)(tp,0)` hangs before the framebuffer `cons_write` body —
+`boot_mode==1` should select `fb_cons_sw` (rasops → GOP framebuffer), and the
+QEMU graphical window shows blank/frozen/garbage.  Headless serial login is
+additionally blocked by design: `rs232.c` skips the `cttyline` serial line for
+userland ("in use by kernel"), so the kernel and userland cannot share it.
+Not yet root-caused.
 
 ## Limitations / future work
 
