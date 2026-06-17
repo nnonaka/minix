@@ -350,7 +350,7 @@ distribution buildworld: .PHONY .MAKE
 .if defined(DESTDIR) && ${DESTDIR} != "" && ${DESTDIR} != "/"
 	${MAKEDIRTARGET} . postinstall-fix-obsolete
 	${MAKEDIRTARGET} . postinstall-fix-obsolete_stand
-	${MAKEDIRTARGET} distrib/sets checkflist
+	${MAKEDIRTARGET} distrib/sets checkflist SLOPPY_FLIST=YES
 .endif
 	@echo   "make ${.TARGET} started at:  ${START_TIME}"
 	@printf "make ${.TARGET} finished at: " && date

@@ -19,7 +19,7 @@ CPPFLAGS+= -I${EFIDIR}/inc/protocol
 USE_BITCODE=no
 .endif # defined(__MINIX)
 
-.if defined(__MINIX) && (${GNUEFIARCH} == "ia32")
+.if defined(__MINIX) && (${GNUEFIARCH} == "ia32" || ${GNUEFIARCH} == "x86_64")
 LDSCRIPT?= ${EFIDIR}/gnuefi/elf_${GNUEFIARCH}_minix_efi.lds
 .else
 LDSCRIPT?= ${EFIDIR}/gnuefi/elf_${GNUEFIARCH}_efi.lds
