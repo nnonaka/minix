@@ -249,6 +249,29 @@ Bits 20:12  → PT index    = ARCH_VM_PTE(v)   = AMD64_VM_PT(v)
 Bits 11:0   → page offset
 ```
 
+## Memory allocator (`alloc.c`) — LP64 root-cause fixes (boot to login)
+
+Two bugs here produced pervasive, intermittent, shape-shifting corruption
+(slab `nused`, `pt_ptalloc` PDE/`pt_pt`, `mem_cache` phys, plus userland
+`malloc` free-list cycles / `-1` and bad pointers in `awk`/`sh`/`services_mkdb`,
+and a `vfs` jump-to-`-1`).  Fixing both is what gets MINIX/amd64 to a multiuser
+login.
+
+- **`findbit()` returned `int` (sign-extension).**  On a no-free-run it returns
+  `NO_MEM` = `(phys_clicks)MAP_NONE`.  Through an `int` return, assigned into a
+  64-bit `phys_bytes mem`, the value **sign-extended** to `0xFFFFFFFF_FFFFFFFE`,
+  so `alloc_pages()`'s `mem == NO_MEM` guard — comparing a zero-extended 32-bit
+  `NO_MEM` — never matched, and `alloc_pages` used a garbage page number →
+  out-of-bounds `free_pages_bitmap[]` access whenever VM was briefly under
+  allocation pressure (e.g. `services_mkdb` at "Building databases").  Fix:
+  `findbit()` returns `phys_clicks`, so `NO_MEM` round-trips unsigned/32-bit.
+  This is the key fix; the corruption only *looked* like many different bugs
+  because which allocation got the bad page varied by layout.
+
+- **A non-RAM page in the free list** (legacy ROM hole — see
+  `kernel-arch-x86_64.md`) was the other source: writes to it silently
+  vanished, so any structure placed there stayed garbage.
+
 ## Known limitations / future work
 
 - **Physical memory is capped at the low 4 GB.**  `alloc.c` sizes its core
@@ -267,8 +290,9 @@ Bits 11:0   → page offset
   that reach past `NUMBER_PHYSICAL_PAGES` before handing them to `free_mem()`:
 
   ```c
-  if (base >= NUMBER_PHYSICAL_PAGES)            continue;       /* skip */
-  if (base + size > NUMBER_PHYSICAL_PAGES)      size = NUMBER_PHYSICAL_PAGES - base;
+  if (base >= NUMBER_PHYSICAL_PAGES)        continue;            /* skip */
+  /* overflow-safe: phys_clicks is 32-bit, so base+size could wrap */
+  if (size > NUMBER_PHYSICAL_PAGES - base)  size = NUMBER_PHYSICAL_PAGES - base;
   ```
 
   Effect: a `-m 4G` config boots and uses the RAM below the hole (~3 GB usable);
