@@ -94,7 +94,7 @@ static void do_tag_framebuffer(kinfo_t *cbi, struct multiboot_tag_framebuffer *t
 		cbi->fb.framebuffer_blue_field_position =
 			tag_fb->framebuffer_blue_field_position;
 		cbi->fb.framebuffer_blue_mask_size =
-			tag_fb->framebuffer_blue_mask_size;
+			tag_fb->framebuffer_red_field_position;
 	}
 }
 
