@@ -148,18 +148,25 @@ so the reorder is ABI-transparent within the MINIX build.
 7. **kernel_call_entry_common read AXREG** — message pointer is in `%rdi`
    on AMD64 (DIREG), not `%rax` (AXREG).
 
-## SYSCALL MSR Setup — Done
+## Required Follow-up: SYSCALL MSR Setup
 
-`setup_sysenter_syscall()` is implemented in
-`minix/kernel/arch/x86_64/protect.c`.  It programs:
+`arch_system.c::setup_sysenter_syscall()` must program these MSRs to
+activate the SYSCALL fast path:
 
-- `AMD_MSR_EFER` — sets `AMD_EFER_SCE` to enable `SYSCALL`/`SYSRET`.
-- `AMD_MSR_STAR` — kernel/user CS selectors in bits [63:32].
-- `AMD_MSR_LSTAR` — per-CPU 64-bit RIP of `ipc_entry_syscall_cpuN`.
+```c
+/* Enable SYSCALL/SYSRET in EFER */
+ia32_msr_write(0xC0000080 /* IA32_EFER */, 0, efer | 1);
 
-It is called from:
+/* LSTAR = entry point for this CPU */
+ia32_msr_write(0xC0000082 /* IA32_LSTAR */, hi, lo);  /* ipc_entry_syscall_cpuN */
 
-- `smp_single_cpu_fallback()` macro (`arch_smp.h`) — BSP single-CPU path.
-- `arch_smp.c` lines 223 and 305 — BSP and AP SMP paths.
+/* STAR[63:48] = USER_CS - 16 (SYSRET picks CS+16, SS+8) */
+/* STAR[47:32] = KERN_CS_SELECTOR                          */
+ia32_msr_write(0xC0000081 /* IA32_STAR */, star_hi, star_lo);
 
-The SYSCALL fast path is active on both single-core and multi-core boots.
+/* FMASK: clear IF on SYSCALL entry */
+ia32_msr_write(0xC0000084 /* IA32_FMASK */, 0, X86_IF);
+```
+
+Until these are set, the SYSCALL fast path is unreachable and all IPC uses
+the INT 33 path, which works correctly today.

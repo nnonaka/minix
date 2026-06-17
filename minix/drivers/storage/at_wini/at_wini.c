@@ -963,7 +963,7 @@ static int error_dma(const struct wini *wn)
 	u32_t v;
 
 #define DMAERR(msg) \
-	printf("at_wini%ld: bad DMA: %s. Disabling DMA for drive %td.\n",	\
+	printf("at_wini%ld: bad DMA: %s. Disabling DMA for drive %d.\n",	\
 		w_instance, msg, wn - wini);				\
 	printf("at_wini%ld: workaround: set %s=1 in boot monitor.\n", \
 		w_instance, NO_DMA_VAR); \

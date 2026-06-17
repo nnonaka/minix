@@ -31,6 +31,7 @@
 #include "console.h"
 
 
+extern cons_sw_t bios_cons_sw;
 extern cons_sw_t fb_cons_sw;
 extern cons_sw_t ser_cons_sw;
 
@@ -103,6 +104,9 @@ void scr_init(tty_t *tp)
     }
 
 	switch (kinfo.boot_mode) {
+	case 0: // BIOS cinsole
+		cons_sw = &bios_cons_sw;
+		break;
 	case 1: // UEFI fb console
 		cons_sw = &fb_cons_sw;
 		break;
@@ -140,14 +144,10 @@ void select_console(int cons_line)
 int con_loadfont(endpoint_t endpt, cp_grant_id_t grant)
 {
   int r = !OK;
-
+  
 	if (cons_sw != NULL)
 		r = cons_sw->sw_loadfont(endpt, grant);
 
   return(r);
 }
-
-void beep_x(unsigned UNUSED(freq), clock_t UNUSED(dur)) {}
-
-void toggle_scroll(void) {}
 

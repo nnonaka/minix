@@ -26,7 +26,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define _KERNTYPES
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: genfb.c,v 1.67.2.3 2020/07/26 10:47:25 martin Exp $");
 

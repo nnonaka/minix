@@ -266,7 +266,7 @@ void kernel_put_stacktrace(struct trace_proc * procp)
 	 * the lines straight into tools such as addr2line.
 	 */
 	put_newline();
-	put_fmt(procp, "  0x%lx", (unsigned long)pc);
+	put_fmt(procp, "  0x%x", pc);
 
 	low = high = fp;
 
@@ -274,7 +274,7 @@ void kernel_put_stacktrace(struct trace_proc * procp)
 		if (kernel_get_nextframe(procp->pid, fp, &pc, &fp) < 0)
 			break;
 
-		put_fmt(procp, " 0x%lx", (unsigned long)pc);
+		put_fmt(procp, " 0x%x", pc);
 
 		/*
 		 * Stop if we see a frame pointer that falls within the range

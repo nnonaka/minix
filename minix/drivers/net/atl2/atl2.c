@@ -495,7 +495,7 @@ static void atl2_init_hw(int devind, netdriver_addr_t * addr)
 	if (state.size < ATL2_MIN_MMAP_SIZE || flag)
 		panic("invalid register bar");
 
-	state.base = vm_map_phys(SELF, (void *)(uintptr_t)bar, state.size);
+	state.base = vm_map_phys(SELF, (void *)bar, state.size);
 	if (state.base == MAP_FAILED)
 		panic("unable to map in registers");
 

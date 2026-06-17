@@ -225,12 +225,8 @@ rebuild the cross tools.
   `targ_selvecs` in the `x86_64-*-minix*` stanza of
   `external/gpl3/binutils/dist/bfd/config.bfd`, then rebuild cross tools.
 
-- **`efi_boot_kernel` wrong for native 64-bit kernel** (latent): The
-  `efi_boot_kernel` implementation calls `startprog64`, which transitions from
-  EFI 64-bit mode → 32-bit protected mode before jumping to the kernel entry
-  point.  This is the NetBSD i386-compat path and is incorrect for a native
-  64-bit MINIX kernel (which enters directly in long mode via the EFI64 entry
-  tag).  The MINIX primary boot path goes through `exec_multiboot2` →
-  `multiboot2()` → `multiboot64` (stays in 64-bit mode throughout), so
-  `efi_boot_kernel` is not currently exercised and this is a latent bug rather
-  than an active blocker.
+- **`efi_boot_kernel` for NetBSD ELF kernels**: The `efi_boot_kernel`
+  implementation uses the `startprog64` trampoline which transitions to 32-bit
+  protected mode. This is suitable for i386-compatible kernels but not for
+  native 64-bit MINIX kernels.  For MINIX the primary boot path is through
+  `exec_multiboot2` → `multiboot64`, so this path is not currently exercised.

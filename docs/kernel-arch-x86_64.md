@@ -196,14 +196,8 @@ request fields), **not** including inter-tag alignment padding.
 
 ## Limitations / future work
 
-- **SMP trampoline**: `trampoline.S` is a verbatim i386 trampoline.  It
-  transitions real mode → 32-bit protected mode and jumps to `startup_ap_32`
-  (`mpx.S`).  There is no PAE enable, no 64-bit page table load, no
-  `EFER.LME`, no far jump into long mode.  AP cores will not boot until this
-  is rewritten to mirror the BSP's `multiboot_entry32` → long-mode path in
-  `head.S`.
+- **APIC**: `apic.c` / `apic_asm.S` still use i386 patterns; not ported yet.
+- **SMP trampoline**: `trampoline.S` AP startup needs x86_64 review.
 - **> 8 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (8) GB; increase
   `PG_IDENT_PD_MAX` to support more RAM.
 - **NX bit**: page table entries do not set the NX/XD bit on data pages.
-
-*(APIC was ported in a prior session; see `docs/apic-x86_64.md`.)*

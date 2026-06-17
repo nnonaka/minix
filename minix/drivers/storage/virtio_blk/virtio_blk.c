@@ -276,7 +276,7 @@ static ssize_t virtio_blk_transfer(devminor_t minor, int write, u64_t position,
 	 * needs to be sector (512 byte) aligned...
 	 */
 	if (position % VIRTIO_BLK_BLOCK_SIZE) {
-		dprintf(("Non sector-aligned access %016lx", position));
+		dprintf(("Non sector-aligned access %016llx", position));
 		return EINVAL;
 	}
 
@@ -362,7 +362,7 @@ static ssize_t virtio_blk_transfer(devminor_t minor, int write, u64_t position,
 		return size;
 
 	/* Error path */
-	dprintf(("ERROR status=%02x sector=%lu len=%lx cnt=%d op=%s t=%d",
+	dprintf(("ERROR status=%02x sector=%llu len=%lx cnt=%d op=%s t=%d",
 		 mystatus(tid), sector, size, pcnt,
 		 write ? "write" : "read", tid));
 

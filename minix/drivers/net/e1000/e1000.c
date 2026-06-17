@@ -123,7 +123,7 @@ static void e1000_map_flash(e1000_t * e, int devind, int did)
 		break;
 	}
 
-	e->flash = vm_map_phys(SELF, (void *)(uintptr_t)flash_addr, flash_size);
+	e->flash = vm_map_phys(SELF, (void *)flash_addr, flash_size);
 	if (e->flash == MAP_FAILED)
 		panic("e1000: couldn't map in flash");
 
@@ -203,7 +203,7 @@ static int e1000_probe(e1000_t * e, int skip)
 	if (ioflag)
 		panic("PCI BAR is not for memory");
 
-	if ((e->regs = vm_map_phys(SELF, (void *)(uintptr_t)base, size)) == MAP_FAILED)
+	if ((e->regs = vm_map_phys(SELF, (void *)base, size)) == MAP_FAILED)
 		panic("failed to map hardware registers from PCI");
 
 	/* Enable DMA bus mastering if necessary. */
