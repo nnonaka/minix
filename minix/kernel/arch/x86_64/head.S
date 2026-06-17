@@ -118,9 +118,6 @@ boot_saved_info:
 /*===========================================================================*/
 /*  EFI-64 entry — bootloader has already set up 64-bit long mode           */
 /*===========================================================================*/
-/* Back to .text: the preceding .data block left us in the data section, so
- * without this the entry code would be emitted into .unpaged_data. */
-.text
 .code64
 multiboot_entry64_efi:
 	/*
@@ -157,17 +154,11 @@ multiboot_entry64_efi:
 	orq	$3, %rax
 	movq	%rax, 4088(%rcx)	/* 511 * 8 = 4088 */
 
-	/* pdpt_low[0..3] → 4 consecutive PD pages (identity-map low 4 GB) */
+	/* pdpt_low[0] → pd_low */
 	leaq	boot_pd_low(%rip), %rax
 	orq	$3, %rax
 	leaq	boot_pdpt_low(%rip), %rcx
-	movl	$4, %edx
-.Lfill_pdpt_low_efi:
 	movq	%rax, (%rcx)
-	addq	$8, %rcx
-	addq	$0x1000, %rax		/* next PD page */
-	decl	%edx
-	jnz	.Lfill_pdpt_low_efi
 
 	/* pdpt_high[510] → pd_kern */
 	leaq	boot_pd_kern(%rip), %rax
@@ -175,18 +166,10 @@ multiboot_entry64_efi:
 	leaq	boot_pdpt_high(%rip), %rcx
 	movq	%rax, 4080(%rcx)	/* 510 * 8 = 4080 */
 
-	/*
-	 * Identity-map 0–4 GB: 2048 × 2 MB pages across the 4 PDs.
-	 * The EFI loader allocates the multiboot2 info struct (and its own
-	 * heap) with AllocateAnyPages, which routinely lands well above the
-	 * first 16 MB.  pre_init() dereferences that pointer in
-	 * get_parameters_mb2() *before* it can build the full identity map,
-	 * so the boot map must already reach it.  4 GB covers RAM on the VMs
-	 * we boot on.
-	 */
+	/* Identity-map 0–16 MB: 8 × 2 MB pages in pd_low */
 	leaq	boot_pd_low(%rip), %rdi
 	movq	$0x83, %rax
-	movl	$2048, %ecx
+	movl	$8, %ecx
 .Lfill_pd_low_efi:
 	movq	%rax, (%rdi)
 	addq	$8, %rdi
@@ -244,7 +227,6 @@ multiboot_entry64_efi:
 	movq	$k_initial_stktop, %rsp
 	xorq	%rbp, %rbp
 	movq	%rax, %rdi		/* kinfo_t * as first arg */
-
 	/*
 	 * Can't use a direct call: 32-bit PC-relative displacement from
 	 * physical ~0x00400000 to virtual ~0xFFFFFFFF80400000 overflows.
@@ -280,7 +262,7 @@ boot_pdpt_high:
 	.space	4096
 .balign 4096
 boot_pd_low:
-	.space	4096 * 4		/* 4 PDs: identity-map low 4 GB */
+	.space	4096
 .balign 4096
 boot_pd_kern:
 	.space	4096

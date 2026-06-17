@@ -320,7 +320,7 @@ void prot_load_selectors(void)
   x86_lgdt(&gdt_desc);	/* Load gdt */ 
   idt_init();
   idt_reload();
-  x86_lldt(0);			/* No LDT: x86_64 uses a flat GDT (null LDTR) */
+  x86_lldt(LDT_SELECTOR); 	/* Load bogus ldt */
   x86_ltr(TSS_SELECTOR(booting_cpu));
 
   x86_load_kerncs();
@@ -354,9 +354,9 @@ void prot_init(void)
   tss_init(0, &k_boot_stktop);
 
   /* Build GDT */
-  /* No LDT on x86_64 (flat model); LDTR is loaded with the null selector in
-   * prot_load_selectors(), so gdt[LDT_INDEX] is left empty.  A real LDT would
-   * need a 16-byte system descriptor, not an 8-byte segment descriptor. */
+  init_param_dataseg(&gdt[LDT_INDEX],
+    (phys_bytes) 0, 0, INTR_PRIVILEGE); /* unusable LDT */
+  gdt[LDT_INDEX].access = PRESENT | LDT;
   init_codeseg(KERN_CS_INDEX, INTR_PRIVILEGE);
   init_dataseg(KERN_DS_INDEX, INTR_PRIVILEGE);
   init_codeseg(USER_CS_INDEX, USER_PRIVILEGE);

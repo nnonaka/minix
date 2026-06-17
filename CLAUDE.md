@@ -121,16 +121,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `efi_gop_found()` returns NULL on headless/GOP-less systems; always null-check before dereferencing `gop->Mode`
 - EFI `FreePages(addr, n)`: `n` is a **page count**, not bytes — always use `EFI_SIZE_TO_PAGES(size)`; passing raw bytes frees ~16 MB instead of 1 page
 - Block I/O IoAlign allocation: use `blkbuf_size + IoAlign - 1` (not `roundup(blkbuf_size, IoAlign)`) — `roundup2(blkbuf, IoAlign)` advances the start pointer by up to `IoAlign-1` bytes, so the allocation must accommodate both the shift and the full transfer
-- `efi_md_init()` (copies `multiboot64`/`startprog64` trampolines into allocated memory, sets the function pointers) **must** be called from `efi_main()` (`efiboot.c`) before `boot()` — it was missing, so `multiboot64` stayed at its `.quad 0` init and `(*multiboot64)()` jumped through NULL to address 0 right after ExitBootServices. Latent until the multiboot2 path reached the jump
-- Boot bring-up debugging: a raw COM1 (0x3F8) byte writer (LCR=0x03 to clear DLAB, bounded LSR/THRE poll, `outb`) works both before and after ExitBootServices and bypasses the EFI console + kernel console — drop markers in `head.S` (asm macro) / loader (inline asm) to bisect a silent hang; the EFI `printf` is dead after ExitBootServices
-
-## EFI64 boot bring-up (first successful boot, x86_64)
-Sequence of faults fixed to get the UEFI/multiboot2 path running (details: `docs/kernel-arch-x86_64.md` "EFI64 boot bring-up", `docs/apic-x86_64.md`):
-- **head.S `.code64` does not switch sections**: after the `.data` boot-GDT block, `multiboot_entry64_efi` was emitted into `.unpaged_data`; add an explicit `.text` before the entry
-- **Boot identity map**: `multiboot_entry64_efi` must identity-map the low **4 GB** (4 PD pages), not 16 MB — the EFI loader's `AllocateAnyPages` puts the multiboot info struct ~2 GB up, and `get_parameters_mb2()` dereferences it before the full map exists
-- **`pg_identity()` (pg_utils.c) must cover ≥ low 4 GB** (`if (num_pds < 4) num_pds = 4`) — it only mapped RAM (`mem_high_phys`), leaving the LAPIC `0xFEE00000` / IOAPIC `0xFEC00000` MMIO hole unmapped → #PF in APIC init after `prot_init` replaces the head.S boot map
-- **No LDT on x86_64**: `prot_init` must `x86_lldt(0)` (null LDTR), not load an 8-byte LDT descriptor — a real LDT descriptor is 16-byte (system) in long mode; the 8-byte one #GPs (`lldt`, error = LDT selector 0x28). Flat GDT, no per-process LDT
-- **ACPI `struct acpi_xsdt` must be `__packed`**: the 36-byte `acpi_sdt_header` + 8-aligned `u64_t data[]` gets 4 bytes padding (data at offset 40), but the on-disk XSDT packs entries at offset 36 → `memcpy` misaligns every table pointer → #GP (non-canonical) reading `xsdt.data[i]`
 
 ## VM pagetable PTF flags
 - `PTF_ALLFLAGS` in `minix/servers/vm/arch/x86_64/pagetable.h` must include every PTF_ flag callers may pass — `assert(!(flags & ~PTF_ALLFLAGS))` in `pt_writemap` rejects unknown flags at runtime

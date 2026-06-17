@@ -194,10 +194,7 @@ void pg_identity(kinfo_t *cbi)
 	/* Round up to the next GB boundary, capped at PG_IDENT_PD_MAX GBs */
 	num_pds = (int)((cbi->mem_high_phys + (u64_t)(512 * PAGE_2MB) - 1)
 		  / (512 * PAGE_2MB));
-	/* Always map at least the low 4 GB so below-4GB MMIO (the Local APIC at
-	 * 0xFEE00000, the IOAPIC at 0xFEC00000, video memory, etc.) is reachable
-	 * before VM is up.  Pages above mem_high_phys are mapped uncacheable. */
-	if (num_pds < 4) num_pds = 4;
+	if (num_pds < 1) num_pds = 1;
 	if (num_pds > PG_IDENT_PD_MAX) num_pds = PG_IDENT_PD_MAX;
 
 	/* PML4[0] → pg_pdpt_low */
