@@ -1,6 +1,6 @@
 # $NetBSD: Makefile,v 1.8 2010/05/27 06:58:13 dholland Exp $
 
-SUBDIR= biosboot
+SUBDIR=		# biosboot not needed for UEFI boot
 
 LIBOBJ= ${.OBJDIR}
 .MAKEOVERRIDES+= LIBOBJ

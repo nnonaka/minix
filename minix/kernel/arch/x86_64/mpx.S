@@ -1,8 +1,8 @@
-/* This file is part of the lowest layer of the MINIX kernel.  (The other part 
- * is "proc.c".)  The lowest layer does process switching and message handling. 
- * Furthermore it contains the assembler startup code for Minix and the 32-bit 
- * interrupt handlers.  It cooperates with the code in "start.c" to set up a  
- * good environment for main(). 
+/* This file is part of the lowest layer of the MINIX kernel.  (The other part
+ * is "proc.c".)  The lowest layer does process switching and message handling.
+ * Furthermore it contains the assembler startup code for Minix and the 64-bit
+ * interrupt handlers.  It cooperates with the code in "start.c" to set up a
+ * good environment for main().
  *
  * Kernel is entered either because of kernel-calls, ipc-calls, interrupts or
  * exceptions. TSS is set so that the kernel stack is loaded. The user context is
@@ -11,19 +11,32 @@
  * finish what needs to be done for the next process to run, sets its context
  * and switch to userspace.
  *
- * For communication with the boot monitor at startup time some constant 
- * data are compiled into the beginning of the text segment. This facilitates  
- * reading the data at the start of the boot process, since only the first 
- * sector of the file needs to be read. 
+ * AMD64 IPC register convention (Approach B):
+ *   %rdi = IPC call number  (r1 for do_ipc)
+ *   %rsi = endpoint         (r2 for do_ipc)
+ *   %rdx = message pointer  (r3 for do_ipc)
  *
- * Some data storage is also allocated at the end of this file. This data  
- * will be at the start of the data segment of the kernel and will be read 
- * and modified by the boot monitor before the kernel starts.
+ * ipc_entry_common reloads all three IPC arguments from p_reg (the saved proc
+ * struct) so the reload is correct for both paths:
+ *   - softint: SAVE_PROCESS_CTX clobbers %rsi via RESTORE_KERNEL_SEGS; p_reg.si
+ *              still has the correct endpoint value saved before the clobber.
+ *   - SYSCALL: per-CPU entry handler saves all GP regs to p_reg explicitly.
+ *
+ * SYSCALL fast path:
+ *   CPU stores RIP -> %rcx, RFLAGS -> %r11; does NOT switch %rsp.
+ *   Userspace stores its own RSP in %r10 before SYSCALL.
+ *   Per-CPU entry points load the kernel stack from k_percpu_stacks[cpu].
+ *   proc_ptr is stored at the top cell of each per-CPU kernel stack by
+ *   arch_finish_switch_to_user() before returning to userspace.
+ *
+ * Register save policy:
+ *   All GP registers (rax-rdi, r8-r15, rbp) are saved on every kernel entry.
+ *   Saving r12-r15 unconditionally simplifies restore_user_context: both
+ *   same-process returns and context switches use the same restore path without
+ *   any bookkeeping about which registers were actually saved.
  */
 
-#include "kernel/kernel.h" /* configures the kernel */
-
-/* sections */
+#include "kernel/kernel.h"
 
 #include <machine/vm.h>
 #include "kernel/kernel.h"
@@ -37,16 +50,11 @@
 #include "kernel/const.h"
 #include "kernel/proc.h"
 #include "sconst.h"
-#include <machine/multiboot.h>
-
 #include "arch_proto.h" /* K_STACK_SIZE */
 
 #ifdef CONFIG_SMP
 #include "kernel/smp.h"
 #endif
-
-/* Selected 386 tss offsets. */
-#define TSS3_S_SP0	4
 
 IMPORT(usermapped_offset)
 IMPORT(copr_not_available_handler)
@@ -56,157 +64,146 @@ IMPORT(switch_to_user)
 IMPORT(multiboot_init)
 
 .text
-/*===========================================================================*/
-/*				interrupt handlers			     */
-/*		interrupt handlers for 386 32-bit protected mode	     */
-/*===========================================================================*/
-
-#define PIC_IRQ_HANDLER(irq)	\
-	push	$irq							    	;\
-	call	_C_LABEL(irq_handle)	/* intr_handle(irq_handlers[irq]) */	;\
-	add	$4, %esp						    	;
 
 /*===========================================================================*/
-/*				hwint00 - 07				     */
+/*			hardware interrupt handlers (IRQs)		     */
 /*===========================================================================*/
-/* Note this is a macro, it just looks like a subroutine. */
+
+/* Pass irq as first argument per AMD64 ABI (%edi), not on the stack as on
+ * i386 — irq_handle(int) reads %rdi, so a pushed arg leaves it garbage. */
+#define PIC_IRQ_HANDLER(irq)						\
+	movl	$irq, %edi						;\
+	call	_C_LABEL(irq_handle)					;
 
 #define hwint_master(irq) \
-	TEST_INT_IN_KERNEL(4, 0f)					;\
+	TEST_INT_IN_KERNEL(8, 0f)					;\
 									\
 	SAVE_PROCESS_CTX(0, KTS_INT_HARD)				;\
-	push	%ebp							;\
-	movl	$0, %ebp	/* for stack trace */			;\
+	movq	%rbp, %rdi	/* context_stop(proc_ptr) */		;\
+	push	%rbp							;\
+	movq	$0, %rbp						;\
 	call	_C_LABEL(context_stop)					;\
-	add	$4, %esp						;\
+	pop	%rbp							;\
 	PIC_IRQ_HANDLER(irq)						;\
 	movb	$END_OF_INT, %al					;\
-	outb	$INT_CTL	/* reenable interrupts in master pic */	;\
+	outb	$INT_CTL						;\
 	jmp	_C_LABEL(switch_to_user)				;\
 									\
 0:									\
-	pusha								;\
+	pushaq								;\
 	call	_C_LABEL(context_stop_idle)				;\
 	PIC_IRQ_HANDLER(irq)						;\
 	movb	$END_OF_INT, %al					;\
-	outb	$INT_CTL	/* reenable interrupts in master pic */	;\
-	CLEAR_IF(10*4(%esp))						;\
-	popa								;\
-	iret								;
+	outb	$INT_CTL						;\
+	CLEAR_IF(KERNEL_IRQ_RFLAGS_OFF(%rsp))				;\
+	popaq								;\
+	iretq								;
 
-/* Each of these entry points is an expansion of the hwint_master macro */
-ENTRY(hwint00)
-/* Interrupt routine for irq 0 (the clock). */
-	hwint_master(0)
+ENTRY(hwint00)	hwint_master(0)
+ENTRY(hwint01)	hwint_master(1)
+ENTRY(hwint02)	hwint_master(2)
+ENTRY(hwint03)	hwint_master(3)
+ENTRY(hwint04)	hwint_master(4)
+ENTRY(hwint05)	hwint_master(5)
+ENTRY(hwint06)	hwint_master(6)
+ENTRY(hwint07)	hwint_master(7)
 
-ENTRY(hwint01)
-/* Interrupt routine for irq 1 (keyboard) */
-	hwint_master(1)
-
-ENTRY(hwint02)
-/* Interrupt routine for irq 2 (cascade!) */
-	hwint_master(2)
-
-ENTRY(hwint03)
-/* Interrupt routine for irq 3 (second serial) */
-	hwint_master(3)
-
-ENTRY(hwint04)
-/* Interrupt routine for irq 4 (first serial) */
-	hwint_master(4)
-
-ENTRY(hwint05)
-/* Interrupt routine for irq 5 (XT winchester) */
-	hwint_master(5)
-
-ENTRY(hwint06)
-/* Interrupt routine for irq 6 (floppy) */
-	hwint_master(6)
-
-ENTRY(hwint07)
-/* Interrupt routine for irq 7 (printer) */
-	hwint_master(7)
-
-/*===========================================================================*/
-/*				hwint08 - 15				     */
-/*===========================================================================*/
-/* Note this is a macro, it just looks like a subroutine. */
-#define hwint_slave(irq)	\
-	TEST_INT_IN_KERNEL(4, 0f)					;\
+#define hwint_slave(irq) \
+	TEST_INT_IN_KERNEL(8, 0f)					;\
 									\
 	SAVE_PROCESS_CTX(0, KTS_INT_HARD)				;\
-	push	%ebp							;\
-	movl	$0, %ebp	/* for stack trace */			;\
+	movq	%rbp, %rdi	/* context_stop(proc_ptr) */		;\
+	push	%rbp							;\
+	movq	$0, %rbp						;\
 	call	_C_LABEL(context_stop)					;\
-	add	$4, %esp						;\
+	pop	%rbp							;\
 	PIC_IRQ_HANDLER(irq)						;\
 	movb	$END_OF_INT, %al					;\
-	outb	$INT_CTL	/* reenable interrupts in master pic */	;\
-	outb	$INT2_CTL	/* reenable slave 8259		  */	;\
+	outb	$INT_CTL						;\
+	outb	$INT2_CTL						;\
 	jmp	_C_LABEL(switch_to_user)				;\
 									\
 0:									\
-	pusha								;\
+	pushaq								;\
 	call	_C_LABEL(context_stop_idle)				;\
 	PIC_IRQ_HANDLER(irq)						;\
 	movb	$END_OF_INT, %al					;\
-	outb	$INT_CTL	/* reenable interrupts in master pic */	;\
-	outb	$INT2_CTL	/* reenable slave 8259		  */	;\
-	CLEAR_IF(10*4(%esp))						;\
-	popa								;\
-	iret								;
+	outb	$INT_CTL						;\
+	outb	$INT2_CTL						;\
+	CLEAR_IF(KERNEL_IRQ_RFLAGS_OFF(%rsp))				;\
+	popaq								;\
+	iretq								;
 
-/* Each of these entry points is an expansion of the hwint_slave macro */
-ENTRY(hwint08)
-/* Interrupt routine for irq 8 (realtime clock) */
-	hwint_slave(8)
+ENTRY(hwint08)	hwint_slave(8)
+ENTRY(hwint09)	hwint_slave(9)
+ENTRY(hwint10)	hwint_slave(10)
+ENTRY(hwint11)	hwint_slave(11)
+ENTRY(hwint12)	hwint_slave(12)
+ENTRY(hwint13)	hwint_slave(13)
+ENTRY(hwint14)	hwint_slave(14)
+ENTRY(hwint15)	hwint_slave(15)
 
-ENTRY(hwint09)
-/* Interrupt routine for irq 9 (irq 2 redirected) */
-	hwint_slave(9)
-
-ENTRY(hwint10)
-/* Interrupt routine for irq 10 */
-	hwint_slave(10)
-
-ENTRY(hwint11)
-/* Interrupt routine for irq 11 */
-	hwint_slave(11)
-
-ENTRY(hwint12)
-/* Interrupt routine for irq 12 */
-	hwint_slave(12)
-
-ENTRY(hwint13)
-/* Interrupt routine for irq 13 (FPU exception) */
-	hwint_slave(13)
-
-ENTRY(hwint14)
-/* Interrupt routine for irq 14 (AT winchester) */
-	hwint_slave(14)
-
-ENTRY(hwint15)
-/* Interrupt routine for irq 15 */
-	hwint_slave(15)
-
-/* differences with sysenter:
- *   - we have to find our own per-cpu stack (i.e. post-SYSCALL
- *     %esp is not configured)
- *   - we have to save the post-SYSRET %eip, provided by the cpu
- *     in %ecx
- *   - the system call parameters are passed in %ecx, so we userland
- *     code that executes SYSCALL copies %ecx to %edx. So the roles
- *     of %ecx and %edx are reversed
- *   - we can use %esi as a scratch register
+/*===========================================================================*/
+/*			SYSCALL fast path -- per-CPU entry points	     */
+/*===========================================================================*/
+/*
+ * One entry point per logical CPU.  The LSTAR MSR for CPU N is set to
+ * ipc_entry_syscall_cpuN at boot so each CPU knows its own stack without
+ * needing swapgs or a per-CPU data segment.
+ *
+ * k_percpu_stacks[cpu] == tss[cpu].rsp0 == address of the top cell of the
+ * per-CPU kernel stack.  arch_finish_switch_to_user() stores the current
+ * proc_ptr at that address before returning to userspace, so:
+ *   proc_ptr = *(k_percpu_stacks[cpu])
+ *
+ * Register state on AMD64 SYSCALL entry:
+ *   %rcx  = saved user RIP   (CPU-saved)
+ *   %r11  = saved user RFLAGS (CPU-saved)
+ *   %rsp  = user RSP   (NOT switched by CPU)
+ *   %rdi  = call_nr    (IPC arg 1, set by userspace)
+ *   %rsi  = endpoint   (IPC arg 2, set by userspace)
+ *   %rdx  = msg_ptr    (IPC arg 3, set by userspace)
+ *   %r10  = user RSP   (pre-saved by userspace: mov %rsp, %r10 before syscall)
+ *   %rbp  = user %rbp  (must be saved; not clobbered by SYSCALL)
+ *
+ * Saving user %rbp requires care because we immediately overwrite %rbp with
+ * proc_ptr.  Strategy: push user %rbp to the kernel stack one slot below the
+ * proc_ptr cell, load proc_ptr, save all GP regs, then pop the saved user
+ * %rbp into %rax (scratch) and write to BPREG.
  */
-#define ipc_entry_syscall_percpu(cpu)			;\
-ENTRY(ipc_entry_syscall_cpu ## cpu)			;\
-	xchg	%ecx, %edx				;\
-	mov	k_percpu_stacks+4*cpu, %esi		;\
-	mov	(%esi), %ebp 				;\
-	movl	$KTS_SYSCALL, P_KERN_TRAP_STYLE(%ebp)	;\
-	xchg	%esp, %esi				;\
-	jmp	syscall_sysenter_common
+#define ipc_entry_syscall_percpu(cpu)					\
+ENTRY(ipc_entry_syscall_cpu ## cpu)					;\
+	/* Switch to this CPU's kernel stack. */			\
+	movq	k_percpu_stacks + 8*cpu, %rsp				;\
+	/* Reserve one slot for user %rbp. */				\
+	sub	$8, %rsp						;\
+	movq	%rbp, (%rsp)	/* stash user %rbp */			;\
+	/* Load proc_ptr from the cell above. */			\
+	movq	8(%rsp), %rbp					;\
+	movl	$KTS_SYSCALL, P_KERN_TRAP_STYLE(%rbp)			;\
+	/* Save user RSP / return RIP / RFLAGS. */			\
+	movq	%r10, SPREG(%rbp)	/* user RSP (from %r10) */	;\
+	movq	%rcx, PCREG(%rbp)	/* return RIP (CPU-saved) */	;\
+	movq	%r11, PSWREG(%rbp)	/* RFLAGS (CPU-saved) */	;\
+	/* Save all GP registers. */					\
+	movq	%rax, AXREG(%rbp)					;\
+	movq	%rbx, BXREG(%rbp)					;\
+	movq	%rcx, CXREG(%rbp)	/* return RIP */		;\
+	movq	%rdx, DXREG(%rbp)					;\
+	movq	%rsi, SIREG(%rbp)					;\
+	movq	%rdi, DIREG(%rbp)					;\
+	movq	%r8,  R8REG(%rbp)					;\
+	movq	%r9,  R9REG(%rbp)					;\
+	movq	%r10, R10REG(%rbp)	/* user RSP */			;\
+	movq	%r11, R11REG(%rbp)	/* RFLAGS */			;\
+	movq	%r12, R12REG(%rbp)					;\
+	movq	%r13, R13REG(%rbp)					;\
+	movq	%r14, R14REG(%rbp)					;\
+	movq	%r15, R15REG(%rbp)					;\
+	/* Pop stashed user %rbp and write to BPREG. */			\
+	popq	%rax						;\
+	movq	%rax, BPREG(%rbp)				;\
+	jmp	ipc_entry_common
 
 ipc_entry_syscall_percpu(0)
 ipc_entry_syscall_percpu(1)
@@ -217,92 +214,62 @@ ipc_entry_syscall_percpu(5)
 ipc_entry_syscall_percpu(6)
 ipc_entry_syscall_percpu(7)
 
+/*===========================================================================*/
+/*			software-interrupt IPC entry (INT IPCVEC)	     */
+/*===========================================================================*/
+
+/* ipc_entry_sysenter -- SYSENTER is i386-only; redirect to the softint path. */
 ENTRY(ipc_entry_sysenter)
-	/* SYSENTER simply sets kernel segments, EIP to here, and ESP
-	 * to tss->sp0 (through MSR). so no automatic context saving is done.
-	 * interrupts are disabled.
-	 *
-	 * register usage:
-	 * edi: call type (IPCVEC, KERVEC)
-	 * ebx, eax, ecx: syscall params, set by userland
-	 * esi, edx: esp, eip to restore, set by userland
-	 *
-	 * no state is automatically saved; userland does all of that.
-	 */
-	mov	(%esp), %ebp /* get proc saved by arch_finish_switch_to_user */
+	SAVE_PROCESS_CTX(0, KTS_INT_ORIG)
+	jmp	ipc_entry_common
 
-	/* inform kernel we entered by sysenter and should
-	 * therefore exit through restore_user_context_sysenter
-	 */
-	movl	$KTS_SYSENTER, P_KERN_TRAP_STYLE(%ebp)
-	add	usermapped_offset, %edx	/* compensate for mapping difference */
-
-syscall_sysenter_common:
-	mov	%esi, SPREG(%ebp)	/* esi is return esp */
-	mov	%edx, PCREG(%ebp)	/* edx is return eip */
-
-	/* save PSW */
-	pushf
-	pop	%edx
-	mov	%edx, PSWREG(%ebp)
-
-	/* check for call type; do_ipc? */
-	cmp	$IPCVEC_UM, %edi
-	jz	ipc_entry_common
-
-	/* check for kernel trap */
-	cmp	$KERVEC_UM, %edi
-	jz	kernel_call_entry_common
-
-	/* unrecognized call number; restore user with error */
-	movl	$-1, AXREG(%ebp)
-	push	%ebp	
-	call	restore_user_context	/* restore_user_context(%ebp); */
-
-/*
- * IPC is only from a process to kernel
- */
 ENTRY(ipc_entry_softint_orig)
 	SAVE_PROCESS_CTX(0, KTS_INT_ORIG)
-	jmp ipc_entry_common
+	jmp	ipc_entry_common
 
 ENTRY(ipc_entry_softint_um)
 	SAVE_PROCESS_CTX(0, KTS_INT_UM)
-	jmp ipc_entry_common
+	jmp	ipc_entry_common
 
+/*
+ * Common IPC dispatch.
+ *
+ * On entry %rbp = proc_ptr, and p_reg holds the complete saved user context.
+ *
+ * We always reload IPC args from p_reg rather than relying on live registers
+ * because SAVE_PROCESS_CTX clobbers %rsi (RESTORE_KERNEL_SEGS uses it as a
+ * scratch register).  Reloading from p_reg works for both paths.
+ *
+ * context_stop() is a C function that clobbers all caller-saved registers
+ * including %rdi/%rsi/%rdx, so IPC args are reloaded after it returns.
+ */
 ENTRY(ipc_entry_common)
-	/* save the pointer to the current process */
-	push	%ebp
+	push	%rbp			/* save proc_ptr at [rsp] */
 
-	/*
-	 * pass the syscall arguments from userspace to the handler.
-	 * SAVE_PROCESS_CTX() does not clobber these registers, they are still
-	 * set as the userspace have set them
-	 */
-	push	%ebx
-	push	%eax
-	push	%ecx
-
-	/* stop user process cycles */
-	push	%ebp
-	/* for stack trace */
-	movl	$0, %ebp
+	/* context_stop(proc_ptr) -- first arg in %rdi (AMD64 ABI) */
+	movq	%rbp, %rdi
+	movq	$0, %rbp		/* clear frame pointer for stack trace */
 	call	_C_LABEL(context_stop)
-	add	$4, %esp
 
-	call	_C_LABEL(do_ipc)
+	/* Reload proc_ptr (context_stop clobbered %rbp) */
+	movq	(%rsp), %rbp
 
-	/* restore the current process pointer and save the return value */
-	add	$3 * 4, %esp
-	pop	%esi
-	mov     %eax, AXREG(%esi)
+	/* Reload IPC args from p_reg -- valid for both softint and SYSCALL */
+	movq	DIREG(%rbp), %rdi	/* call_nr  -> arg 1 */
+	movq	SIREG(%rbp), %rsi	/* endpoint -> arg 2 */
+	movq	DXREG(%rbp),  %rdx	/* msg_ptr  -> arg 3 */
+
+	call	_C_LABEL(do_ipc)	/* do_ipc(rdi, rsi, rdx) */
+
+	pop	%rsi			/* recover proc_ptr */
+	movq	%rax, AXREG(%rsi)	/* save return value */
 
 	jmp	_C_LABEL(switch_to_user)
 
+/*===========================================================================*/
+/*			kernel call entry (INT KERVEC)			     */
+/*===========================================================================*/
 
-/*
- * kernel call is only from a process to kernel
- */
 ENTRY(kernel_call_entry_orig)
 	SAVE_PROCESS_CTX(0, KTS_INT_ORIG)
 	jmp	kernel_call_entry_common
@@ -311,158 +278,164 @@ ENTRY(kernel_call_entry_um)
 	SAVE_PROCESS_CTX(0, KTS_INT_UM)
 	jmp	kernel_call_entry_common
 
+/*
+ * kernel_call(message *m_user, struct proc *caller):
+ *   m_user  = kernel call message ptr (userspace passed it in %rdi per AMD64
+ *             ABI, so SAVE_PROCESS_CTX saved it to DIREG)
+ *   caller  = proc_ptr (in %rbp after SAVE_PROCESS_CTX)
+ */
 ENTRY(kernel_call_entry_common)
-	/* save the pointer to the current process */
-	push	%ebp
-
-	/*
-	 * pass the syscall arguments from userspace to the handler.
-	 * SAVE_PROCESS_CTX() does not clobber these registers, they are still
-	 * set as the userspace have set them
-	 */
-	push	%eax
-
-	/* stop user process cycles */
-	push	%ebp
-	/* for stack trace */
-	movl	$0, %ebp
+	/* context_stop(proc_ptr) */
+	movq	%rbp, %rdi
+	push	%rbp
+	movq	$0, %rbp
 	call	_C_LABEL(context_stop)
-	add	$4, %esp
+	pop	%rbp
 
+	/* kernel_call(m_user=%rdi, caller=%rsi) -- AMD64 ABI */
+	movq	DIREG(%rbp), %rdi	/* m_user: msg ptr from saved %rdi (first C arg) */
+	movq	%rbp, %rsi		/* caller: proc_ptr */
 	call	_C_LABEL(kernel_call)
-
-	/* restore the current process pointer and save the return value */
-	add	$8, %esp
 
 	jmp	_C_LABEL(switch_to_user)
 
+/*===========================================================================*/
+/*			context restore					     */
+/*===========================================================================*/
 
-.balign 16
 /*
- * called by the exception interrupt vectors. If the exception does not push
- * errorcode, we assume that the vector handler pushed 0 instead. Next pushed
- * thing is the vector number. From this point on we can continue as if every
- * exception pushes an error code
+ * restore_user_context_syscall(struct proc *p)
+ *
+ * Return via SYSRETQ.  CPU restores RIP from %rcx and RFLAGS from %r11.
+ * %rsp is NOT restored by SYSRETQ; the kernel sets it explicitly.
+ *
+ * AMD64 SysV ABI: proc_ptr in %rdi (first argument register).
  */
-exception_entry:
+ENTRY(restore_user_context_syscall)
+	movq	%rdi, %rbp		/* rbp = proc_ptr */
+
 	/*
-	 * check if it is a nested trap by comparing the saved code segment
-	 * descriptor with the kernel CS first
+	 * Set user segment registers before RESTORE_GP_REGS so the %si
+	 * clobber from movw is immediately overwritten when RESTORE_GP_REGS
+	 * restores %rsi from SIREG.
 	 */
-	TEST_INT_IN_KERNEL(12, exception_entry_nested)
+	movw	$USER_DS_SELECTOR, %si
+	movw	%si, %ds
+	movw	%si, %es
+	movw	%si, %fs
+	movw	%si, %gs
+
+	/* Restore all GP registers from p_reg. */
+	RESTORE_GP_REGS(%rbp)
+
+	/*
+	 * Override %rcx/%r11 for SYSRETQ.  RESTORE_GP_REGS already wrote the
+	 * saved CXREG/R11REG values; override here in case the kernel modified
+	 * PCREG/PSWREG (e.g. signal delivery redirected the return address).
+	 */
+	movq	PCREG(%rbp),  %rcx	/* return RIP */
+	movq	PSWREG(%rbp), %r11	/* return RFLAGS */
+
+	/* Switch to user stack, restore %rbp last. */
+	movq	SPREG(%rbp), %rsp
+	movq	BPREG(%rbp), %rbp
+
+	sysretq
+
+/*
+ * restore_user_context_sysenter -- not used on AMD64 (sysenter is i386-only).
+ * Redirect to the INT path rather than crashing.
+ */
+ENTRY(restore_user_context_sysenter)
+	jmp	_C_LABEL(restore_user_context_int)
+
+/*
+ * restore_user_context_int(struct proc *p)
+ *
+ * Return via IRETQ.  Reconstructs the long-mode interrupt frame on the
+ * kernel stack.
+ *
+ * AMD64 SysV ABI: proc_ptr in %rdi (first argument register).
+ */
+ENTRY(restore_user_context_int)
+	movq	%rdi, %rbp		/* rbp = proc_ptr */
+
+	/*
+	 * Build the IRETQ frame.  %rax is used as a scratch register here;
+	 * RESTORE_GP_REGS will restore the correct %rax from AXREG.
+	 */
+	pushq	$USER_DS_SELECTOR	/* SS = DS in flat AMD64 user mode */
+	movq	SPREG(%rbp), %rax;	pushq	%rax
+	movq	PSWREG(%rbp), %rax;	pushq	%rax
+	pushq	$USER_CS_SELECTOR
+	movq	PCREG(%rbp), %rax;	pushq	%rax
+
+	/*
+	 * Set user segment registers before RESTORE_GP_REGS so the %si
+	 * clobber is overwritten when %rsi is restored from SIREG.
+	 */
+	movw	$USER_DS_SELECTOR, %si
+	movw	%si, %ds
+	movw	%si, %es
+	movw	%si, %fs
+	movw	%si, %gs
+
+	/* Restore all GP registers (%rax, %rsi, etc. are corrected here). */
+	RESTORE_GP_REGS(%rbp)
+
+	/* Restore %rbp last (it was proc_ptr until now). */
+	movq	BPREG(%rbp), %rbp
+
+	iretq
+
+/*===========================================================================*/
+/*			exception entry					     */
+/*===========================================================================*/
+/*
+ * On AMD64 the CPU-pushed exception frame is 5 x 8 = 40 bytes:
+ *   [rsp+0]  RIP
+ *   [rsp+8]  CS
+ *   [rsp+16] RFLAGS
+ *   [rsp+24] RSP
+ *   [rsp+32] SS
+ *
+ * Exception stubs push $vector + $error_code = 16 bytes before reaching
+ * exception_entry, so the CPU frame starts 16 bytes above %rsp.
+ * SAVE_PROCESS_CTX(16, ...) accounts for those 16 extra bytes.
+ * TEST_INT_IN_KERNEL checks CS: with the two software-pushed words, CS is at
+ * 8 (error) + 8 (vector) + 8 (RIP) + 8 (CS) = CS at [rsp + 24].
+ */
+.balign 16
+exception_entry:
+	TEST_INT_IN_KERNEL(24, exception_entry_nested)
 
 exception_entry_from_user:
-	SAVE_PROCESS_CTX(8, KTS_INT_HARD)
+	SAVE_PROCESS_CTX(16, KTS_INT_HARD)
 
-	/* stop user process cycles */
-	push	%ebp
-	/* for stack trace clear %ebp */
-	movl	$0, %ebp
+	movq	%rbp, %rdi
+	push	%rbp
+	movq	$0, %rbp
 	call	_C_LABEL(context_stop)
-	add	$4, %esp
+	pop	%rbp
 
-	/*
-	 * push a pointer to the interrupt state pushed by the cpu and the
-	 * vector number pushed by the vector handler just before calling
-	 * exception_entry and call the exception handler.
-	 */
-	push	%esp
-	push	$0	/* it's not a nested exception */
-	call 	_C_LABEL(exception_handler)
+	movq	%rsp, %rsi		/* frame ptr -> 2nd arg (%rsi) */
+	xorl	%edi, %edi		/* is_nested=0  -> 1st arg (%rdi) */
+	call	_C_LABEL(exception_handler)
 
 	jmp	_C_LABEL(switch_to_user)
 
 exception_entry_nested:
-
-	pusha
-	mov	%esp, %eax
-	add	$(8 * 4), %eax
-	push	%eax
-	pushl	$1			/* it's a nested exception */
+	pushaq
+	movq	%rsp, %rsi
+	addq	$(15 * 8), %rsi		/* skip pushaq frame; point at exception frame */
+	movl	$1, %edi		/* is_nested=1  -> 1st arg (%rdi) */
 	call	_C_LABEL(exception_handler)
-	add	$8, %esp
-	popa
-
-	/* clear the error code and the exception number */
-	add	$8, %esp
-	/* resume execution at the point of exception */
-	iret
-
-ENTRY(restore_user_context_sysenter)
-	/* return to userspace using sysexit.
-	 * most of the context saving the userspace process is
-	 * responsible for, we just have to take care of the right EIP
-	 * and ESP restoring here to resume execution, and set EAX and
-	 * EBX to the saved status values.
-	 */
-	mov	4(%esp), %ebp		/* retrieve proc ptr arg */
-	movw	$USER_DS_SELECTOR, %ax
-	movw	%ax, %ds
-	mov	PCREG(%ebp), %edx	/* sysexit restores EIP using EDX */
-	mov	SPREG(%ebp), %ecx	/* sysexit restores ESP using ECX */
-	mov	AXREG(%ebp), %eax	/* trap return value */
-	mov	BXREG(%ebp), %ebx	/* secondary return value */
-
-        /* restore PSW */
-        movl    PSWREG(%ebp), %edi      /* load desired PSW to EDI */
-        andl    $0xfffffdff, %edi	/* Clear IF to avoid receiving int. */
-        push    %edi
-        popf
-
-	sti				/* enable interrupts */
-	sysexit				/* jump to EIP in user */
-
-ENTRY(restore_user_context_syscall)
-	/* return to userspace using sysret.
-	 * the procedure is very similar to sysexit; it requires
-	 * manual %esp restoring, new EIP in ECX, does not require
-	 * enabling interrupts, and of course sysret instead of sysexit.
-	 */
-	mov	4(%esp), %ebp		/* retrieve proc ptr arg */
-
-        /* restore PSW (before we switch to user stack!) */
-        movl    PSWREG(%ebp), %edi      /* load desired PSW to EDI */
-        andl    $0xfffffdff, %edi	/* Clear IF to avoid receiving int. */
-        push    %edi
-        popf
-
-	mov	PCREG(%ebp), %ecx	/* sysret restores EIP using ECX */
-	mov	SPREG(%ebp), %esp	/* restore ESP directly */
-	mov	AXREG(%ebp), %eax	/* trap return value */
-	mov	BXREG(%ebp), %ebx	/* secondary return value */
-
-	sti
-	sysret				/* jump to EIP in user */
-
-ENTRY(restore_user_context_int)
-	mov	4(%esp), %ebp	/* will assume P_STACKBASE == 0 */
-
-	/* reconstruct the stack for iret */
-	push	$USER_DS_SELECTOR	/* ss */
-	movl	SPREG(%ebp), %eax
-	push	%eax
-	movl	PSWREG(%ebp), %eax
-	push	%eax
-	push	$USER_CS_SELECTOR	/* cs */
-	movl	PCREG(%ebp), %eax
-	push	%eax
-
-	/* Restore segments as the user should see them. */
-	movw	$USER_DS_SELECTOR, %si
-        movw    %si, %ds
-        movw    %si, %es
-        movw    %si, %fs
-        movw    %si, %gs
-
-	/* Same for general-purpose registers. */
-	RESTORE_GP_REGS(%ebp)
-
-	movl	BPREG(%ebp), %ebp
-
-	iret	/* continue process */
+	popaq
+	add	$16, %rsp		/* discard error code + vector */
+	iretq
 
 /*===========================================================================*/
-/*				exception handlers			     */
+/*			exception handlers (IDT stubs)			     */
 /*===========================================================================*/
 
 #define EXCEPTION_ERR_CODE(vector)	\
@@ -470,156 +443,77 @@ ENTRY(restore_user_context_int)
 	jmp	exception_entry
 
 #define EXCEPTION_NO_ERR_CODE(vector)	\
-	pushl	$0		;\
+	pushq	$0			;\
 	EXCEPTION_ERR_CODE(vector)
 
-LABEL(divide_error)
-	EXCEPTION_NO_ERR_CODE(DIVIDE_VECTOR)
-
-LABEL(single_step_exception)
-	EXCEPTION_NO_ERR_CODE(DEBUG_VECTOR)
+LABEL(divide_error)		EXCEPTION_NO_ERR_CODE(DIVIDE_VECTOR)
+LABEL(single_step_exception)	EXCEPTION_NO_ERR_CODE(DEBUG_VECTOR)
 
 LABEL(nmi)
 #ifndef USE_WATCHDOG
 	EXCEPTION_NO_ERR_CODE(NMI_VECTOR)
 #else
-	/*
-	 * We have to be very careful as this interrupt can occur anytime. On
-	 * the other hand, if it interrupts a user process, we will resume the
-	 * same process which makes things a little simpler. We know that we are
-	 * already on kernel stack whenever it happened and we can be
-	 * conservative and save everything as we don't need to be extremely
-	 * efficient as the interrupt is infrequent and some overhead is already
-	 * expected.
-	 */
-
-	/*
-	 * save the important registers. We don't save %cs and %ss and they are
-	 * saved and restored by CPU
-	 */
-	pushw	%ds
-	pushw	%es
-	pushw	%fs
-	pushw	%gs
-	pusha
-
-	/*
-	 * We cannot be sure about the state of the kernel segment register,
-	 * however, we always set %ds and %es to the same as %ss
-	 */
-	mov	%ss, %si
-	mov	%si, %ds
-	mov	%si, %es
-
-	push	%esp
+	pushw	%ds; pushw	%es; pushw	%fs; pushw	%gs
+	pushaq
+	mov	%ss, %si;  mov	%si, %ds;  mov	%si, %es
+	mov	%rsp, %rdi
 	call	_C_LABEL(nmi_watchdog_handler)
-	add	$4, %esp
-
-	/* restore all the important registers as they were before the trap */
-	popa
-	popw	%gs
-	popw	%fs
-	popw	%es
-	popw	%ds
-
-	iret
+	popaq
+	popw	%gs; popw	%fs; popw	%es; popw	%ds
+	iretq
 #endif
 
-LABEL(breakpoint_exception)
-	EXCEPTION_NO_ERR_CODE(BREAKPOINT_VECTOR)
-
-LABEL(overflow)
-	EXCEPTION_NO_ERR_CODE(OVERFLOW_VECTOR)
-
-LABEL(bounds_check)
-	EXCEPTION_NO_ERR_CODE(BOUNDS_VECTOR)
-
-LABEL(inval_opcode)
-	EXCEPTION_NO_ERR_CODE(INVAL_OP_VECTOR)
+LABEL(breakpoint_exception)	EXCEPTION_NO_ERR_CODE(BREAKPOINT_VECTOR)
+LABEL(overflow)			EXCEPTION_NO_ERR_CODE(OVERFLOW_VECTOR)
+LABEL(bounds_check)		EXCEPTION_NO_ERR_CODE(BOUNDS_VECTOR)
+LABEL(inval_opcode)		EXCEPTION_NO_ERR_CODE(INVAL_OP_VECTOR)
 
 LABEL(copr_not_available)
-	TEST_INT_IN_KERNEL(4, copr_not_available_in_kernel)
-	cld			/* set direction flag to a known value */
+	TEST_INT_IN_KERNEL(8, copr_not_available_in_kernel)
+	cld
 	SAVE_PROCESS_CTX(0, KTS_INT_HARD)
-	/* stop user process cycles */
-	push	%ebp
-	mov	$0, %ebp
+	movq	%rbp, %rdi
+	push	%rbp;  movq	$0, %rbp
 	call	_C_LABEL(context_stop)
+	pop	%rbp			/* balance the push; restore proc_ptr */
 	call	_C_LABEL(copr_not_available_handler)
-	/* reached upon failure only */
 	jmp	_C_LABEL(switch_to_user)
 
 copr_not_available_in_kernel:
-	pushl	$0
-	pushl	$COPROC_NOT_VECTOR
+	pushq	$0;  pushq	$COPROC_NOT_VECTOR
 	jmp	exception_entry_nested
 
-LABEL(double_fault)
-	EXCEPTION_ERR_CODE(DOUBLE_FAULT_VECTOR)
-
-LABEL(copr_seg_overrun)
-	EXCEPTION_NO_ERR_CODE(COPROC_SEG_VECTOR)
-
-LABEL(inval_tss)
-	EXCEPTION_ERR_CODE(INVAL_TSS_VECTOR)
-
-LABEL(segment_not_present)
-	EXCEPTION_ERR_CODE(SEG_NOT_VECTOR)
-
-LABEL(stack_exception)
-	EXCEPTION_ERR_CODE(STACK_FAULT_VECTOR)
-
-LABEL(general_protection)
-	EXCEPTION_ERR_CODE(PROTECTION_VECTOR)
-
-LABEL(page_fault)
-	EXCEPTION_ERR_CODE(PAGE_FAULT_VECTOR)
-
-LABEL(copr_error)
-	EXCEPTION_NO_ERR_CODE(COPROC_ERR_VECTOR)
-
-LABEL(alignment_check)
-	EXCEPTION_NO_ERR_CODE(ALIGNMENT_CHECK_VECTOR)
-
-LABEL(machine_check)
-	EXCEPTION_NO_ERR_CODE(MACHINE_CHECK_VECTOR)
-
-LABEL(simd_exception)
-	EXCEPTION_NO_ERR_CODE(SIMD_EXCEPTION_VECTOR)
+LABEL(double_fault)		EXCEPTION_ERR_CODE(DOUBLE_FAULT_VECTOR)
+LABEL(copr_seg_overrun)		EXCEPTION_NO_ERR_CODE(COPROC_SEG_VECTOR)
+LABEL(inval_tss)		EXCEPTION_ERR_CODE(INVAL_TSS_VECTOR)
+LABEL(segment_not_present)	EXCEPTION_ERR_CODE(SEG_NOT_VECTOR)
+LABEL(stack_exception)		EXCEPTION_ERR_CODE(STACK_FAULT_VECTOR)
+LABEL(general_protection)	EXCEPTION_ERR_CODE(PROTECTION_VECTOR)
+LABEL(page_fault)		EXCEPTION_ERR_CODE(PAGE_FAULT_VECTOR)
+LABEL(copr_error)		EXCEPTION_NO_ERR_CODE(COPROC_ERR_VECTOR)
+LABEL(alignment_check)		EXCEPTION_NO_ERR_CODE(ALIGNMENT_CHECK_VECTOR)
+LABEL(machine_check)		EXCEPTION_NO_ERR_CODE(MACHINE_CHECK_VECTOR)
+LABEL(simd_exception)		EXCEPTION_NO_ERR_CODE(SIMD_EXCEPTION_VECTOR)
 
 /*===========================================================================*/
-/*				reload_cr3				     */
+/*			miscellaneous kernel routines			     */
 /*===========================================================================*/
-/* PUBLIC void reload_cr3(void); */
+
 ENTRY(reload_cr3)
-	push    %ebp
-	mov     %esp, %ebp
-	mov	%cr3, %eax
-	mov	%eax, %cr3
-	pop     %ebp
+	push	%rbp
+	mov	%rsp, %rbp
+	mov	%cr3, %rax
+	mov	%rax, %cr3
+	pop	%rbp
 	ret
 
 #ifdef CONFIG_SMP
 ENTRY(startup_ap_32)
-	/*
-	 * we are in protected mode now, %cs is correct and we need to set the
-	 * data descriptors before we can touch anything
-	 *
-	 * first load the regular, highly mapped idt, gdt
-	 */
-
-	/*
-	 * use the boot stack for now. The running CPUs are already using their
-	 * own stack, the rest is still waiting to be booted
-	 */
 	movw	$KERN_DS_SELECTOR, %ax
 	mov	%ax, %ds
 	mov	%ax, %ss
-	mov	$_C_LABEL(k_boot_stktop) - 4, %esp
-
-	/* load the highly mapped idt, gdt, per-cpu tss */
+	mov	$_C_LABEL(k_boot_stktop) - 8, %rsp
 	call	_C_LABEL(prot_load_selectors)
-
 	jmp	_C_LABEL(smp_ap_boot)
 	hlt
 #endif
@@ -629,26 +523,18 @@ ENTRY(startup_ap_32)
 /*===========================================================================*/
 
 .data
-.short	0x526F	/* this must be the first data entry (magic #) */
+.short	0x526F	/* magic number -- must be the first data entry */
 
 .bss
 k_initial_stack:
 .space	K_STACK_SIZE
 LABEL(__k_unpaged_k_initial_stktop)
 
-/*
- * the kernel stack
- */
 k_boot_stack:
-.space	K_STACK_SIZE	/* kernel stack */ /* FIXME use macro here */
-LABEL(k_boot_stktop)	/* top of kernel stack */
+.space	K_STACK_SIZE
+LABEL(k_boot_stktop)
 
 .balign K_STACK_SIZE
 LABEL(k_stacks_start)
-
-/* two pages for each stack, one for data, other as a sandbox */
 .space	2 * (K_STACK_SIZE * CONFIG_MAX_CPUS)
-
 LABEL(k_stacks_end)
-
-/* top of kernel stack */

@@ -596,7 +596,7 @@ int wctxpn(char *name)
 	if (Modem2) {
 		if ((in!=stdin) && *name && fstat(fileno(in), &f)!= -1) {
 			fprintf(stderr, "Sending %s, %lld blocks: ",
-			  name, f.st_size>>7);
+			  name, (long long)(f.st_size>>7));
 		}
 		fprintf(stderr, "Give your local XMODEM receive command now.\r\n");
 		return OK;
@@ -630,7 +630,8 @@ int wctxpn(char *name)
 	while (q < (txbuf + 1024))
 		*q++ = 0;
 	if (!Ascii && (in!=stdin) && *name && fstat(fileno(in), &f)!= -1)
-		sprintf(p, "%llu %llo %o 0 %d %ld", f.st_size, f.st_mtime,
+		sprintf(p, "%lld %llo %o 0 %d %ld", (long long)f.st_size,
+		  (unsigned long long)f.st_mtime,
 		  f.st_mode, Filesleft, Totalleft);
 	Totalleft -= f.st_size;
 	if (--Filesleft <= 0)
@@ -1685,7 +1686,7 @@ void countem(int argc, char **argv)
 			}
 		}
 		if (Verbose>2)
-			fprintf(stderr, " %lld", f.st_size);
+			fprintf(stderr, " %lld", (long long)f.st_size);
 	}
 	if (Verbose>2)
 		fprintf(stderr, "\ncountem: Total %d %ld\n",

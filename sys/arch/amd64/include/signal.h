@@ -43,6 +43,10 @@
 #define	__HAVE_STRUCT_SIGCONTEXT
 #endif /* _KERNEL */
 
+#if defined(__minix) && (defined(_LIBMINC) || !defined(_STANDALONE))
+#include <machine/fpu.h>
+#endif
+
 typedef int sig_atomic_t;
 
 #if defined(_NETBSD_SOURCE)
@@ -51,6 +55,57 @@ typedef int sig_atomic_t;
  */
 #include <machine/trap.h>
 #include <machine/mcontext.h>
+
+#if defined(_KERNEL) || defined(__minix)
+/*
+ * Signal context structure for x86_64 MINIX.  Mirrors the i386 layout but
+ * uses 64-bit register fields and omits the 16-bit segment registers that
+ * have no meaningful user-space content on AMD64.
+ */
+struct sigcontext {
+	long	sc_rdi;
+	long	sc_rsi;
+	long	sc_rbp;
+	long	sc_rbx;
+	long	sc_rdx;
+	long	sc_rcx;
+	long	sc_rax;
+	long	sc_r8;
+	long	sc_r9;
+	long	sc_r10;
+	long	sc_r11;
+	long	sc_r12;
+	long	sc_r13;
+	long	sc_r14;
+	long	sc_r15;
+	long	sc_rip;
+	long	sc_rflags;
+	long	sc_rsp;
+	long	sc_ss;
+	long	sc_cs;
+
+	int	sc_onstack;		/* sigstack state to restore */
+	int	__sc_mask13;		/* signal mask to restore (old style) */
+
+	int	sc_trapno;
+	int	sc_err;
+
+	sigset_t sc_mask;		/* signal mask to restore (new style) */
+#if defined(__minix) && (defined(_LIBMINC) || !defined(_STANDALONE))
+	union fpu_state_u sc_fpu_state;
+	int	trap_style;		/* KTS_* method of entering kernel */
+	int	sc_flags;		/* MF_FPU_INITIALIZED if fpu state valid */
+#define SC_MAGIC 0xc0ffee1
+	int	sc_magic;
+#endif
+};
+#endif /* _KERNEL || __minix */
+
+#if defined(__minix) && (defined(_LIBMINC) || !defined(_STANDALONE))
+__BEGIN_DECLS
+int sigreturn(struct sigcontext *_scp);
+__END_DECLS
+#endif
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"

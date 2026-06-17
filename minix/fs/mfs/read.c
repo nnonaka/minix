@@ -178,7 +178,7 @@ static int rw_chunk(
 	assert(ino != VMC_NO_INODE);
 	assert(!(ino_off % block_size));
 	if ((r = lmfs_get_block_ino(&bp, dev, b, n, ino, ino_off)) != OK)
-		panic("MFS: error getting block (%llu,%u): %d", dev, b, r);
+		panic("MFS: error getting block (%llu,%u): %d", (unsigned long long)dev, b, r);
   }
 
   /* In all cases, bp now points to a valid buffer. */
@@ -292,7 +292,7 @@ struct buf *get_block_map(register struct inode *rip, u64_t position)
 	if ((r = lmfs_get_block_ino(&bp, rip->i_dev, b, NORMAL, rip->i_num,
 	    position)) != OK)
 		panic("MFS: error getting block (%llu,%u): %d",
-		    rip->i_dev, b, r);
+		    (unsigned long long)rip->i_dev, b, r);
 	return bp;
 }
 
@@ -371,7 +371,7 @@ static struct buf *rahead(
   if (r == OK)
 	return(bp);
   if (r != ENOENT)
-	panic("MFS: error getting block (%llu,%u): %d", dev, block, r);
+	panic("MFS: error getting block (%llu,%u): %d", (unsigned long long)dev, block, r);
 
   /* The best guess for the number of blocks to prefetch:  A lot.
    * It is impossible to tell what the device looks like, so we don't even
@@ -440,13 +440,13 @@ static struct buf *rahead(
 		break;
 	}
 	if (r != ENOENT)
-		panic("MFS: error getting block (%llu,%u): %d", dev, block, r);
+		panic("MFS: error getting block (%llu,%u): %d", (unsigned long long)dev, block, r);
   }
   lmfs_prefetch(dev, read_q, read_q_size);
 
   r = lmfs_get_block_ino(&bp, dev, baseblock, NORMAL, rip->i_num, position);
   if (r != OK)
-	panic("MFS: error getting block (%llu,%u): %d", dev, baseblock, r);
+	panic("MFS: error getting block (%llu,%u): %d", (unsigned long long)dev, baseblock, r);
   return bp;
 }
 

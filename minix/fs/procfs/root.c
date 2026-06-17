@@ -2,7 +2,7 @@
 
 #include "inc.h"
 
-#if defined (__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 #include <machine/pci.h>
 #endif
 #include <minix/dmap.h>
@@ -12,7 +12,7 @@ static void root_uptime(void);
 static void root_loadavg(void);
 static void root_kinfo(void);
 static void root_meminfo(void);
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 static void root_pci(void);
 #endif
 static void root_dmap(void);
@@ -25,11 +25,11 @@ struct file root_files[] = {
 	{ "loadavg",	REG_ALL_MODE,	(data_t) root_loadavg	},
 	{ "kinfo",	REG_ALL_MODE,	(data_t) root_kinfo	},
 	{ "meminfo",	REG_ALL_MODE,	(data_t) root_meminfo	},
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 	{ "pci",	REG_ALL_MODE,	(data_t) root_pci	},
 #endif
 	{ "dmap",	REG_ALL_MODE,	(data_t) root_dmap	},
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 	{ "cpuinfo",	REG_ALL_MODE,	(data_t) root_cpuinfo	},
 #endif
 	{ "ipcvecs",	REG_ALL_MODE,	(data_t) root_ipcvecs	},
@@ -105,7 +105,7 @@ static void root_meminfo(void)
 	    vsi.vsi_free, vsi.vsi_largest, vsi.vsi_cached);
 }
 
-#if defined(__i386__)
+#if defined(__i386__) || defined(__x86_64__)
 /*
  * Print information about PCI devices present in the system.
  */
@@ -145,7 +145,7 @@ static void root_pci(void)
 		r = pci_next_dev(&devind, &vid, &did);
 	}
 }
-#endif /* defined(__i386__) */
+#endif /* defined(__i386__) || defined(__x86_64__) */
 
 /*
  * Print a list of drivers that have been assigned major device numbers.
@@ -186,9 +186,15 @@ static void root_ipcvecs(void)
 	 * Print the vectors with an descriptive name and the additional (k)
 	 * to distinguish them from regular symbols.
 	 */
+#if defined(__x86_64__)
+#define PRINT_ENTRYPOINT(name) \
+	buf_printf("%016lx T %s(k)\n", \
+	    (unsigned long)_minix_ipcvecs.name, #name)
+#else
 #define PRINT_ENTRYPOINT(name) \
 	buf_printf("%08lx T %s(k)\n", \
 	    (unsigned long)_minix_ipcvecs.name, #name)
+#endif
 
 	PRINT_ENTRYPOINT(sendrec);
 	PRINT_ENTRYPOINT(send);

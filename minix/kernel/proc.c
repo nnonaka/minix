@@ -437,8 +437,8 @@ check_misc_flags:
 		goto not_runnable_pick_new;
 
 	TRACE(VF_SCHEDULING, printf("cpu %d starting %s / %d "
-				"pc 0x%08x\n",
-		cpuid, p->p_name, p->p_endpoint, p->p_reg.pc););
+				"pc 0x%08lx\n",
+		cpuid, p->p_name, p->p_endpoint, (unsigned long)p->p_reg.pc););
 #if DEBUG_TRACE
 	p->p_schedules++;
 #endif
@@ -473,7 +473,7 @@ check_misc_flags:
 #endif
 	
 	restart_local_timer();
-	
+
 	/*
 	 * restore_user_context() carries out the actual mode switch from kernel
 	 * to userspace. This function does not return

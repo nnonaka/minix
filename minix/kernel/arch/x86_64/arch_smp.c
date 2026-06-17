@@ -87,7 +87,7 @@ void copy_trampoline(void)
 	 */
 	assert(prot_init_done);
 	memcpy(&__ap_gdt_tab, gdt, sizeof(gdt));
-	memcpy(&__ap_idt_tab, gdt, sizeof(idt));
+	memcpy(&__ap_idt_tab, idt, sizeof(idt));
 	__ap_gdt.base = ap_lin_addr(&__ap_gdt_tab);
 	__ap_gdt.limit = sizeof(gdt)-1;
 	__ap_idt.base = ap_lin_addr(&__ap_idt_tab);

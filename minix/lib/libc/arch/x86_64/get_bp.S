@@ -7,7 +7,7 @@
 #include <machine/asm.h>
 
 ENTRY(get_bp)
-	movl	%ebp, %eax
+	movq	%rbp, %rax
 	ret
 
 /* $PchId: get_bp.ack.s,v 1.3 1996/02/23 08:30:52 philip Exp $ */

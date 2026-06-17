@@ -4,10 +4,7 @@
 #include <machine/asm.h>
 
 ENTRY(outl)
-	push	%ebp
-	movl	%esp, %ebp
-	movl	8(%ebp), %edx	/* port */
-	movl	8+4(%ebp), %eax	/* value */
-	outl	%dx	/* output 1 dword */
-	pop	%ebp
+	movl	%esi, %eax	/* value */
+	movl	%edi, %edx	/* port */
+	outl	%dx		/* output 1 dword from %eax */
 	ret

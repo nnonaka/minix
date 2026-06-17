@@ -21,7 +21,7 @@ struct buf *get_block(dev_t dev, block_t block, int how)
   int r;
 
   if ((r = lmfs_get_block(&bp, dev, block, how)) != OK && r != ENOENT)
-	panic("ext2: error getting block (%llu,%u): %d", dev, block, r);
+	panic("ext2: error getting block (%llu,%u): %d", (unsigned long long)dev, block, r);
 
   assert(r == OK || how == PEEK);
 

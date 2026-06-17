@@ -40,6 +40,13 @@
 #define	PGOFSET		(NBPG-1)	/* byte offset into page */
 #define	NPTEPG		(NBPG/(sizeof (pt_entry_t)))
 
+#define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
+#define	DEV_BSIZE	(1 << DEV_BSHIFT)
+#define	BLKDEV_IOSIZE	2048
+#ifndef	MAXPHYS
+#define	MAXPHYS		(64 * 1024)	/* max raw I/O transfer size */
+#endif
+
 #define	MAXIOMEM	0xffffffffffff
 
 /*

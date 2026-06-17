@@ -96,169 +96,6 @@ int overlaps(kinfo_module_t *mod, int n, int cmp_mod)
 	return 0;
 }
 
-void get_parameters(u32_t ebx, kinfo_t *cbi) 
-{
-	struct multiboot_mmap	*mmap;
-	struct multiboot_info	mbi1;
-	struct multiboot_info	*mbi = &mbi1;
-	struct multiboot_module	*modp;
-	int var_i,value_i, m, k;
-	char *p;
-	extern char _kern_phys_base, _kern_vir_base, _kern_size,
-		_kern_unpaged_start, _kern_unpaged_end;
-	phys_bytes kernbase = (phys_bytes) &_kern_phys_base,
-		kernsize = (phys_bytes) &_kern_size;
-#define BUF 1024
-	static char cmdline[BUF];
-
-	/* get our own copy of the multiboot info struct and module list */
-	memcpy((void *) mbi, (void *) ebx, sizeof(mbi1));
-
-	cbi->boot_mode = 0;
-	cbi->mb_version = 1;
-	
-	/* Set various bits of info for the higher-level kernel. */
-	cbi->module_count = mbi->mi_mods_count;
-	cbi->mem_high_phys = 0;
-	cbi->user_sp = (vir_bytes) &_kern_vir_base;
-	cbi->vir_kern_start = (vir_bytes) &_kern_vir_base;
-	cbi->bootstrap_start = (vir_bytes) &_kern_unpaged_start;
-	cbi->bootstrap_len = (vir_bytes) &_kern_unpaged_end -
-		cbi->bootstrap_start;
-	cbi->kmess = &kmess;
-
-	/* set some configurable defaults */
-	cbi->do_serial_debug = 0;
-	cbi->serial_debug_baud = 115200;
-
-	/* parse boot command line */
-	if (mbi->mi_flags & MULTIBOOT_INFO_HAS_CMDLINE) {
-		static char var[BUF];
-		static char value[BUF];
-
-		/* Override values with cmdline argument */
-		memcpy(cmdline, (void *) mbi->mi_cmdline, BUF);
-		p = cmdline;
-		while (*p) {
-			var_i = 0;
-			value_i = 0;
-			while (*p == ' ') p++;
-			if (!*p) break;
-			while (*p && *p != '=' && *p != ' ' && var_i < BUF - 1) 
-				var[var_i++] = *p++ ;
-			var[var_i] = 0;
-			if (*p++ != '=') continue; /* skip if not name=value */
-			while (*p && *p != ' ' && value_i < BUF - 1) 
-				value[value_i++] = *p++ ;
-			value[value_i] = 0;
-			
-			mb_set_param(cbi->param_buf, var, value, cbi);
-		}
-	}
-
-        /* let higher levels know what we are booting on */
-        mb_set_param(cbi->param_buf, ARCHVARNAME, (char *)get_board_arch_name(BOARD_ID_INTEL), cbi);
-	mb_set_param(cbi->param_buf, BOARDVARNAME,(char *)get_board_name(BOARD_ID_INTEL) , cbi);
-
-	/* move user stack/data down to leave a gap to catch kernel
-	 * stack overflow; and to distinguish kernel and user addresses
-	 * at a glance (0xf.. vs 0xe..) 
-	 */
-	cbi->user_sp = USR_STACKTOP;
-	cbi->user_end = USR_DATATOP;
-
-	/* kernel bytes without bootstrap code/data that is currently
-	 * still needed but will be freed after bootstrapping.
-	 */
-	kinfo.kernel_allocated_bytes = (phys_bytes) &_kern_size;
-	kinfo.kernel_allocated_bytes -= cbi->bootstrap_len;
-
-	assert(!(cbi->bootstrap_start % I386_PAGE_SIZE));
-	cbi->bootstrap_len = rounddown(cbi->bootstrap_len, I386_PAGE_SIZE);
-	assert(mbi->mi_flags & MULTIBOOT_INFO_HAS_MODS);
-	assert(mbi->mi_mods_count < MULTIBOOT_MAX_MODS);
-	assert(mbi->mi_mods_count > 0);
-	cbi->module_count = mbi->mi_mods_count;
-	for (m = 0; m < mbi->mi_mods_count; m++) {
-		modp = (struct multiboot_module *)(mbi->mi_mods_addr
-			 + sizeof(struct multiboot_module) * m);
-		cbi->module_list[m].mod_start = modp->mmo_start;
-		cbi->module_list[m].mod_end = modp->mmo_end;
-		cbi->module_list[m].mod_string = modp->mmo_string;
-	}
-	
-	memset((void *)&cbi->fb, 0, sizeof(cbi->fb));
-	if(mbi->mi_flags & MULTIBOOT_INFO_HAS_FRAMEBUFFER) {
-		cbi->fb.framebuffer_addr = mbi->framebuffer_addr;
-		cbi->fb.framebuffer_pitch = mbi->framebuffer_pitch;
-		cbi->fb.framebuffer_width = mbi->framebuffer_width;
-		cbi->fb.framebuffer_height = mbi->framebuffer_height;
-		cbi->fb.framebuffer_bpp = mbi->framebuffer_bpp;
-		cbi->fb.framebuffer_type = mbi->framebuffer_type;
-		if (mbi->framebuffer_type == MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED) {
-			cbi->fb.framebuffer_palette_addr = 
-				mbi->framebuffer_palette_addr;
-			cbi->fb.framebuffer_palette_num_colors = 
-				mbi->framebuffer_palette_num_colors;
-		} else if (mbi->framebuffer_type == MULTIBOOT_FRAMEBUFFER_TYPE_RGB) {
-			cbi->fb.framebuffer_red_field_position =
-				mbi->framebuffer_red_field_position;
-			cbi->fb.framebuffer_red_mask_size =
-				mbi->framebuffer_red_mask_size;
-			cbi->fb.framebuffer_green_field_position =
-				mbi->framebuffer_green_field_position;
-			cbi->fb.framebuffer_green_mask_size =
-				mbi->framebuffer_green_mask_size;
-			cbi->fb.framebuffer_blue_field_position =
-				mbi->framebuffer_blue_field_position;
-			cbi->fb.framebuffer_blue_mask_size =
-				mbi->framebuffer_red_field_position;
-		}
-	}
-		
-	memset(cbi->memmap, 0, sizeof(cbi->memmap));
-	/* mem_map has a variable layout */
-	if(mbi->mi_flags & MULTIBOOT_INFO_HAS_MMAP) {
-		cbi->mmap_size = 0;
-	        for (mmap = (struct multiboot_mmap *) mbi->mi_mmap_addr;
-       	     (unsigned long) mmap < mbi->mi_mmap_addr + mbi->mi_mmap_length;
-       	       mmap = (struct multiboot_mmap *) 
-		      	((unsigned long) mmap + mmap->mm_size + sizeof(mmap->mm_size))) {
-			if(mmap->mm_type != MULTIBOOT_MEMORY_AVAILABLE) continue;
-			add_memmap(cbi, mmap->mm_base_addr, mmap->mm_length);
-		}
-	} else {
-		assert(mbi->mi_flags & MULTIBOOT_INFO_HAS_MEMORY);
-		add_memmap(cbi, 0, mbi->mi_mem_lower*1024);
-		add_memmap(cbi, 0x100000, mbi->mi_mem_upper*1024);
-	}
-
-	/* Sanity check: the kernel nor any of the modules may overlap
-	 * with each other. Pretend the kernel is an extra module for a
-	 * second.
-	 */
-	k = cbi->module_count;
-	assert(k < MULTIBOOT_MAX_MODS);
-	cbi->module_list[k].mod_start = kernbase;
-	cbi->module_list[k].mod_end = kernbase + kernsize;
-	cbi->mods_with_kernel = cbi->module_count+1;
-	cbi->kern_mod = k;
-
-	for(m = 0; m < cbi->mods_with_kernel; m++) {
-#if 0
-		printf("checking overlap of module %08lx-%08lx\n",
-		  cbi->module_list[m].mod_start, cbi->module_list[m].mod_end);
-#endif
-		if(overlaps(cbi->module_list, cbi->mods_with_kernel, m))
-			panic("overlapping boot modules/kernel");
-		/* We cut out the bits of memory that we know are
-		 * occupied by the kernel and boot modules.
-		 */
-		cut_memmap(cbi,
-			cbi->module_list[m].mod_start, 
-			cbi->module_list[m].mod_end);
-	}
-}
 
 kinfo_t *pre_init(u32_t magic, u32_t ebx)
 {
@@ -267,20 +104,17 @@ kinfo_t *pre_init(u32_t magic, u32_t ebx)
 	 */
 	if (magic == MULTIBOOT2_BOOTLOADER_MAGIC)
 		get_parameters_mb2(ebx, &kinfo);
-	else if (magic == MULTIBOOT_INFO_MAGIC)
-		get_parameters(ebx, &kinfo);
 	else
-		panic("Invalid magic: %d\n", magic);
+		panic("Invalid multiboot2 magic: 0x%x\n", magic);
 
-	/* Make and load a pagetable that will map the kernel
-	 * to where it should be; but first a 1:1 mapping so
-	 * this code stays where it should be.
+	/* Build proper page tables: identity-map physical RAM, then map the
+	 * kernel at its high virtual address.  Long mode and paging were
+	 * already enabled by head.S, so vm_enable_paging() is skipped.
 	 */
 	pg_clear();
 	pg_identity(&kinfo);
 	kinfo.freepde_start = pg_mapkernel();
 	pg_load();
-	vm_enable_paging();
 
 	/* Done, return boot info so it can be passed to kmain(). */
 	return &kinfo;

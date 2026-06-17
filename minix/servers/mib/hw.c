@@ -8,6 +8,9 @@ static const char arch[] = "i386";	/* architecture */
 #elif defined(__arm__)
 static const char mach[] = "evbarm";	/* machine (cpu) type */
 static const char arch[] = "evbarm";	/* architecture */
+#elif defined(__x86_64__)
+static const char mach[] = "amd64";	/* machine (cpu) type */
+static const char arch[] = "x86_64";	/* architecture */
 #else
 #error "unknown machine architecture"
 #endif

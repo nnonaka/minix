@@ -91,7 +91,7 @@ static int cons_write(register struct tty *tp, int try)
 	if (count > sizeof(buf)) count = sizeof(buf);
 	if (tp->tty_outcaller == KERNEL) {
 		/* We're trying to print on kernel's behalf */
-		memcpy(buf, (char *) tp->tty_outgrant + tp->tty_outcum, count);
+		memcpy(buf, (char *)(uintptr_t) tp->tty_outgrant + tp->tty_outcum, count);
 	} else {
 		if ((result = sys_safecopyfrom(tp->tty_outcaller,
 				tp->tty_outgrant, tp->tty_outcum,

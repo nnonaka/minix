@@ -132,7 +132,7 @@ ssize_t lmfs_bio(dev_t dev, struct fsdriver_data * data, size_t bytes, off_t pos
 	if (bytes == 0)
 		return 0; /* just in case */
 
-	if (pos < 0 || bytes > SSIZE_MAX || pos > INT64_MAX - bytes + 1)
+	if (pos < 0 || bytes > SSIZE_MAX || pos > (off_t)(INT64_MAX - bytes + 1))
 		return EINVAL;
 
 	/*

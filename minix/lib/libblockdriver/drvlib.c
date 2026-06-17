@@ -419,9 +419,11 @@ static int check_gpthdr(struct blockdriver *bdp, int device, daddr_t sector,
 	if (gpth->hdr_lba_self != (uint64_t)sector)
 		return -1;
 
-	/* hdr_entsz must be non-zero and fit within our read buffer to avoid
-	 * division by zero and an infinite loop in the entry scan below. */
-	if (gpth->hdr_entsz == 0 || gpth->hdr_entsz > CD_SECTOR_SIZE)
+	/* hdr_entsz must be at least sizeof(struct gpt_ent) (UEFI spec: >= 128,
+	 * multiple of 8) and fit within our read buffer to avoid division by
+	 * zero, an infinite loop, and a buffer overread in the entry scan. */
+	if (gpth->hdr_entsz < sizeof(struct gpt_ent) ||
+	    gpth->hdr_entsz > CD_SECTOR_SIZE)
 		return -1;
 
 	sectors = CD_SECTOR_SIZE/SECTOR_SIZE; /* sectors per buffer */

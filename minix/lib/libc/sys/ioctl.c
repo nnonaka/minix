@@ -301,7 +301,11 @@ static int ioctl_to_fcntl(int fd, unsigned long request, void * data)
 int     ioctl(int fd, unsigned long request, ...)
 {
   minix_i2c_ioctl_exec_t i2c;
-  int r, request_save;
+  int r;
+  unsigned long request_save;	/* must match 'request' width: ioctl codes
+				 * set bit 31 (IOC_IN), which an int would
+				 * sign-extend on LP64 and break the request
+				 * comparisons below */
   message m;
   vir_bytes addr;
   void *data;

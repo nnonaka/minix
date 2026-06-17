@@ -304,7 +304,7 @@ struct buf *new_block(
   r = lmfs_get_block_ino(&bp, rip->i_dev, b, NO_READ, rip->i_num,
   	rounddown(position, rip->i_sp->s_block_size));
   if (r != OK)
-	panic("MFS: error getting block (%llu,%u): %d", rip->i_dev, b, r);
+	panic("MFS: error getting block (%llu,%u): %d", (unsigned long long)rip->i_dev, b, r);
   zero_block(bp);
   return(bp);
 }

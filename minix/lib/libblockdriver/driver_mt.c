@@ -407,6 +407,8 @@ static void blockdriver_mt_receive(message *m_ptr, int *ipc_status)
 
   r = sef_receive_status(ANY, m_ptr, ipc_status);
 
+  if (r == EINTR && !running)
+	return;
   if (r != OK)
 	panic("blockdriver_mt: sef_receive_status() returned %d", r);
 }

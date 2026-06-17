@@ -907,27 +907,27 @@ static ssize_t bread_bwrite(const struct fsdriver * __restrict fdp,
 /*
  * Process a BREAD request from VFS.
  */
-ssize_t fsdriver_bread(const struct fsdriver * __restrict fdp,
+int fsdriver_bread(const struct fsdriver * __restrict fdp,
 	const message * __restrict m_in, message * __restrict m_out)
 {
 
 	if (fdp->fdr_bread == NULL)
 		return ENOSYS;
 
-	return bread_bwrite(fdp, m_in, m_out, FSC_READ);
+	return (int)bread_bwrite(fdp, m_in, m_out, FSC_READ);
 }
 
 /*
  * Process a BWRITE request from VFS.
  */
-ssize_t fsdriver_bwrite(const struct fsdriver * __restrict fdp,
+int fsdriver_bwrite(const struct fsdriver * __restrict fdp,
 	const message * __restrict m_in, message * __restrict m_out)
 {
 
 	if (fdp->fdr_bwrite == NULL)
 		return ENOSYS;
 
-	return bread_bwrite(fdp, m_in, m_out, FSC_WRITE);
+	return (int)bread_bwrite(fdp, m_in, m_out, FSC_WRITE);
 }
 
 /*

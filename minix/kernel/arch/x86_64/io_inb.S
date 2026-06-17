@@ -4,10 +4,7 @@
 #include <machine/asm.h>
 
 ENTRY(inb)
-	push	%ebp
-	movl	%esp, %ebp
-	movl	8(%ebp), %edx	/* port */
+	movl	%edi, %edx	/* port */
 	xorl	%eax, %eax
-	inb	%dx	/* read 1 byte */
-	pop	%ebp
+	inb	%dx		/* read 1 byte into %al */
 	ret

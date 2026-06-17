@@ -7,8 +7,14 @@
 
 #ifndef __ASSEMBLY__
 
-/* returns the current cpu id */
-#define cpuid	(((u32_t *)(((u32_t)get_stack_frame() + (K_STACK_SIZE - 1)) \
+/*
+ * Returns the current cpu id.  The id is stored as a reg_t at
+ * kernel_stack_top - sizeof(reg_t) by tss_init() (see protect.c).  Use
+ * vir_bytes (64-bit) for the address arithmetic so the kernel stack VA at
+ * 0xFFFFFFFF80xxxxxx is not truncated, and read it as a reg_t so [-1] lands
+ * on the full 8-byte slot rather than its high (zero) half.
+ */
+#define cpuid	(((reg_t *)(((vir_bytes)get_stack_frame() + (K_STACK_SIZE - 1)) \
 						& ~(K_STACK_SIZE - 1)))[-1])
 /* 
  * in case apic or smp is disabled in boot monitor, we need to finish single cpu

@@ -1036,8 +1036,8 @@ void select_cdev_reply1(endpoint_t driver_e, devminor_t minor, int status)
 		/* This should never happen. The driver may be misbehaving.
 		 * For now we assume that the reply we want will arrive later..
 		 */
-		printf("VFS (%s:%d): expected reply from dev %llx not %llx\n",
-			__FILE__, __LINE__, f->filp_select_dev, dev);
+		printf("VFS (%s:%d): expected reply from dev %lx not %lx\n",
+			__FILE__, __LINE__, (unsigned long)f->filp_select_dev, (unsigned long)dev);
 		return;
 	}
   }
@@ -1087,8 +1087,8 @@ void select_sdev_reply1(dev_t dev, int status)
 		/* This should never happen. The driver may be misbehaving.
 		 * For now we assume that the reply we want will arrive later..
 		 */
-		printf("VFS: expected reply from sock dev %llx, not %llx\n",
-		    f->filp_select_dev, dev);
+		printf("VFS: expected reply from sock dev %lx, not %lx\n",
+		    (unsigned long)f->filp_select_dev, (unsigned long)dev);
 		return;
 	}
   }
