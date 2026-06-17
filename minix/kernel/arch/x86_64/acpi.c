@@ -257,14 +257,14 @@ static void acpi_init_poweroff(void)
 
 	/* Everything used here existed since ACPI spec 1.0 */
 	/* So we can safely use them */
-	fadt_header = (struct acpi_fadt_header *)(uintptr_t)
+	fadt_header = (struct acpi_fadt_header *)
 		acpi_phys2vir(acpi_get_table_base("FACP"));
 	if (fadt_header == NULL) {
 		msg = "Could not load FACP";
 		goto exit;
 	}
 
-	dsdt_header = (struct acpi_rsdt *)(uintptr_t)
+	dsdt_header = (struct acpi_rsdt *)
 		acpi_phys2vir((phys_bytes) fadt_header->dsdt);
 	if (dsdt_header == NULL) {
 		msg = "Could not load DSDT";
@@ -388,7 +388,7 @@ struct acpi_madt_ioapic * acpi_get_ioapic_next(void)
 	struct acpi_madt_ioapic * ret;
 
 	if (idx == 0) {
-		madt_hdr = (struct acpi_madt_hdr *)(uintptr_t)
+		madt_hdr = (struct acpi_madt_hdr *)
 			acpi_phys2vir(acpi_get_table_base("APIC"));
 		if (madt_hdr == NULL)
 			return NULL;
@@ -410,7 +410,7 @@ struct acpi_madt_lapic * acpi_get_lapic_next(void)
 	struct acpi_madt_lapic * ret;
 
 	if (idx == 0) {
-		madt_hdr = (struct acpi_madt_hdr *)(uintptr_t)
+		madt_hdr = (struct acpi_madt_hdr *)
 			acpi_phys2vir(acpi_get_table_base("APIC"));
 		if (madt_hdr == NULL)
 			return NULL;

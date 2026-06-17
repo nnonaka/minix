@@ -1240,9 +1240,8 @@ MKBINUTILS?=	${MKBFD}
 
 #
 # We want to build zfs only for amd64 by default for now.
-# MINIX does not support ZFS, so keep it off there.
 #
-.if ${MACHINE} == "amd64" && !defined(__MINIX)
+.if ${MACHINE} == "amd64"
 MKZFS?=		yes
 .endif
 
@@ -1276,13 +1275,9 @@ _MKVARS.yes= \
 #MINIX-specific vars
 _MKVARS.yes+= \
 	MKSYSDEBUG MKLIVEUPDATE MKLLVMCMDS
-.if (${MACHINE_ARCH} == "i386") || (${MACHINE_ARCH} == "x86_64")
-_MKVARS.yes+= \
-	MKACPI MKAPIC MKDEBUGREG MKPCI
-.endif
 .if (${MACHINE_ARCH} == "i386")
 _MKVARS.yes+= \
-	MKWATCHDOG MKINSTALLBOOT
+	MKWATCHDOG MKACPI MKAPIC MKDEBUGREG MKINSTALLBOOT MKPCI
 .endif
 
 .for var in ${_MKVARS.yes}

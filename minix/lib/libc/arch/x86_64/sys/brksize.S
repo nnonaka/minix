@@ -2,4 +2,4 @@
 .globl _brksize
 
 .data
-_brksize: .quad _end
+_brksize: .long _end

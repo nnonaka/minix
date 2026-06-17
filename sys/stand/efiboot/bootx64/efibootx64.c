@@ -26,11 +26,9 @@
  * SUCH DAMAGE.
  */
 
-#include "../efiboot.h"
+#include "efiboot.h"
 
 #include <sys/bootblock.h>
-
-#include <loadfile.h>
 
 void startprog64_start(physaddr_t, physaddr_t, physaddr_t, u_long,
     void *, physaddr_t);
@@ -49,7 +47,7 @@ efi_md_init(void)
 	EFI_PHYSICAL_ADDRESS addr;
 	u_int sz;
 
-	addr = EFIBOOT_ALLOCATE_MAX_ADDRESS;
+	addr = EFI_ALLOCATE_MAX_ADDRESS;
 	sz = EFI_SIZE_TO_PAGES(startprog64_size);
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
 	    EfiLoaderData, sz, &addr);
@@ -59,7 +57,7 @@ efi_md_init(void)
 	startprog64 = (void *)addr;
 	CopyMem(startprog64, startprog64_start, startprog64_size);
 
-	addr = EFIBOOT_ALLOCATE_MAX_ADDRESS;
+	addr = EFI_ALLOCATE_MAX_ADDRESS;
 	sz = EFI_SIZE_TO_PAGES(multiboot64_size);
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
 	    EfiLoaderData, sz, &addr);
@@ -70,31 +68,25 @@ efi_md_init(void)
 	CopyMem(multiboot64, multiboot64_start, multiboot64_size);
 }
 
+/* ARGSUSED */
 void
-efi_dcache_flush(u_long start, u_long size)
+startprog(physaddr_t entry, uint32_t argc, uint32_t *argv, physaddr_t sp)
 {
-	/* x86_64 has cache-coherent DMA; no flush needed */
+	uint32_t *newsp = (void *)((char *)startprog64 + startprog64_size);
+
+	/* Copy argv to new stack pointer */
+	if (argc > 0) {
+		newsp -= argc;
+		memcpy(newsp, argv, sizeof(*argv) * argc);
+	}
+
+	(*startprog64)(efi_kernel_start, efi_kernel_start + efi_loadaddr,
+	    (physaddr_t)newsp, efi_kernel_size, startprog64, entry);
 }
 
+/* ARGSUSED */
 void
-efi_boot_kernel(u_long marks[MARK_MAX])
-{
-	physaddr_t kernel_start = marks[MARK_START];
-	physaddr_t kernel_entry = marks[MARK_ENTRY];
-	u_long kernel_size = marks[MARK_END] - marks[MARK_START];
-
-	(*startprog64)(kernel_start, kernel_start,
-	    (physaddr_t)((char *)startprog64 + startprog64_size),
-	    kernel_size, startprog64, kernel_entry);
-}
-
-void
-efi_md_show(void)
-{
-}
-
-void
-multiboot2(physaddr_t entry, physaddr_t header, uint32_t magic)
+multiboot(physaddr_t entry, physaddr_t header, physaddr_t sp, uint32_t magic)
 {
 	(*multiboot64)(entry, header, magic);
 }

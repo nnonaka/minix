@@ -211,11 +211,7 @@ static void pid_map(int slot)
 			break;
 
 		for (i = 0; i < r; i++) {
-#if defined(__x86_64__)
-			buf_printf("%016lx-%016lx %c%c%c\n",
-#else
 			buf_printf("%08lx-%08lx %c%c%c\n",
-#endif
 			    vri[i].vri_addr,
 			    vri[i].vri_addr + vri[i].vri_length,
 			    (vri[i].vri_prot & PROT_READ) ? 'r' : '-',

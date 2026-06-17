@@ -8,8 +8,6 @@
 
 #if defined(__i386__)
 #include "kernel/arch/i386/include/archconst.h"
-#elif defined(__x86_64__)
-#include "kernel/arch/x86_64/include/archconst.h"
 #endif
 
 #ifndef CONFIG_MAX_CPUS

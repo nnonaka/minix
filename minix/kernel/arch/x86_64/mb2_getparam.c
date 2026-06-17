@@ -164,9 +164,9 @@ void get_parameters_mb2(u32_t ebx, kinfo_t *cbi)
 	cbi->do_serial_debug = 0;
 	cbi->serial_debug_baud = 115200;
 
-	size = *(multiboot_uint32_t *)(uintptr_t)ebx;
-	tag = (struct multiboot_tag *)(uintptr_t)(ebx + 8);
-	tag_end = (struct multiboot_tag *)(uintptr_t)(ebx + size);
+	size = *(multiboot_uint32_t *)ebx;
+	tag = (struct multiboot_tag *) (ebx + 8);
+	tag_end = (struct multiboot_tag *) (ebx + size);
 	while (tag < tag_end) {
 		if (tag->type == MULTIBOOT_TAG_TYPE_CMDLINE) {
 			//reset();

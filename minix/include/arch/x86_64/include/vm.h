@@ -89,45 +89,6 @@ i386/vm.h
 
 #define CPUID_EF_EDX_SYSENTER	(1L << 11)	/* Intel SYSENTER */
 
-/* AMD64 (x86_64) paging constants — 4-level: PML4 → PDPT → PD → PT */
-#define AMD64_PAGE_SIZE          4096
-#define AMD64_BIG_PAGE_SIZE      (2UL * 1024 * 1024)   /* 2MB large page (PS in PDE) */
-
-#define AMD64_VM_PT_ENT_SIZE     8                      /* 64-bit entries */
-#define AMD64_VM_PT_ENTRIES      512                    /* entries per table at every level */
-
-#define AMD64_VM_PRESENT         (1ULL << 0)
-#define AMD64_VM_WRITE           (1ULL << 1)
-#define AMD64_VM_READ            0ULL
-#define AMD64_VM_USER            (1ULL << 2)
-#define AMD64_VM_PWT             (1ULL << 3)
-#define AMD64_VM_PCD             (1ULL << 4)
-#define AMD64_VM_ACC             (1ULL << 5)
-#define AMD64_VM_DIRTY           (1ULL << 6)
-#define AMD64_VM_PS              (1ULL << 7)    /* large page (2MB in PDE) */
-#define AMD64_VM_GLOBAL          (1ULL << 8)
-#define AMD64_VM_PTAVAIL1        (1ULL << 9)
-#define AMD64_VM_PTAVAIL2        (1ULL << 10)
-#define AMD64_VM_PTAVAIL3        (1ULL << 11)
-#define AMD64_VM_NX              (1ULL << 63)   /* no-execute */
-
-#define AMD64_VM_BIGPAGE         AMD64_VM_PS    /* large page flag alias */
-
-#define AMD64_VM_ADDR_MASK       0x000FFFFFFFFFF000ULL  /* physical address bits [51:12] */
-#define AMD64_VM_ADDR_MASK_2MB   0x000FFFFFFFE00000ULL
-#define AMD64_VM_OFFSET_MASK_2MB 0x00000000001FFFFFULL
-
-/* Pagefault error code bits (same encoding as i386) */
-#define AMD64_VM_PFE_P           0x01   /* fault caused by protection violation */
-#define AMD64_VM_PFE_W           0x02   /* fault caused by write */
-#define AMD64_VM_PFE_U           0x04   /* CPU was in user mode */
-
-/* Virtual-address field extractors */
-#define AMD64_VM_PML4(v)    (((unsigned long)(v) >> 39) & 0x1FFUL)
-#define AMD64_VM_PDPT(v)    (((unsigned long)(v) >> 30) & 0x1FFUL)
-#define AMD64_VM_PD(v)      (((unsigned long)(v) >> 21) & 0x1FFUL)
-#define AMD64_VM_PT(v)      (((unsigned long)(v) >> 12) & 0x1FFUL)
-
 #ifndef __ASSEMBLY__
 
 #include <minix/type.h>

@@ -26,15 +26,15 @@ struct segdesc_s gdt[GDT_SIZE] __aligned(DESC_SIZE);
 struct gatedesc_s idt[IDT_SIZE] __aligned(DESC_SIZE);
 struct tss_s tss[CONFIG_MAX_CPUS];
 
-u64_t k_percpu_stacks[CONFIG_MAX_CPUS];
+u32_t k_percpu_stacks[CONFIG_MAX_CPUS];
 
 int prot_init_done = 0;
 
 phys_bytes vir2phys(void *vir)
 {
 	extern char _kern_vir_base, _kern_phys_base;	/* in kernel.lds */
-	vir_bytes offset = (vir_bytes)&_kern_vir_base -
-		(vir_bytes)&_kern_phys_base;
+	u32_t offset = (vir_bytes) &_kern_vir_base -
+		(vir_bytes) &_kern_phys_base;
 	return (phys_bytes)vir - offset;
 }
 
@@ -71,7 +71,7 @@ void enable_iop(struct proc *pp)
 	segdp->limit_low = size;
 	segdp->granularity = size >> GRANULARITY_SHIFT;
   }
-  segdp->granularity |= DEFAULT;	/* BIG for data segs; code segs clear this */
+  segdp->granularity |= DEFAULT;	/* means BIG for data seg */
 }
 
 /*===========================================================================*
@@ -97,13 +97,11 @@ void init_dataseg(int index, const int privilege)
  *===========================================================================*/
 static void init_codeseg(int index, int privilege)
 {
-	/* Build descriptor for a 64-bit code segment. */
+	/* Build descriptor for a code segment. */
 	sdesc(&gdt[index], 0, 0xFFFFFFFF);
-	/* L=1 (64-bit mode), D=0 (required when L=1) */
-	gdt[index].granularity &= ~DEFAULT;
-	gdt[index].granularity |= LONG_MODE;
 	gdt[index].access = (privilege << DPL_SHIFT)
-		| (PRESENT | SEGMENT | EXECUTABLE | READABLE);
+	        | (PRESENT | SEGMENT | EXECUTABLE | READABLE);
+		/* CONFORMING = 0, ACCESSED = 0 */
 }
 
 static struct gate_table_s gate_table_pic[] = {
@@ -157,16 +155,12 @@ void setup_sysenter_syscall(void)
 {
 	const int cpu = cpuid;
 	struct tss_s const *const t = &tss[cpu];
-	/* Set up Intel SYSENTER support if available.
-	 * SYSENTER is i386-only; on x86_64, write full 64-bit MSR values. */
+	/* Set up Intel SYSENTER support if available. */
 	if(minix_feature_flags & MKF_I386_INTEL_SYSENTER) {
 	  ia32_msr_write(INTEL_MSR_SYSENTER_CS, 0, KERN_CS_SELECTOR);
-	  ia32_msr_write(INTEL_MSR_SYSENTER_ESP,
-		(u32_t)((u64_t)t->rsp0 >> 32), (u32_t)t->rsp0);
-	  ia32_msr_write(INTEL_MSR_SYSENTER_EIP,
-		(u32_t)((u64_t)(vir_bytes)ipc_entry_sysenter >> 32),
-		(u32_t)(vir_bytes)ipc_entry_sysenter);
-	}
+  	  ia32_msr_write(INTEL_MSR_SYSENTER_ESP, 0, t->sp0);
+  	  ia32_msr_write(INTEL_MSR_SYSENTER_EIP, 0, (u32_t) ipc_entry_sysenter);
+  	}
 
 	/* Set up AMD SYSCALL support if available. */
 	if(minix_feature_flags & MKF_I386_AMD_SYSCALL) {
@@ -177,54 +171,51 @@ void setup_sysenter_syscall(void)
 		msr_lo |= AMD_EFER_SCE;
 		ia32_msr_write(AMD_MSR_EFER, msr_hi, msr_lo);
 
-		/* STAR[63:32]: kernel/user CS selectors; low 32 bits unused */
-		ia32_msr_write(AMD_MSR_STAR,
-			((u32_t)USER_CS_SELECTOR << 16) | (u32_t)KERN_CS_SELECTOR,
-			0);
-
-		/* LSTAR: 64-bit RIP for SYSCALL entry, per CPU */
-#define set_lstar_cpu(forcpu) if(cpu == forcpu) {				\
-		  u64_t rip = (u64_t)(vir_bytes)ipc_entry_syscall_cpu ## forcpu; \
-		  ia32_msr_write(AMD_MSR_LSTAR,					\
-			(u32_t)(rip >> 32), (u32_t)rip); }
-		set_lstar_cpu(0);
-		set_lstar_cpu(1);
-		set_lstar_cpu(2);
-		set_lstar_cpu(3);
-		set_lstar_cpu(4);
-		set_lstar_cpu(5);
-		set_lstar_cpu(6);
-		set_lstar_cpu(7);
+		/* set STAR register value */
+#define set_star_cpu(forcpu) if(cpu == forcpu) {				\
+		ia32_msr_write(AMD_MSR_STAR,					\
+		  ((u32_t)USER_CS_SELECTOR << 16) | (u32_t)KERN_CS_SELECTOR,	\
+		  (u32_t) ipc_entry_syscall_cpu ## forcpu); }
+		set_star_cpu(0);
+		set_star_cpu(1);
+		set_star_cpu(2);
+		set_star_cpu(3);
+		set_star_cpu(4);
+		set_star_cpu(5);
+		set_star_cpu(6);
+		set_star_cpu(7);
 		assert(CONFIG_MAX_CPUS <= 8);
-	}
+  	}
 }
 
 int tss_init(unsigned cpu, void * kernel_stack)
 {
-	struct tss_s *t = &tss[cpu];
+	struct tss_s * t = &tss[cpu];
 	int index = TSS_INDEX(cpu);
-	phys_bytes tss_phys = vir2phys(t);
-	struct segdesc_s *tssgdt = &gdt[index];
+	struct segdesc_s *tssgdt;
 
-	/*
-	 * 64-bit TSS descriptor occupies 2 consecutive GDT slots (16 bytes).
-	 * Slot 0: standard 8-byte descriptor with base[31:0] and limit.
-	 * Slot 1: low 4 bytes = base[63:32], high 4 bytes = reserved.
-	 */
-	init_param_dataseg(tssgdt, tss_phys, sizeof(*t), INTR_PRIVILEGE);
+	tssgdt = &gdt[index];
+  
+	init_param_dataseg(tssgdt, (phys_bytes) t,
+			sizeof(struct tss_s), INTR_PRIVILEGE);
 	tssgdt->access = PRESENT | (INTR_PRIVILEGE << DPL_SHIFT) | TSS_TYPE;
 
-	/* Second slot: base[63:32] in its lowest 32 bits, rest zero. */
-	memset(&gdt[index + 1], 0, sizeof(gdt[index + 1]));
-	*(u32_t *)&gdt[index + 1] = (u32_t)(tss_phys >> 32);
-
-	/* Build TSS (64-bit layout — no legacy segment registers). */
+	/* Build TSS. */
 	memset(t, 0, sizeof(*t));
-	t->iobase = sizeof(*t);		/* no I/O permission bitmap */
+	t->ds = t->es = t->fs = t->gs = t->ss0 = KERN_DS_SELECTOR;
+	t->cs = KERN_CS_SELECTOR;
+	t->iobase = sizeof(struct tss_s);	/* empty i/o permissions map */
 
-	k_percpu_stacks[cpu] = t->rsp0 =
-		((reg_t)kernel_stack) - X86_STACK_TOP_RESERVED;
-	*((reg_t *)(t->rsp0 + 1 * sizeof(reg_t))) = cpu;
+	/* 
+	 * make space for process pointer and cpu id and point to the first
+	 * usable word
+	 */
+	k_percpu_stacks[cpu] = t->sp0 = ((unsigned) kernel_stack) - X86_STACK_TOP_RESERVED;
+	/* 
+	 * set the cpu id at the top of the stack so we know on which cpu is
+	 * this stack in use when we trap to kernel
+	 */
+	*((reg_t *)(t->sp0 + 1 * sizeof(reg_t))) = cpu;
 	return SEG_SELECTOR(index);
 }
 
@@ -240,17 +231,14 @@ phys_bytes init_segdesc(int gdt_index, void *base, int size)
 void int_gate(struct gatedesc_s *tab,
 	unsigned vec_nr, vir_bytes offset, unsigned dpl_type)
 {
-/* Build descriptor for a 64-bit interrupt gate (16 bytes). */
+/* Build descriptor for an interrupt gate. */
   register struct gatedesc_s *idp;
 
   idp = &tab[vec_nr];
-  idp->offset_low  = (u16_t) offset;
-  idp->selector    = KERN_CS_SELECTOR;
-  idp->ist         = 0;
-  idp->p_dpl_type  = dpl_type;
-  idp->offset_mid  = (u16_t)(offset >> 16);
-  idp->offset_high = (u32_t)(offset >> 32);
-  idp->reserved    = 0;
+  idp->offset_low = offset;
+  idp->selector = KERN_CS_SELECTOR;
+  idp->p_dpl_type = dpl_type;
+  idp->offset_high = offset >> OFFSET_HIGH_SHIFT;
 }
 
 void int_gate_idt(unsigned vec_nr, vir_bytes offset, unsigned dpl_type)
@@ -347,10 +335,10 @@ void prot_init(void)
   memset(idt, 0, sizeof(idt));
 
   /* Build GDT, IDT, IDT descriptors. */
-  gdt_desc.base = (u64_t)(vir_bytes) gdt;
-  gdt_desc.limit = sizeof(gdt) - 1;
-  idt_desc.base = (u64_t)(vir_bytes) idt;
-  idt_desc.limit = sizeof(idt) - 1;
+  gdt_desc.base = (u32_t) gdt;
+  gdt_desc.limit = sizeof(gdt)-1;
+  idt_desc.base = (u32_t) idt;
+  idt_desc.limit = sizeof(idt)-1;
   tss_init(0, &k_boot_stktop);
 
   /* Build GDT */
@@ -424,7 +412,7 @@ void arch_boot_proc(struct boot_image *ip, struct proc *rp)
 		execi.stack_high = kinfo.user_sp;
 		execi.stack_size = 64 * 1024;	/* not too crazy as it must be preallocated */
 		execi.proc_e = ip->endpoint;
-		execi.hdr = (char *)(uintptr_t) mod->mod_start; /* phys mem direct */
+		execi.hdr = (char *) mod->mod_start; /* phys mem direct */
 		execi.filesize = execi.hdr_len = mod->mod_end - mod->mod_start;
 		strlcpy(execi.progname, ip->proc_name, sizeof(execi.progname));
 		execi.frame_len = 0;

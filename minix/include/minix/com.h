@@ -378,7 +378,7 @@
 #define	SVMCTL_MRG_ADDR2	m2_l2	/* MEMREQ_GET reply: source address */
 #define SVMCTL_MRG_REQUESTOR	m2_p1	/* MEMREQ_GET reply: requestor */
 #define SVMCTL_MAP_VIR_ADDR	m1_p1
-#define SVMCTL_PTROOT		m1_ull1  /* 64-bit physical page-table root (CR3/TTBR) */
+#define SVMCTL_PTROOT		m1_i3
 #define SVMCTL_PTROOT_V		m1_p1
 
 /* Reply message for VMCTL_KERN_PHYSMAP */

@@ -2,11 +2,12 @@
 
 #define LD_ST_REG(reg)							;\
 ENTRY(ld_##reg)							;\
-	movq	%rdi,	%reg						;\
+	mov	4(%esp), %eax						;\
+	mov	%eax,	%reg						;\
 	ret								;\
 									;\
 ENTRY(st_##reg)							;\
-	movq	%reg,	%rax						;\
+	mov	%reg,	%eax						;\
 	ret
 
 /*
@@ -19,8 +20,8 @@ LD_ST_REG(dr2)
 LD_ST_REG(dr3)
 
 /*
- * void ld_dr6(unsigned long value)
- * unsigned long st_dr6(void)
+ * void ld_dr0(unsigned long value)
+ * unsigned long st_dr0(void)
  */
 LD_ST_REG(dr6)
 LD_ST_REG(dr7)

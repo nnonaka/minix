@@ -14,7 +14,7 @@
 
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
-/* #undef ENABLE_NLS */
+#define ENABLE_NLS 1
 
 /* Define to 1 if you have the declaration of `basename', and to 0 if you
    don't. */

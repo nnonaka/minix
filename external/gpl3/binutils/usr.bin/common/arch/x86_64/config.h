@@ -28,7 +28,7 @@
 
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
-/* #undef ENABLE_NLS */
+#define ENABLE_NLS 1
 
 /* Suffix used for executables, if any. */
 #define EXECUTABLE_SUFFIX ""

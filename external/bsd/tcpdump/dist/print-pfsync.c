@@ -49,9 +49,7 @@ __RCSID("$NetBSD: print-pfsync.c,v 1.2 2014/11/20 03:05:03 christos Exp $");
 #include <sys/socket.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
-#ifndef __minix
 #include <sys/mbuf.h>
-#endif
 
 #ifdef __STDC__
 struct rtentry;

@@ -11,57 +11,22 @@
 extern char _kern_vir_base, _kern_phys_base, _kern_size;
 
 /* Retrieve the absolute values to something we can use. */
-static vir_bytes kern_vir_start   = (vir_bytes)  &_kern_vir_base;
+static phys_bytes kern_vir_start = (phys_bytes) &_kern_vir_base;
 static phys_bytes kern_phys_start = (phys_bytes) &_kern_phys_base;
-static phys_bytes kern_kernlen    = (phys_bytes) &_kern_size;
+static phys_bytes kern_kernlen = (phys_bytes) &_kern_size;
 
-/* Page-table entry flags */
-#define PG_PRESENT   (1ULL << 0)
-#define PG_WRITE     (1ULL << 1)
-#define PG_USER      (1ULL << 2)
-#define PG_PWT       (1ULL << 3)
-#define PG_PCD       (1ULL << 4)
-#define PG_PS        (1ULL << 7)   /* 2MB page in PDE */
-#define PG_PHYS_MASK (0x000FFFFFFFFFF000ULL)
-
-/* Virtual-address field extractors */
-#define PML4_INDEX(v)  (((vir_bytes)(v) >> 39) & 0x1FFU)
-#define PDPT_INDEX(v)  (((vir_bytes)(v) >> 30) & 0x1FFU)
-#define PD_INDEX(v)    (((vir_bytes)(v) >> 21) & 0x1FFU)
-#define PT_INDEX(v)    (((vir_bytes)(v) >> 12) & 0x1FFU)
-
-#define PAGE_2MB  (2UL * 1024 * 1024)
-#define PAGE_4KB  (4096UL)
-
-/*
- * Static 4-level page-table storage.
- * Compiled twice: as an unpaged object (physical addresses) and as a
- * regular kernel object (high-virtual addresses).  The unpaged version
- * is used by pre_init(); the regular version is rebuilt by prot_init().
- */
-#define PG_IDENT_PD_MAX 8   /* covers 8 GB of identity-mapped physical RAM */
-
-static u64_t pg_pml4[512]                    __aligned(4096);
-static u64_t pg_pdpt_low[512]                __aligned(4096);
-static u64_t pg_pdpt_high[512]               __aligned(4096);
-static u64_t pg_pd_ident[PG_IDENT_PD_MAX][512] __aligned(4096);
-static u64_t pg_pd_kern[512]                 __aligned(4096);
-
-/* Page tables (level 1) for 4KB-page mappings used by pg_map() */
-#define PG_PAGETABLES 32
-static u64_t pagetables[PG_PAGETABLES][512]  __aligned(4096);
-static int   pt_inuse = 0;
+/* page directory we can use to map things */
+static u32_t pagedir[1024]  __aligned(4096);
 
 void print_memmap(kinfo_t *cbi)
 {
         int m;
         assert(cbi->mmap_size < MAXMEMMAP);
-        for (m = 0; m < cbi->mmap_size; m++) {
-		phys_bytes addr  = cbi->memmap[m].mm_base_addr;
-		phys_bytes endit = addr + cbi->memmap[m].mm_length;
-                printf("%08lx-%08lx ", (unsigned long)addr, (unsigned long)endit);
+        for(m = 0; m < cbi->mmap_size; m++) {
+		phys_bytes addr = cbi->memmap[m].mm_base_addr, endit = cbi->memmap[m].mm_base_addr + cbi->memmap[m].mm_length;
+                printf("%08lx-%08lx ",addr, endit);
         }
-        printf("\nsize %08lx\n", (unsigned long)cbi->mmap_size);
+        printf("\nsize %08lx\n", cbi->mmap_size);
 }
 
 void cut_memmap(kinfo_t *cbi, phys_bytes start, phys_bytes end)
@@ -69,47 +34,52 @@ void cut_memmap(kinfo_t *cbi, phys_bytes start, phys_bytes end)
         int m;
         phys_bytes o;
 
-        if ((o = start % PAGE_4KB))
+        if((o=start % I386_PAGE_SIZE))
                 start -= o;
-        if ((o = end % PAGE_4KB))
-                end += PAGE_4KB - o;
+        if((o=end % I386_PAGE_SIZE))
+                end += I386_PAGE_SIZE - o;
 
 	assert(kernel_may_alloc);
 
-        for (m = 0; m < cbi->mmap_size; m++) {
+        for(m = 0; m < cbi->mmap_size; m++) {
                 phys_bytes substart = start, subend = end;
-                phys_bytes memaddr  = cbi->memmap[m].mm_base_addr;
-                phys_bytes memend   = memaddr + cbi->memmap[m].mm_length;
+                phys_bytes memaddr = cbi->memmap[m].mm_base_addr,
+                        memend = cbi->memmap[m].mm_base_addr + cbi->memmap[m].mm_length;
 
-                if (substart < memaddr) substart = memaddr;
-                if (subend   > memend)  subend   = memend;
-                if (substart >= subend) continue;
+                /* adjust cut range to be a subset of the free memory */
+                if(substart < memaddr) substart = memaddr;
+                if(subend > memend) subend = memend;
+                if(substart >= subend) continue;
 
+                /* if there is any overlap, forget this one and add
+                 * 1-2 subranges back
+                 */
                 cbi->memmap[m].mm_base_addr = cbi->memmap[m].mm_length = 0;
-                if (substart > memaddr)
-                        add_memmap(cbi, memaddr, substart - memaddr);
-                if (subend < memend)
-                        add_memmap(cbi, subend, memend - subend);
+                if(substart > memaddr)
+                        add_memmap(cbi, memaddr, substart-memaddr);
+                if(subend < memend)
+                        add_memmap(cbi, subend, memend-subend);
         }
 }
 
 phys_bytes alloc_lowest(kinfo_t *cbi, phys_bytes len)
 {
+	/* Allocate the lowest physical page we have. */
 	int m;
-	phys_bytes lowest = (phys_bytes)-1ULL;
+#define EMPTY 0xffffffff
+	phys_bytes lowest = EMPTY;
 	assert(len > 0);
-	len = roundup(len, PAGE_4KB);
+	len = roundup(len, I386_PAGE_SIZE);
 
 	assert(kernel_may_alloc);
 
-	for (m = 0; m < cbi->mmap_size; m++) {
-		if (cbi->memmap[m].mm_length < len) continue;
-		if (cbi->memmap[m].mm_base_addr < lowest)
-			lowest = cbi->memmap[m].mm_base_addr;
+	for(m = 0; m < cbi->mmap_size; m++) {
+		if(cbi->memmap[m].mm_length < len) continue;
+		if(cbi->memmap[m].mm_base_addr < lowest) lowest = cbi->memmap[m].mm_base_addr;
 	}
-	assert(lowest != (phys_bytes)-1ULL);
+	assert(lowest != EMPTY);
 	if (lowest == 0) lowest = 0x8000;
-	cut_memmap(cbi, lowest, lowest + len);
+	cut_memmap(cbi, lowest, len);
 	cbi->kernel_allocated_bytes_dynamic += len;
 	return lowest;
 }
@@ -117,222 +87,232 @@ phys_bytes alloc_lowest(kinfo_t *cbi, phys_bytes len)
 void add_memmap(kinfo_t *cbi, u64_t addr, u64_t len)
 {
         int m;
-
+#define LIMIT 0xFFFFF000
+        /* Truncate available memory at 4GB as the rest of minix
+         * currently can't deal with any bigger.
+         */
+        if(addr > LIMIT) return;
+        if(addr + len > LIMIT) {
+                len -= (addr + len - LIMIT);
+        }
         assert(cbi->mmap_size < MAXMEMMAP);
-        if (len == 0) return;
-	addr = roundup(addr, PAGE_4KB);
-	len  = rounddown(len, PAGE_4KB);
-	if (len == 0) return;
+        if(len == 0) return;
+	addr = roundup(addr, I386_PAGE_SIZE);
+	len = rounddown(len, I386_PAGE_SIZE);
 
 	assert(kernel_may_alloc);
 
-        for (m = 0; m < MAXMEMMAP; m++) {
+        for(m = 0; m < MAXMEMMAP; m++) {
 		phys_bytes highmark;
-                if (cbi->memmap[m].mm_length) continue;
+                if(cbi->memmap[m].mm_length) continue;
                 cbi->memmap[m].mm_base_addr = addr;
-                cbi->memmap[m].mm_length    = len;
-                cbi->memmap[m].mm_type      = MULTIBOOT_MEMORY_AVAILABLE;
-                if (m >= cbi->mmap_size)
-                        cbi->mmap_size = m + 1;
+                cbi->memmap[m].mm_length = len;
+                cbi->memmap[m].mm_type = MULTIBOOT_MEMORY_AVAILABLE;
+                if(m >= cbi->mmap_size)
+                        cbi->mmap_size = m+1;
 		highmark = addr + len;
-		if (highmark > cbi->mem_high_phys)
+		if(highmark > cbi->mem_high_phys) {
 			cbi->mem_high_phys = highmark;
+		}
+
                 return;
         }
 
         panic("no available memmap slot");
 }
 
-static u64_t *alloc_pagetable(phys_bytes *ph)
+u32_t *alloc_pagetable(phys_bytes *ph)
 {
-	u64_t *ret;
-	if (pt_inuse >= PG_PAGETABLES) panic("no more pagetables");
-	assert(sizeof(pagetables[pt_inuse]) == PAGE_4KB);
+	u32_t *ret;
+#define PG_PAGETABLES 6
+	static u32_t pagetables[PG_PAGETABLES][1024]  __aligned(4096);
+	static int pt_inuse = 0;
+	if(pt_inuse >= PG_PAGETABLES) panic("no more pagetables");
+	assert(sizeof(pagetables[pt_inuse]) == I386_PAGE_SIZE);
 	ret = pagetables[pt_inuse++];
 	*ph = vir2phys(ret);
 	return ret;
 }
 
-static phys_bytes pg_alloc_page(kinfo_t *cbi)
+#define PAGE_KB (I386_PAGE_SIZE / 1024)
+
+phys_bytes pg_alloc_page(kinfo_t *cbi)
 {
 	int m;
 	kinfo_memory_map_t *mmap;
 
 	assert(kernel_may_alloc);
 
-	for (m = cbi->mmap_size - 1; m >= 0; m--) {
+	for(m = cbi->mmap_size-1; m >= 0; m--) {
 		mmap = &cbi->memmap[m];
-		if (!mmap->mm_length) continue;
+		if(!mmap->mm_length) continue;
 		assert(mmap->mm_length > 0);
-		assert(!(mmap->mm_length   % PAGE_4KB));
-		assert(!(mmap->mm_base_addr % PAGE_4KB));
+		assert(!(mmap->mm_length % I386_PAGE_SIZE));
+		assert(!(mmap->mm_base_addr % I386_PAGE_SIZE));
 
-		mmap->mm_length -= PAGE_4KB;
-		cbi->kernel_allocated_bytes_dynamic += PAGE_4KB;
+		mmap->mm_length -= I386_PAGE_SIZE;
+
+                cbi->kernel_allocated_bytes_dynamic += I386_PAGE_SIZE;
+
 		return mmap->mm_base_addr + mmap->mm_length;
 	}
 
 	panic("can't find free memory");
 }
 
-void pg_clear(void)
-{
-	memset(pg_pml4,      0, sizeof(pg_pml4));
-	memset(pg_pdpt_low,  0, sizeof(pg_pdpt_low));
-	memset(pg_pdpt_high, 0, sizeof(pg_pdpt_high));
-	memset(pg_pd_ident,  0, sizeof(pg_pd_ident));
-	memset(pg_pd_kern,   0, sizeof(pg_pd_kern));
-}
-
 void pg_identity(kinfo_t *cbi)
 {
-	int i, j, num_pds;
-	u64_t phys = 0;
+	uint32_t i;
+	phys_bytes phys;
 
+	/* We map memory that does not correspond to physical memory
+	 * as non-cacheable. Make sure we know what it is.
+	 */
 	assert(cbi->mem_high_phys);
 
-	/* Round up to the next GB boundary, capped at PG_IDENT_PD_MAX GBs */
-	num_pds = (int)((cbi->mem_high_phys + (u64_t)(512 * PAGE_2MB) - 1)
-		  / (512 * PAGE_2MB));
-	if (num_pds < 1) num_pds = 1;
-	if (num_pds > PG_IDENT_PD_MAX) num_pds = PG_IDENT_PD_MAX;
-
-	/* PML4[0] → pg_pdpt_low */
-	pg_pml4[0] = vir2phys(pg_pdpt_low) | PG_PRESENT | PG_WRITE;
-
-	for (i = 0; i < num_pds; i++) {
-		/* pdpt_low[i] → pg_pd_ident[i] */
-		pg_pdpt_low[i] = vir2phys(pg_pd_ident[i]) | PG_PRESENT | PG_WRITE;
-
-		for (j = 0; j < 512; j++) {
-			u64_t flags = PG_PRESENT | PG_WRITE | PG_PS;
-			if (phys >= cbi->mem_high_phys)
-				flags |= PG_PWT | PG_PCD;
-			pg_pd_ident[i][j] = phys | flags;
-			phys += PAGE_2MB;
+        /* Set up an identity mapping page directory */
+        for(i = 0; i < I386_VM_DIR_ENTRIES; i++) {
+		u32_t flags = I386_VM_PRESENT | I386_VM_BIGPAGE
+			| I386_VM_USER
+			| I386_VM_WRITE;
+                phys = i * I386_BIG_PAGE_SIZE;
+		if((cbi->mem_high_phys & I386_VM_ADDR_MASK_4MB)
+			<= (phys & I386_VM_ADDR_MASK_4MB)) {
+			flags |= I386_VM_PWT | I386_VM_PCD;
 		}
-	}
+                pagedir[i] =  phys | flags;
+        }
 }
 
 int pg_mapkernel(void)
 {
-	u64_t phys = kern_phys_start;
-	u64_t virt = kern_vir_start;
-	int pde    = PD_INDEX(virt);
-	int mapped = 0;
+	int pde;
+	u32_t mapped = 0, kern_phys = kern_phys_start;
 
-	assert(!(virt % PAGE_2MB));
-	assert(!(phys % PAGE_2MB));
-
-	/* PML4[511] → pg_pdpt_high */
-	pg_pml4[PML4_INDEX(virt)] = vir2phys(pg_pdpt_high) | PG_PRESENT | PG_WRITE;
-
-	/* pg_pdpt_high[510] → pg_pd_kern */
-	pg_pdpt_high[PDPT_INDEX(virt)] = vir2phys(pg_pd_kern) | PG_PRESENT | PG_WRITE;
-
-	while (mapped < (int)kern_kernlen) {
-		pg_pd_kern[pde] = phys | PG_PRESENT | PG_WRITE | PG_PS;
-		mapped += PAGE_2MB;
-		phys   += PAGE_2MB;
+        assert(!(kern_vir_start % I386_BIG_PAGE_SIZE));
+        assert(!(kern_phys % I386_BIG_PAGE_SIZE));
+        pde = kern_vir_start / I386_BIG_PAGE_SIZE; /* start pde */
+	while(mapped < kern_kernlen) {
+	        pagedir[pde] = kern_phys | I386_VM_PRESENT | 
+			I386_VM_BIGPAGE | I386_VM_WRITE;
+		mapped += I386_BIG_PAGE_SIZE;
+		kern_phys += I386_BIG_PAGE_SIZE;
 		pde++;
 	}
-
-	return pde;	/* first free PD entry after kernel */
-}
-
-phys_bytes pg_load(void)
-{
-	phys_bytes phpml4 = vir2phys(pg_pml4);
-	write_cr3(phpml4);
-	return phpml4;
-}
-
-void pg_info(reg_t *pml4_ph, u64_t **pml4_v)
-{
-	*pml4_ph = vir2phys(pg_pml4);
-	*pml4_v  = pg_pml4;
+	return pde;	/* free pde */
 }
 
 void vm_enable_paging(void)
 {
-	reg_t cr0, cr4;
+        u32_t cr0, cr4;
+        int pgeok;
 
-	cr0 = read_cr0();
-	cr4 = read_cr4();
+        pgeok = _cpufeature(_CPUF_I386_PGE);
 
-	/* x86_64 long mode: PAE and paging are already active from head.S.
-	 * Enable write-protect and, if supported, global pages.
-	 */
-	cr0 |= I386_CR0_WP;
-	write_cr0(cr0);
+#ifdef PAE
+	if(_cpufeature(_CPUF_I386_PAE) == 0)
+		panic("kernel built with PAE support, CPU seems to lack PAE support?\n");
+#endif
 
-	if (_cpufeature(_CPUF_I386_PGE))
-		cr4 |= I386_CR4_PGE;
-	write_cr4(cr4);
+        cr0= read_cr0();
+        cr4= read_cr4();
+
+	/* The boot loader should have put us in protected mode. */
+	assert(cr0 & I386_CR0_PE);
+
+        /* First clear PG and PGE flag, as PGE must be enabled after PG. */
+        write_cr0(cr0 & ~I386_CR0_PG);
+        write_cr4(cr4 & ~(I386_CR4_PGE | I386_CR4_PSE));
+
+        cr0= read_cr0();
+        cr4= read_cr4();
+
+        /* Our page table contains 4MB entries. */
+        cr4 |= I386_CR4_PSE;
+
+        write_cr4(cr4);
+
+        /* First enable paging, then enable global page flag. */
+        cr0 |= I386_CR0_PG;
+        write_cr0(cr0);
+        cr0 |= I386_CR0_WP;
+        write_cr0(cr0);
+
+        /* May we enable these features? */
+        if(pgeok)
+                cr4 |= I386_CR4_PGE;
+
+        write_cr4(cr4);
+}
+
+phys_bytes pg_load(void)
+{
+	phys_bytes phpagedir = vir2phys(pagedir);
+        write_cr3(phpagedir);
+	return phpagedir;
+}
+
+void pg_clear(void)
+{
+	memset(pagedir, 0, sizeof(pagedir));
 }
 
 phys_bytes pg_rounddown(phys_bytes b)
 {
 	phys_bytes o;
-	if (!(o = b % PAGE_4KB))
+	if(!(o = b % I386_PAGE_SIZE))
 		return b;
-	return b - o;
-}
-
-phys_bytes pg_roundup(phys_bytes b)
-{
-	phys_bytes o;
-	if (!(o = b % PAGE_4KB))
-		return b;
-	return b - o + PAGE_4KB;
+	return b  - o;
 }
 
 void pg_map(phys_bytes phys, vir_bytes vaddr, vir_bytes vaddr_end,
 	kinfo_t *cbi)
 {
-	/* Map 4KB pages; only for user-space addresses (< kern_vir_start). */
+	static int mapped_pde = -1;
+	static u32_t *pt = NULL;
+	int pde, pte;
 
-	if (phys == PG_ALLOCATEME) {
-		assert(!(vaddr % PAGE_4KB));
-	} else {
-		assert((vaddr % PAGE_4KB) == (phys % PAGE_4KB));
+	assert(kernel_may_alloc);
+
+	if(phys == PG_ALLOCATEME) {
+		assert(!(vaddr % I386_PAGE_SIZE));
+	} else  {
+		assert((vaddr % I386_PAGE_SIZE) == (phys % I386_PAGE_SIZE));
 		vaddr = pg_rounddown(vaddr);
-		phys  = pg_rounddown(phys);
-	}
+		phys = pg_rounddown(phys);
+	}	
 	assert(vaddr < kern_vir_start);
 
-	while (vaddr < vaddr_end) {
+	while(vaddr < vaddr_end) {
 		phys_bytes source = phys;
-		int pdpt_i = PDPT_INDEX(vaddr);
-		int pd_i   = PD_INDEX(vaddr);
-		int pt_i   = PT_INDEX(vaddr);
-		u64_t *pd, *pt;
-		phys_bytes ph;
-
-		if (phys == PG_ALLOCATEME)
+		assert(!(vaddr % I386_PAGE_SIZE));
+		if(phys == PG_ALLOCATEME) {
 			source = pg_alloc_page(cbi);
-
-		assert(PML4_INDEX(vaddr) == 0);	/* only low canonical half */
-		assert(pdpt_i < PG_IDENT_PD_MAX);
-
-		pd = pg_pd_ident[pdpt_i];
-
-		/* If this 2MB slot hasn't been split into a PT yet, do it now */
-		if (!(pd[pd_i] & PG_PRESENT) || (pd[pd_i] & PG_PS)) {
-			pt = alloc_pagetable(&ph);
-			pd[pd_i] = ph | PG_PRESENT | PG_WRITE | PG_USER;
 		} else {
-			/*
-			 * PT already allocated; recover its virtual address.
-			 * Physical address == virtual address in the identity map.
-			 */
-			pt = (u64_t *)(vir_bytes)(pd[pd_i] & PG_PHYS_MASK);
+			assert(!(phys % I386_PAGE_SIZE));
 		}
-
-		pt[pt_i] = (source & PG_PHYS_MASK) | PG_PRESENT | PG_WRITE | PG_USER;
-
-		vaddr += PAGE_4KB;
-		if (phys != PG_ALLOCATEME)
-			phys += PAGE_4KB;
+		assert(!(source % I386_PAGE_SIZE));
+		pde = I386_VM_PDE(vaddr);
+		pte = I386_VM_PTE(vaddr);
+		if(mapped_pde < pde) {
+			phys_bytes ph;
+			pt = alloc_pagetable(&ph);
+			pagedir[pde] = (ph & I386_VM_ADDR_MASK)
+		                | I386_VM_PRESENT | I386_VM_USER | I386_VM_WRITE;
+			mapped_pde = pde;
+		}
+		assert(pt);
+		pt[pte] = (source & I386_VM_ADDR_MASK) |
+			I386_VM_PRESENT | I386_VM_USER | I386_VM_WRITE;
+		vaddr += I386_PAGE_SIZE;
+		if(phys != PG_ALLOCATEME)
+			phys += I386_PAGE_SIZE;
 	}
 }
+
+void pg_info(reg_t *pagedir_ph, u32_t **pagedir_v)
+{
+	*pagedir_ph = vir2phys(pagedir);
+	*pagedir_v = pagedir;
+}
+

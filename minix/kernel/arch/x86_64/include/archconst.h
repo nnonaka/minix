@@ -21,9 +21,8 @@
 #define USER_DS_INDEX        4
 #define LDT_INDEX            5
 #define TSS_INDEX_FIRST      6
-/* 64-bit TSS descriptor occupies 2 GDT slots (16 bytes instead of 8) */
-#define TSS_INDEX(cpu)       (TSS_INDEX_FIRST + (cpu) * 2)
-#define GDT_SIZE             (TSS_INDEX(CONFIG_MAX_CPUS))
+#define TSS_INDEX(cpu)       (TSS_INDEX_FIRST + (cpu)) /* per cpu kernel tss */
+#define GDT_SIZE             (TSS_INDEX(CONFIG_MAX_CPUS))	/* LDT descriptor */
 
 #define SEG_SELECTOR(i)          ((i)*8)
 #define KERN_CS_SELECTOR SEG_SELECTOR(KERN_CS_INDEX)
@@ -115,7 +114,6 @@
 /* Granularity byte. */
 #define GRANULAR  	  0x80	/* set for 4K granularilty */
 #define DEFAULT   	  0x40	/* set for 32-bit defaults (executable seg) */
-#define LONG_MODE	  0x20	/* L-bit: set for 64-bit code segment (D must be 0) */
 #define BIG       	  0x40	/* set for "BIG" (expand-down seg) */
 #define AVL        	  0x10	/* 0 for available */
 #define LIMIT_HIGH   	  0x0F	/* mask for high bits of limit */
@@ -166,12 +164,8 @@
 #define INTEL_MSR_PERFMON_SEL0_ENABLE (1 << 22)
 
 #define AMD_EFER_SCE		(1L << 0) /* SYSCALL/SYSRET enabled */
-#define AMD_EFER_LME		(1L << 8) /* Long Mode Enable */
-#define AMD_EFER_LMA		(1L << 10) /* Long Mode Active (read-only) */
 #define AMD_MSR_EFER		0xC0000080	/* extended features msr */
 #define AMD_MSR_STAR		0xC0000081	/* SYSCALL params msr */
-#define AMD_MSR_LSTAR		0xC0000082	/* 64-bit SYSCALL RIP */
-#define AMD_MSR_FMASK		0xC0000084	/* SYSCALL RFLAGS mask */
 
 /* trap styles recorded on kernel entry and exit */
 #define KTS_NONE	1 /* invalid */

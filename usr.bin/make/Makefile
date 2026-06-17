@@ -61,11 +61,7 @@ USE_META?=	yes
 SRCS+=		meta.c
 CPPFLAGS+=	-DUSE_META
 
-## TODO
-## Minix don't have filemon.
-## use 'ifdef _MINIX' breaks build process.
-#USE_FILEMON?=	ktrace
-USE_FILEMON?=	no
+USE_FILEMON?=	ktrace
 .  if ${USE_FILEMON:tl} != "no"
 
 .PATH:	${.CURDIR}/filemon

@@ -4,79 +4,64 @@
 #include "apic_asm.h"
 #include <machine/asm.h>
 
-/* Pass irq as first argument per AMD64 ABI (%edi). */
 #define APIC_IRQ_HANDLER(irq)	\
-	movl	$irq, %edi					;\
-	call	_C_LABEL(irq_handle)				;
-
-/*
- * Call the LAPIC interrupt handler function, then signal EOI by writing 0
- * to the address stored in lapic_eoi_addr (a 64-bit vir_bytes global).
- */
-#define LAPIC_INTR_HANDLER(func)	\
-	call	func						;\
-	movq	_C_LABEL(lapic_eoi_addr)(%rip), %rax		;\
-	movl	$0, (%rax)					;
+	push	$irq						;\
+	call	_C_LABEL(irq_handle)		/* intr_handle(irq) */	;\
+	add	$4, %esp					;
 
 /*===========================================================================*/
-/*			interrupt handlers				     */
-/*		APIC interrupt handlers for x86_64 long mode		     */
+/*				interrupt handlers			     */
+/*		interrupt handlers for 386 32-bit protected mode	     */
+/*		APIC interrupt handlers for 386 32-bit protected mode	     */
 /*===========================================================================*/
-
-/*
- * apic_hwint(irq): hardware interrupt from I/O APIC.
- *
- * Two paths:
- *   User path (CS != KERN_CS_SELECTOR): save process context, stop it, call
- *   irq_handle(), then jump to switch_to_user.
- *   Kernel path (0: label): save all GP regs with pushaq, handle, restore,
- *   iretq.  CS is always at 8(%rsp) in x86_64 (CPU pushes a full 5-word frame
- *   even for same-privilege interrupts).
- */
 #define apic_hwint(irq)							\
 ENTRY(apic_hwint##irq)							\
-	TEST_INT_IN_KERNEL(8, 0f)					;\
+	TEST_INT_IN_KERNEL(4, 0f)					;\
 									\
 	SAVE_PROCESS_CTX(0, KTS_INT_HARD)				;\
-	movq	%rbp, %rdi	/* context_stop(proc_ptr) */		;\
-	push	%rbp							;\
-	movq	$0, %rbp	/* for stack trace */			;\
+	push	%ebp							;\
 	call	_C_LABEL(context_stop)					;\
-	pop	%rbp							;\
+	add	$4, %esp						;\
+	movl	$0, %ebp	/* for stack trace */			;\
 	APIC_IRQ_HANDLER(irq)						;\
 	jmp	_C_LABEL(switch_to_user)				;\
 									\
 0:									\
-	pushaq								;\
+	pusha								;\
 	call	_C_LABEL(context_stop_idle)				;\
 	APIC_IRQ_HANDLER(irq)						;\
-	CLEAR_IF(KERNEL_IRQ_RFLAGS_OFF(%rsp))				;\
-	popaq								;\
-	iretq								;
+	CLEAR_IF(10*4(%esp))						;\
+	popa								;\
+	iret								;
 
-/*
- * lapic_intr(func): local APIC interrupt (timer, error, spurious, IPI).
- * Same two-path structure as apic_hwint.
- */
+#define LAPIC_INTR_HANDLER(func)	\
+	movl	$func, %eax						;\
+	call	*%eax           /* call the actual handler */		;\
+	mov	_C_LABEL(lapic_eoi_addr), %eax	/* the end of handler*/	;\
+	movl	$0, (%eax)						;
+
+/*===========================================================================*/
+/*			handler of the local APIC interrupts		     */
+/*===========================================================================*/
+
 #define lapic_intr(func) \
-	TEST_INT_IN_KERNEL(8, 0f)					;\
+	TEST_INT_IN_KERNEL(4, 0f)					;\
 									\
 	SAVE_PROCESS_CTX(0, KTS_INT_HARD)				;\
-	movq	%rbp, %rdi	/* context_stop(proc_ptr) */		;\
-	push	%rbp							;\
-	movq	$0, %rbp	/* for stack trace */			;\
+	push	%ebp							;\
 	call	_C_LABEL(context_stop)					;\
-	pop	%rbp							;\
+	add	$4, %esp						;\
+	movl	$0, %ebp		/* for stack trace */		;\
 	LAPIC_INTR_HANDLER(func)					;\
 	jmp	_C_LABEL(switch_to_user)				;\
-									\
-0:									\
-	pushaq								;\
+	\
+0:	\
+	pusha								;\
 	call	_C_LABEL(context_stop_idle)				;\
 	LAPIC_INTR_HANDLER(func)					;\
-	CLEAR_IF(KERNEL_IRQ_RFLAGS_OFF(%rsp))				;\
-	popaq								;\
-	iretq								;
+	CLEAR_IF(10*4(%esp))						;\
+	popa								;\
+	iret								;
 
 /* apic timer tick handlers */
 ENTRY(lapic_timer_int_handler)
@@ -106,16 +91,11 @@ lapic_intr_dummy_handler_msg:
 
 .text
 
-/*
- * AMD64 ABI: arg1 (fmt string) in %rdi, arg2 (vect) in %esi.
- * Each handler is ≤ 19 bytes; .balign 32 pads to the 32-byte stride used
- * by lapic_set_dummy_handlers().
- */
-#define lapic_intr_dummy_handler(vect)					\
-	movl	$vect, %esi					;	\
-	leaq	lapic_intr_dummy_handler_msg(%rip), %rdi	;	\
-	call	_C_LABEL(panic)					;	\
-1:	jmp	1b;
+#define lapic_intr_dummy_handler(vect)			\
+	pushl	$vect;					\
+	push	$lapic_intr_dummy_handler_msg;		\
+	call	_C_LABEL(panic);			\
+1:	jmp	1b; /* never return */
 
 #define LAPIC_INTR_DUMMY_HANDLER(vect)			\
 	.balign	LAPIC_INTR_DUMMY_HANDLER_SIZE;		\

@@ -171,13 +171,13 @@ static u64_t lapic_bus_freq[CONFIG_MAX_CPUS];
 #define IOAPIC_IOREGSEL	0x0
 #define IOAPIC_IOWIN	0x10
 
-static u32_t ioapic_read(vir_bytes ioa_base, u32_t reg)
+static u32_t ioapic_read(u32_t ioa_base, u32_t reg)
 {
 	*((volatile u32_t *)(ioa_base + IOAPIC_IOREGSEL)) = (reg & 0xff);
 	return *(volatile u32_t *)(ioa_base + IOAPIC_IOWIN);
 }
 
-static void ioapic_write(vir_bytes ioa_base, u8_t reg, u32_t val)
+static void ioapic_write(u32_t ioa_base, u8_t reg, u32_t val)
 {
 	*((volatile u32_t *)(ioa_base + IOAPIC_IOREGSEL)) = reg;
 	*((volatile u32_t *)(ioa_base + IOAPIC_IOWIN)) = val;
@@ -214,7 +214,7 @@ static void ioapic_redirt_entry_read(void * ioapic_addr,
 }
 #endif
 
-static void ioapic_redirt_entry_write(vir_bytes ioapic_addr,
+static void ioapic_redirt_entry_write(void * ioapic_addr,
 					int entry,
 					u32_t hi,
 					u32_t lo)
@@ -223,8 +223,8 @@ static void ioapic_redirt_entry_write(vir_bytes ioapic_addr,
 	VERBOSE_APIC(printf("IO apic redir entry %3d "
 				"write 0x%08x 0x%08x\n", entry, hi, lo));
 #endif
-	ioapic_write(ioapic_addr, (u8_t) (IOAPIC_REDIR_TABLE + entry * 2 + 1), hi);
-	ioapic_write(ioapic_addr, (u8_t) (IOAPIC_REDIR_TABLE + entry * 2), lo);
+	ioapic_write((u32_t)ioapic_addr, (u8_t) (IOAPIC_REDIR_TABLE + entry * 2 + 1), hi);
+	ioapic_write((u32_t)ioapic_addr, (u8_t) (IOAPIC_REDIR_TABLE + entry * 2), lo);
 }
 
 #define apic_read_tmr_vector(vec) \
@@ -319,16 +319,16 @@ static void ioapic_disable(struct io_apic * ioapic)
 	
 	for (p = 0; p < io_apic->pins; p++) {
 		u32_t low_32, hi_32;
-		low_32 = ioapic_read(ioapic->addr,
+		low_32 = ioapic_read((u32_t)ioapic->addr,
 				(uint8_t) (IOAPIC_REDIR_TABLE + p * 2));
-		hi_32 = ioapic_read(ioapic->addr,
+		hi_32 = ioapic_read((u32_t)ioapic->addr,
 				(uint8_t) (IOAPIC_REDIR_TABLE + p * 2 + 1));
 
 		if (!(low_32 & APIC_ICR_INT_MASK)) {
 			low_32 |= APIC_ICR_INT_MASK;
-			ioapic_write(ioapic->addr,
+			ioapic_write((u32_t)ioapic->addr,
 				(uint8_t) (IOAPIC_REDIR_TABLE + p * 2 + 1), hi_32);
-			ioapic_write(ioapic->addr,
+			ioapic_write((u32_t)ioapic->addr,
 				(uint8_t) (IOAPIC_REDIR_TABLE + p * 2), low_32);
 		}
 	}
@@ -517,7 +517,7 @@ static void apic_calibrate_clocks(unsigned cpu)
 
 	lapic_bus_freq[cpuid] = system_hz * lapic_delta / (PROBE_TICKS - 1);
 	BOOT_VERBOSE(printf("APIC bus freq %llu MHz\n",
-				(unsigned long long)(lapic_bus_freq[cpuid] / 1000000)));
+				lapic_bus_freq[cpuid] / 1000000));
 	cpu_freq = (tsc_delta / (PROBE_TICKS - 1)) * make64(system_hz, 0);
 	cpu_set_freq(cpuid, cpu_freq);
 	cpu_info[cpuid].freq = (unsigned long)(cpu_freq / 1000000);
@@ -1227,7 +1227,7 @@ void ioapic_set_irq(unsigned irq)
 			 * route the interrupts to the bsp by default
 			 */
 			hi_32 = bsp_lapic_id << 24;
-			ioapic_redirt_entry_write(io_apic[ioa].addr,
+			ioapic_redirt_entry_write((void *) io_apic[ioa].addr,
 					io_apic_irq[irq].pin, hi_32, low_32);
 		}
 	}

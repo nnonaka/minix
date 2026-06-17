@@ -388,7 +388,6 @@ length(u_char *pos, const u_char *bufend, u_char *line, u_char *lineend,
 }
 
 #if defined(__minix)
-#include <inttypes.h>
 static u_char *
 numhex(u_char *pos, const u_char *bufend, u_char *line, u_char *lineend,
     int flag)
@@ -397,8 +396,8 @@ numhex(u_char *pos, const u_char *bufend, u_char *line, u_char *lineend,
 	int64_t n = 0;
 	int l;
 	SKIP_BLANKS(line);
-	sscanf((const char *) pos, "%" SCNx64, &n);
-	l = snprintf((char *)buf, sizeof(buf), "%" PRId64, n);
+	sscanf((const char *) pos, "%llx", &n);
+	l = snprintf((char *)buf, sizeof(buf), "%lld", n);
 	return number(pos, bufend, buf, buf + l, flag);
 }
 #endif /* defined(__minix) */

@@ -134,7 +134,7 @@ void minix_stack_fill(const char *path, int argc, char * const *argv,
 
 	/* Fill in the frame now. */
 	fpw = (char **) frame;
-	*fpw++ = (char *)(uintptr_t) argc;
+	*fpw++ = (char *) argc;
 
 	/* The strings themselves are stored after the aux vectors,
 	 * cf. top comment. */

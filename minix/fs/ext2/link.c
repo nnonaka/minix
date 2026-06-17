@@ -643,7 +643,7 @@ static void zeroblock_range(struct inode *rip, off_t pos, off_t len)
 	return; /* skip holes */
   offset = pos % rip->i_sp->s_block_size;
   if (offset + len > rip->i_sp->s_block_size)
-	panic("zeroblock_range: len too long: %ld", len);
+	panic("zeroblock_range: len too long: %lld", len);
   memset(b_data(bp) + offset, 0, len);
   lmfs_markdirty(bp);
   put_block(bp);

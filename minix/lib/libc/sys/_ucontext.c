@@ -77,9 +77,7 @@ int getuctx(ucontext_t *ucp)
 void makecontext(ucontext_t *ucp, void (*func)(void), int argc, ...)
 {
   va_list ap;
-#if defined(__i386__) || defined(__arm__)
   unsigned int *stack_top;
-#endif
 
   /* There are a number of situations that are erroneous, but we can't actually
      tell the caller something is wrong, because this is a void function.

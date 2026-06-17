@@ -1288,8 +1288,8 @@ static void complete_bars(void)
 	if(OK != sys_getkinfo(&kinfo))
 		panic("can't get kinfo");
 
-	/* Set memgap_low to just above physical memory (cap at 32-bit PCI window) */
-	memgap_low= (u32_t)kinfo.mem_high_phys;
+	/* Set memgap_low to just above physical memory */
+	memgap_low= kinfo.mem_high_phys;
 	memgap_high= 0xfe000000;	/* Leave space for the CPU (APIC) */
 
 	if (debug)
