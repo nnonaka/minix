@@ -37,9 +37,8 @@ static struct acpi_xsdt {
 } xsdt;
 
 static struct {
-	char		signature [ACPI_SDT_SIGNATURE_LEN + 1];
-	size_t		length;
-	phys_bytes	base;	/* full 64-bit physical address of the table */
+	char	signature [ACPI_SDT_SIGNATURE_LEN + 1];
+	size_t	length;
 } sdt_trans[MAX_RSDT];
 
 static int sdt_count;
@@ -62,14 +61,7 @@ static int acpi_check_signature(const char * orig, const char * match)
 	return strncmp(orig, match, ACPI_SDT_SIGNATURE_LEN);
 }
 
-/*
- * Translates a table's physical address to a virtual one.  Before VM is
- * running the kernel relies on the boot identity/direct map, so a table
- * placed above 4 GB by the firmware must lie within that mapping to be
- * reachable here; XSDT entries are kept full 64-bit so the address itself
- * is never the limiting factor.
- */
-static phys_bytes acpi_phys2vir(phys_bytes p)
+static u32_t acpi_phys2vir(u32_t p)
 {
 	if(!vm_running) {
 		DEBUGEXTRA(("acpi: returning 0x%lx as vir addr\n", p));
@@ -139,7 +131,7 @@ phys_bytes acpi_get_table_base(const char * name)
 	for(i = 0; i < sdt_count; i++) {
 		if (strncmp(name, sdt_trans[i].signature,
 					ACPI_SDT_SIGNATURE_LEN) == 0)
-			return sdt_trans[i].base;
+			return (phys_bytes) rsdt.data[i];
 	}
 
 	return (phys_bytes) NULL;
@@ -362,6 +354,9 @@ void acpi_init(void)
 			return;
 		}
 		sdt_count = (s - sizeof(struct acpi_sdt_header)) / sizeof(u64_t);
+		for (i = 0; i < sdt_count; i++) {
+			rsdt.data[i] = (u32_t)xsdt.data[i];
+		}
 	} else {
 		printf("WARNING : ACPI revision error.\n");
 		return;
@@ -369,15 +364,10 @@ void acpi_init(void)
 	
 	for (i = 0; i < sdt_count; i++) {
 		struct acpi_sdt_header hdr;
-		phys_bytes base;
 		int j;
-
-		/* RSDT entries are 32-bit, XSDT entries are full 64-bit */
-		base = (acpi_rsdp.revision == 2) ?
-			(phys_bytes) xsdt.data[i] : (phys_bytes) rsdt.data[i];
-
-		if (read_func(base, &hdr, sizeof(struct acpi_sdt_header))) {
-			printf("ERROR acpi cannot read header at 0x%lx\n", base);
+		if (read_func(rsdt.data[i], &hdr, sizeof(struct acpi_sdt_header))) {
+			printf("ERROR acpi cannot read header at 0x%x\n",
+								rsdt.data[i]);
 			return;
 		}
 
@@ -385,7 +375,6 @@ void acpi_init(void)
 			sdt_trans[i].signature[j] = hdr.signature[j];
 		sdt_trans[i].signature[ACPI_SDT_SIGNATURE_LEN] = '\0';
 		sdt_trans[i].length = hdr.length;
-		sdt_trans[i].base = base;
 	}
 
 	acpi_init_poweroff();

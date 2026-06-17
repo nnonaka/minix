@@ -134,15 +134,6 @@ MINIX has no `pthread.h`. Use mthread with the pthread-compat layer instead:
 - `cpuid` macro (`arch/x86_64/include/arch_smp.h`) must use `(vir_bytes)` for the stack arithmetic and read a `reg_t` (`[-1]` on a `reg_t *`), not i386's `u32_t` — cpu id is stored as a full `reg_t` at `kernel_stack_top - sizeof(reg_t)` by `tss_init`; the `u32_t` version truncates the kernel stack VA and reads the zero high half
 - Any kernel pointer (`struct proc *` etc.) stored in a struct or passed between CPUs must be `vir_bytes`/`uintptr_t`, never `u32_t` (e.g. `sched_ipi_data.data` in `smp.c`) — these SMP bugs are latent under UP (`#define cpuid 0`, no scheduling IPIs)
 
-## ACPI XSDT (x86_64)
-- UEFI x86_64 is ACPI revision 2: the RSDP points at an **XSDT** with 64-bit table addresses (vs the legacy 32-bit **RSDT**); `acpi.c` selects the branch on `acpi_rsdp.revision` (0 = RSDT, 2 = XSDT)
-- `phys_bytes` is `unsigned long` (64-bit) on amd64 — keep XSDT table addresses full-width; the old `rsdt.data[i] = (u32_t)xsdt.data[i]` copy silently truncated tables placed above 4 GB. Resolved address is stored in `sdt_trans[i].base` (`phys_bytes`), the single source of truth returned by `acpi_get_table_base()`; `acpi_phys2vir` takes/returns `phys_bytes`
-- `sdt_count` is bounded by `MAX_RSDT` (35) because `acpi_read_sdt_at()` rejects an XSDT longer than the `xsdt.data[MAX_RSDT]` read buffer
-- The RSDP reaches the kernel via the multiboot2 ACPI2 tag (`kinfo.rsdp_p`, `kinfo.mb_version == 2`) on the EFI path — the legacy EBDA/`0xE0000`–`0x100000` BIOS scan finds nothing under pure UEFI
-- Caveat: pre-VM, `acpi_phys_copy` reads a phys address *as* virtual via the boot identity/direct map; a table >4 GB also needs that range mapped to be reachable — firmware keeps ACPI tables <4 GB on QEMU/OVMF so this works today
-- `mb2_acpi2.c` (standalone experimental `acpi2_init()`) was unused (not in `Makefile.inc`, never called) and is deleted — don't resurrect it; `acpi.c` is the one wired into APIC/SMP/poweroff
-- Details: `docs/apic-x86_64.md` (ACPI feeds MADT/APIC discovery)
-
 ## Port documentation (docs/)
 - Per-subsystem x86_64 port notes live in `docs/*-x86_64*.md` (e.g. `kernel-arch-x86_64.md`, `apic-x86_64.md`, `vm-x86_64-port.md`, `kernel-build-x86_64-fixes.md`); add new kernel/SMP findings to `docs/kernel-arch-x86_64.md`, matching its before/after code-block style
 
