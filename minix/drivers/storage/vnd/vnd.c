@@ -123,7 +123,7 @@ static int vnd_close(devminor_t UNUSED(minor))
  * Copy a number of bytes from or to the caller, to or from the intermediate
  * buffer.  If the given endpoint is SELF, a local memory copy must be made.
  */
-static int vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t endpt,
+static int vnd_copy(iovec_t *iov, size_t iov_off, size_t bytes, endpoint_t endpt,
 	int do_write)
 {
 	struct vscp_vec vvec[SCPVEC_NR], *vvp;
@@ -140,7 +140,12 @@ static int vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t end
 		chunk = MIN(bytes - off, iov->iov_size - iov_off);
 
 		if (endpt == SELF) {
-			ptr = (char *)(uintptr_t) iov->iov_grant + iov_off;
+			/* For a SELF transfer, iov_addr is a local address.
+			 * It must be read as the full-width vir_bytes iov_addr,
+			 * not the low 32 bits of an iovec_s_t pun: a user-space
+			 * address with bit 31 set would sign-extend into the
+			 * kernel half on amd64 and fault. */
+			ptr = (char *)(uintptr_t) iov->iov_addr + iov_off;
 
 			if (do_write)
 				memcpy(&state.buf[off], ptr, chunk);
@@ -152,7 +157,8 @@ static int vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t end
 			vvp->v_from = do_write ? endpt : SELF;
 			vvp->v_to = do_write ? SELF : endpt;
 			vvp->v_bytes = chunk;
-			vvp->v_gid = iov->iov_grant;
+			/* For a non-SELF transfer, iov_addr holds the grant ID. */
+			vvp->v_gid = (cp_grant_id_t) iov->iov_addr;
 			vvp->v_offset = iov_off;
 			vvp->v_addr = (vir_bytes) &state.buf[off];
 
@@ -177,8 +183,8 @@ static int vnd_copy(iovec_s_t *iov, size_t iov_off, size_t bytes, endpoint_t end
  * Advance the given I/O vector, and the offset into its first element, by the
  * given number of bytes.
  */
-static iovec_s_t *
-vnd_advance(iovec_s_t *iov, size_t *iov_offp, size_t bytes)
+static iovec_t *
+vnd_advance(iovec_t *iov, size_t *iov_offp, size_t bytes)
 {
 	size_t iov_off;
 
@@ -208,12 +214,12 @@ static ssize_t vnd_transfer(devminor_t minor, int do_write, u64_t position,
 	endpoint_t endpt, iovec_t *iovt, unsigned int nr_req, int flags)
 {
 	struct device *dv;
-	iovec_s_t *iov;
+	iovec_t *iov;
 	size_t off, chunk, bytes, iov_off;
 	ssize_t r;
 	unsigned int i;
 
-	iov = (iovec_s_t *) iovt;
+	iov = iovt;
 
 	if (state.fd == -1 || (dv = vnd_part(minor)) == NULL)
 		return ENXIO;
@@ -247,7 +253,7 @@ static ssize_t vnd_transfer(devminor_t minor, int do_write, u64_t position,
 	for (off = 0; off < bytes; off += chunk) {
 		chunk = MIN(bytes - off, VND_BUF_SIZE);
 
-		assert((unsigned int) (iov - (iovec_s_t *) iovt) < nr_req);
+		assert((unsigned int) (iov - iovt) < nr_req);
 
 		/* For reads, read in the data for the chunk; possibly less. */
 		if (!do_write) {
