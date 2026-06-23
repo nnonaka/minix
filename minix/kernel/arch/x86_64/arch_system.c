@@ -52,6 +52,19 @@ void fpu_init(void)
 {
 	unsigned short cw, sw;
 
+	/*
+	 * Make the FPU usable before probing it.  On amd64 the EFI loader
+	 * leaves the FPU disabled (CR0.EM set and/or CR0.TS set from firmware);
+	 * with EM=1 the x87 probe instructions don't initialize the FPU, the
+	 * fnstcw check below fails, and fpu_init() wrongly concludes "no FPU".
+	 * That leaves osfxsr_feature=0, so the kernel never fxsave/fxrstor's the
+	 * XMM registers on a context switch — SSE still works (CR4.OSFXSR is set
+	 * here) but XMM state leaks between processes, corrupting any
+	 * SSE-vectorized userland code across a context switch.  Clear EM, set
+	 * MP, clear TS so the probe (and the FPU) work.  amd64 always has x87.
+	 */
+	write_cr0((read_cr0() & ~(I386_CR0_EM | I386_CR0_TS)) | I386_CR0_MP);
+
 	fninit();
 	sw = fnstsw();
 	fnstcw(&cw);
@@ -70,7 +83,7 @@ void fpu_init(void)
 			 * FXSR feature can be available without SSE
 			 */
 			if(_cpufeature(_CPUF_I386_SSE))
-				cr4 |= CR4_OSXMMEXCPT; 
+				cr4 |= CR4_OSXMMEXCPT;
 
 			write_cr4(cr4);
 			osfxsr_feature = 1;

@@ -546,6 +546,48 @@ Why all three: (1) covers the cross-process page-walk copy (a server's
 process's own mapping, (3) covers `safememset`.  This also makes copy-on-write
 correct for kernel-mediated writes generally, not just the test.
 
+## FPU / XMM context-switch state (test2)
+
+A POSIX `test2` pipe test failed with "wrong data": a parent filled a buffer with
+an SSE-vectorized loop (`buf[i]=i&0xff` → clang emits `movdqa`/`paddb`, holding
+the increment constant `{0,1,…,15}` in `xmm0` across the whole loop), wrote it
+through a pipe, and the child read back corruption — every other 16-byte group
+zeroed, as if `xmm0` had been clobbered to `0` (a `pxor %xmm0,%xmm0` signature)
+mid-fill.  The root cause was **XMM not surviving a context switch**, from two
+independent amd64 defects:
+
+1. **`fpu_init()` mis-probed the FPU → no `fxsave`.**  The x87 probe
+   (`fninit`/`fnstcw`) ran with `CR0.EM=1` (FPU emulation), so the control-word
+   check failed and the code took the "no FPU" branch, leaving
+   `osfxsr_feature=0`.  With that flag clear, `save_local_fpu()` used `fnsave`
+   (x87/MMX only, 108 bytes) instead of `fxsave` — **the XMM registers were
+   never saved/restored at all**.  SSE still ran in userland (`CR4.OSFXSR` was
+   set elsewhere), so XMM silently leaked across every context switch.  Fix
+   (`arch_system.c fpu_init`): clear `CR0.EM`/`CR0.TS` and set `CR0.MP` before
+   the probe so x87 initializes and the probe succeeds → `osfxsr_feature=1` →
+   `fxsave`/`fxrstor` save the full 512-byte area including all 16 XMM.
+
+2. **`do_fork()` gave the child the parent's FPU save buffer.**  Each process's
+   `p_seg.fpu_state` points at its own slot in `static fpu_state[NR_PROCS][512]`
+   (assigned by `arch_proc_reset` from `p_nr`).  `do_fork` copies the parent
+   `proc` struct wholesale (`*rpc = *rpp`), which **overwrites the child's
+   `fpu_state` pointer with the parent's**; the code that saves the child's own
+   pointer beforehand and restores it afterward (then `memcpy`s the parent's FPU
+   contents in) was guarded by `#if defined(__i386__)` and so was **compiled out
+   on amd64**.  Result: parent and child shared one FPU buffer.  The lazy-FPU
+   `#NM` path then corrupted it: the child's first SSE use trapped, saved *its*
+   `xmm0=0` into the shared buffer, and when the parent resumed `fxrstor` loaded
+   that zero — exactly the observed `xmm0={0,1,2,3}` → `00000000` transition.
+   Fix: change both guards to `#if defined(__i386__) || defined(__x86_64__)` so
+   the child keeps its own buffer (declaration of `old_fpu_save_area_p` too).
+
+Diagnosing this took a buffer-aliasing detector in `save_local_fpu`/`restore_fpu`
+that printed each watched process's `p_nr` and `fpu_state` address: the parent
+(`nr=205`) and child (`nr=210`) showing the *same* `buf=0x…` pinned it
+immediately.  General lesson: any per-process resource the i386 port carries
+across `*rpc = *rpp` in `do_fork` (here the FPU buffer pointer) must have its
+`#if defined(__i386__)` guard extended to amd64.
+
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each
