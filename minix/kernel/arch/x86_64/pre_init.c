@@ -109,12 +109,19 @@ kinfo_t *pre_init(u32_t magic, u32_t ebx)
 
 	/* Build proper page tables: identity-map physical RAM, then map the
 	 * kernel at its high virtual address.  Long mode and paging were
-	 * already enabled by head.S, so vm_enable_paging() is skipped.
+	 * already enabled by head.S / the EFI loader, but CR0.WP (and CR4.PGE)
+	 * are still at the firmware default.  vm_enable_paging() only ORs those
+	 * bits in (it does not re-toggle paging), and we must call it: without
+	 * CR0.WP, supervisor-mode writes ignore read-only page protections, so
+	 * the kernel copying into a read-only user page (e.g. read(2) into a
+	 * PROT_READ buffer, or a copy-on-write page) silently succeeds instead
+	 * of faulting — breaking EFAULT semantics and COW.
 	 */
 	pg_clear();
 	pg_identity(&kinfo);
 	kinfo.freepde_start = pg_mapkernel();
 	pg_load();
+	vm_enable_paging();
 
 	/* Done, return boot info so it can be passed to kmain(). */
 	return &kinfo;

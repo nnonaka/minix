@@ -507,10 +507,79 @@ With these (plus the VM `findbit()` LP64 fix), MINIX/amd64 boots to a multiuser
 login prompt and working root shell.  (The earlier "no login prompt" stall was a
 symptom of this corruption, not a separate console bug.)
 
+## Read-only / copy-on-write protection on kernel-mediated copies (test74)
+
+A POSIX `read(2)` into a read-only `mmap`'d buffer must fail with `EFAULT`; on
+amd64 it silently succeeded.  Three independent defects let kernel-mediated
+writes bypass a page's write protection — all three had to be fixed:
+
+1. **`createpde()` ignored the PTE write bit.**  It returns the kernel
+   direct-map alias (`phys_to_kacc(phys)`, always writable) for any *present*
+   page, so a kernel-mediated write into a present read-only or COW page wrote
+   straight through — no fault, no copy-on-write.  (i386 avoids this with
+   `CR0.WP=1` plus its transplanted process-PDE copy window.)  Fix:
+   `createpde()`'s 4th parameter is now a `writable` flag (formerly the unused
+   `free_pde_idx`); `lin_lin_copy()` passes 0 for the source and 1 for the
+   destination — see the Theme 2 snippet above.  For a write, `createpde()`
+   returns the not-present sentinel `0` when the leaf entry lacks
+   `AMD64_VM_WRITE`, so the access routes through `vm_suspend(..., writeflag=1)`
+   and VM performs copy-on-write (writable region) or returns `EFAULT`
+   (read-only region).
+
+2. **`CR0.WP` was never set.**  Long mode is entered with paging already on by
+   the EFI loader, so `pre_init.c` *skipped* `vm_enable_paging()` — but that
+   routine also sets `CR0.WP` (and `CR4.PGE`).  Without WP, supervisor-mode
+   writes ignore read-only PTEs entirely (the whole protection model assumes
+   WP=1).  Fix: call `vm_enable_paging()` after `pg_load()` on amd64; it only
+   ORs in WP/PGE and does **not** re-toggle paging.
+
+3. **`vm_memset()` had the same not-present bug as `lin_lin_copy()`** — this is
+   the `safememset` path, used e.g. by `/dev/zero` reads.  It relied on
+   `phys_memset` faulting, but a not-present page makes it touch virtual address
+   0, whose caught fault address `0` is indistinguishable from "no fault", so
+   the memset silently succeeds writing nowhere.  Fix: pass `writable=1` to
+   `createpde()` and, exactly like `lin_lin_copy()`, explicitly
+   `vm_suspend(..., 1)` when it returns 0.
+
+Why all three: (1) covers the cross-process page-walk copy (a server's
+`safecopy` into a user buffer), (2) covers a write through the faulting
+process's own mapping, (3) covers `safememset`.  This also makes copy-on-write
+correct for kernel-mediated writes generally, not just the test.
+
 ## Limitations / future work
 
 - **> 64 GB RAM**: identity map covers up to `PG_IDENT_PD_MAX` (64) GB; each
   entry is a 512-entry PD covering 1 GB via 2 MB pages.  Increase
   `PG_IDENT_PD_MAX` (and add more `pg_pdpt_low` entries) to support more RAM.
+
+- **`test77` (PTY) hangs** — pre-existing, timing-sensitive heisenbug, *unfixed*.
+  Closing a PTY master must `SIGHUP` the slave's session leader (blocked in
+  `sigsuspend`); the child never wakes because its `sigsuspend` mask arrives as
+  `sigfillset` (all signals blocked, including `SIGHUP`) instead of the intended
+  empty mask — its on-stack `oset` is corrupted to exactly the value libc
+  `sigreturn()` writes as its splhi.  Signal *delivery* is correct end-to-end
+  (verified pty `sigchar` → kernel `cause_sig` → PM `process_ksig`/`sig_proc`/
+  `sig_send` → kernel `do_sigsend`).  The corruption is a stack/copy-on-write
+  issue during fork+signal: adding any `printf` shifts the stack layout and
+  masks it, whereupon subtests 5–6 pass and the suite reaches a separate
+  subtest-7 failure.  Needs a memory-watchpoint / "kernel write to a
+  refcount>1 COW page" detector to pin down.  Not caused by the WP/COW work
+  above (test77 hung in every prior boot).
+
+## Companion POSIX-suite fixes (non-arch)
+
+Other `minix-posix` failures fixed alongside the above, recorded here for the
+trail (the code lives outside `kernel/arch`):
+
+- **test53** — `minix/include/minix/u64.h`: `ex64lo()`/`ex64hi()` returned
+  `unsigned long`, which is 64-bit on amd64, so they no longer truncated to the
+  low/high 32 bits.  Fixed by masking through `(u32_t)` while keeping the
+  `unsigned long` return type (preserves i386 semantics and `%lx` callers).
+- **test66** — `minix/tests/test66.c` used `unsigned long`/`signed long` for
+  values meant to be 32-bit; on LP64 that changes `(unsigned long)(-10) % 7`.
+  Switched those locals to `int32_t`/`uint32_t`.
+- **test64 panic / test74** — see "Read-only / COW protection" above and the
+  low-memory reserve in `docs/vm-x86_64-port.md`.
+- **test76** — silenced an upstream debug `printf` in `servers/vfs/worker.c`.
 
 *(APIC was ported in a prior session; see `docs/apic-x86_64.md`.)*

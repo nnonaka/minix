@@ -428,6 +428,12 @@ static struct vir_region *region_new(struct vmproc *vmp, vir_bytes startv, vir_b
 	static u32_t id;
 	int slots = phys_slot(length);
 
+	/* Page allocations for an ordinary user process must honor the
+	 * low-memory reserve so the process cannot starve system services to
+	 * death.  Tag the region; vrallocflags() turns this into PAF_USERMEM. */
+	if(vm_isuserp(vmp))
+		flags |= VR_USERMEM;
+
 	if(!(SLABALLOC(newregion))) {
 		printf("vm: region_new: could not allocate\n");
 		return NULL;
@@ -653,6 +659,8 @@ u32_t vrallocflags(u32_t flags)
 		allocflags |= PAF_LOWER1MB;
 	if(!(flags & VR_UNINITIALIZED))
 		allocflags |= PAF_CLEAR;
+	if(flags & VR_USERMEM)
+		allocflags |= PAF_USERMEM;
 
 	return allocflags;
 }

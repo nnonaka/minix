@@ -29,6 +29,17 @@ void acl_init(void)
 }
 
 /*
+ * Is this an ordinary user process?  System services (and processes that do not
+ * have an ACL assigned yet, e.g. RS early on) return false, so that the
+ * low-memory reserve in alloc_pages() never denies them a page: a system
+ * service that cannot fault in a page would be killed, which is fatal.
+ */
+int vm_isuserp(struct vmproc *vmp)
+{
+	return vmp->vm_acl == USER_ACL;
+}
+
+/*
  * Check whether a process is allowed to make a certain (zero-based) call.
  * Return OK or an error.
  */

@@ -272,6 +272,37 @@ login.
   `kernel-arch-x86_64.md`) was the other source: writes to it silently
   vanished, so any structure placed there stayed garbage.
 
+## Low-memory reserve for system services (`alloc.c`, test64)
+
+`test64` deliberately `mmap(MAP_PREALLOC)`s in a loop until allocation fails.
+On amd64 this drove **physical** memory to full exhaustion (i386 only hit the
+per-process virtual-address limit and recovered), at which point a core service
+— **VFS** — faulted on a page it could not get (`map_pf: pb_new failed`), was
+killed, RS could not restart it, and the kernel panicked (`cause_sig: sig
+manager gets lethal signal 6`).  MINIX has no general OOM protection for
+services beyond VM's own page-table reserve, so once a user process takes the
+last page, the next service to fault dies.
+
+Fix: VM keeps a small **reserve that only system services may dip into**, so a
+user process can no longer starve them.
+
+- `alloc.c`: a maintained `free_pages_cnt` (updated in `alloc_pages`/
+  `free_pages`) and `#define PAGES_RESERVED 1024` (4 MB).  `alloc_pages()`
+  refuses a request carrying the new `PAF_USERMEM` flag when it would drop free
+  pages below the reserve.
+- `region.c`: `region_new()` tags an ordinary user process's regions with the
+  new `VR_USERMEM` flag (predicate `vm_isuserp()` in `acl.c`, i.e.
+  `vm_acl == USER_ACL`; services have `vm_acl >= FIRST_SYS_ACL`, and `NO_ACL`
+  is treated as privileged).  `vrallocflags()` turns `VR_USERMEM` into
+  `PAF_USERMEM`, so **all** user data-page allocations (demand-zero, COW,
+  `MAP_PREALLOC`, `MAP_CONTIG`) honor the reserve, while VM-internal
+  allocations (page tables, slabs, the reserved queue) do not.
+
+Net effect: the offending user `mmap` now returns `MAP_FAILED` cleanly ~4 MB
+before true exhaustion, the process stops, and services keep their reserve to
+fault normally — no cascade, no panic.  (The `anon_pagefault: out of memory`
+line during test64 is just the reserve denying the child's last allocations.)
+
 ## Known limitations / future work
 
 - **Physical memory is capped at the low 4 GB.**  `alloc.c` sizes its core

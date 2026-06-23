@@ -12,6 +12,9 @@ void fs_sync(void)
  * superblock to disk. */
   struct inode *rip;
 
+  if (superblock == NULL)
+	return; /* not mounted (e.g. failed mount being torn down) */
+
   if (superblock->s_rd_only)
 	return; /* nothing to sync */
 

@@ -72,12 +72,20 @@ static const u64_t *pt_vaddr(phys_bytes pa)
  *
  * *bytes is truncated to the contiguous physical region reachable from linaddr
  * within the same page (4 KB, 2 MB, or 1 GB depending on page size).
+ *
+ * If 'writable' is set, the caller intends to write through the returned
+ * mapping.  Because we hand back the always-writable kernel direct-map alias
+ * (phys_to_kacc), the destination page's read-only protection would otherwise
+ * be bypassed (i386 avoids this via CR0.WP + a process-PDE window).  So for a
+ * write we return 0 (the not-present sentinel) when the leaf entry lacks the
+ * write bit; lin_lin_copy then routes the access through vm_suspend(writeflag=1)
+ * and VM performs copy-on-write or rejects it with EFAULT, as appropriate.
  */
 static phys_bytes createpde(
 	const struct proc *pr,
 	const phys_bytes linaddr,
 	phys_bytes *bytes,
-	int free_pde_idx,	/* unused on x86_64 */
+	int writable,		/* caller will write through the mapping */
 	int *changed		/* unused on x86_64 */
 	)
 {
@@ -113,6 +121,8 @@ static phys_bytes createpde(
 		if (pdpte & AMD64_VM_PS) {		/* 1 GB page */
 			phys_bytes base = pdpte & AMD64_VM_ADDR_MASK &
 			                  ~((phys_bytes)((1ULL << 30) - 1));
+			if (writable && !(pdpte & AMD64_VM_WRITE))
+				return 0;
 			offset = linaddr & ((1ULL << 30) - 1);
 			*bytes = MIN(*bytes, (phys_bytes)(1ULL << 30) - offset);
 			return phys_to_kacc(base + offset);
@@ -125,6 +135,8 @@ static phys_bytes createpde(
 		if (pde & AMD64_VM_PS) {		/* 2 MB page */
 			phys_bytes base = pde & AMD64_VM_ADDR_MASK &
 			                  ~((phys_bytes)AMD64_VM_OFFSET_MASK_2MB);
+			if (writable && !(pde & AMD64_VM_WRITE))
+				return 0;
 			offset = linaddr & AMD64_VM_OFFSET_MASK_2MB;
 			*bytes = MIN(*bytes, (phys_bytes)AMD64_BIG_PAGE_SIZE - offset);
 			return phys_to_kacc(base + offset);
@@ -133,6 +145,8 @@ static phys_bytes createpde(
 		pt  = pt_vaddr(pde & AMD64_VM_ADDR_MASK);
 		pte = pt[AMD64_VM_PT(linaddr)];
 		if (!(pte & AMD64_VM_PRESENT))
+			return 0;
+		if (writable && !(pte & AMD64_VM_WRITE))
 			return 0;
 		offset = linaddr & (AMD64_PAGE_SIZE - 1);
 		*bytes = MIN(*bytes, (phys_bytes)AMD64_PAGE_SIZE - offset);
@@ -197,19 +211,26 @@ static int lin_lin_copy(struct proc *srcproc, vir_bytes srclinaddr,
 		}
 #endif
 
-		/* Resolve addresses via identity map. */
+		/* Resolve addresses via identity map.  The destination is resolved
+		 * with writable=1 so a present-but-read-only page is also reported
+		 * not-present (see createpde): the kernel direct-map alias is always
+		 * writable and would otherwise bypass the page's RO protection. */
 		srcptr = createpde(srcproc, srclinaddr, &chunk, 0, &changed);
 		dstptr = createpde(dstproc, dstlinaddr, &chunk, 1, &changed);
 		/* changed is never set to 1 on x86_64; no CR3 reload needed. */
 
 		/* createpde() returns 0 when a process page is not present (e.g. a
-		 * demand-zero stack page during an exec frame copy).  We MUST detect
-		 * that explicitly here and return EFAULT_SRC/DST so virtual_copy_f()
-		 * asks VM to fault the page in.  We cannot rely on the PHYS_COPY_CATCH
-		 * fault below: a not-present page makes the copy touch virtual address
-		 * 0, whose fault yields a caught address of 0 — indistinguishable from
-		 * "no fault" in the `if(addr)` test, so the copy would silently succeed
-		 * writing nowhere and the page would never be mapped. */
+		 * demand-zero stack page during an exec frame copy), and for the
+		 * destination also when the page is present but read-only.  We MUST
+		 * detect that explicitly here and return EFAULT_SRC/DST so
+		 * virtual_copy_f() asks VM to fault the page in (and, for a write to a
+		 * read-only page, perform copy-on-write or reject it with EFAULT).  We
+		 * cannot rely on the PHYS_COPY_CATCH fault below: a not-present page
+		 * makes the copy touch virtual address 0, whose fault yields a caught
+		 * address of 0 — indistinguishable from "no fault" in the `if(addr)`
+		 * test, so the copy would silently succeed writing nowhere and the page
+		 * would never be mapped.  And a write through the writable direct-map
+		 * alias of a read-only page would not fault at all. */
 		if (srcproc && !srcptr) return EFAULT_SRC;
 		if (dstproc && !dstptr) return EFAULT_DST;
 
@@ -457,7 +478,24 @@ int vm_memset(struct proc *caller, endpoint_t who, phys_bytes ph, int c,
 	while (left > 0) {
 		new_cr3 = 0;
 		chunk = left;
-		ptr = createpde(whoptr, cur_ph, &chunk, 0, &new_cr3);
+		ptr = createpde(whoptr, cur_ph, &chunk, 1 /*writable*/, &new_cr3);
+
+		/* createpde() returns 0 for a process page that is not present
+		 * or present-but-read-only (it is a write).  We MUST detect that
+		 * explicitly and ask VM to fault it in: relying on phys_memset()
+		 * to fault is unsafe, because a not-present page makes it touch
+		 * virtual address 0, whose caught fault address 0 is
+		 * indistinguishable from "no fault" — so the memset would silently
+		 * succeed writing nowhere.  This is the safememset() analogue of
+		 * the lin_lin_copy() not-present handling (e.g. read(2) from
+		 * /dev/zero into an unmapped or read-only buffer must EFAULT). */
+		if (whoptr && !ptr) {
+			vm_suspend(caller, whoptr, ph, count,
+				VMSTYPE_KERNELCALL, 1);
+			assert(catch_pagefaults);
+			catch_pagefaults = 0;
+			return VMSUSPEND;
+		}
 
 		if ((pfa = phys_memset(ptr, pattern, chunk))) {
 			if (whoptr) {

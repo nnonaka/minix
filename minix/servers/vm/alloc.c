@@ -37,6 +37,15 @@ static bitchunk_t free_pages_bitmap[PAGE_BITMAP_CHUNKS];
 static int free_page_cache[PAGE_CACHE_MAX];
 static int free_page_cache_size = 0;
 
+/* Number of physical pages currently free (tracks free_pages_bitmap). */
+static int free_pages_cnt = 0;
+
+/* Low-memory reserve: pages that ordinary user processes (PAF_USERMEM) may not
+ * allocate.  They stay available for system services so that a user process
+ * exhausting memory cannot make a service (e.g. VFS) fail a page fault and die,
+ * which would be unrecoverable and panic the kernel. */
+#define PAGES_RESERVED 1024	/* 4 MB */
+
 /* Used for sanity check. */
 static phys_bytes mem_low, mem_high;
 
@@ -314,6 +323,7 @@ void mem_init(struct memory *chunks)
   int i, first = 0;
 
   total_pages = 0;
+  free_pages_cnt = 0;	/* free_mem() below accounts the actual free pages */
 
   memset(free_pages_bitmap, 0, sizeof(free_pages_bitmap));
 
@@ -433,6 +443,12 @@ static phys_bytes alloc_pages(int pages, int memflags)
 	static int lastscan = -1;
 	int startscan, run_length;
 
+	/* Deny ordinary user allocations that would eat into the reserve kept
+	 * for system services.  The process gets ENOMEM/SIGSEGV (acceptable),
+	 * but services can still fault in pages and survive. */
+	if((memflags & PAF_USERMEM) && free_pages_cnt - pages < PAGES_RESERVED)
+		return NO_MEM;
+
 	if(memflags & PAF_LOWER16MB)
 		maxpage = boundary16 - 1;
 	else if(memflags & PAF_LOWER1MB)
@@ -471,6 +487,7 @@ static phys_bytes alloc_pages(int pages, int memflags)
 	for(i = mem; i < mem + pages; i++) {
 		UNSET_BIT(free_pages_bitmap, i);
 	}
+	free_pages_cnt -= pages;
 
 	if(memflags & PAF_CLEAR) {
 		int s;
@@ -501,6 +518,7 @@ static void free_pages(phys_bytes pageno, int npages)
 			free_page_cache[free_page_cache_size++] = i;
 		}
 	}
+	free_pages_cnt += npages;
 }
 
 /*===========================================================================*

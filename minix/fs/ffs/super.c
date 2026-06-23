@@ -96,7 +96,7 @@ int read_super(struct super_block *sp)
   char *sbbuf;
   size_t cssize;
   dev_t dev;
-  int i, r, found;
+  int i, r, found, saw_ufs1;
 
   sp->s_csp = NULL;		/* so free_super() is safe on early failure */
   sp->s_csp_size = 0;
@@ -118,11 +118,14 @@ int read_super(struct super_block *sp)
    * UFS2 in either the plain or the extended-attribute (EA) flavour; both use
    * the same on-disk inode and block layout. */
   found = FALSE;
+  saw_ufs1 = FALSE;
   for (i = 0; sblocksearch[i] != -1; i++) {
 	r = read_chunked(dev, (u64_t) sblocksearch[i], sbbuf, SBLOCKSIZE);
 	if (r != OK)
 		continue;
 	memcpy(fs, sbbuf, sizeof(struct fs));
+	if (fs->fs_magic == FS_UFS1_MAGIC)
+		saw_ufs1 = TRUE;	/* note it for an accurate message */
 	if (fs->fs_magic == FS_UFS2_MAGIC || fs->fs_magic == FS_UFS2EA_MAGIC) {
 		/* Guard against picking up a stale/aliased superblock. */
 		if (fs->fs_sblockloc == sblocksearch[i]) {
@@ -135,9 +138,9 @@ int read_super(struct super_block *sp)
   munmap(sbbuf, SBLOCKSIZE);
 
   if (!found) {
-	/* Re-read the first location just to report the most likely magic. */
-	if (fs->fs_magic == FS_UFS1_MAGIC)
-		printf("ffs: UFS1 is not supported by this server\n");
+	if (saw_ufs1)
+		printf("ffs: UFS1 (FFSv1) is not supported; "
+		    "create the filesystem with newfs -O2 (UFS2)\n");
 	else
 		printf("ffs: no supported UFS2 superblock found\n");
 	return(EINVAL);

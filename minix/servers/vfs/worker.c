@@ -399,7 +399,7 @@ void worker_start(struct fproc *rfp, void (*func)(void), message *m_ptr,
 	 * work (in particular, do_pending_pipe) arrives after postponed PM
 	 * work has been scheduled for execution, so we don't check for that.
 	 */
-#if 1
+#if 0
 	printf("VFS: adding %s work to %s thread\n",
 		is_pm_work ? "PM" : "normal",
 		is_pending ? "pending" : "active");
