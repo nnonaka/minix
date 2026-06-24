@@ -311,13 +311,53 @@ single 24-pin IOAPIC (gsi_base 0) therefore routes GSI 16–23 without change.
 IRQs (<16) edge/active-high, PCI IRQs (≥16) **level/active-low**. So once ACPI
 hands the pci driver the right GSI, delivery works end-to-end.
 
-### Known remaining gap
+### Devices behind a PCI-to-PCI bridge — interrupt-pin swizzle *(fixed)*
 
-`do_map_bridge`/`find_bridge` do not resolve **secondary** PCI-to-PCI bridge
-buses (`libacpi: acpi failed to map pci (0) to pci (N) bridge`), so devices
-*behind* a bridge still get no GSI. Everything on the root bus (bus 0, including
-the q35 AHCI at 00:1f.2) routes correctly. The `do_get_irq: out of range
-bus=... dev=...` printf is a pre-existing debug aid for that path.
+The ACPI service's `do_map_bridge`/`find_bridge` still do not resolve
+**secondary** PCI-to-PCI bridge buses, so `libacpi: acpi failed to map pci (0)
+to pci (N) bridge` is printed for each bridge and a direct
+`acpi_get_irq(secondary_bus, ...)` for a device behind a bridge returns -1.
+That is now handled by the spec-standard fallback in the **pci** driver rather
+than by fixing the ACPI service: when direct routing fails, `record_irq()`
+calls `derive_irq()`, which swizzles the device's INTx pin up the bridge
+hierarchy until it reaches a bus ACPI can route (normally the root bus, which
+has a `_PRT`).
+
+`derive_irq()` had a long-standing bug that made it a no-op: it derived the
+swizzle *slot* from `pd_func` (the function number, 0–7) instead of `pd_dev`
+(the device/slot number), so `(pd_func >> 3)` was always 0 and the swizzle
+`(pin + slot) % 4` never rotated the pin. It also only swizzled **one** level,
+so a device behind a *nested* bridge (e.g. q35 bus 2 behind bus 1 behind bus 0)
+got no IRQ at all (the one-level query hit bus 1, which has no `_PRT` node).
+
+Fix (`minix/drivers/bus/pci/pci.c`, `derive_irq`):
+
+```c
+/* swizzle with the device/slot number, and walk up every bridge level */
+for (levels = 0; levels < NR_PCIBUS; levels++) {
+    busind = get_busind(dev->pd_busnr);
+    if (pcibus[busind].pb_type != PBT_PCIBRIDGE &&
+        pcibus[busind].pb_type != PBT_CARDBUS)
+        return -1;                       /* host bus: nothing to swizzle */
+    parent_bridge = &pcidev[pcibus[busind].pb_devind];
+    pin = (pin + dev->pd_dev) % 4;       /* PCI-to-PCI Bridge spec swizzle */
+    irq = acpi_get_irq(parent_bridge->pd_busnr, parent_bridge->pd_dev, pin);
+    if (irq >= 0)
+        return irq;
+    dev = parent_bridge;                 /* not routable here; go up one level */
+}
+```
+
+Verified on q35/UEFI: an `e1000` placed behind a (nested) bridge now routes
+(`IRQ 22 handler registered by e1000`) and comes up `status: active`; before the
+fix it got no GSI. Everything on the root bus (bus 0, including the q35 AHCI at
+00:1f.2) was already routing correctly via the root `_PRT`. The
+`libacpi: acpi failed to map ... bridge` and `do_get_irq: out of range` printfs
+are now cosmetic — the swizzle path carries the routing.
+
+This is a machine-independent MINIX bug (i386 had it too); it only became
+load-bearing on the q35/UEFI/APIC path, where disks and NICs commonly sit behind
+PCIe root-port bridges.
 
 ---
 

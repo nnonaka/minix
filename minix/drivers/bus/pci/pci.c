@@ -860,18 +860,40 @@ static int do_isabridge(int busind)
 static int derive_irq(struct pcidev * dev, int pin)
 {
 	struct pcidev * parent_bridge;
-	int slot;
-
-	parent_bridge = &pcidev[pcibus[get_busind(dev->pd_busnr)].pb_devind];
+	int busind, irq, levels;
 
 	/*
-	 * We don't support PCI-Express, no ARI, decode the slot of the device
-	 * and mangle the pin as the device is behind a bridge
+	 * A device behind a PCI-to-PCI bridge whose interrupt cannot be routed
+	 * directly (no usable _PRT entry for its secondary bus) must have its
+	 * INTx pin swizzled up the bridge hierarchy per the PCI-to-PCI Bridge
+	 * spec, until a bus that ACPI can route is reached (normally the root
+	 * bus, which has a _PRT).  We don't support PCI-Express ARI, so the
+	 * swizzle uses the device (slot) number of the device on its own bus:
+	 *	parent_pin = (pin + slot) % 4   (0-based pins).
 	 */
-	slot = ((dev->pd_func) >> 3) & 0x1f;
+	for (levels = 0; levels < NR_PCIBUS; levels++) {
+		busind = get_busind(dev->pd_busnr);
 
-	return acpi_get_irq(parent_bridge->pd_busnr,
-			parent_bridge->pd_dev, (pin + slot) % 4);
+		/* Only PCI-to-PCI / Cardbus bridges have a parent bridge device
+		 * to swizzle through; the host bus does not. */
+		if (pcibus[busind].pb_type != PBT_PCIBRIDGE &&
+			pcibus[busind].pb_type != PBT_CARDBUS)
+			return -1;
+
+		parent_bridge = &pcidev[pcibus[busind].pb_devind];
+
+		pin = (pin + dev->pd_dev) % 4;
+
+		irq = acpi_get_irq(parent_bridge->pd_busnr,
+				parent_bridge->pd_dev, pin);
+		if (irq >= 0)
+			return irq;
+
+		/* Not routable here; swizzle through the next bridge up. */
+		dev = parent_bridge;
+	}
+
+	return -1;
 }
 
 static void record_irq(int devind)
