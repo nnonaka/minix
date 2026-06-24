@@ -405,3 +405,44 @@ pci_attr_w16(devind, PCI_CR, cr);
 `PCI_CR_INT_DIS` (0x0400) is defined locally in `ahci.c` (it is not in
 `machine/pci.h`). On OVMF this is a no-op (CR is already `0x0007`), but it is
 correct not to depend on firmware leaving INTx/bus-master enabled.
+
+### Disk device naming (`/dev/cCdD`) and the MAKEDEV major bug *(fixed)*
+
+MINIX names disks `/dev/c<C>d<D>` where **C is the controller** (selects the
+block major via `CTRLR(n)` in `minix/include/minix/dmap.h`: 0→3, 1→8, 2→10,
+3→12) and **D is the drive on that controller** (selects the minor:
+`D * DEV_PER_DRIVE`, `DEV_PER_DRIVE = 5`). A single driver instance owns one
+major (one controller) and serves all its drives/partitions as minors.
+
+`etc/MAKEDEV.tmpl` computed the major from the **wrong digit**: it extracted
+only the `d` digit (`expr $i : '...\(.\)'`, the 4th character) and passed it to
+both the minor *and* `disk_major`, never reading the controller digit. So
+`/dev/c1d0` and `/dev/c0d0` both resolved to **major 3, minor 0** — the same
+device — and `gpt show /dev/c1d0` returned byte-identical output (same partition
+GUIDs) as `c0d0`. The fix reads the controller digit separately
+(`ctrlr=\`expr $i : '.\(.\)'\``) and majors off it, in all three disk node
+classes (whole-disk, `pN` primary partitions, `pNsM` subpartitions):
+
+```sh
+ctrlr=`expr $i : '.\(.\)'`     # c<N>: controller -> major
+disk=`expr $i : '...\(.\)'`    # d<N>: drive       -> minor
+minor=$(($disk * 5))
+disk_major ${ctrlr}
+```
+
+**Naming consequence on q35:** the single ICH9 AHCI HBA presents its SATA ports
+as drives of *one* controller, so a second disk is `/dev/c0d1` (major 3, minor
+5), **not** `/dev/c1d0`. `c1d0` is a second controller (major 8); with only
+`ahci_0` started it has no bound driver and correctly fails to open instead of
+aliasing `c0d0`.
+
+### `gpt(8)` sector size on MINIX *(fixed)*
+
+`gpt`'s `gpt_open()` queries geometry with NetBSD's `DIOCGSECTORSIZE` /
+`DIOCGMEDIASIZE` ioctls, which MINIX block drivers do not implement (they expose
+geometry via `DIOCGETP` → `struct part_geom`, byte `size`; logical sector size
+is a fixed 512). The unsupported ioctl returned `ENOTTY` ("Inappropriate ioctl
+for device"). `sbin/gpt/gpt.c` now has a `__minix` branch that uses `DIOCGETP`
+(`<minix/partition.h>` / `<sys/ioc_disk.h>`), mirroring libc `minix_sizeup()`.
+`gpt` is wired into the MINIX build via `sbin/Makefile` and
+`distrib/sets/lists/minix-base/mi`.

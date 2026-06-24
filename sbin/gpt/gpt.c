@@ -43,6 +43,10 @@ __RCSID("$NetBSD: gpt.c,v 1.82 2020/05/24 18:42:20 jmcneill Exp $");
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/bootblock.h>
+#ifdef __minix
+#include <sys/ioc_disk.h>
+#include <minix/partition.h>
+#endif
 
 #include <err.h>
 #include <errno.h>
@@ -510,6 +514,28 @@ gpt_open(const char *dev, int flags, int verbose, off_t mediasz, u_int secsz,
 	}
 
 	if ((gpt->sb.st_mode & S_IFMT) != S_IFREG) {
+#ifdef __minix
+		/*
+		 * MINIX block drivers do not implement DIOCGSECTORSIZE/
+		 * DIOCGMEDIASIZE; they expose geometry via DIOCGETP, which
+		 * returns the partition size in bytes.  Sector size is a
+		 * fixed 512 bytes.
+		 */
+		struct part_geom geom;
+
+		if (ioctl(gpt->fd, DIOCGETP, &geom) == -1) {
+			gpt_warn(gpt, "Cannot get partition geometry");
+			goto close;
+		}
+		if (gpt->secsz == 0)
+			gpt->secsz = 512;
+		if (gpt->mediasz == 0)
+			gpt->mediasz = (off_t)geom.size;
+		if (gpt->mediasz == 0) {
+			gpt_warnx(gpt, "Media size can't be 0");
+			goto close;
+		}
+#else
 		if (gpt->secsz == 0) {
 #ifdef DIOCGSECTORSIZE
 			if (ioctl(gpt->fd, DIOCGSECTORSIZE, &gpt->secsz) == -1) {
@@ -534,6 +560,7 @@ gpt_open(const char *dev, int flags, int verbose, off_t mediasz, u_int secsz,
 				goto close;
 			}
 		}
+#endif /* __minix */
 	} else {
 		gpt->flags |= GPT_FILE;
 		if (gpt->secsz == 0)
