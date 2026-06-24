@@ -624,4 +624,35 @@ trail (the code lives outside `kernel/arch`):
   Machine-independent (would affect i386 too); needs a live-image rebuild to
   recreate `/dev`.
 
+## Known limitation — test85 (vnd block-device EOF) deadlocks on a single-partition image
+
+`test85` sets up a `vnd` whose backing file (`image`) is created in the test's
+working directory (`/usr/tests/minix-posix`), then does block I/O on
+`/dev/vnd0`.  On the dev-efi3 **emuimage**, everything lives on one MFS
+partition (`distrib/amd64/liveimage/emuimage/fstab.in`: only `/dev/c0d0p1 /
+mfs`), which makes the test deadlock on its first device read:
+
+1. `read(/dev/vnd0)` — for an *unmounted* block device, VFS routes the block I/O
+   to `ROOT_FS_E` (`servers/vfs/open.c` `v_bfs_e = ROOT_FS_E`).  The **root MFS**
+   runs `lmfs_bio` → `bdev_gather`, a **synchronous** sendrec to vnd
+   (`lib/libbdev/bdev.c` `bdev_vrdwt`), and blocks.
+2. vnd services that request by `pread()`-ing its backing file `image` — which is
+   on the **same root MFS**.
+3. That `pread` queues behind the blocked root MFS → deadlock (single-threaded
+   FS can't re-enter itself).
+
+This is **not arch-specific** and not an LP64 bug: the vnd / libbdev /
+libblockdriver / `lmfs_bio` data path all compute correctly on amd64 (iovec math
+verified; `iovec_t` and `iovec_s_t` are both 16 bytes with matching field
+offsets).  A stock MINIX install avoids the deadlock only because `/usr` is a
+**separate** MFS process, so vnd's backing-file reads never touch the root MFS
+that is doing the block caching.  i386 with the same single-partition emuimage
+hangs identically.
+
+Resolutions, if ever needed: give the emuimage a separate `/usr` partition (matches
+stock MINIX, fixes the whole suite's `/usr != /` assumption), or host the vnd
+backing file on a different FS instance (e.g. a ramdisk MFS).  Left as a known
+limitation for now; the earlier `test85` *crash* (vnd `iovec_s_t`/`iov_grant`
+sign-extension at config time) is fixed — see commit `25297885a`.
+
 *(APIC was ported in a prior session; see `docs/apic-x86_64.md`.)*
