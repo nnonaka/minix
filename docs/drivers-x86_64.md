@@ -18,9 +18,101 @@ Drivers enabled for x86_64 (essential x86 subset):
 | Network | `3c90x`, `atl2`, `dec21140A`, `dp8390`, `dpeth`, `e1000`, `fxp`, `ip1000`, `lance`, `rtl8139`, `rtl8169`, `virtio_net`, `vt6105` |
 | HID | `pckbd` |
 | Power | `acpi` |
+| Audio | `als4000`, `cmi8738`, `cs4281`, `trident` (MMIO); `es1370`, `es1371`, `sb16` (port-I/O) |
+| Printer | `printer` (Centronics/LPT) |
 | TTY | already built unconditionally; `bios_console` removed from x86_64 |
 
-Not included: `audio`, `printer`, `iommu/amddev`, `vmm_guest/vbox`.
+Not included: `iommu/amddev`, `vmm_guest/vbox`.
+
+## Audio drivers (LP64 audit)
+
+All seven audio drivers build and stage for x86_64.  Two addressing classes:
+
+- **MMIO** (`als4000`, `cmi8738`, `cs4281`, `trident`): needed the BAR /
+  `base[6]` / `io.h` port-parameter widening from `u32_t` to `vir_bytes`
+  documented under "PCI BAR address widening" above.
+- **Port-I/O** (`es1370`, `es1371` via PCI I/O BAR; `sb16` via legacy ISA
+  ports + 8237 DMA): no MMIO, so the `u32_t base` (an I/O-port BAR, always
+  <64 KB) is correct as-is.  DMA is hardware-limited (es137x 32-bit PCI;
+  sb16 24-bit ISA + page register = 16 MB), matching the `drv_set_dma(u32_t
+  dma, ...)` framework signature.  `libaudiodriver` (`audio_fw.c`) allocates
+  the DMA buffer with `AC_LOWER16M`, so `DmaPhys` is always <16 MB and the
+  `u32_t` parameter never truncates on amd64.  All three compile clean under
+  `-Werror` with no format/cast fixes required.
+
+None of the seven is runtime-tested: QEMU's `pc`/`q35` machines emulate none
+of this hardware by default (es137x needs `-device ES1370`, sb16 needs
+`-device sb16`, etc.), so they simply do not probe on the standard test setup.
+
+## Modern (virtio-1.0) virtio support
+
+On `-machine q35` QEMU presents virtio devices as **modern / non-transitional**
+virtio-1.0 devices, not the legacy/transitional ones used on `-machine pc`:
+
+| | Legacy / transitional (pc) | Modern (q35) |
+|---|---|---|
+| PCI device ID | `1af4:1000` (net), `1af4:1001` (blk) | `1af4:1041` (net), `1af4:1042` (blk) |
+| Register access | flat I/O BAR0 block | MMIO regions via vendor PCI caps |
+| Queue address | single 32-bit PFN | 64-bit desc/avail/used triplet |
+| Features | 32-bit | 64-bit, must ack `VIRTIO_F_VERSION_1` |
+
+`libvirtio` was legacy-only, so on q35 the driver was never even bound (its
+`.conf` listed only `1af4:1000`) and, if bound, would have failed with "PCI not
+IO space". `minix/lib/libvirtio/virtio.c` now supports **both** interfaces:
+
+- **Capability discovery** (`init_modern`): walks the PCI capability list for
+  vendor caps (`PCI_CAP_ID_VNDR` = 0x09), reads each `virtio_pci_cap`
+  (`cfg_type`/`bar`/`offset`/`length`), and `vm_map_phys()`-maps the common,
+  notify, ISR and device-config MMIO windows (`map_cap_region`, which handles a
+  non-page-aligned offset). Presence of a common-cfg cap ⇒ modern; otherwise
+  `init_device` falls back to the legacy I/O BAR. Enables `PCI_CR` mem-space +
+  bus-master and clears INTx-disable (`pci_reserve` does not touch `PCI_CR`).
+- **Register/queue/notify/ISR/device-config** access branches on `dev->modern`;
+  the legacy paths are byte-for-byte unchanged. Modern queue setup programs the
+  64-bit desc/avail/used addresses derived from the single contiguous vring
+  allocation, sets `queue_enable`, and notifies at
+  `notify_base + queue_notify_off * notify_off_multiplier`.
+- **Status handshake**: reset → ACK → DRIVER → features → (modern) FEATURES_OK +
+  verify → queues → DRIVER_OK.
+- **Matching** (`is_matching_device`): legacy = PCI ID `0x1000-0x103f` with the
+  subsystem ID equal to the expected virtio type; modern = PCI ID
+  `0x1040 + type`. Both `.conf`s gained the modern ID (`virtio_net.conf` →
+  `1af4:1041`; `etc/system.conf` virtio_blk → `1af4:1042`).
+
+Driver-visible difference: the virtio-1.0 net header always includes
+`num_buffers` (12 bytes) even without `MRG_RXBUF`, vs 10 bytes on legacy.
+`virtio_net.c` queries the new `virtio_is_modern()` and sizes the header
+(`net_hdr_size`) accordingly; header slots are always allocated at the 12-byte
+`virtio_net_hdr_mrg_rxbuf` size so one allocation serves both.
+
+INTx only (no MSI-X): queue/config MSI-X vectors are left at `NO_VECTOR`, and
+`virtio_had_irq` reads the mapped ISR region. PCI INTx routing behind the q35
+PCIe root port is the same path validated for e1000 (see `apic-x86_64.md`).
+
+`virtio_net` also gained a `ndr_get_link` callback so `vio0` reports
+`status: active`: it negotiates `VIRTIO_NET_F_STATUS` and reads the config
+`status` field's `VIRTIO_NET_S_LINK_UP` bit (link assumed up if the device does
+not expose status), reported as media `IFM_ETHER | IFM_AUTO`.
+
+Confirmed working on q35 with the default modern virtio-net device: the driver
+binds, reads its MAC, brings up `vio0`, and passes traffic. The legacy code
+paths are structurally unchanged.
+
+## Printer (Centronics/LPT)
+
+The `printer` driver is port-I/O only (LPT data/status/control at `port_base`
++0/+1/+2) and grant-based for user transfers — no MMIO/DMA, LP64-clean as-is.
+It was already UEFI-aware: `do_probe` reads `kinfo.boot_mode` and falls back to
+the standard ISA LPT1 port `0x378` when booted under UEFI (no BIOS Data Area to
+`sys_readbios`), otherwise reads `LPT1_IO_PORT_ADDR` (0x408) from the BDA.
+
+The only blocker was that `<minix/drivers.h>` gated `#include <machine/bios.h>`
+(for `LPT1_IO_PORT_ADDR`) and `<machine/ports.h>` on `#if defined(__i386__)`.
+Both headers exist and are valid for x86_64 (same x86 port I/O; `ports.h`
+already had its own `__i386__ || __x86_64__` guard), so the include guard in
+`drivers.h` was widened to `defined(__i386__) || defined(__x86_64__)`.  The
+full x86_64 `minix/drivers` tree rebuilds clean with no macro-redefinition
+collisions from the newly-included `bios.h`/`ports.h`.
 
 ## Files Changed
 
