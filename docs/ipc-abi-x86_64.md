@@ -39,8 +39,11 @@ code builds that frame manually from `%r10` (user RSP saved by caller) and
 `%r11` (user RFLAGS saved by CPU).
 
 > **Note:** The SYSCALL MSR setup (`IA32_EFER.SCE`, `IA32_LSTAR`,
-> `IA32_STAR`, `IA32_FMASK`) is not yet wired in `arch_system.c`. Until it
-> is, the fast path faults silently and the INT 33 path handles all IPC.
+> `IA32_STAR`, `IA32_FMASK`) is wired in `setup_sysenter_syscall`
+> (`arch_system.c`); the fast path is live. Programming `IA32_FMASK` to clear
+> `IF` on entry was the prerequisite that made the SYSCALL path safe — see
+> "SYSCALL / SYSENTER MSR setup" in `docs/kernel-arch-x86_64.md`. The INT 33
+> path remains as the universal fallback.
 
 ### Kernel calls — always INT
 

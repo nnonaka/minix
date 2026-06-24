@@ -142,9 +142,10 @@ as future work.
 
 ## Validation
 
-Because the x86_64 MINIX port does not yet boot to a shell, the server could not
-be exercised on MINIX itself. Instead, `minix/fs/ffs/test/` compiles the **real,
-unmodified server source files** on the build host against a small
+The server has not yet been exercised on a running MINIX (the x86_64 port now
+boots to a multiuser login, but the FFS server has not been mounted there). It
+is instead validated on the build host: `minix/fs/ffs/test/` compiles the
+**real, unmodified server source files** on the build host against a small
 lmfs / bdev / fsdriver shim (`compat/`, `shim.c`, `globals.c`) and runs the
 actual VFS-FS handlers against a real UFS2 image file. Run with `sh run.sh`.
 
@@ -179,5 +180,6 @@ Read-path internals were additionally checked with an independent reader
 - New directories are allocated a full block (simple and fsck-clean, but uses
   more space than a fragment-sized directory).
 - `fsck_ffs` checks but does not repair.
-- Not yet exercised on a running MINIX (the x86_64 port does not boot to a shell
-  yet); all validation to date is via the host harness.
+- Not yet exercised on a running MINIX (the x86_64 port boots to a multiuser
+  login, but the FFS server has not been mounted there); all validation to date
+  is via the host harness.
