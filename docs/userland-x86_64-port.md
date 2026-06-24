@@ -195,3 +195,49 @@ comparisons miss and it hits `default: assert(0)`. Symptom: `ifconfig -C`
 SIGABRT. i386 is immune (`unsigned long` is 32-bit there, no sign extension).
 
 **Fix:** `request_save` → `unsigned long` (matching `request`).
+
+## 12. csu — `__attribute__((constructor))` never ran (`.init_array` vs `.ctors`)
+
+**Files:** `lib/csu/arch/x86_64/Makefile.inc`, `lib/csu/arch/i386/Makefile.inc`,
+`lib/csu/arch/{x86_64,i386}/crtbegin.h` (new), `lib/csu/arch/{x86_64,i386}/crtbegin.S`
+(removed), `lib/csu/common/crt0-common.c`,
+`external/bsd/llvm/dist/clang/lib/Driver/ToolChains.cpp`
+
+Global static constructors silently never ran. The toolchain layers disagreed:
+
+| Layer | Was | Behavior |
+|-------|-----|----------|
+| clang (Minix target) | legacy | emitted constructors into `.ctors` |
+| ld script (`elf_x86_64_minix`, `elf_i386_minix`) | modern | merges user `.ctors` → `.init_array` output, brackets with `__init_array_start/end` |
+| crt (`crtbegin.S`) | legacy | `__do_global_ctors_aux` walked only `.ctors` |
+
+So the linker put the constructors in `.init_array` (leaving only sentinels in
+`.ctors`), but the crt walked the now-empty `.ctors`. Both amd64 and i386 were
+affected (identical ld scripts). Surfaced as `ifconfig <if> inet <addr>` printing
+usage and setting no address: ifconfig registers its address families
+(`inet`/`inet6`/`link`) via constructors, so an empty family list left the `inet`
+keyword unknown (even `lo0`'s hardcoded `127.0.0.1` was never set).
+
+**Fix** — make everything use the modern `.init_array` mechanism (mirrors
+aarch64/riscv):
+
+- `Makefile.inc` (both arches): add `-DHAVE_INITFINI_ARRAY` and `-I${ARCHDIR}`,
+  so `crt0-common.c`'s C `_init()` walks `.init_array`; remove the legacy
+  `crtbegin.S` so the common `crtbegin.c` is used (it registers `.eh_frame` as an
+  init_array constructor). Add `crtbegin.h` (copy of aarch64's).
+- `crt0-common.c` (under `#ifdef __minix`): the stock `HAVE_INITFINI_ARRAY` path
+  references the array bounds via `__weak_reference()`, but on MINIX clang this
+  fails twice: at `-O2` clang folds a loop bounded by an undefined-weak symbol to
+  nothing, and a weak reference does **not** trigger the linker script's
+  `PROVIDE_HIDDEN`, leaving `__init_array_start/end` undefined. Replaced with
+  strong hidden externs (`extern const fptr_t init_array_start[]
+  __asm("__init_array_start") __dso_hidden;`), which keep the loop and make
+  `PROVIDE_HIDDEN` materialize the boundary symbols.
+- clang `ToolChains.cpp`: added `getTriple().getOS() == llvm::Triple::Minix` to
+  `Generic_ELF`'s `UseInitArrayDefault`, so clang emits `.init_array` directly
+  instead of relying on the ld script to bridge `.ctors`. Consistency only —
+  needs a clang rebuild; the csu fix works with either clang.
+
+Requires relinking the whole world (every binary's `crt0.o`). Verified: relinked
+binaries define `__init_array_start/end` bracketing a populated `.init_array`, and
+constructor-dependent tools (ifconfig) work at runtime.
