@@ -1230,7 +1230,9 @@ ipty)
 	;;
 
 ptmx)
-	mkdev ptmx c %ptmx_chr% 0 666
+	# MINIX: pty derives the "tty" group ID from /dev/ptmx at startup
+	# (see etc/usr/rc), so the node must belong to the tty group.
+	mkdev ptmx c %ptmx_chr% 0 666 $g_tty
 	;;
 
 mmem[0-9]*)

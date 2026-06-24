@@ -594,20 +594,6 @@ across `*rpc = *rpp` in `do_fork` (here the FPU buffer pointer) must have its
   entry is a 512-entry PD covering 1 GB via 2 MB pages.  Increase
   `PG_IDENT_PD_MAX` (and add more `pg_pdpt_low` entries) to support more RAM.
 
-- **`test77` (PTY) hangs** — pre-existing, timing-sensitive heisenbug, *unfixed*.
-  Closing a PTY master must `SIGHUP` the slave's session leader (blocked in
-  `sigsuspend`); the child never wakes because its `sigsuspend` mask arrives as
-  `sigfillset` (all signals blocked, including `SIGHUP`) instead of the intended
-  empty mask — its on-stack `oset` is corrupted to exactly the value libc
-  `sigreturn()` writes as its splhi.  Signal *delivery* is correct end-to-end
-  (verified pty `sigchar` → kernel `cause_sig` → PM `process_ksig`/`sig_proc`/
-  `sig_send` → kernel `do_sigsend`).  The corruption is a stack/copy-on-write
-  issue during fork+signal: adding any `printf` shifts the stack layout and
-  masks it, whereupon subtests 5–6 pass and the suite reaches a separate
-  subtest-7 failure.  Needs a memory-watchpoint / "kernel write to a
-  refcount>1 COW page" detector to pin down.  Not caused by the WP/COW work
-  above (test77 hung in every prior boot).
-
 ## Companion POSIX-suite fixes (non-arch)
 
 Other `minix-posix` failures fixed alongside the above, recorded here for the
@@ -623,5 +609,19 @@ trail (the code lives outside `kernel/arch`):
 - **test64 panic / test74** — see "Read-only / COW protection" above and the
   low-memory reserve in `docs/vm-x86_64-port.md`.
 - **test76** — silenced an upstream debug `printf` in `servers/vfs/worker.c`.
+- **test77** (PTY) — the earlier subtest-5 `sigsuspend` heisenbug-hang cleared
+  with the WP/COW and FPU fixes above (the suite now runs through to the end),
+  exposing a real subtest-7 failure: `test_getdents` over `/dev/pts` checks that
+  each Unix98 slave node belongs to the `tty` group, but they came up group
+  `wheel` (gid 0).  Root cause was in `etc/MAKEDEV.tmpl`: the `ptmx)` recipe
+  created `/dev/ptmx` with no group argument, so `mkdev` defaulted it to
+  `$g_wheel`.  MINIX `etc/usr/rc` then starts the pty driver with
+  `-args "gid=$(stat -f '%g' /dev/ptmx)"`, so the driver stamped every slave
+  node (via ptyfs) with gid 0 instead of `tty` (4).  Fix: add `$g_tty` to the
+  `ptmx` line — `mkdev ptmx c %ptmx_chr% 0 666 $g_tty`.  NetBSD's upstream
+  template omits the group because NetBSD does not derive the tty gid from
+  `/dev/ptmx`; that mechanism is MINIX-specific, so the group is required here.
+  Machine-independent (would affect i386 too); needs a live-image rebuild to
+  recreate `/dev`.
 
 *(APIC was ported in a prior session; see `docs/apic-x86_64.md`.)*
