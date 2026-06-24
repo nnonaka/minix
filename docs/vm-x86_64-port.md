@@ -303,32 +303,54 @@ before true exhaustion, the process stops, and services keep their reserve to
 fault normally — no cascade, no panic.  (The `anon_pagefault: out of memory`
 line during test64 is just the reserve denying the child's last allocations.)
 
+## Physical memory above 4 GB (`alloc.c`)
+
+VM originally sized its free-page bitmap statically for exactly 4 GB and
+**clamped/skipped** any RAM chunk reaching past that boundary, so a `-m 4G` (or
+larger) config — where firmware splits RAM across the 4 GB PCI-hole and places
+the remainder above 4 GB — booted but used only the ~3 GB below the hole.
+
+This is now lifted to the range the kernel can actually reach.  The cap is the
+identity-mapped maximum (`PG_IDENT_PD_MAX` = 64 GB on x86_64; the 4 GB address
+space on i386):
+
+```c
+#if defined(__x86_64__)
+#define MAX_PHYSICAL_BYTES	(64ULL * 1024 * 1024 * 1024)	/* 64 GB */
+#else
+#define MAX_PHYSICAL_BYTES	(0x100000000ULL)		/* 4 GB */
+#endif
+#define MAX_PHYSICAL_PAGES	((int)(MAX_PHYSICAL_BYTES / VM_PAGE_SIZE))
+static bitchunk_t free_pages_bitmap[BITMAP_CHUNKS(MAX_PHYSICAL_PAGES)];
+```
+
+The static bitmap is sized for the cap (2 MB BSS on amd64 for 64 GB), but a
+runtime `number_physical_pages` — the high-water mark of the actual memory map,
+recorded in `mem_init()` and bounded by `MAX_PHYSICAL_PAGES` — bounds every
+bitmap scan (`alloc_pages` `maxpage`, `memstats`, `mem_sanitycheck`), so a
+machine with little RAM does not walk the whole 64 GB range.  `mem_init()` now
+admits chunks up to `MAX_PHYSICAL_PAGES` instead of skipping everything past
+4 GB.
+
+The rest of the chain already supported this: the kernel identity/direct maps
+cover 64 GB, `do_tag_mmap`/`cut_memmap` are 64-bit, `get_mem_chunks` keeps
+64-bit addresses, and a 64 GB page count (16 M) fits `phys_clicks`/`int`.
+
+The `SANITYCHECKS`-only `pagemap[]` is deliberately **not** scaled to the cap
+(64 GB worth of entries would be hundreds of MB of BSS); it stays sized for the
+low 4 GB (`SANITYCHECK_PHYSICAL_PAGES`) and `usedpages_add()` skips — rather than
+asserts on — pages above that.  This costs nothing in production builds
+(`SANITYCHECKS` off) and keeps debug builds bootable, at the price of not
+sanity-tracking individual pages above 4 GB.
+
+Verified on QEMU `-m 6G` / q35 UEFI: `sysctl hw.physmem64` reports ~6 GB (the
+legacy 32-bit `hw.physmem` node saturates at `UINT_MAX` for any RAM ≥ 4 GB —
+that is `hw.c`'s standard NetBSD behavior, not a cap).  True support beyond
+64 GB would additionally require raising the kernel's `PG_IDENT_PD_MAX` and the
+identity/direct maps.
+
 ## Known limitations / future work
 
-- **Physical memory is capped at the low 4 GB.**  `alloc.c` sizes its core
-  arrays statically for 4 GB of pages:
-
-  ```c
-  #define NUMBER_PHYSICAL_PAGES (int)(0x100000000ULL/VM_PAGE_SIZE) /* 1M pages */
-  static bitchunk_t free_pages_bitmap[PAGE_BITMAP_CHUNKS];
-  ... pagemap[NUMBER_PHYSICAL_PAGES];
-  ```
-
-  These are indexed by page number, so any RAM at a physical address ≥ 4 GB
-  overruns them and corrupts VM's own data.  This bites with QEMU `-m 4G` (and
-  above), where firmware splits RAM across the 4 GB boundary at the PCI hole and
-  places the remainder above 4 GB.  `mem_init()` now **clamps/skips** chunks
-  that reach past `NUMBER_PHYSICAL_PAGES` before handing them to `free_mem()`:
-
-  ```c
-  if (base >= NUMBER_PHYSICAL_PAGES)        continue;            /* skip */
-  /* overflow-safe: phys_clicks is 32-bit, so base+size could wrap */
-  if (size > NUMBER_PHYSICAL_PAGES - base)  size = NUMBER_PHYSICAL_PAGES - base;
-  ```
-
-  Effect: a `-m 4G` config boots and uses the RAM below the hole (~3 GB usable);
-  the portion above 4 GB is ignored.  Full >4 GB support would require making
-  `free_pages_bitmap[]`/`pagemap[]` dynamic (sized from the actual top of RAM).
 - User space is capped at 512 GB (single PDPT).  Extending to 256 TB requires
   making `pt_pdpt` an array indexed by PML4 index and adjusting `pt_ptalloc`,
   `pt_writemap`, etc.

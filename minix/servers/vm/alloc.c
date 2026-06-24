@@ -29,10 +29,25 @@
 #include "sanitycheck.h"
 #include "memlist.h"
 
-/* Number of physical pages in a 32-bit address space */
-#define NUMBER_PHYSICAL_PAGES (int)(0x100000000ULL/VM_PAGE_SIZE)
-#define PAGE_BITMAP_CHUNKS BITMAP_CHUNKS(NUMBER_PHYSICAL_PAGES)
+/* Maximum amount of physical memory the VM allocator can track.  The free
+ * bitmap is statically sized for this cap; mem_init() records how much RAM the
+ * machine actually has in number_physical_pages (<= MAX_PHYSICAL_PAGES), and
+ * every bitmap scan is bounded by that runtime value (so a machine with little
+ * RAM does not scan the whole range).  On x86_64 the kernel identity-maps up to
+ * 64 GB (PG_IDENT_PD_MAX in arch/x86_64/pg_utils.c), so VM can manage that
+ * much; on i386 the physical address space is 4 GB. */
+#if defined(__x86_64__)
+#define MAX_PHYSICAL_BYTES	(64ULL * 1024 * 1024 * 1024)	/* 64 GB */
+#else
+#define MAX_PHYSICAL_BYTES	(0x100000000ULL)		/* 4 GB */
+#endif
+#define MAX_PHYSICAL_PAGES	((int)(MAX_PHYSICAL_BYTES / VM_PAGE_SIZE))
+#define PAGE_BITMAP_CHUNKS BITMAP_CHUNKS(MAX_PHYSICAL_PAGES)
 static bitchunk_t free_pages_bitmap[PAGE_BITMAP_CHUNKS];
+
+/* Highest physical page actually present (+1), determined in mem_init() and
+ * bounded by MAX_PHYSICAL_PAGES.  Upper bound for all free-bitmap scans. */
+static int number_physical_pages = MAX_PHYSICAL_PAGES;
 #define PAGE_CACHE_MAX 10000
 static int free_page_cache[PAGE_CACHE_MAX];
 static int free_page_cache_size = 0;
@@ -53,11 +68,15 @@ static void free_pages(phys_bytes addr, int pages);
 static phys_bytes alloc_pages(int pages, int flags);
 
 #if SANITYCHECKS
+/* The page map is a debug-only aid and would be enormous if sized for
+ * MAX_PHYSICAL_PAGES on x86_64 (64 GB worth of entries -> hundreds of MB).
+ * Keep it sized for the low 4 GB; pages above that are simply not tracked. */
+#define SANITYCHECK_PHYSICAL_PAGES	((int)(0x100000000ULL / VM_PAGE_SIZE))
 struct {
 	int used;
 	const char *file;
 	int line;
-} pagemap[NUMBER_PHYSICAL_PAGES];
+} pagemap[SANITYCHECK_PHYSICAL_PAGES];
 #endif
 
 #define page_isfree(i) GET_BIT(free_pages_bitmap, i)
@@ -324,6 +343,7 @@ void mem_init(struct memory *chunks)
 
   total_pages = 0;
   free_pages_cnt = 0;	/* free_mem() below accounts the actual free pages */
+  number_physical_pages = 0;
 
   memset(free_pages_bitmap, 0, sizeof(free_pages_bitmap));
 
@@ -335,20 +355,22 @@ void mem_init(struct memory *chunks)
 		phys_bytes from, to;
 
 		/*
-		 * VM can only manage the low 4GB of physical memory: the
-		 * free_pages_bitmap[] and pagemap[] arrays are statically sized
-		 * for NUMBER_PHYSICAL_PAGES (= 4GB worth of pages). With more
-		 * than ~3GB configured, firmware places RAM above the 4GB
-		 * boundary (around the PCI hole); indexing those page numbers
-		 * would overrun the arrays and corrupt VM's own data. Skip or
-		 * clamp any chunk that reaches beyond the 4GB boundary.
+		 * The free_pages_bitmap[] array is statically sized for
+		 * MAX_PHYSICAL_PAGES; indexing a page beyond that would overrun
+		 * it and corrupt VM's own data.  Skip or clamp any chunk that
+		 * reaches past the cap (on x86_64 this is the 64 GB the kernel
+		 * identity-maps; on i386 it is the 4 GB address space).
 		 */
-		if (base >= NUMBER_PHYSICAL_PAGES)
+		if (base >= MAX_PHYSICAL_PAGES)
 			continue;
 		/* overflow-safe: phys_clicks is 32-bit, so base+size could
 		 * wrap; compare against the headroom instead. */
-		if (size > (phys_clicks)NUMBER_PHYSICAL_PAGES - base)
-			size = (phys_clicks)NUMBER_PHYSICAL_PAGES - base;
+		if (size > (phys_clicks)MAX_PHYSICAL_PAGES - base)
+			size = (phys_clicks)MAX_PHYSICAL_PAGES - base;
+
+		/* Remember the highest page present so scans stop there. */
+		if ((int)(base + size) > number_physical_pages)
+			number_physical_pages = (int)(base + size);
 
 		from = CLICK2ABS(base);
 		to = CLICK2ABS(base+size)-1;
@@ -359,13 +381,17 @@ void mem_init(struct memory *chunks)
 		first = 0;
 	}
   }
+
+  /* Defensive: never leave the scan bound at 0 (would make maxpage -1). */
+  if (number_physical_pages <= 0)
+	number_physical_pages = MAX_PHYSICAL_PAGES;
 }
 
 #if SANITYCHECKS
 void mem_sanitycheck(const char *file, int line)
 {
 	int i;
-	for(i = 0; i < NUMBER_PHYSICAL_PAGES; i++) {
+	for(i = 0; i < number_physical_pages; i++) {
 		if(!page_isfree(i)) continue;
 		MYASSERT(usedpages_add(i * VM_PAGE_SIZE, VM_PAGE_SIZE) == OK);
 	}
@@ -379,9 +405,9 @@ void memstats(int *nodes, int *pages, int *largest)
 	*pages = 0;
 	*largest = 0;
 
-	for(i = 0; i < NUMBER_PHYSICAL_PAGES; i++) {
+	for(i = 0; i < number_physical_pages; i++) {
 		int size = 0;
-		while(i < NUMBER_PHYSICAL_PAGES && page_isfree(i)) {
+		while(i < number_physical_pages && page_isfree(i)) {
 			size++;
 			i++;
 		}
@@ -439,7 +465,7 @@ static phys_bytes alloc_pages(int pages, int memflags)
 	phys_bytes boundary16 = 16 * 1024 * 1024 / VM_PAGE_SIZE;
 	phys_bytes boundary1  =  1 * 1024 * 1024 / VM_PAGE_SIZE;
 	phys_bytes mem = NO_MEM, i;	/* page number */
-	int maxpage = NUMBER_PHYSICAL_PAGES - 1;
+	int maxpage = number_physical_pages - 1;
 	static int lastscan = -1;
 	int startscan, run_length;
 
@@ -564,9 +590,14 @@ int usedpages_add_f(phys_bytes addr, phys_bytes len, const char *file, int line)
 	while(pages > 0) {
 		phys_bytes thisaddr;
 		assert(pagestart > 0);
-		assert(pagestart < NUMBER_PHYSICAL_PAGES);
+		/* pagemap[] only covers the low 4 GB (SANITYCHECK_PHYSICAL_PAGES);
+		 * pages above that are not tracked, so skip them. */
+		if(pagestart >= SANITYCHECK_PHYSICAL_PAGES) {
+			pages--;
+			pagestart++;
+			continue;
+		}
 		thisaddr = pagestart * VM_PAGE_SIZE;
-		assert(pagestart < NUMBER_PHYSICAL_PAGES);
 		if(pagemap[pagestart].used) {
 			static int warnings = 0;
 			if(warnings++ < 100)
