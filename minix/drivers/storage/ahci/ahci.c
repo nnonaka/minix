@@ -132,6 +132,7 @@ static struct {
 	int nr_cmds;		/* maximum number of commands per port */
 	int has_ncq;		/* NCQ support flag */
 	int has_clo;		/* CLO support flag */
+	int has_s64a;		/* 64-bit addressing support flag */
 
 	int irq;		/* IRQ number */
 	int hook_id;		/* IRQ hook ID */
@@ -189,6 +190,25 @@ static struct port_state {
 
 #define port_read(ps, r)	((ps)->reg[r])
 #define port_write(ps, r, v)	((ps)->reg[r] = (v))
+
+/* AHCI command tables, command-list entries, and several port registers carry
+ * a 64-bit DMA address split into separate low and high 32-bit fields. These
+ * extract the two halves; on i386 phys_bytes is 32-bit, so the high half is
+ * always zero (and the corresponding *U registers are hardwired to zero unless
+ * the HBA reports CAP.S64A).
+ */
+#define ADDR_LO32(a)	((u32_t) (phys_bytes) (a))
+#define ADDR_HI32(a)	((u32_t) ((u64_t) (phys_bytes) (a) >> 32))
+
+/* Write a 64-bit DMA address into a port register pair: the base register 'r'
+ * (low 32 bits) and its upper-32-bits counterpart at 'r + 1' (the AHCI layout
+ * for CLB/CLBU and FB/FBU).
+ */
+#define port_write64(ps, r, a)						\
+	do {								\
+		port_write((ps), (r), ADDR_LO32(a));			\
+		port_write((ps), (r) + 1, ADDR_HI32(a));		\
+	} while (0)
 
 static int ahci_instance;			/* driver instance number */
 
@@ -836,8 +856,8 @@ static void ct_set_prdt(u8_t *ct, prd_t *prdt, int nr_prds)
 	p = (u32_t *) &ct[AHCI_CT_PRDT_OFF];
 
 	for (i = 0; i < nr_prds; i++, prdt++) {
-		*p++ = prdt->vp_addr;				/* DBA: bits 31:0 */
-		*p++ = (u32_t) ((u64_t) prdt->vp_addr >> 32);	/* DBAU: 63:32 */
+		*p++ = ADDR_LO32(prdt->vp_addr);	/* DBA:  bits 31:0 */
+		*p++ = ADDR_HI32(prdt->vp_addr);	/* DBAU: bits 63:32 */
 		*p++ = 0;
 		*p++ = prdt->vp_size - 1;
 	}
@@ -895,8 +915,8 @@ static void port_set_cmd(struct port_state *ps, int cmd, cmd_fis_t *fis,
 		(write ? AHCI_CL_WRITE : 0) |
 		((packet != NULL) ? AHCI_CL_ATAPI : 0) |
 		((size / sizeof(u32_t)) << AHCI_CL_CFL_SHIFT);
-	cl[2] = ps->ct_phys[cmd];			/* CTBA: bits 31:0 */
-	cl[3] = (u32_t) ((u64_t) ps->ct_phys[cmd] >> 32);	/* CTBAU: 63:32 */
+	cl[2] = ADDR_LO32(ps->ct_phys[cmd]);		/* CTBA:  bits 31:0 */
+	cl[3] = ADDR_HI32(ps->ct_phys[cmd]);		/* CTBAU: bits 63:32 */
 }
 
 /*===========================================================================*
@@ -1944,11 +1964,8 @@ static void port_alloc(struct port_state *ps)
 	}
 
 	/* Tell the controller about some of the physical addresses. */
-	port_write(ps, AHCI_PORT_FBU, (u32_t) ((u64_t) ps->fis_phys >> 32));
-	port_write(ps, AHCI_PORT_FB, ps->fis_phys);
-
-	port_write(ps, AHCI_PORT_CLBU, (u32_t) ((u64_t) ps->cl_phys >> 32));
-	port_write(ps, AHCI_PORT_CLB, ps->cl_phys);
+	port_write64(ps, AHCI_PORT_FB, ps->fis_phys);
+	port_write64(ps, AHCI_PORT_CLB, ps->cl_phys);
 
 	/* Enable FIS receive. */
 	cmd = port_read(ps, AHCI_PORT_CMD);
@@ -2140,6 +2157,7 @@ static void ahci_init(int devind)
 	cap = hba_read(AHCI_HBA_CAP);
 	hba_state.has_ncq = !!(cap & AHCI_HBA_CAP_SNCQ);
 	hba_state.has_clo = !!(cap & AHCI_HBA_CAP_SCLO);
+	hba_state.has_s64a = !!(cap & AHCI_HBA_CAP_S64A);
 	hba_state.nr_cmds = MIN(NR_CMDS,
 		((cap >> AHCI_HBA_CAP_NCS_SHIFT) & AHCI_HBA_CAP_NCS_MASK) + 1);
 
@@ -2156,6 +2174,15 @@ static void ahci_init(int devind)
 	dprintf(V_INFO, ("AHCI%u: CAP %08x, CAP2 %08x, PI %08x\n",
 		ahci_instance, cap, hba_read(AHCI_HBA_CAP2),
 		hba_read(AHCI_HBA_PI)));
+
+	/* On a 64-bit host the DMA buffers (and user data pages) may be placed
+	 * above 4 GB. We always program the upper-32-bit address registers, but
+	 * an HBA without CAP.S64A ignores them and there is no bounce-buffer
+	 * path, so such a controller can only be used safely below 4 GB.
+	 */
+	if (sizeof(phys_bytes) > sizeof(u32_t) && !hba_state.has_s64a)
+		printf("AHCI%u: warning: HBA lacks 64-bit addressing (CAP.S64A);"
+			" DMA above 4 GB is unsupported\n", ahci_instance);
 
 	/* Initialize each of the implemented ports. We ignore CAP.NP. */
 	mask = hba_read(AHCI_HBA_PI);

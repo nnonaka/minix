@@ -20,9 +20,10 @@ Drivers enabled for x86_64 (essential x86 subset):
 | Power | `acpi` |
 | Audio | `als4000`, `cmi8738`, `cs4281`, `trident` (MMIO); `es1370`, `es1371`, `sb16` (port-I/O) |
 | Printer | `printer` (Centronics/LPT) |
+| IOMMU | `amddev` (AMD K8 Device Exclusion Vector) |
 | TTY | already built unconditionally; `bios_console` removed from x86_64 |
 
-Not included: `iommu/amddev`, `vmm_guest/vbox`.
+Not included: `vmm_guest/vbox`.
 
 ## Audio drivers (LP64 audit)
 
@@ -113,6 +114,29 @@ already had its own `__i386__ || __x86_64__` guard), so the include guard in
 `drivers.h` was widened to `defined(__i386__) || defined(__x86_64__)`.  The
 full x86_64 `minix/drivers` tree rebuilds clean with no macro-redefinition
 collisions from the newly-included `bios.h`/`ports.h`.
+
+## IOMMU (AMD DEV) *(enabled, LP64-clean)*
+
+`iommu/amddev` is the driver for the **AMD Device Exclusion Vector** (DEV), the
+pre-AMD-Vi DMA-protection facility on K8/early-K10 northbridges (PCI
+`1022:1103`, the HyperTransport "Miscellaneous Control" function). It is *not*
+the modern AMD-Vi / Intel VT-d remapping IOMMU — DEV only gates device DMA
+through a per-page bitmap. The `Makefile` guard was extended from `i386` to
+`i386 || x86_64`.
+
+LP64 audit: the IOMMU_MAP wire protocol is already 64-bit-safe — senders
+(`fxp`, `rtl8139`) pass the buffer address and size through `m2_l1`/`m2_l2`
+(`long`, 64-bit on amd64) and the PCI bus/dev/func through the `int` `m2_i*`
+fields; `amddev` reads them back as `m1_i1..3`, which alias the same offsets, so
+nothing truncates. The DEV base register is programmed via the `DEVF_BASE_HI` /
+`DEVF_BASE_LO` 32-bit halves, so >4 GB bitmap placement is representable.
+
+The only build fixes were four `-Wformat` errors where `size_t` (`unsigned
+long` on amd64) was printed with `%x`; changed to `%zx` (correct on both
+arches). Builds and links clean under `-Werror` as a 64-bit static ELF and
+stages to `service/amddev`; added to the `minix-base` / `minix-debug` amd64 set
+lists. Not runtime-testable on QEMU (no machine emulates the AMD DEV
+northbridge), so it is build/LP64-verified only — like the audio drivers.
 
 ## Files Changed
 
@@ -206,10 +230,40 @@ correctly once `port` carries the full 64-bit VA.
 
 | Driver | Notes |
 |--------|-------|
-| `rtl8169` | DMA descriptor uses `addr_low`/`addr_high` split — correct for 64-bit DMA |
-| `rtl8139` | 32-bit DMA-only hardware; `u32_t` bus addresses are inherently limited to 4 GB |
 | `dec21140A` | Uses I/O ports, not MMIO; all bus addresses are `u32_t` matching the hardware |
 | `at_wini`, `floppy`, `virtio_net`, `dpeth` | No format or cast issues found |
+
+## DMA 64-bit physical-address audit (all drivers)
+
+On amd64 `phys_bytes` is 64-bit and `alloc_contig` / `sys_vumap` can return a
+buffer above 4 GB. A driver that programs a hardware DMA descriptor or base
+register must therefore write the **upper 32 bits**, not hardcode them to zero.
+Several MINIX drivers, written for 32-bit i386, did exactly that. Audit result:
+
+| Driver | HW DMA width | Status |
+|--------|--------------|--------|
+| `ahci` | 64-bit (CAP.S64A) | **fixed** — DBAU/CTBAU/FBU/CLBU upper halves (see AHCI section); warns if HBA lacks S64A |
+| `e1000` | 64-bit | **fixed** — `RDBAH`/`TDBAH` were hardcoded `0`, and per-descriptor `buffer_h` was never written; both now carry `(u32_t)((u64_t)phys >> 32)` |
+| `rtl8169` | 64-bit | **fixed** — ring-base `RDSAR_HI`/`TNPDS_HI` were `0` and the descriptor `addr_high` field was declared but never set; both now programmed |
+| `ip1000` | 64-bit | already correct — descriptor `frag_info`/`next` are `u64_t` and store the full physical address |
+| `virtio_blk`, `virtio_net` | 64-bit (modern) | already correct — `libvirtio` programs 64-bit desc/avail/used addresses (see virtio section) |
+| `lance`, `floppy` | ISA (≤16 MB) | safe — buffers allocated with `AC_LOWER16M`, never above 16 MB |
+| `es1370`, `es1371`, `sb16`, `als4000`, `cmi8738`, `cs4281`, `trident` | audio | safe — `libaudiodriver` allocates the DMA buffer with `AC_LOWER16M` |
+| `dp8390`/`dpeth` | ISA PIO | safe — programmed I/O, no bus-master DMA |
+| `at_wini` | IDE bus-master | safe — PRD `prdte_base` is fixed `u32_t` (8-byte entry); bails to PIO for buffers > 4 GB |
+| `fxp` (i82557), `3c90x` (Vortex/Boomerang), `atl2`, `dec21140A` (Tulip), `rtl8139`, `vt6105` (Rhine) | **32-bit only** | inherently ≤ 4 GB — descriptors/registers have no upper-32-bit field. Correct on a < 4 GB host (and always on i386); on a > 4 GB host they would need DMA buffers below 4 GB, for which there is currently no `AC_LOWER4G` allocation primitive. Left as a known limitation; not the boot/test path |
+
+The three **fixed** drivers (`ahci`, `e1000`, `rtl8169`) are behavior-identical
+below 4 GB — the high half is `0`, exactly as before — so there is no i386
+regression and no change on the QEMU/OVMF test setup, which keeps these buffers
+low. The fix only adds correctness when a buffer legitimately lands above 4 GB
+on a 64-bit-capable controller. The `(u64_t)` cast before `>> 32` keeps the
+shift defined on i386 (where `phys_bytes` is 32-bit, yielding `0`).
+
+**Verified**: a live image rebuilt with the AHCI refactor and the `e1000` /
+`rtl8169` fixes boots cleanly on q35/UEFI (root mounts via AHCI) with no
+regression — as expected, since the QEMU guest keeps all DMA buffers below 4 GB
+and the changes are identical to the prior code on that path.
 
 ## PCI BAR address widening *(fixed)*
 
@@ -365,6 +419,32 @@ The `(u64_t)` cast before `>> 32` keeps the shift well-defined on i386 (where
 `phys_bytes` is 32-bit, the cast yields 0). Below 4 GB the upper halves are 0,
 identical to the old behaviour, so there is no i386 regression. Above 4 GB they
 program correctly on S64A-capable controllers (QEMU's ICH9 AHCI supports it).
+
+**Refactor (post-bring-up).** The four ad-hoc low/high splits above were
+replaced with shared helpers so the pattern lives in one place:
+
+```c
+#define ADDR_LO32(a)	((u32_t) (phys_bytes) (a))
+#define ADDR_HI32(a)	((u32_t) ((u64_t) (phys_bytes) (a) >> 32))
+
+#define port_write64(ps, r, a)	/* writes base reg r and upper reg r+1 */
+```
+
+`ct_set_prdt` / `port_set_cmd` use `ADDR_LO32`/`ADDR_HI32`; `port_alloc` uses
+`port_write64(ps, AHCI_PORT_FB, …)` / `port_write64(ps, AHCI_PORT_CLB, …)`
+(CLBU/FBU are the `+1` words). Byte-for-byte identical codegen on both arches;
+the low-half writes are now explicit `u32_t` truncations rather than implicit
+ones.
+
+**S64A safety gap (documented, warned).** The driver now always programs the
+upper-32-bit registers but has **no bounce-buffer path**, and there is no
+`AC_LOWER4G` allocation primitive — DMA buffers (and user data pages from
+`sys_vumap`) can land above 4 GB on a >4 GB host. An HBA that does not report
+`CAP.S64A` ignores the upper-32-bit registers, so it can only be driven safely
+below 4 GB. `ahci_init` now records `CAP.S64A` (`hba_state.has_s64a`) and prints
+a warning at startup when 64-bit `phys_bytes` is in use but the controller lacks
+S64A. QEMU's ICH9 reports S64A, so the supported path is unaffected; the warning
+flags genuinely unsupportable hardware instead of corrupting silently.
 
 ### Device detection without a connect-change interrupt
 

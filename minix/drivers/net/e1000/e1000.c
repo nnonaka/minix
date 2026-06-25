@@ -305,8 +305,11 @@ static void e1000_init_buf(e1000_t * e)
 		panic("failed to allocate RX buffers");
 
 	/* Set up receive descriptors. */
-	for (i = 0; i < E1000_RXDESC_NR; i++)
-		e->rx_desc[i].buffer = rx_buff_p + i * E1000_IOBUF_SIZE;
+	for (i = 0; i < E1000_RXDESC_NR; i++) {
+		phys_bytes b = rx_buff_p + i * E1000_IOBUF_SIZE;
+		e->rx_desc[i].buffer = (u32_t) b;
+		e->rx_desc[i].buffer_h = (u32_t) ((u64_t) b >> 32);
+	}
 
 	/* Allocate transmit descriptors. */
 	if ((e->tx_desc = alloc_contig(sizeof(e1000_tx_desc_t) *
@@ -323,12 +326,15 @@ static void e1000_init_buf(e1000_t * e)
 		panic("failed to allocate TX buffers");
 
 	/* Set up transmit descriptors. */
-	for (i = 0; i < E1000_TXDESC_NR; i++)
-		e->tx_desc[i].buffer = tx_buff_p + i * E1000_IOBUF_SIZE;
+	for (i = 0; i < E1000_TXDESC_NR; i++) {
+		phys_bytes b = tx_buff_p + i * E1000_IOBUF_SIZE;
+		e->tx_desc[i].buffer = (u32_t) b;
+		e->tx_desc[i].buffer_h = (u32_t) ((u64_t) b >> 32);
+	}
 
 	/* Set up the receive ring registers. */
-	e1000_reg_write(e, E1000_REG_RDBAL, rx_desc_p);
-	e1000_reg_write(e, E1000_REG_RDBAH, 0);
+	e1000_reg_write(e, E1000_REG_RDBAL, (u32_t) rx_desc_p);
+	e1000_reg_write(e, E1000_REG_RDBAH, (u32_t) ((u64_t) rx_desc_p >> 32));
 	e1000_reg_write(e, E1000_REG_RDLEN,
 	    e->rx_desc_count * sizeof(e1000_rx_desc_t));
 	e1000_reg_write(e, E1000_REG_RDH, 0);
@@ -337,8 +343,8 @@ static void e1000_init_buf(e1000_t * e)
 	e1000_reg_set(e, E1000_REG_RCTL, E1000_REG_RCTL_EN);
 
 	/* Set up the transmit ring registers. */
-	e1000_reg_write(e, E1000_REG_TDBAL, tx_desc_p);
-	e1000_reg_write(e, E1000_REG_TDBAH, 0);
+	e1000_reg_write(e, E1000_REG_TDBAL, (u32_t) tx_desc_p);
+	e1000_reg_write(e, E1000_REG_TDBAH, (u32_t) ((u64_t) tx_desc_p >> 32));
 	e1000_reg_write(e, E1000_REG_TDLEN,
 	    e->tx_desc_count * sizeof(e1000_tx_desc_t));
 	e1000_reg_write(e, E1000_REG_TDH, 0);
