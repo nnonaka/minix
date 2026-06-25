@@ -39,6 +39,17 @@ Build/sets wiring: `minix/fs/Makefile` (`SUBDIR+=ffs`),
 `minix_mount()` execs `/service/<type>`, so installing `/service/ffs` is the
 entire mount mechanism.
 
+Type **auto-detection** (`mount <dev> <dir>` with no `-t`, and `df`/other
+`fsversion()` callers) also recognises UFS2. `fsversion()`
+(`minix/lib/libc/gen/fsversion.c`) probes the superblock candidate offsets
+65536 (standard `newfs`) and 8192 (`nbmakefs -o version=2`), reads `fs_magic`
+at struct-offset 1372, accepts both `FS_UFS2_MAGIC` (0x19540119) and
+`FS_UFS2EA_MAGIC` (0x19012038), and confirms `fs_sblockloc` (offset 1000)
+equals the probe offset to reject false positives. It returns the new
+`FSVERSION_FFS` (`minix/include/minix/minlib.h`), which
+`minix/commands/mount/mount.c` maps to type `ffs`. Without this, an unflagged
+mount of a UFS2 volume fell through to the `mfs` default.
+
 ## On-disk format
 
 The on-disk definitions are vendored, trimmed to UFS2 / native-LE, into
