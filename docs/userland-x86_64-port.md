@@ -242,3 +242,33 @@ aarch64/riscv):
 Requires relinking the whole world (every binary's `crt0.o`). Verified: relinked
 binaries define `__init_array_start/end` bracketing a populated `.init_array`, and
 constructor-dependent tools (ifconfig) work at runtime.
+
+### 12a. `ld.elf_so` never ran shared libraries' `.init_array`
+
+The csu change above fixes the **main executable** (whose `.init_array` is walked
+by `crt0-common.c`'s `_init()`). But **shared libraries** are initialized by the
+dynamic linker, and `libexec/ld.elf_so/rtld.c` gates its `DT_INIT_ARRAY`
+processing behind `#ifdef HAVE_INITFINI_ARRAY`. The x86_64 `ld.elf_so`
+`Makefile.inc` never defined that macro (arm/aarch64/riscv do), so the amd64
+dynamic linker called only the legacy `DT_INIT`/`_init` and **never walked a
+shared library's `.init_array`**. Since the toolchain now emits C++ static
+constructors into `.init_array` (and the `HAVE_INITFINI_ARRAY` `crtbegin` no
+longer walks `.ctors` from `_init`), **every constructor in every shared library
+silently never ran.** This was latent until real C++-in-shared-libs workloads:
+
+- `libc.so.12` — LLVM libunwind's `sThisAddressSpace` constructor sets the
+  `findPCRange` function pointer; unrun, it stayed NULL, so the first C++ `throw`
+  faulted in `addDSO` calling `*NULL` (SIGSEGV, PC=0). C++ exceptions were
+  completely broken.
+- `libmthread.so` — the TSD-init constructor never ran, so
+  `pthread_setspecific` from a C++ static initializer hit "Library state
+  corrupt" (worked around separately with a defensive `mthread_init()`).
+
+**Fix** — `libexec/ld.elf_so/arch/x86_64/Makefile.inc`: add
+`CPPFLAGS+= -DHAVE_INITFINI_ARRAY` (matching aarch64/riscv/arm). Note nbmake
+does **not** rebuild on a `CPPFLAGS`-only change — `cleandir` `ld.elf_so` to
+force it. Verified: `kyua test` (heavy C++/exceptions) runs the full suite to
+completion (2518/3012 passing) instead of crashing on the first `throw`; a
+minimal `try{throw;}catch{}` prints "ALL OK". This, the csu `crtbegin`
+`.init_array` entry, and the libmthread defensive init together make C++
+exceptions and shared-library constructors work on amd64.
