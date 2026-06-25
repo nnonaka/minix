@@ -29,6 +29,10 @@ $cc $CFLAGS -I"$here/compat" -I"$srv" -o "$work/harness" \
 	"$here/globals.c" "$here/shim.c" "$here/harness.c" $srv_list
 $cc $CFLAGS -I"$here/compat" -I"$srv" -o "$work/create_only" \
 	"$here/globals.c" "$here/shim.c" "$here/create_only.c" $srv_list
+for t in bigfile sparse slink truncgrow; do
+	$cc $CFLAGS -I"$here/compat" -I"$srv" -o "$work/$t" \
+		"$here/globals.c" "$here/shim.c" "$here/$t.c" $srv_list
+done
 $cc $CFLAGS -I"$srv" -o "$work/ufs2dump" "$here/ufs2dump.c"
 $cc $CFLAGS -I"$sbin/newfs_ffs" -o "$work/newfs_ffs" "$sbin/newfs_ffs/newfs_ffs.c"
 $cc $CFLAGS -I"$sbin/fsck_ffs"  -o "$work/fsck_ffs"  "$sbin/fsck_ffs/fsck_ffs.c"
@@ -42,9 +46,20 @@ fi
 echo
 echo "== 1. newfs_ffs creates an image, server read/writes it, fsck checks it =="
 "$work/newfs_ffs" -s 16384 "$work/a.img" >/dev/null
-"$work/harness" "$work/a.img" || true		# harness has its own PASS/FAIL
+"$work/harness" "$work/a.img"
 echo "-- fsck after full harness run --"
 "$work/fsck_ffs" "$work/a.img"
+
+echo
+echo "== 1b. indirect blocks (direct+single/double/triple), symlinks, ftruncate-grow =="
+"$work/newfs_ffs" -s 131072 "$work/big.img" >/dev/null
+"$work/bigfile" "$work/big.img"; "$work/fsck_ffs" "$work/big.img"
+"$work/newfs_ffs" -s 131072 "$work/sp.img" >/dev/null
+"$work/sparse" "$work/sp.img"; "$work/fsck_ffs" "$work/sp.img"
+"$work/newfs_ffs" -s 16384 "$work/sl.img" >/dev/null
+"$work/slink" "$work/sl.img"; "$work/fsck_ffs" "$work/sl.img"
+"$work/newfs_ffs" -s 16384 "$work/tg.img" >/dev/null
+"$work/truncgrow" "$work/tg.img"; "$work/fsck_ffs" "$work/tg.img"
 
 echo
 echo "== 2. server writes content (no deletes), fsck must stay clean =="

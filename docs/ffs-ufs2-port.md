@@ -153,18 +153,25 @@ as future work.
 
 ## Validation
 
-The server has not yet been exercised on a running MINIX (the x86_64 port now
-boots to a multiuser login, but the FFS server has not been mounted there). It
-is instead validated on the build host: `minix/fs/ffs/test/` compiles the
-**real, unmodified server source files** on the build host against a small
-lmfs / bdev / fsdriver shim (`compat/`, `shim.c`, `globals.c`) and runs the
-actual VFS-FS handlers against a real UFS2 image file. Run with `sh run.sh`.
+The server now mounts read/write on a running MINIX/x86_64 (`mount -t ffs`, with
+the new `fsversion()` UFS2 auto-detection); it is additionally validated on the
+build host: `minix/fs/ffs/test/` compiles the **real, unmodified server source
+files** on the build host against a small lmfs / bdev / fsdriver shim
+(`compat/`, `shim.c`, `globals.c`) and runs the actual VFS-FS handlers against a
+real UFS2 image file. Run with `sh run.sh`.
 
 The test cross-validates the whole stack:
 
 1. `newfs_ffs` creates an image → the server does create / multi-fragment write /
    mkdir / nested file / unlink / rmdir → free blocks and inodes reclaim exactly
    → `fsck_ffs` reports clean.
+1b. Indirect blocks beyond the 12 direct (`bigfile`: a 2 MiB file spanning
+   direct + single indirect, with boundary reads and full-tree truncate;
+   `sparse`: high-offset sparse writes that reach the double- and triple-indirect
+   allocation/free recursion; holes read as zero; blocks fully reclaim).  Fast
+   (inline) and slow (data-block) symlinks (`slink`).  `ftruncate`-grow edge
+   cases including fragment enlargement and frag→block rounding (`truncgrow`),
+   each followed by `fsck_ffs`.
 2. The server writes content (no deletes) → `fsck_ffs` stays clean (the server
    keeps the file system fsck-consistent).
 3. The server reads a reference `nbmakefs` image (the 8192 / UFS2EA case).
@@ -183,6 +190,17 @@ Read-path internals were additionally checked with an independent reader
 - Superblock `s_csp` mmap leaked on mount failure / across mounts.
 - The inverted `ffs_isblock` / `ffs_isfreeblock` predicate in `ffs_blkfree`
   (directory-block leak) — found by the host harness.
+- `truncate_inode` grow path advanced `di_size` past the EOF fragment without
+  enlarging it: an `ftruncate`-grow within a direct block (or one that only
+  extended the trailing fragment) left the on-disk fragment smaller than
+  `fragroundup(blkoff(di_size))`.  The next grow of that block derived the
+  "old size" from `di_size`, so `ffs_realloccg`/`ffs_fragextend` mis-counted the
+  fragment delta and `cg_cs.cs_nffree` drifted from the bitmap (fsck:
+  "free-frag count N != bitmap M").  Fix: a growing truncate now sizes the new
+  EOF block via `ffs_balloc(rip, length - 1, 1)` when the EOF is in the direct
+  range (which also rounds an earlier partial direct block up to a full block
+  and zeroes the grown bytes), keeping the fragment consistent with `di_size`.
+  Found by the new `truncgrow` host test.
 
 ## Limitations / future work
 
@@ -191,6 +209,6 @@ Read-path internals were additionally checked with an independent reader
 - New directories are allocated a full block (simple and fsck-clean, but uses
   more space than a fragment-sized directory).
 - `fsck_ffs` checks but does not repair.
-- Not yet exercised on a running MINIX (the x86_64 port boots to a multiuser
-  login, but the FFS server has not been mounted there); all validation to date
-  is via the host harness.
+- No crash consistency / ordering guarantees (no soft updates or journaling) —
+  like MINIX MFS/ext2, an unclean shutdown can leave the file system needing an
+  fsck.

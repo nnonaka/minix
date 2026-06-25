@@ -432,31 +432,34 @@ int truncate_inode(struct inode *rip, off_t length)
   }
 
   /*
-   * Growing the file.  If the old last block is a fragment and the file now
-   * extends past it, round that fragment up to a full block and zero the new
-   * space; the rest of the growth is left as a hole.
+   * Growing the file.  The new EOF must end up backed by a correctly sized
+   * block/fragment so that the on-disk fragment is consistent with di_size:
+   * later ffs_blksize()/ffs_balloc() calls derive the EOF fragment size from
+   * di_size, so advancing di_size past a too-small fragment corrupts the
+   * fragment bookkeeping the next time that block is grown.  The interior of a
+   * sparse growth is left as a hole (reads as zero).
    */
   if (length > osize) {
-	if (osize > 0 && ffs_lblkno(fs, osize) < UFS_NDADDR &&
-	    ffs_lblkno(fs, osize) != ffs_lblkno(fs, length) &&
-	    ffs_blkoff(fs, osize) != 0) {
-		off_t eob = ffs_blkroundup(fs, osize);
-		(void) ffs_balloc(rip, eob - 1, 1);
-		if (err_code != OK)
-			return(err_code);
-		/* Zero the gap between the old EOF and the block boundary. */
-		{
-			block64_t base = read_map(rip, osize, 0);
-			if (base != NO_BLOCK) {
-				/* base is the fragment holding osize */
-				struct buf *bp;
-				off_t boff = osize % fs->fs_fsize;
-				bp = get_block(fs_dev, base, NORMAL);
-				memset(b_data(bp) + boff, 0,
-					fs->fs_fsize - boff);
-				lmfs_markdirty(bp);
-				put_block(bp);
-			}
+	if (length > 0) {
+		off_t newlast = ffs_lblkno(fs, length - 1);
+
+		if (newlast < UFS_NDADDR) {
+			/* The new EOF lands in the direct range: allocate and
+			 * size the EOF fragment.  ffs_balloc also rounds any
+			 * earlier partial direct block up to a full block and
+			 * zeroes the bytes it grows into. */
+			(void) ffs_balloc(rip, length - 1, 1);
+			if (err_code != OK)
+				return(err_code);
+		} else if (osize > 0 && ffs_lblkno(fs, osize) < UFS_NDADDR &&
+		    ffs_blkoff(fs, osize) != 0) {
+			/* The new EOF is in the indirect range (always full
+			 * blocks), but the old EOF was a direct fragment that
+			 * must now be rounded up to a full block. */
+			off_t eob = ffs_blkroundup(fs, osize);
+			(void) ffs_balloc(rip, eob - 1, 1);
+			if (err_code != OK)
+				return(err_code);
 		}
 	}
 	rip->i_din.di_size = length;

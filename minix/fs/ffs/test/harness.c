@@ -66,8 +66,7 @@ int main(int argc, char **argv) {
 
 	printf("== initial root listing ==\n");
 	list_dir(ROOT, "root");
-	check("root has hello.txt", dir_has("hello.txt"));
-	check("root has sub", dir_has("sub"));
+	check("root has . and ..", h_dent_count == 2);
 
 	fs_statvfs(&sv);
 	uint64_t bfree0 = sv.f_bfree, ffree0 = sv.f_ffree;
@@ -152,7 +151,7 @@ int main(int argc, char **argv) {
 	list_dir(ROOT, "root");
 	check("newfile gone", !dir_has("newfile"));
 	check("newdir gone", !dir_has("newdir"));
-	check("hello.txt still present", dir_has("hello.txt"));
+	check("root back to . and .. only", h_dent_count == 2);
 
 	fs_statvfs(&sv);
 	printf("  free after deletes: blocks=%llu inodes=%llu\n",
