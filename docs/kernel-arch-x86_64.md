@@ -621,8 +621,9 @@ trail (the code lives outside `kernel/arch`):
   `ptmx` line — `mkdev ptmx c %ptmx_chr% 0 666 $g_tty`.  NetBSD's upstream
   template omits the group because NetBSD does not derive the tty gid from
   `/dev/ptmx`; that mechanism is MINIX-specific, so the group is required here.
-  Machine-independent (would affect i386 too); needs a live-image rebuild to
-  recreate `/dev`.
+  Machine-independent (would affect i386 too).  **Resolved:** after the
+  live-image rebuild recreated `/dev` with the corrected `ptmx` group, test77
+  passes end-to-end.
 
 ## Known limitation — test85 (vnd block-device EOF) deadlocks on a single-partition image
 

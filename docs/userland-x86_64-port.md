@@ -236,7 +236,8 @@ aarch64/riscv):
 - clang `ToolChains.cpp`: added `getTriple().getOS() == llvm::Triple::Minix` to
   `Generic_ELF`'s `UseInitArrayDefault`, so clang emits `.init_array` directly
   instead of relying on the ld script to bridge `.ctors`. Consistency only —
-  needs a clang rebuild; the csu fix works with either clang.
+  the csu fix works with either clang. The clang rebuild has since been done and
+  verified: clang now emits `.init_array` natively.
 
 Requires relinking the whole world (every binary's `crt0.o`). Verified: relinked
 binaries define `__init_array_start/end` bracketing a populated `.init_array`, and
