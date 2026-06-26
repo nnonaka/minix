@@ -33,3 +33,9 @@ Cross-compiling memo
   *texinfo
   
     You might run gnu/dist/fetch.sh manually.
+    
+  ex.
+  
+    $ sh build.sh -U -u -j4 -mi386 -O ../build32 tools
+    $ sh build.sh -U -u -j4 -mamd64 -O ../build tools
+
