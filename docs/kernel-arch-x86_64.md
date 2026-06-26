@@ -347,6 +347,126 @@ bytes are the zero high half of a sub-1 MB physical address, and the clobbered
 fields (`__ap_idt.limit`, `__ap_jmpvec`) are rewritten afterward — but fragile.
 Reserved `.space 10` for each to match the struct.
 
+#### 5. `trampoline.o` rule piped through the broken external `as` (`Makefile.inc`)
+
+`trampoline.S` is the only kernel source with its own build rule, because its
+real-mode (`.code16`) AP entry historically needed GNU `as`.  The rule
+preprocessed with clang and piped the result to `${AS}`
+(`x86_64-elf64-minix-as`):
+
+```make
+# before — pipe to external as
+trampoline.o: trampoline.S
+	${CC} -E ${AFLAGS} ${AFLAGS.${<:T}} ${CPPFLAGS} ${.IMPSRC} | ${AS} -o ${.TARGET}
+```
+
+The NetBSD binutils `as` (2.34) for this target was built **without the
+`elf64-x86-64` BFD vector** — even a trivial `nop` fails with
+`Fatal error: selected target format 'elf64-x86-64' unknown`.  Every other
+kernel `.S` builds fine because the default suffix rule uses clang's
+integrated assembler, which also handles `.code16` correctly.  Fix: assemble
+`trampoline.S` directly with clang, dropping the external `as`:
+
+```make
+# after — clang integrated assembler (handles .code16)
+trampoline.o: trampoline.S
+	${CC} ${AFLAGS} ${AFLAGS.${<:T}} ${CPPFLAGS} -c ${.IMPSRC} -o ${.TARGET}
+```
+
+#### 6. `cpuid` printed with `%d` (`-Werror=format`)
+
+Once `CONFIG_SMP` is set, `cpuid` expands to a `reg_t` (`unsigned long`) read
+from the kernel stack (see #1), but several `printf`s carried it with `%d`.
+On i386 `cpuid` is a `u32_t`, so `%d` was correct there; on x86_64 clang
+rejects it under `-Werror,-Wformat`.  Cast to `(int)cpuid` (cpu ids are small)
+in `utility.c` (`kernel on CPU %d` in `panic`), `apic.c` (spurious/error
+interrupt warnings), and `proc.c` (two `TRACE` scheduling prints).  These are
+the only SMP-only format errors; UP builds never reach them because `cpuid` is
+a literal `0`.
+
+#### 7. Off-by-one IDT write corrupts `k_percpu_stacks[0]` → SYSCALL triple-fault *(the SMP boot-to-login bug)*
+
+This was the bug that stopped `cpunum=1` from reaching `login:`: the kernel
+booted all the way through VM and the servers, then **silently rebooted the
+instant userland issued its first `SYSCALL`-based IPC** (no panic, no `DBG exc`
+— a pure triple-fault).
+
+The decisive clue was that booting with `libc_ipc=1` (which makes the kernel
+*not* publish the SYSCALL ipcvecs, so libc falls back to the `INT $vec` IPC
+path) booted to login fine.  So the fault was specific to the **SYSCALL fast
+path**, which differs from the INT path in exactly one way that matters here:
+
+```asm
+/* ipc_entry_syscall_cpuN (mpx.S): SYSCALL does NOT switch the stack, so the
+ * stub loads the per-CPU kernel stack itself, from the C array: */
+	movq	k_percpu_stacks + 8*cpu, %rsp
+```
+
+The INT path instead gets its stack from `tss[cpu].rsp0` (the CPU loads it from
+the TSS on a ring3→ring0 gate).  Tracing `setup_sysenter_syscall()` showed
+`k_percpu_stacks[0]` flip from a valid `0xffffffff804ffff0` to garbage
+(`0x804d8e0000086262`) between two calls, while `tss[0].rsp0` stayed valid —
+hence INT survived, SYSCALL loaded a garbage `%rsp` and triple-faulted on its
+first push.
+
+Decoding the garbage as little-endian bytes revealed it was an **IDT gate
+descriptor** (offset `0x804d6262` = `_lapic_intr_dummy_handler_255`, selector
+`0x0008` = `KERN_CS`, type `0x8E` = present interrupt gate).  The IDT
+(`256 * 16` = 4096 bytes) sits **immediately below `k_percpu_stacks` in BSS**,
+so `idt[256]` *is* `k_percpu_stacks[0]`.  Something wrote one gate past the end
+of the 256-entry table.
+
+Root cause is in `lapic_set_dummy_handlers()` (`apic.c`, only built/run when
+`APIC_DEBUG` is on).  Each `LAPIC_INTR_DUMMY_HANDLER(n)` does its own
+`.balign LAPIC_INTR_DUMMY_HANDLER_SIZE`, but the surrounding
+`LABEL(lapic_intr_dummy_handles_start)` did **not** — so the label landed ~30
+bytes *before* handler 0:
+
+```
+lapic_intr_dummy_handles_start = 0x...4262   (label, unaligned)
+_lapic_intr_dummy_handler_0    = 0x...4280   (.balign 32 -> 0x1E later)
+```
+
+The loop computes positions as `start + vect*SIZE` and bounds itself by
+`handler < &lapic_intr_dummy_handles_end`.  With `start` 30 bytes low, the bound
+allows **one extra iteration**, pushing `vect` to `256` and calling
+`int_gate_idt(256, …)` → write past the IDT into `k_percpu_stacks[0]`.
+
+Fix (`apic_asm.S`): align the label to the handler stride so it coincides with
+handler 0:
+
+```asm
+.balign LAPIC_INTR_DUMMY_HANDLER_SIZE
+LABEL(lapic_intr_dummy_handles_start)
+	LAPIC_INTR_DUMMY_HANDLER(0)
+```
+
+Defensive bound (`apic.c`), so an out-of-range vector can never write past the
+IDT again regardless of label alignment:
+
+```c
+for(; handler < &lapic_intr_dummy_handles_end && vect < IDT_SIZE; …)
+```
+
+Two related x86_64 SYSCALL-path corrections made while hunting this:
+
+- **`mpx.S`** — the per-CPU SYSCALL stub now runs `RESTORE_KERNEL_SEGS` before
+  entering C, matching the INT path's `SAVE_PROCESS_CTX`.  SYSCALL leaves the
+  user data-segment selectors loaded; the stub must reset them like every other
+  kernel entry.
+- **`arch_proto.h`** — `K_STACK_SIZE` raised from one page to `4 * I386_PAGE_SIZE`
+  (16 KB).  It doubles as the rounding granularity for the `cpuid` macro (see
+  #1), which is only valid while the stack pointer stays within the top
+  `K_STACK_SIZE` of `get_k_stack_top(cpu)`.  x86_64 kernel frames are ~2x i386's,
+  so a single 4 KB page is uncomfortably tight for deep chains (e.g.
+  `RECEIVE(ANY)` with async delivery); 16 KB (NetBSD/amd64 UPAGES) keeps the
+  cpuid-safe window well clear of real usage.
+
+Lesson: any fixed-size table immediately followed by a live global in BSS turns
+an off-by-one write into silent corruption of unrelated state.  The IDT/
+`k_percpu_stacks` adjacency made a debug-only installer fatal — and only on the
+SYSCALL path, because that is the sole consumer of `k_percpu_stacks`.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one

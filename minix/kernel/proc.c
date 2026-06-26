@@ -438,7 +438,7 @@ check_misc_flags:
 
 	TRACE(VF_SCHEDULING, printf("cpu %d starting %s / %d "
 				"pc 0x%08lx\n",
-		cpuid, p->p_name, p->p_endpoint, (unsigned long)p->p_reg.pc););
+		(int)cpuid, p->p_name, p->p_endpoint, (unsigned long)p->p_reg.pc););
 #if DEBUG_TRACE
 	p->p_schedules++;
 #endif
@@ -1810,7 +1810,7 @@ static struct proc * pick_proc(void)
   rdy_head = get_cpulocal_var(run_q_head);
   for (q=0; q < NR_SCHED_QUEUES; q++) {	
 	if(!(rp = rdy_head[q])) {
-		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", cpuid, q););
+		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", (int)cpuid, q););
 		continue;
 	}
 	assert(proc_is_runnable(rp));

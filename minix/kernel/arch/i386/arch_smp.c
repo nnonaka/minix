@@ -304,11 +304,26 @@ void smp_init (void)
 	tss_init_all();
 	setup_sysenter_syscall();
 
-	/* 
+	/*
 	 * we still run on the boot stack and we cannot use cpuid as its value
 	 * wasn't set yet. apicid2cpuid initialized in mps_init()
 	 */
 	bsp_cpu_id = apicid2cpuid[apicid()];
+
+	/*
+	 * tss_init_all() seeded the cpuid slot (top-of-stack[-1]) only on the
+	 * real per-CPU stacks (get_k_stack_top()); the BSP is still on the
+	 * separate boot stack (k_boot_stk), whose slot is uninitialized.
+	 * lapic_enable() below calibrates the LAPIC timer with interrupts
+	 * enabled, and the clock IRQ reads cpuid in context_stop() to index
+	 * kernel_ticks[] &c.  Seed the boot stack's slot with the BSP id now so
+	 * that read is valid until we switch_k_stack().  The cpuid macro is an
+	 * lvalue using the same %ebp-rounded computation, so this writes exactly
+	 * the slot the IRQ will read while we run on the boot stack.  (On i386
+	 * the stale slot does not fault like amd64 does -- the 32-bit OOB index
+	 * wraps into mapped memory -- but it is still a wild write; seed it.)
+	 */
+	cpuid = bsp_cpu_id;
 
 	if (!lapic_enable(bsp_cpu_id)) {
 		printf("ERROR : failed to initialize BSP Local APIC\n");

@@ -749,7 +749,7 @@ void apic_spurios_intr_handler(void)
 
 	x++;
 	if (x == 1 || (x % 100) == 0)
-		printf("WARNING spurious interrupt(s) %d on cpu %d\n", x, cpuid);
+		printf("WARNING spurious interrupt(s) %d on cpu %d\n", x, (int)cpuid);
 }
 
 void apic_error_intr_handler(void)
@@ -759,7 +759,7 @@ void apic_error_intr_handler(void)
 	x++;
 	if (x == 1 || (x % 100) == 0)
 		printf("WARNING apic error (0x%x) interrupt(s) %d on cpu %d\n",
-				lapic_errstatus(), x, cpuid);
+				lapic_errstatus(), x, (int)cpuid);
 }
 
 static struct gate_table_s gate_table_ioapic[] = {
@@ -856,7 +856,7 @@ void lapic_set_dummy_handlers(void)
 
 	handler = &lapic_intr_dummy_handles_start;
 	handler += vect * LAPIC_INTR_DUMMY_HANDLER_SIZE;
-	for(; handler < &lapic_intr_dummy_handles_end;
+	for(; handler < &lapic_intr_dummy_handles_end && vect < IDT_SIZE;
 			handler += LAPIC_INTR_DUMMY_HANDLER_SIZE) {
 		int_gate_idt(vect++, (vir_bytes) handler,
 				PRESENT | INT_GATE_TYPE |

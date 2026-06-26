@@ -203,6 +203,10 @@ ENTRY(ipc_entry_syscall_cpu ## cpu)					;\
 	/* Pop stashed user %rbp and write to BPREG. */			\
 	popq	%rax						;\
 	movq	%rax, BPREG(%rbp)				;\
+	/* SYSCALL leaves the user data segment selectors loaded; the INT	\
+	 * entry path (SAVE_PROCESS_CTX) restores kernel segs here, so the	\
+	 * per-CPU SYSCALL stub must do the same before running C code.	*/	\
+	RESTORE_KERNEL_SEGS						;\
 	jmp	ipc_entry_common
 
 ipc_entry_syscall_percpu(0)

@@ -132,7 +132,7 @@ OBJS.kernel+=	${UNPAGED_OBJS}
 .ifdef CONFIG_SMP
 SRCS += arch_smp.c trampoline.S
 trampoline.o: trampoline.S
-	${CC} -E ${AFLAGS} ${AFLAGS.${<:T}} ${CPPFLAGS} ${.IMPSRC} | ${AS} -o ${.TARGET}
+	${CC} ${AFLAGS} ${AFLAGS.${<:T}} ${CPPFLAGS} -c ${.IMPSRC} -o ${.TARGET}
 .endif
 
 .if ${USE_ACPI} != "no"

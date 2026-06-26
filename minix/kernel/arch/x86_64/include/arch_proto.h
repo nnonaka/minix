@@ -4,7 +4,19 @@
 
 #include <machine/vm.h>
 
-#define K_STACK_SIZE	I386_PAGE_SIZE
+/*
+ * Per-CPU kernel stack size.  This is also the granularity at which the SMP
+ * `cpuid` macro (arch_smp.h) rounds %rbp to find the per-CPU id stored at the
+ * top of the stack: it is only valid while the stack pointer stays within the
+ * top K_STACK_SIZE of get_k_stack_top(cpu).  On x86_64 the kernel call frames
+ * are ~2x i386's (8-byte regs, more spilling, the 40-byte CPU trap frame), so
+ * a single 4 KB page is too small: a deep chain (e.g. RECEIVE(ANY) with async
+ * delivery) grows past 4 KB, round_up(%rbp, K_STACK_SIZE) then lands on the
+ * wrong boundary and `cpuid` reads garbage, corrupting per-CPU state and
+ * triple-faulting.  Use 16 KB (matching NetBSD/amd64 UPAGES) so the cpuid-safe
+ * window comfortably exceeds real kernel stack usage.  i386 keeps one page.
+ */
+#define K_STACK_SIZE	(4 * I386_PAGE_SIZE)
 
 #ifndef __ASSEMBLY__
 
