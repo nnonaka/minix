@@ -467,6 +467,90 @@ an off-by-one write into silent corruption of unrelated state.  The IDT/
 `k_percpu_stacks` adjacency made a debug-only installer fatal — and only on the
 SYSCALL path, because that is the sole consumer of `k_percpu_stacks`.
 
+#### 8. `apic_send_init_ipi` `phys_copy(vir2phys(&stack_local))` faults *(reboot at "SMP initialized")*
+
+After #7, the BSP reached `smp_start_aps` but rebooted the instant it started
+the first AP — a nested kernel page fault writing to `0x4fff9c`:
+
+```
+SMP initialized
+pagefault in kernel at pc 0x...4c57e7 (phys_copy) address 0x4fff9c
+   ... apic_send_init_ipi -> phys_copy   (nested, write, not-present)
+CPU 1 didn't boot
+```
+
+`0x4fff9c` is the **physical** alias of a live BSP-stack slot
+(`0xffffffff804fff9c`).  The warm-reset-vector setup in `apic_send_init_ipi`
+(`apic.c`) copied straight from i386:
+
+```c
+u32_t ptr;
+ptr = (u32_t)(trampoline & 0xF);
+phys_copy(0x467, vir2phys(&ptr), sizeof(u16_t));   /* dst = phys(stack local) */
+```
+
+amd64 `phys_copy` is a raw `rep movsb` in the **current** address space (it does
+*not* translate phys→kernel-virt the way some ports do).  `vir2phys(&ptr)`
+yields the stack local's physical address inside the kernel image's
+`0x400000–0x600000` range — and once VM loads it **splits/removes the identity
+mapping of that 2 MB region** (the same effect documented for the TSS in
+`protect.c`), so the physical alias is no longer mapped.  i386 runs the identical
+line harmlessly only because it keeps the kernel region identity-mapped (and APs
+boot via the SIPI vector regardless of the warm-reset bytes).
+
+Fix (`apic.c`): pass the kernel **virtual** address directly — the idiom
+`smp_start_aps` already uses for its own `0x467` copies (`phys_copy(0x467,
+(phys_bytes)&biosresetvector, …)`), which is why those succeeded:
+
+```c
+phys_copy(0x467, (phys_bytes) &ptr, sizeof(u16_t));
+phys_copy(0x469, (phys_bytes) &ptr, sizeof(u16_t));
+```
+
+Source `0x467` (sub-1 MB) stays identity-mapped; dest `&ptr` is a normal mapped
+kernel VA.  Rule: on amd64 never feed `vir2phys()` of a *kernel* address to
+`phys_copy` — use the VA.  Low (<1 MB) and process physical addresses are fine;
+only the kernel's own region loses its identity page.
+
+The diagnosis path is worth remembering: print `k_stacks`/`get_k_stack_top`/
+`new_sp`/`trampoline_base` (all proved correct, ruling out the stack switch),
+then read `phys_copy`'s caller from the nested-fault frame.  On amd64 the CPU
+pushes RSP even for a same-privilege fault, so `frame->esp` is the faulting
+`rsp`; `*(frame->esp)` is the (frameless) `phys_copy`'s return address — here
+`apic_send_init_ipi+0x36`.
+
+#### 9. `runqueues_ok_cpu` false-positives across CPUs *(panic right after CPU 1 is up)*
+
+With #8 fixed, CPU 1 came up and servers started, then:
+
+```
+CPU 1 is up
+sched error: ready proc 12 not on queue
+proc.c:1666: assert "runqueues_ok_local()" failed, function "enqueue"
+```
+
+Not a real scheduling bug — a stock-MINIX debug check that was never SMP-correct,
+live here only because this tree builds with `DEBUG_SANITYCHECKS=1` (it is `0` in
+production, so the path is normally dead).  On SMP `runqueues_ok_local()` expands
+to `runqueues_ok_cpu(cpuid)` (`proto.h`), which walks **only the checking CPU's**
+per-CPU run queues (setting `p_found`), then flags *any* runnable process that
+wasn't found.  A process assigned to a different CPU is legitimately on *that*
+CPU's queue, so it trips the "ready proc N not on queue" check.  The base UP
+branch never hits it because every process lives on cpu0's single queue.
+
+Fix (`debug.c`): only flag a process that belongs to the CPU being verified:
+
+```c
+if(proc_is_runnable(xp) && xp->p_cpu == cpu && !xp->p_found) {
+        printf("sched error: ready proc %d not on queue\n", xp->p_nr);
+        return 0;
+}
+```
+
+A genuinely misplaced process is still caught (by the pass for its own `p_cpu`);
+on UP it is a no-op since every `p_cpu == 0`.  With #8 and #9, amd64 SMP boots to
+`login:` with `cpunum=2`.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one

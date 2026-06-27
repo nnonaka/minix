@@ -96,7 +96,14 @@ int runqueues_ok_cpu(unsigned cpu)
 	}
 	if (isemptyp(xp))
 		continue;
-	if(proc_is_runnable(xp) && !xp->p_found) {
+	/*
+	 * On SMP each CPU has its own run queues and runqueues_ok_cpu()
+	 * only walks the queues of 'cpu'.  A runnable process assigned to a
+	 * different CPU is legitimately on that CPU's queue, so only flag
+	 * processes that belong to the CPU being checked.  (On UP every
+	 * process has p_cpu == 0, so this is a no-op there.)
+	 */
+	if(proc_is_runnable(xp) && xp->p_cpu == cpu && !xp->p_found) {
 		printf("sched error: ready proc %d not on queue\n", xp->p_nr);
 		return 0;
 	}
