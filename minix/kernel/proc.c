@@ -354,7 +354,22 @@ not_runnable_pick_new:
 check_misc_flags:
 
 	assert(p);
+#ifdef CONFIG_SMP
+	/*
+	 * In SMP, proc_ptr can be made non-runnable by another CPU between the
+	 * moment it was picked and here -- the scheduler (sched_proc) performs a
+	 * cross-CPU RTS_SET/RTS_UNSET on a process that is the running proc_ptr on
+	 * this CPU (see the FIXMEs in sched_proc), and a scheduling IPI sets
+	 * RTS_PREEMPTED on proc_ptr.  This is the same condition the misc-flags
+	 * loop below already tolerates, so recover the same way instead of
+	 * asserting; not_runnable_pick_new clears RTS_PREEMPTED and re-picks a
+	 * runnable process.
+	 */
+	if (!proc_is_runnable(p))
+		goto not_runnable_pick_new;
+#else
 	assert(proc_is_runnable(p));
+#endif
 	while (p->p_misc_flags &
 		(MF_KCALL_RESUME | MF_DELIVERMSG |
 		 MF_SC_DEFER | MF_SC_TRACE | MF_SC_ACTIVE)) {

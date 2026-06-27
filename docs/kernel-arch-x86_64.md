@@ -551,6 +551,62 @@ A genuinely misplaced process is still caught (by the pass for its own `p_cpu`);
 on UP it is a no-op since every `p_cpu == 0`.  With #8 and #9, amd64 SMP boots to
 `login:` with `cpunum=2`.
 
+#### 10. `switch_to_user` asserts a runnable `proc_ptr` that another CPU just descheduled *(random reboot under load)*
+
+With SMP booting to login, running the `minix-posix` test suite with `cpunum=2`
+rebooted at a *random* test (4, 22, 25, 31, ... — different every run):
+
+```
+proc.c:357: assert "proc_is_runnable(p)" failed, function "switch_to_user"
+kernel panic: assert failed
+```
+
+`switch_to_user` reads `p = proc_ptr`, and at the `check_misc_flags` label asserts
+it is runnable:
+
+```c
+check_misc_flags:
+	assert(p);
+	assert(proc_is_runnable(p));	/* <- fired */
+	while (p->p_misc_flags & (MF_KCALL_RESUME | MF_DELIVERMSG | ...)) {
+#ifdef CONFIG_SMP
+		if (!proc_is_runnable(p))
+			goto not_runnable_pick_new;	/* loop already tolerates it */
+#endif
+```
+
+The assert held on UP and at boot but failed only under true 2-CPU load.
+Instrumentation (printf in the assert path — *never* in the `BKL_LOCK`/`BKL_UNLOCK`
+macros; that hot path, including the `smp_schedule_sync` spin loops, deadlocks into
+a silent hang) showed the stuck `proc_ptr` carried `RTS_PREEMPTED`, with `IF=0` and
+the BKL held, and was **never** `proc_ptr` on two CPUs (so not a double-run).
+
+Root cause: another CPU makes `proc_ptr` non-runnable between the moment it is
+picked and the assert. `sched_proc` (`system.c`, with the upstream
+`/* FIXME ... a problem for SMP if the process currently runs on a different CPU */`)
+does a cross-CPU `RTS_SET`/`RTS_UNSET` on a process that is the running `proc_ptr`
+on this CPU, and a scheduling IPI sets `RTS_PREEMPTED` on `proc_ptr`.  This is the
+exact condition the misc-flags loop just below already tolerates with
+`goto not_runnable_pick_new`; the entry assert simply predates SMP.
+
+Fix (`proc.c`): recover the same way instead of asserting.  `not_runnable_pick_new`
+clears `RTS_PREEMPTED` (the preempt-handling at the top of the path) and re-picks a
+runnable process.
+
+```c
+check_misc_flags:
+	assert(p);
+#ifdef CONFIG_SMP
+	if (!proc_is_runnable(p))
+		goto not_runnable_pick_new;
+#else
+	assert(proc_is_runnable(p));
+#endif
+```
+
+With #10 the suite runs past every prior crash point with only a few transient
+recoveries per run.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one
