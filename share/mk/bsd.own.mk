@@ -10,6 +10,10 @@ _BSD_OWN_MK_=1
 
 .if defined(__MINIX)
 
+# 2026/06/26 N.Nonaka default to enable SMP
+CONFIG_SMP?= yes
+CONFIG_MAX_CPUS?= 4
+
 # Some Minix deviations from NetBSD
 LDSTATIC?=	-static
 MKDYNAMICROOT?=	no
