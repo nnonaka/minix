@@ -461,6 +461,19 @@ check_misc_flags:
 	p = arch_finish_switch_to_user();
 	assert(p->p_cpu_time_left);
 
+#ifdef CONFIG_SMP
+	/*
+	 * The kernel-to-user exit window must run with interrupts disabled. If a
+	 * HW interrupt is taken here (after context_stop() releases the BKL, before
+	 * restore_user_context()), the in-kernel interrupt path's context_stop_idle()
+	 * re-acquires the BKL, which then leaks into user mode -> the next kernel
+	 * entry on this CPU self-deadlocks on the BKL. (Confirmed via a BKL op-ring
+	 * trace: an L context_stop_idle after the final BKL release.) Enforce IF=0
+	 * here; restore_user_context()'s iret/sysret restores the user's IF.
+	 */
+	intr_disable();
+#endif
+
 	context_stop(proc_addr(KERNEL));
 
 	/* If the process isn't the owner of FPU, enable the FPU exception */
@@ -1977,6 +1990,12 @@ void copr_not_available_handler(void)
 	}
 
 	*local_fpu_owner = p;
+#ifdef CONFIG_SMP
+	/* Same kernel-to-user exit invariant as switch_to_user: IF=0 from the BKL
+	 * release through restore_user_context, so no nested interrupt can leak the
+	 * BKL into user mode. */
+	intr_disable();
+#endif
 	context_stop(proc_addr(KERNEL));
 	restore_user_context(p);
 	NOT_REACHABLE;

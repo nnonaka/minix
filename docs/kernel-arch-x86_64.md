@@ -646,40 +646,43 @@ ENOENT) or putnodes the same PFS inode a second time (→ `VFS: putnode failed:
 after the mapped-FS `req_putnode`, the same reset `get_free_vnode`/`clean_vnode`
 already do — done eagerly so the dangling mapping can't survive into the reopen.
 
-#### 13. OPEN — full `minix-posix` run deadlocks on the BKL under load
+#### 13. Kernel-to-user exit window ran with IF=1 → BKL leaked into user mode *(full-run deadlock / runqueue corruption)*
 
-With #12, `test31` (and the other earlier crashers) are clean, but a **full**
-`minix-posix` run still hangs at a *random* test.  This is a **pre-existing
-upstream BKL deadlock**, not caused by any fix here — it reproduces on the
-verbatim upstream scheduler.
+With #12, `test31` was clean but a **full** `minix-posix` run hung at a *random*
+test (the suite would die ~test 4–31 every run, in three guises: a hard BKL
+deadlock, a `runqueues_ok_local` "ready proc N not on queue" panic, or a reboot).
+All three were the **same** root cause.
 
-Triage via libvirt/QEMU monitor (the standard tool now — no rebuild):
-`virsh qemu-monitor-command <dom> --hmp 'info registers -a'` at the hang. Every
-capture shows the **same** signature:
+The leak: `switch_to_user()` (and the FPU `#NM` handler `copr_not_available_handler`)
+ran the final kernel-to-user exit — `context_stop(proc_addr(KERNEL))` (which
+`BKL_UNLOCK`s) → … → `restore_user_context()` — with **interrupts enabled**. A HW
+interrupt taken in that window enters the in-kernel (`0:`) path → `context_stop_idle()`
+→ `context_stop()` which **re-acquires the BKL**; the `iretq` (`CLEAR_IF`) returns
+to the exit path now holding the BKL, and `restore_user_context()` carries it into
+user mode. The next kernel entry on that CPU then self-deadlocks on `context_stop`'s
+`BKL_LOCK` (recursive acquire), while the other CPU spins behind it. The same IF=1
+window also let a scheduling IPI nest mid-`switch_to_user` and corrupt the run
+queues (the `dequeue`/`runqueues_ok_local` panic).
 
-- Both vCPUs `RIP` in `arch_spinlock_lock` (`+0x23`, the backoff `pause` loop),
-  `RDI = &big_kernel_lock`, `IF=0`, CPU time climbing on both (spinning).
-- Both interrupted **from user mode** (`RSP` at the per-CPU kernel-stack top,
-  two different `CR3`s), so both are at the **first** `context_stop()` after an
-  interrupt → its `BKL_LOCK()` (`arch/x86_64/arch_clock.c:242`).
-- `runqueues`/`vcpuinfo` confirm spinning, not halted (not a lost-wakeup).
+Fix (`proc.c`): `intr_disable()` immediately before the final
+`context_stop(proc_addr(KERNEL))` in both `switch_to_user()` and the FPU-exception
+restore path, so the exit window runs IF=0 (the kernel invariant it should already
+satisfy); `restore_user_context()`'s `iret`/`sysret` restores the user's own IF.
+With this the suite runs **78 tests** (was ~3); the next failure (test 79) is an
+unrelated PM signal-state assertion.
 
-Because both CPUs are *spinning to acquire* (neither holds it) yet the hang is
-permanent, `big_kernel_lock` must be **leaked** — acquired on some path that
-returns to user/idle without a matching `BKL_UNLOCK`.  The `smp_sched_handler()`
-that `context_stop` runs to break the documented two-CPU live-lock is *after*
-the `BKL_LOCK`, so it cannot help once a CPU is stuck on the acquire.  This is a
-known weak spot of MINIX3 SMP (see the live-lock comment in `context_stop`).
-
-Next step (needs a rebuild + repro): **BKL ownership tracking** — on a
-successful `arch_spinlock_lock` of `big_kernel_lock`, record owner cpuid + the
-caller return address into globals; dump them when a CPU spins too long. That
-pinpoints the leak site directly. Get the stacks too if possible:
-`--hmp 'x/40gx <RSP>'` for each CPU (return addrs are kernel `0xffffffff804…`
-values; symbolize with `x86_64-elf64-minix-addr2line -f -e .../usr/sbin/kernel`).
-**Do NOT** instrument the `BKL_LOCK`/`BKL_UNLOCK` macros or `smp_schedule_sync`
-spin loops with `printf` (silent deadlock) — record into globals only, dump from
-a watchdog/assert path.
+How it was found — the reusable SMP-hang toolkit:
+- `virsh qemu-monitor-command <dom> --hmp 'info registers -a'` at the hang showed
+  both vCPUs spinning in `arch_spinlock_lock` on `&big_kernel_lock`, IF=0, CPU
+  time climbing (a *leaked* BKL: held with no live owner).
+- A `BKL_DEBUG` build (temporary, since reverted) tracked the BKL owner cpuid +
+  the **`__builtin_return_address(0)` of `BKL_LOCK`'s caller**, a per-CPU op ring
+  (lock/unlock + caller), and dumped them over **raw COM1** (`direct_com_print`,
+  which takes no BKL and survives the wedge) from a leaked-exit / recursive-acquire
+  detector. The ring showed `… U switch_to_user(final release) … L context_stop_idle`
+  — a BKL acquire *after* the final release — which pinned the exit-window nesting.
+- **Never** `printf` from the `BKL_LOCK`/`BKL_UNLOCK` macros or `smp_schedule_sync`
+  spin loops (silent deadlock); record into globals + raw-COM1 only.
 
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
