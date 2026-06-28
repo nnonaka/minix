@@ -607,6 +607,80 @@ check_misc_flags:
 With #10 the suite runs past every prior crash point with only a few transient
 recoveries per run.
 
+#### 11. `sched_proc` cross-CPU re-quantum — *attempted fix REVERTED, do not retry naively*
+
+It is tempting to "fix" the upstream `sched_proc` (`system.c`)
+`/* FIXME ... problem for SMP */` by IPI-sync-stopping a process that runs on
+another CPU before touching its RTS flags / quantum.  **Two such attempts were
+made and both reverted** — record so the next person doesn't repeat them:
+
+- *Always* `smp_schedule_stop_proc()` for a remote-running target → **BKL
+  live-lock**: `SYS_SCHEDULE` fires constantly, two CPUs scheduling onto each
+  other both enter `smp_schedule_sync` and ping-pong the BKL forever (both
+  spinning in `arch_spinlock_lock`; caught via `virsh ... 'info registers -a'`).
+- Skip the dequeue when `get_cpu_var(p->p_cpu, proc_ptr) == p` → **runqueues_ok
+  panic** `wrong priority q N`: a process can be `proc_ptr` *and* still queued
+  (the preempted-but-queued window in `switch_to_user`), so changing
+  `p_priority` without dequeue leaves it on the wrong queue.
+
+The upstream code is actually correct: it always dequeues (BKL-safe under the
+big lock) before changing priority and only does the heavy IPI-stop for a real
+migration.  `sched_proc` was restored to upstream verbatim.  test31's wedge was
+**not** a `sched_proc` bug at all — it was the VFS mapped-inode bug (#12); with
+#12 alone test31 is clean (errors and hang both gone).  Lesson: do not touch
+this hot path without a reproducer that actually implicates it.
+
+#### 12. VFS `put_vnode` leaves a dangling FIFO→PFS mapping *(test31 reopen corruption — the real test31 fix)*
+
+A named FIFO's data is buffered in a *mapped* inode on PFS
+(`v_mapfs_e`/`v_mapinode_nr`, created by `map_vnode()` in `servers/vfs/pipe.c`).
+`put_vnode()` (`servers/vfs/vnode.c`) released that PFS inode (`req_putnode`) and
+zeroed `v_mapfs_count`, but left `v_mapfs_e`/`v_mapinode_nr` pointing at the freed
+inode — the reset only happened later in `get_free_vnode()` on reuse.  On UP the
+slot is recycled before anyone looks; on SMP a concurrent reopen of the FIFO
+(test31's second open/write/read cycle, parent and child on two CPUs) observes
+the slot in that window and either skips remapping (`map_vnode()` early-returns on
+`v_mapfs_e != NONE`, routing I/O to the freed PFS inode → `write` EINVAL / `read`
+ENOENT) or putnodes the same PFS inode a second time (→ `VFS: putnode failed:
+-22`).  Fix: clear `v_mapfs_e = NONE; v_mapinode_nr = 0;` in `put_vnode` right
+after the mapped-FS `req_putnode`, the same reset `get_free_vnode`/`clean_vnode`
+already do — done eagerly so the dangling mapping can't survive into the reopen.
+
+#### 13. OPEN — full `minix-posix` run deadlocks on the BKL under load
+
+With #12, `test31` (and the other earlier crashers) are clean, but a **full**
+`minix-posix` run still hangs at a *random* test.  This is a **pre-existing
+upstream BKL deadlock**, not caused by any fix here — it reproduces on the
+verbatim upstream scheduler.
+
+Triage via libvirt/QEMU monitor (the standard tool now — no rebuild):
+`virsh qemu-monitor-command <dom> --hmp 'info registers -a'` at the hang. Every
+capture shows the **same** signature:
+
+- Both vCPUs `RIP` in `arch_spinlock_lock` (`+0x23`, the backoff `pause` loop),
+  `RDI = &big_kernel_lock`, `IF=0`, CPU time climbing on both (spinning).
+- Both interrupted **from user mode** (`RSP` at the per-CPU kernel-stack top,
+  two different `CR3`s), so both are at the **first** `context_stop()` after an
+  interrupt → its `BKL_LOCK()` (`arch/x86_64/arch_clock.c:242`).
+- `runqueues`/`vcpuinfo` confirm spinning, not halted (not a lost-wakeup).
+
+Because both CPUs are *spinning to acquire* (neither holds it) yet the hang is
+permanent, `big_kernel_lock` must be **leaked** — acquired on some path that
+returns to user/idle without a matching `BKL_UNLOCK`.  The `smp_sched_handler()`
+that `context_stop` runs to break the documented two-CPU live-lock is *after*
+the `BKL_LOCK`, so it cannot help once a CPU is stuck on the acquire.  This is a
+known weak spot of MINIX3 SMP (see the live-lock comment in `context_stop`).
+
+Next step (needs a rebuild + repro): **BKL ownership tracking** — on a
+successful `arch_spinlock_lock` of `big_kernel_lock`, record owner cpuid + the
+caller return address into globals; dump them when a CPU spins too long. That
+pinpoints the leak site directly. Get the stacks too if possible:
+`--hmp 'x/40gx <RSP>'` for each CPU (return addrs are kernel `0xffffffff804…`
+values; symbolize with `x86_64-elf64-minix-addr2line -f -e .../usr/sbin/kernel`).
+**Do NOT** instrument the `BKL_LOCK`/`BKL_UNLOCK` macros or `smp_schedule_sync`
+spin loops with `printf` (silent deadlock) — record into globals only, dump from
+a watchdog/assert path.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one
