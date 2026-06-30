@@ -1107,7 +1107,32 @@ static int mini_receive(struct proc * caller_ptr,
     xpp = &caller_ptr->p_caller_q;
     while (*xpp) {
 	struct proc * sender = *xpp;
-	endpoint_t sender_e = sender->p_endpoint;
+	endpoint_t sender_e;
+
+	/*
+	 * On SMP a queued sender can be torn down on another CPU (its slot
+	 * freed or endpoint revoked by clear_ipc()/clear_ipc_refs()) while
+	 * still linked on this caller queue, if its exit cleanup raced this
+	 * walk. Such an entry is a dead message whose sender will never wait
+	 * for a reply: unlink and skip it rather than delivering it (which
+	 * would also trip the assert below that encodes the UP-only invariant
+	 * that no dead process is ever queued to send).
+	 */
+	if (RTS_ISSET(sender, RTS_SLOT_FREE) ||
+	    RTS_ISSET(sender, RTS_NO_ENDPOINT)) {
+		static unsigned long c;
+		if ((c++ & 0x3ff) == 0)
+			printf("mini_receive: %s/%d dropped stale sender "
+			    "ep=%d rts=%x sendto=%d (n=%lu)\n",
+			    caller_ptr->p_name, caller_ptr->p_endpoint,
+			    sender->p_endpoint, sender->p_rts_flags,
+			    sender->p_sendto_e, c);
+		*xpp = sender->p_q_link;	/* unlink stale entry */
+		sender->p_q_link = NULL;
+		continue;
+	}
+
+	sender_e = sender->p_endpoint;
 
         if (CANRECEIVE(src_e, sender_e, caller_ptr, 0, &sender->p_sendmsg)) {
             int call;
