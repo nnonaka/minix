@@ -189,6 +189,23 @@ static void idle(void)
 
 	switch_address_space_idle();
 
+	/*
+	 * The idle setup-and-halt sequence must run with interrupts disabled,
+	 * for the same reason as the kernel-to-user exit window in
+	 * switch_to_user() (see the intr_disable() there). The kernel runs this
+	 * path with IF=1; if a HW interrupt or IPI is taken between setting
+	 * cpu_is_idle=1 and the hlt, the in-kernel interrupt path runs
+	 * context_stop_idle(), which clears cpu_is_idle back to 0 (and, on an
+	 * AP, restarts the local timer that we are about to stop again). We then
+	 * fall through to halt_cpu() and halt with cpu_is_idle==0 and the AP
+	 * timer stopped: enqueue() on another CPU sees cpu_is_idle==0 and skips
+	 * the wake IPI, and no timer tick ever arrives, so a runnable process
+	 * sits on this (halted) AP's run queue forever. halt_cpu() does sti;hlt,
+	 * which atomically re-enables interrupts and delivers any IPI that became
+	 * pending while we were disabled.
+	 */
+	intr_disable();
+
 #ifdef CONFIG_SMP
 	get_cpulocal_var(cpu_is_idle) = 1;
 	/* we don't need to keep time on APs as it is handled on the BSP */
