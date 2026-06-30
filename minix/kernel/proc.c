@@ -208,7 +208,18 @@ static void idle(void)
 
 #ifdef CONFIG_SMP
 	get_cpulocal_var(cpu_is_idle) = 1;
-	/* we don't need to keep time on APs as it is handled on the BSP */
+	/*
+	 * Stop the local timer on idle APs: a halted AP must not take local timer
+	 * interrupts, or context_stop() in the in-kernel interrupt path would spin
+	 * on the BKL with interrupts disabled and could deadlock against the BSP
+	 * (which may hold the BKL while waiting for an IPI ack from this AP). The
+	 * BSP keeps its timer (it is the timekeeper). stop_local_timer() preserves
+	 * the remaining one-shot count (see lapic_stop_timer/lapic_restart_timer)
+	 * so an AP that idles more often than once per tick still accumulates
+	 * run-time toward a tick instead of re-arming a full fresh period every
+	 * wakeup -- otherwise the one-shot never expired and process CPU-time
+	 * accounting / the SIGVTALRM/SIGPROF itimers never fired on the AP.
+	 */
 	if (cpuid != bsp_cpu_id)
 		stop_local_timer();
 	else

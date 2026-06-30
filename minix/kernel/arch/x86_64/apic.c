@@ -562,9 +562,23 @@ void lapic_set_timer_periodic(const unsigned freq)
 	lapic_write(LAPIC_TIMER_ICR, lapic_ticks_per_clock_tick);
 }
 
+/*
+ * Remaining one-shot count saved when a CPU stops its timer on idle, so it can
+ * resume the same countdown on the next wakeup instead of re-arming a full
+ * fresh period.  Without this, an AP that idles more often than once per tick
+ * (e.g. running a process that busy-loops with frequent syscalls) would reset
+ * its one-shot on every wakeup and never count down a whole tick, so the AP
+ * would never receive a timer interrupt and per-process CPU-time accounting and
+ * the virtual/profiling itimers (SIGVTALRM/SIGPROF) would never fire for procs
+ * scheduled onto it.
+ */
+static u32_t lapic_timer_rem[CONFIG_MAX_CPUS];
+
 void lapic_stop_timer(void)
 {
 	u32_t lvtt;
+	/* Save the remaining count so lapic_restart_timer() can resume it. */
+	lapic_timer_rem[cpuid] = lapic_read(LAPIC_TIMER_CCR);
 	lvtt = lapic_read(LAPIC_LVTTR);
 	lapic_write(LAPIC_LVTTR, lvtt | APIC_LVTT_MASK);
 	/* zero the current counter so it can be restarted again */
@@ -574,6 +588,21 @@ void lapic_stop_timer(void)
 
 void lapic_restart_timer(void)
 {
+	unsigned cpu = cpuid;
+	u32_t rem = lapic_timer_rem[cpu];
+
+	/*
+	 * If we stopped the timer on idle with a partial countdown remaining,
+	 * resume that same countdown rather than arming a full fresh period.
+	 */
+	if (rem) {
+		lapic_timer_rem[cpu] = 0;
+		lapic_write(LAPIC_TIMER_ICR, rem);
+		lapic_write(LAPIC_TIMER_DCR, APIC_TDCR_1);
+		lapic_write(LAPIC_LVTTR, APIC_TIMER_INT_VECTOR);
+		return;
+	}
+
 	/* restart the timer only if the counter reached zero, i.e. expired */
 	if (lapic_read(LAPIC_TIMER_CCR) == 0)
 		lapic_set_timer_one_shot(1000000/system_hz);

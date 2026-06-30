@@ -819,6 +819,68 @@ With #14–#16, **test79 passes** (`ok`) and the full `minix-posix` suite runs p
 pre-existing and non-fatal, but it is the exit churn that triggers #16; root-causing
 that driver/RS crash loop is future work.
 
+### #17 — AP local timer never fires for short-burst processes (test41)
+
+test41 (`getitimer`/`setitimer`) failed only on `ITIMER_VIRTUAL`/`ITIMER_PROF`
+(REAL passed); the virtual/profiling signal was never delivered.  With `no_smp=1`
+it passed, so it was SMP-specific.
+
+Root cause: the **AP local APIC timer never delivered a single interrupt**.
+The scheduler (`sched` `pick_cpu`) places user processes on APs while system
+services (incl. PM) stay on the BSP, so the test process runs on an AP — but a
+LAPIC timer that never ticks there means `p_user_time`/`p_virt_left`/`p_prof_left`
+are never charged, so `vtimer_check` never fires `cause_sig(SIGVTALRM/SIGPROF)`.
+REAL works because it is driven entirely by the BSP (`kclockinfo.uptime` +
+`clock_timers`).  A per-CPU tick probe in `timer_int_handler` confirmed only
+`cpu=0` ever ticked.
+
+The LAPIC timer is one-shot, re-armed in `switch_to_user`/`context_stop_idle`
+(`lapic_restart_timer`, which re-arms only when `CCR==0`).  `idle()` stops the
+timer on APs (`stop_local_timer`) — correctly, because a *halted* AP must not take
+a local timer interrupt: the in-kernel interrupt path runs `context_stop()`, which
+spins on the BKL with interrupts disabled (interrupt-gate entry) and can deadlock
+against the BSP holding the BKL while waiting for an IPI ack from that AP.  (An
+early fix that simply kept the AP timer running confirmed this — it made the AP
+tick but **hung the boot** in a BKL deadlock.)
+
+The real defect: `lapic_stop_timer` *zeroed* the one-shot ICR, and the next
+`lapic_restart_timer` armed a **full fresh period** from the top.  A process that
+yields (blocks in a syscall) more often than once per tick — e.g. test41's
+`busy_wait` calling `time()` every few µs — makes its AP idle every few µs; a
+register dump showed the one-shot perpetually re-armed at ICR=16,666,000 and only
+ever counted down ~13,000 (0.08%) before the next idle reset it.  It never reached
+0, so the AP never ticked.
+
+Fix (`apic.c`): preserve the remaining count across idle.  `lapic_stop_timer`
+saves `CCR` into `lapic_timer_rem[cpu]`; `lapic_restart_timer` resumes that saved
+count (writes it back to ICR) instead of arming a fresh period.  An AP that idles
+often now accumulates *run-time* toward a tick across bursts; the one-shot
+eventually expires while a process runs → AP tick → `p_virt_left` decrements →
+`SIGVTALRM`/`SIGPROF` fire.  Idle APs still stop their timer (no BKL deadlock).
+
+```c
+/* lapic_stop_timer: before masking + zeroing ICR */
+lapic_timer_rem[cpuid] = lapic_read(LAPIC_TIMER_CCR);
+
+/* lapic_restart_timer: resume the saved partial countdown */
+u32_t rem = lapic_timer_rem[cpu];
+if (rem) {
+    lapic_timer_rem[cpu] = 0;
+    lapic_write(LAPIC_TIMER_ICR, rem);
+    lapic_write(LAPIC_TIMER_DCR, APIC_TDCR_1);
+    lapic_write(LAPIC_LVTTR, APIC_TIMER_INT_VECTOR);
+    return;
+}
+if (lapic_read(LAPIC_TIMER_CCR) == 0)   /* else: normal full re-arm on expiry */
+    lapic_set_timer_one_shot(1000000/system_hz);
+```
+
+`timer_int_handler` still updates wall-clock time (`uptime`) only on the BSP, so
+APs add no timekeeping cost — only the per-CPU accounting tick they need.  With
+this, **test41 passes** on SMP (verified end-to-end: AP `dec` → `vtimer_check` →
+PM `process_ksig` → signal delivered).  How it was found: per-CPU tick counter +
+LAPIC register dump in `lapic_restart_timer` showed the never-completing one-shot.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one
