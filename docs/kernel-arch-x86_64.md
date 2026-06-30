@@ -773,7 +773,51 @@ idle/exit state and then halts or returns to user must run IF=0; the BSP-timer +
 wake-IPI recovery does **not** cover an AP that has stopped its own timer.  (commit
 28119c23a)
 
-With #14 and #15, **test79 passes** and the full `minix-posix` suite runs past it.
+#### 16. `mini_receive` delivered a dead sender off the caller queue → assert *(test79, intermittent)*
+
+With #14 and #15, test79 ran to completion but **intermittently** panicked in a
+later sub-test:
+
+```
+proc.c: assert "!RTS_ISSET(sender, RTS_SLOT_FREE)" failed, function "mini_receive"
+kernel on CPU 0: … do_ipc … ipc_entry_common
+```
+
+`mini_receive` walks the receiver's `p_caller_q` and asserts each queued sender is
+live — a uniprocessor invariant: there, a process being torn down can't also be
+sitting on a send queue.  On SMP it can.  A process queued to send (`RTS_SENDING`,
+linked on the target's `p_caller_q`) is torn down on another CPU — `do_clear()` →
+`clear_endpoint()` → `clear_ipc()`/`clear_ipc_refs()` unlink it and then
+`RTS_SETFLAGS(rc, RTS_SLOT_FREE)` — and that teardown can race the target's
+`mini_receive` queue walk, leaving a `SLOT_FREE` (or `RTS_NO_ENDPOINT`) entry still
+linked.  Delivering it trips the assert and panics the kernel.  It was surfaced by
+test79's heavy fork/exit/signal load, amplified by an `e1000`/`virtio_net` restart
+loop churning process exits (`IRQ 22 handler registered by … /<ep>` with climbing
+endpoint generations).
+
+Fix (`proc.c mini_receive`): before the `CANRECEIVE` test, if the queued sender is
+`RTS_SLOT_FREE` or `RTS_NO_ENDPOINT` it is a dead message whose sender will never
+wait for a reply — **unlink and skip it** instead of delivering/asserting (with a
+rate-limited warning, since it is a genuine but handled SMP anomaly).
+
+```c
+while (*xpp) {
+    struct proc *sender = *xpp;
+    if (RTS_ISSET(sender, RTS_SLOT_FREE) || RTS_ISSET(sender, RTS_NO_ENDPOINT)) {
+        *xpp = sender->p_q_link;      /* drop stale entry */
+        sender->p_q_link = NULL;
+        continue;
+    }
+    ...
+}
+```
+
+(commit 96fe5bfec)
+
+With #14–#16, **test79 passes** (`ok`) and the full `minix-posix` suite runs past it.
+*Open, separate:* the `e1000`/`virtio_net` IRQ-22 restart loop under test79's load is
+pre-existing and non-fatal, but it is the exit churn that triggers #16; root-causing
+that driver/RS crash loop is future work.
 
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
