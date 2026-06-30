@@ -668,8 +668,9 @@ Fix (`proc.c`): `intr_disable()` immediately before the final
 `context_stop(proc_addr(KERNEL))` in both `switch_to_user()` and the FPU-exception
 restore path, so the exit window runs IF=0 (the kernel invariant it should already
 satisfy); `restore_user_context()`'s `iret`/`sysret` restores the user's own IF.
-With this the suite runs **78 tests** (was ~3); the next failure (test 79) is an
-unrelated PM signal-state assertion.
+With this the suite runs **78 tests** (was ~3); the next failure (test 79) was a
+PM signal-state assertion and an intermittent idle deadlock, both SMP-only — see
+#14 and #15.
 
 How it was found — the reusable SMP-hang toolkit:
 - `virsh qemu-monitor-command <dom> --hmp 'info registers -a'` at the hang showed
@@ -683,6 +684,96 @@ How it was found — the reusable SMP-hang toolkit:
   — a BKL acquire *after* the final release — which pinned the exit-window nesting.
 - **Never** `printf` from the `BKL_LOCK`/`BKL_UNLOCK` macros or `smp_schedule_sync`
   spin loops (silent deadlock); record into globals + raw-COM1 only.
+
+#### 14. `do_runctl` cross-CPU stop races an in-transit send → PM `do_sigprocmask` assert *(test79)*
+
+PM delivers a caught signal by stopping the target (`stop_proc` → `sys_delay_stop`
+→ `SYS_RUNCTL` `RC_STOP|RC_DELAY`).  `do_runctl` decides whether the target has a
+message *in transit* with a snapshot test (`RTS_SENDING` / `MF_SC_DEFER`): if so it
+sets `MF_SIG_DELAY` and returns `EBUSY` (PM defers, waiting for `SIGSNDELAY`);
+otherwise it stops the target and PM sets `PROC_STOPPED`.  On UP the snapshot is
+exact (the target can't run while PM runs).  On SMP the target runs on another CPU
+and can enter the kernel to `SENDREC` (e.g. `sigprocmask`) to PM *between* the
+snapshot and the cross-CPU stop — `RTS_SENDING` isn't set yet, so `do_runctl`
+returns OK, PM sets `PROC_STOPPED`, and the in-transit message then arrives →
+`pm/signal.c do_sigprocmask` asserts `!(mp_flags & (PROC_STOPPED|VFS_CALL|UNPAUSED|
+EVENT_CALL))` and PM panics (which RS cannot recover → kernel `cause_sig` lethal
+panic).
+
+Key: `smp_schedule_stop_proc()` is **synchronous** — it returns only after this CPU
+re-acquires the BKL, by which point the target CPU has finished delivering its
+message and is blocked `SENDING`.  So re-check after the stop:
+
+```c
+case RC_STOP:
+#if CONFIG_SMP
+    if (rp->p_cpu != cpuid) {
+        smp_schedule_stop_proc(rp);
+        /* the snapshot above may have missed a send the target (running on
+         * another CPU) only issued during the stop; it is now SENDING. */
+        if ((flags & RC_DELAY) &&
+            (RTS_ISSET(rp, RTS_SENDING) || (rp->p_misc_flags & MF_SC_DEFER))) {
+            rp->p_misc_flags |= MF_SIG_DELAY;
+            RTS_UNSET(rp, RTS_PROC_STOP);   /* mandatory — see below */
+            return (EBUSY);
+        }
+        break;
+    }
+#endif
+    RTS_SET(rp, RTS_PROC_STOP);
+```
+
+`RTS_UNSET(RTS_PROC_STOP)` is mandatory: PM treats `EBUSY` as a delay call
+(`DELAY_CALL`, not `PROC_STOPPED`) and never issues the matching resume, so leaving
+the kernel stop set strands the process (both CPUs idle).  Clearing it is safe — the
+process stays blocked `SENDING` (not runnable here); the normal send-completion path
+reschedules it and fires `SIGSNDELAY`, after which PM retries the stop.  This mirrors
+the UP up-front `EBUSY` path exactly.  (commit b6b9b7b55)
+
+#### 15. `idle()` setup-and-halt window ran with IF=1 → lost wake-IPI on an AP *(test79 intermittent whole-system idle hang)*
+
+The **same bug class as #13**, in the other IF-sensitive window.  `idle()` set
+`cpu_is_idle = 1`, stopped the AP's local timer, and `halt_cpu()`d — all with
+interrupts enabled.  A HW interrupt/IPI taken between `cpu_is_idle = 1` and the `hlt`
+enters the in-kernel `context_stop_idle()`, which **resets `cpu_is_idle = 0`** (and
+restarts the AP timer that `idle()` then re-stops).  `idle()` falls through to
+`halt_cpu()` and the CPU halts with `cpu_is_idle == 0` and, on an AP, its local timer
+stopped.  `enqueue()` on another CPU then reads `cpu_is_idle == 0`, concludes the
+target is running, and **skips the wake IPI** (`smp_schedule`); since the AP has no
+timer tick, a runnable process sits on the halted AP's run queue forever → all CPUs
+idle, system wedged.
+
+```c
+switch_address_space_idle();
+
+intr_disable();   /* NEW: keep the whole window IF=0; halt_cpu() does sti;hlt */
+
+#ifdef CONFIG_SMP
+    get_cpulocal_var(cpu_is_idle) = 1;
+    if (cpuid != bsp_cpu_id)
+        stop_local_timer();     /* AP: only an IPI can wake it after this */
+    else
+#endif
+        restart_local_timer();
+    context_stop(proc_addr(KERNEL));   /* BKL_UNLOCK */
+    halt_cpu();                 /* sti; hlt — re-enables and atomically catches
+                                 * an IPI that went pending while IF=0 */
+```
+
+The BSP **masks** the symptom (it keeps its timer and re-checks `pick_proc()` every
+tick), so only APs (which stop their timer when idle) deadlock — which is why the
+stranded procs were always on `cpu != bsp`.
+
+How it was found: the `info registers -a` toolkit from #13 showed both vCPUs `HLT`ed
+(*idle*, not spinning on the BKL).  A temporary deadlock probe in the BSP `idle()`
+path dumped the run state — `nrun=4` processes runnable on `cpu=1` with `onq=1` (on
+the AP's run queue) and `cpuidle=0` (the AP's flag wrong while halted) — which pinned
+the IF window in `idle()`.  General lesson: any kernel window that sets per-CPU
+idle/exit state and then halts or returns to user must run IF=0; the BSP-timer +
+wake-IPI recovery does **not** cover an AP that has stopped its own timer.  (commit
+28119c23a)
+
+With #14 and #15, **test79 passes** and the full `minix-posix` suite runs past it.
 
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
