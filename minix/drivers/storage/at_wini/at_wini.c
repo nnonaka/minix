@@ -397,9 +397,16 @@ static void w_init(int devind, u16_t vid, u16_t did)
 		printf("at_wini%ld: native 0 on %d: 0x%x 0x%x irq %d\n",
 			w_instance, devind, base_cmd, base_ctl, irq);
   } else {
-	/* Register first compatibility IRQ. */
+	/* Register first compatibility IRQ.
+	 *
+	 * Policy 0 (not IRQ_REENABLE): re-enable the IRQ ourselves from
+	 * w_intr_wait() only AFTER reading REG_STATUS (which acks/clears the
+	 * drive interrupt).  IRQ_REENABLE unmasks the line before we drain it;
+	 * under the IOAPIC (SMP/APIC mode) that re-fires the still-asserted IRQ
+	 * 14/15 immediately, starving this driver so it never drains -> interrupt
+	 * storm that wedges the boot.  The 8259 PIC (non-SMP) doesn't re-fire. */
 	compat_hook = nhooks++;
-	if ((r = sys_irqsetpolicy(AT_WINI_0_IRQ, IRQ_REENABLE,
+	if ((r = sys_irqsetpolicy(AT_WINI_0_IRQ, 0,
 		&compat_hook)) != OK)
 		panic("couldn't set compat(0) IRQ policy: %d", r);
 	if ((r = sys_irqenable(&compat_hook)) != OK)
@@ -428,9 +435,11 @@ static void w_init(int devind, u16_t vid, u16_t did)
 		printf("at_wini%ld: native 1 on %d: 0x%x 0x%x irq %d\n",
 			w_instance, devind, base_cmd, base_ctl, irq);
   } else {
-	/* Register secondary compatibility IRQ. */
+	/* Register secondary compatibility IRQ.  Policy 0 (not IRQ_REENABLE);
+	 * see the compat(0) comment above -- re-enabled from w_intr_wait() after
+	 * the REG_STATUS read, to avoid the IOAPIC IRQ-storm on VBox. */
 	compat_hook = nhooks++;
-	if ((r = sys_irqsetpolicy(AT_WINI_1_IRQ, IRQ_REENABLE,
+	if ((r = sys_irqsetpolicy(AT_WINI_1_IRQ, 0,
 		&compat_hook)) != OK)
 		panic("couldn't set compat(1) IRQ policy: %d", r);
 	if ((r = sys_irqenable(&compat_hook)) != OK)
@@ -1628,6 +1637,17 @@ static void w_intr_wait(void)
 					if (r != 0)
 						panic("sys_inb failed: %d", r);
 					w_wn->w_status= w_status;
+					/*
+					 * Compat (legacy) IRQs use a non-
+					 * IRQ_REENABLE policy to avoid an IOAPIC
+					 * re-fire storm on VBox; re-enable now
+					 * that the REG_STATUS read above cleared
+					 * the drive interrupt.  Native drives are
+					 * re-enabled by w_hw_int().
+					 */
+					if (!w_wn->native)
+						(void) sys_irqenable(
+						    &w_wn->irq_hook_id);
 					w_hw_int(m.m_notify.interrupts);
 					break;
 				default:

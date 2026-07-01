@@ -260,6 +260,19 @@ static int kb_init(void)
 	/* If bit 5 is clear, it is a single channel controler for sure.. */
 	aux_available = (ccb & 0x10);
 
+	/*
+	 * Do NOT enable the AUX (PS/2 mouse) port.  Enabling it turns on mouse
+	 * data reporting (0xF4 below), whose ACK/stream bytes sit in the 8042
+	 * output buffer and hold IRQ 12 asserted until port 0x60 is drained.
+	 * Under the IOAPIC (SMP/APIC mode) the IRQ_REENABLE policy re-fires that
+	 * still-asserted line on every auto-unmask, producing an IRQ 12 interrupt
+	 * storm that starves every process (including this driver, so the mouse
+	 * byte is never drained) and wedges the boot.  The legacy 8259 PIC does
+	 * not re-fire that way, so this only bites under APIC.  The console needs
+	 * only the keyboard (IRQ 1); disable the mouse entirely.
+	 */
+	aux_available = 0;
+
 	/* Execute Controller Self Test. */
 	kbc_cmd0(0xAA);
 	r = kbc_read();
@@ -268,9 +281,23 @@ static int kb_init(void)
 		return EGENERIC;
 	}
 
-	/* Set interrupt handler and enable keyboard IRQ. */
+	/*
+	 * Set interrupt handler and enable keyboard IRQ.
+	 *
+	 * Do NOT use IRQ_REENABLE: that makes the kernel re-enable (unmask) the
+	 * IRQ line immediately after notifying us, i.e. before pckbd_intr() has
+	 * had a chance to read (drain) the byte from the 8042 output buffer.
+	 * While the byte is undrained the 8042 holds IRQ 1 asserted (OBF=1), and
+	 * under the IOAPIC (SMP/APIC mode) unmasking a still-asserted edge line
+	 * re-fires it immediately -- an IRQ 1 storm that starves every process
+	 * (including this driver, so the byte is never drained) and wedges the
+	 * boot.  The legacy 8259 PIC does not re-fire that way, which is why the
+	 * non-SMP build boots.  Instead we leave the IRQ masked after each
+	 * interrupt and re-enable it from pckbd_intr() only AFTER draining the
+	 * byte (see pckbd_intr), so the line is low again by the time we unmask.
+	 */
 	irq_hook_id = KEYBOARD_IRQ;	/* id to be returned on interrupt */
-	r = sys_irqsetpolicy(KEYBOARD_IRQ, IRQ_REENABLE, &irq_hook_id);
+	r = sys_irqsetpolicy(KEYBOARD_IRQ, 0, &irq_hook_id);
 	if (r != OK)
 		panic("Couldn't set keyboard IRQ policy: %d", r);
 	if ((r = sys_irqenable(&irq_hook_id)) != OK)
@@ -424,16 +451,26 @@ static void pckbd_intr(unsigned int UNUSED(mask))
 	int isaux;
 
 	/* Fetch a character from the keyboard hardware and acknowledge it. */
-	if (!scan_keyboard(&scode, &isaux))
-		return;
-
-	if (!isaux) {
-		/* A keyboard key press or release. */
-		kbd_process(scode);
-	} else {
-		/* A mouse event. */
-		kbdaux_process(scode);
+	if (scan_keyboard(&scode, &isaux)) {
+		if (!isaux) {
+			/* A keyboard key press or release. */
+			kbd_process(scode);
+		} else {
+			/* A mouse event. */
+			kbdaux_process(scode);
+		}
 	}
+
+	/*
+	 * Re-enable the keyboard IRQ now that scan_keyboard() has drained the
+	 * byte from the 8042 output buffer (which drops the asserted IRQ line).
+	 * The IRQ uses a non-IRQ_REENABLE policy (see kb_init) precisely so that
+	 * we unmask only AFTER draining -- re-enabling while the line is still
+	 * asserted would re-fire immediately under the IOAPIC and storm.  Re-arm
+	 * unconditionally (even if scan_keyboard found nothing) or the line would
+	 * stay masked forever and the keyboard would go dead.
+	 */
+	(void) sys_irqenable(&irq_hook_id);
 }
 
 /*

@@ -338,6 +338,16 @@ overflowed the 2048-byte buffer by 2048 bytes into adjacent trampoline memory
 on every AP boot.  Fix: add a `GATE_DESC_SIZE` (16) macro in `archconst.h`
 and reserve `IDT_SIZE*GATE_DESC_SIZE`.
 
+**i386 does NOT have this buffer-size bug** — i386 IDT gates *are* 8 bytes
+(`DESC_SIZE`), so `IDT_SIZE*DESC_SIZE` = 2048 correctly sizes `__ap_idt_tab`.
+But i386 `copy_trampoline()` had a *different* defect in the same spot:
+`memcpy(&__ap_idt_tab, gdt, sizeof(idt))` copied from **`gdt`** instead of `idt`
+(the same wrong-source bug amd64's `arch_smp.c` also had originally — see the
+CLAUDE.md "SMP AP startup" note).  It filled every AP's IDT with GDT segment
+descriptors (and read ~2 KB past the small GDT), triple-faulting each AP on its
+first interrupt.  Fix: `memcpy(&__ap_idt_tab, idt, sizeof(idt))`.  Latent until
+i386 actually brings APs up.
+
 #### 4. Descriptor-table pointer slots were 8 bytes, not 10 (`trampoline.S`)
 
 `__ap_gdt` / `__ap_idt` hold `struct desctableptr_s` = `{ u16 limit; u64 base; }`
@@ -466,6 +476,22 @@ Lesson: any fixed-size table immediately followed by a live global in BSS turns
 an off-by-one write into silent corruption of unrelated state.  The IDT/
 `k_percpu_stacks` adjacency made a debug-only installer fatal — and only on the
 SYSCALL path, because that is the sole consumer of `k_percpu_stacks`.
+
+**i386 has the identical bug** (the `apic_asm.S` label, the `apic.c` loop, the
+IDT/`k_percpu_stacks` BSS adjacency are all mirror images of amd64).  It only
+surfaces where the firmware actually offers the AMD SYSCALL fast path — e.g.
+VirtualBox in 32-bit legacy mode (`kernel: selecting amd syscall ipc style`),
+where QEMU/Intel would have used SYSENTER and dodged it.  The i386 stub is
+`ipc_entry_syscall_cpuN` in `arch/i386/mpx.S` (`mov k_percpu_stacks+4*cpu,%esi;
+mov (%esi),%ebp`); the gate is 8 bytes so `idt[256]` lands on
+`k_percpu_stacks[0]` exactly (`idt 0xf0470330 + 256*8 = 0xf0470b30`).  The 257th
+write stored gate dword0 `(KERN_CS<<16)|low16(handler256)` = `0x0008b5a5` there,
+and the first user SYSCALL faulted dereferencing `%esi = 0x8b5a5` in
+`ipc_entry_syscall_cpu0` (not a triple-fault on i386 — a clean
+`pagefault in kernel ... address 0x8b5a5`, `vec_nr=14`).  Same two-part fix
+ported: `.balign LAPIC_INTR_DUMMY_HANDLER_SIZE` before the start label, and the
+`&& vect < IDT_SIZE` loop guard.  (i386 `K_STACK_SIZE` stays one page — the
+16 KB bump above is an amd64-frame-size need, not part of this fix.)
 
 #### 8. `apic_send_init_ipi` `phys_copy(vir2phys(&stack_local))` faults *(reboot at "SMP initialized")*
 
@@ -880,6 +906,77 @@ APs add no timekeeping cost — only the per-CPU accounting tick they need.  Wit
 this, **test41 passes** on SMP (verified end-to-end: AP `dec` → `vtimer_check` →
 PM `process_ksig` → signal delivered).  How it was found: per-CPU tick counter +
 LAPIC register dump in `lapic_restart_timer` showed the never-completing one-shot.
+
+**i386 applies** — `arch/i386/apic.c`'s `lapic_stop_timer`/`lapic_restart_timer`
+were byte-for-byte the pre-fix amd64 versions (LAPIC timer registers are
+identical), so the same `lapic_timer_rem[]` save/resume was ported.  Latent until
+i386 SMP actually schedules user procs onto an AP.
+
+### #18 — IOAPIC re-fires an auto-re-enabled IRQ whose device line is still asserted → interrupt storm *(SMP boot hang on VirtualBox)*
+
+SMP (i386 **and** amd64) hung on VirtualBox during driver bring-up; the same tree
+booted fine **non-SMP** on VBox and **SMP on QEMU**.  The console froze after `rs
+server: started`, and a `switch_to_user` probe showed RS being re-picked millions
+of times, its user pc **frozen** at the instruction right after its `SENDA`
+`syscall` (the SYSRET return point) — executing *zero* userland instructions.
+That framing ("RS spins on SENDA") was a red herring: RS is simply the
+highest-priority runnable process, and something re-entered the kernel the instant
+`restore_user_context` re-enabled interrupts, every time, so RS never advanced.
+
+Not a syscall (`do_ipc` entered once), not a fault (`exception_handler` fired once
+— a single legitimate demand-page on RS's stack, resolved by VM), and **not the
+timer** (`arch_timer_int_handler` ticked once; period was a normal ~16 M).  A
+per-IRQ counter in `irq_handle` found it: one device IRQ flooding in lockstep with
+`switch_to_user`.  As each fix landed, the storm **walked to the next driver**:
+IRQ 12 (PS/2 mouse) → IRQ 1 (keyboard) → IRQ 14 (at_wini disk).  The tell: floppy
+(IRQ 6) registered but never stormed — it does **not** use `IRQ_REENABLE`.
+
+Root cause is generic, in the `IRQ_REENABLE` + IOAPIC interaction.  `irq_handle`
+masks the IOAPIC pin, calls the handler (which notifies the userspace driver), and
+for an `IRQ_REENABLE` line **immediately unmasks the pin again** — before the
+driver process has been scheduled to read/drain the device.  Devices like the 8042
+(keyboard/mouse) and legacy IDE hold their IRQ line **asserted** (8042 `OBF`=1 /
+IDE status pending) until the driver reads the data port.  VBox's emulated IOAPIC
+re-fires an edge pin that is unmasked while its input is still asserted → the IRQ
+re-delivers instantly → the storm monopolizes the CPU so the driver is *never*
+scheduled to drain it → self-sustaining livelock.  The legacy **8259 PIC**
+(non-SMP path) does not re-fire an asserted edge line on unmask, which is exactly
+why non-SMP boots.  MINIX programs ISA IRQs edge/active-high correctly
+(`set_irq_redir_low`, irq<16); the re-fire is VBox re-asserting the held-high pin.
+
+There is no clean *kernel* fix that keeps `IRQ_REENABLE`: auto-unmask-before-drain
+is inherent to the policy, and suppressing the IOAPIC re-fire is VBox-behavior
+specific and conflicts with the drain-first model.  Fix is per-driver
+**drain-before-reenable**: use policy `0` (not `IRQ_REENABLE`) so the line stays
+masked after each interrupt, and have the driver call `sys_irqenable()` **after**
+it reads the device (which drops the line), so the pin is unmasked only when its
+input is already low.
+
+```c
+/* pckbd (drivers/hid/pckbd/pckbd.c) */
+-   r = sys_irqsetpolicy(KEYBOARD_IRQ, IRQ_REENABLE, &irq_hook_id);
++   r = sys_irqsetpolicy(KEYBOARD_IRQ, 0, &irq_hook_id);   /* stay masked */
+    ...
+/* pckbd_intr(): after scan_keyboard() reads port 0x60 (clears OBF) */
++   (void) sys_irqenable(&irq_hook_id);   /* re-enable only after draining */
+    /* (the PS/2 AUX/mouse port is also left disabled: aux_available = 0) */
+
+/* at_wini (drivers/storage/at_wini/at_wini.c) — legacy IRQ 14/15 only */
+-   sys_irqsetpolicy(AT_WINI_0_IRQ, IRQ_REENABLE, &compat_hook);
++   sys_irqsetpolicy(AT_WINI_0_IRQ, 0, &compat_hook);
+    ...
+/* w_intr_wait(), HARDWARE case, after the REG_STATUS read that acks the drive */
++   if (!w_wn->native)
++       (void) sys_irqenable(&w_wn->irq_hook_id);
+```
+
+With pckbd + at_wini fixed, i386 SMP **boots to `login:`** on VBox.  These live in
+driver files shared with amd64, so they also clear the amd64-on-VBox hang.  Still
+**latent**: `rs232` (tty serial), `dpeth`, and `vbox` also use `IRQ_REENABLE`;
+they only storm if their line happens to be asserted at boot before their driver
+runs (serial RX had none in testing).  Any future "boots to a point then wedges on
+IRQ N" under APIC is the same bug — apply the same drain-then-`sys_irqenable`
+pattern to driver N.  (See also the pointer in `docs/drivers-x86_64.md`.)
 
 ## EFI64 boot bring-up — first successful boot (2026-06)
 

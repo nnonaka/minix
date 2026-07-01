@@ -526,3 +526,18 @@ for device"). `sbin/gpt/gpt.c` now has a `__minix` branch that uses `DIOCGETP`
 (`<minix/partition.h>` / `<sys/ioc_disk.h>`), mirroring libc `minix_sizeup()`.
 `gpt` is wired into the MINIX build via `sbin/Makefile` and
 `distrib/sets/lists/minix-base/mi`.
+
+## `IRQ_REENABLE` interrupt storm under the IOAPIC (SMP) *(pckbd, at_wini — fixed)*
+
+Under SMP (IOAPIC), a driver that registers its IRQ with `IRQ_REENABLE` and whose
+device holds the IRQ line asserted until it is read (8042 `OBF`, legacy-IDE status)
+storms on VirtualBox: the kernel auto-unmasks the IOAPIC pin right after notifying
+the driver, before the driver has drained the device, and VBox re-fires the still-
+asserted edge pin — livelocking the whole system before the driver can run.  Under
+the non-SMP 8259 PIC this does not happen, so it looks like an SMP-only hang.  Fix
+is **drain-before-reenable**: policy `0` instead of `IRQ_REENABLE`, then
+`sys_irqenable()` *after* reading the device.  Applied to `pckbd` (keyboard; PS/2
+mouse/AUX also left disabled) and `at_wini` (legacy compat IRQ 14/15; `w_intr_wait`
+re-enables after the `REG_STATUS` read, native drives unchanged).  Latent in
+`rs232`/`dpeth`/`vbox` (also `IRQ_REENABLE`).  **Full root-cause analysis and the
+before/after diffs are in `docs/kernel-arch-x86_64.md` #18.**
