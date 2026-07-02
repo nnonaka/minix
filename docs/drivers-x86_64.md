@@ -527,7 +527,7 @@ for device"). `sbin/gpt/gpt.c` now has a `__minix` branch that uses `DIOCGETP`
 `gpt` is wired into the MINIX build via `sbin/Makefile` and
 `distrib/sets/lists/minix-base/mi`.
 
-## `IRQ_REENABLE` interrupt storm under the IOAPIC (SMP) *(pckbd, at_wini — fixed)*
+## `IRQ_REENABLE` interrupt storm under the IOAPIC (SMP) *(pckbd, at_wini, rs232 — fixed)*
 
 Under SMP (IOAPIC), a driver that registers its IRQ with `IRQ_REENABLE` and whose
 device holds the IRQ line asserted until it is read (8042 `OBF`, legacy-IDE status)
@@ -537,7 +537,11 @@ asserted edge pin — livelocking the whole system before the driver can run.  U
 the non-SMP 8259 PIC this does not happen, so it looks like an SMP-only hang.  Fix
 is **drain-before-reenable**: policy `0` instead of `IRQ_REENABLE`, then
 `sys_irqenable()` *after* reading the device.  Applied to `pckbd` (keyboard; PS/2
-mouse/AUX also left disabled) and `at_wini` (legacy compat IRQ 14/15; `w_intr_wait`
-re-enables after the `REG_STATUS` read, native drives unchanged).  Latent in
-`rs232`/`dpeth`/`vbox` (also `IRQ_REENABLE`).  **Full root-cause analysis and the
-before/after diffs are in `docs/kernel-arch-x86_64.md` #18.**
+mouse/AUX also left disabled), `at_wini` (legacy compat IRQ 14/15; `w_intr_wait`
+re-enables after the `REG_STATUS` read, native drives unchanged), and `rs232`
+(tty serial; `rs_interrupt()` re-enables after `rs232_handler()` drains the UART —
+VBox's emulated COM2 holds IRQ 3 asserted, so an amd64 boot with COM2 enabled hung
+right after `IRQ 3 handler registered by tty`; `IRQ DIAG` probe showed `irq=3`
+flooding with `actids=0x0`).  Still latent in `dpeth`/`vbox` (also `IRQ_REENABLE`,
+not boot-critical).  **Full root-cause analysis and the before/after diffs are in
+`docs/kernel-arch-x86_64.md` #18.**

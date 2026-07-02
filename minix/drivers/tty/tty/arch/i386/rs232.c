@@ -517,7 +517,14 @@ void rs_init(tty_t *tp)
 
   rs->irq = irq;
   rs->irq_hook_id = rs->irq;	/* call back with irq line number */
-  if (sys_irqsetpolicy(irq, IRQ_REENABLE, &rs->irq_hook_id) != OK) {
+  /* Policy 0 (no IRQ_REENABLE): the kernel leaves the line masked after each
+   * interrupt; rs_interrupt() re-enables it only AFTER rs232_handler() has
+   * drained the UART (dropping the line).  IRQ_REENABLE auto-unmasks before
+   * the driver runs, so an asserted line (e.g. VBox's emulated COM2 on IRQ 3)
+   * re-fires on every unmask under the IOAPIC -> interrupt storm that starves
+   * the driver so it never drains.  Same drain-before-reenable fix as
+   * pckbd/at_wini. */
+  if (sys_irqsetpolicy(irq, 0, &rs->irq_hook_id) != OK) {
   	printf("RS232: Couldn't obtain hook for irq %d\n", irq);
   } else {
   	if (sys_irqenable(&rs->irq_hook_id) != OK)  {
@@ -561,8 +568,16 @@ void rs_interrupt(message *m)
 	irq_set= m->m_notify.interrupts;
 	for (i= 0, rs = rs_lines; i<NR_RS_LINES; i++, rs++)
 	{
-		if (irq_set & (1 << rs->irq))
+		if (irq_set & (1 << rs->irq)) {
 			rs232_handler(rs);
+			/* Drain done (line dropped); now re-arm the IRQ.  With
+			 * policy 0 the kernel kept it masked, so this is the
+			 * only re-enable -- and it happens after the drain, so
+			 * no re-fire storm. */
+			if (sys_irqenable(&rs->irq_hook_id) != OK)
+				printf("RS232: sys_irqenable failed for irq %d\n",
+					rs->irq);
+		}
 	}
 }
 
