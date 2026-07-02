@@ -545,3 +545,13 @@ right after `IRQ 3 handler registered by tty`; `IRQ DIAG` probe showed `irq=3`
 flooding with `actids=0x0`).  Still latent in `dpeth`/`vbox` (also `IRQ_REENABLE`,
 not boot-critical).  **Full root-cause analysis and the before/after diffs are in
 `docs/kernel-arch-x86_64.md` #18.**
+
+**Caveat — this fix regresses QEMU if applied naively (see #19).**  Policy `0`
+leaves the pin masked from the interrupt until the driver re-enables it; on a
+*correct* edge-triggered IOAPIC (QEMU/real hardware, unlike VBox) an edge that
+arrives in that masked window is **lost**, wedging the device permanently (dead
+keyboard/serial).  Each driver must therefore **drain fully** (loop, not one unit)
+*and* **re-check the device after unmask**: `pckbd_intr()` loops `scan_keyboard()`
+then re-checks `KB_STATUS`; `rs_interrupt()` re-checks the IIR after
+`sys_irqenable()`; `w_hw_int()` now acks + re-enables **all** drives (compat
+included) so a leftover interrupt on a compat drive can't strand IRQ 14/15.

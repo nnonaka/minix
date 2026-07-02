@@ -449,28 +449,44 @@ static void pckbd_intr(unsigned int UNUSED(mask))
 {
 	unsigned char scode;
 	int isaux;
-
-	/* Fetch a character from the keyboard hardware and acknowledge it. */
-	if (scan_keyboard(&scode, &isaux)) {
-		if (!isaux) {
-			/* A keyboard key press or release. */
-			kbd_process(scode);
-		} else {
-			/* A mouse event. */
-			kbdaux_process(scode);
-		}
-	}
+	u32_t sb;
 
 	/*
-	 * Re-enable the keyboard IRQ now that scan_keyboard() has drained the
-	 * byte from the 8042 output buffer (which drops the asserted IRQ line).
-	 * The IRQ uses a non-IRQ_REENABLE policy (see kb_init) precisely so that
-	 * we unmask only AFTER draining -- re-enabling while the line is still
-	 * asserted would re-fire immediately under the IOAPIC and storm.  Re-arm
-	 * unconditionally (even if scan_keyboard found nothing) or the line would
-	 * stay masked forever and the keyboard would go dead.
+	 * Drain the 8042 output buffer completely, then re-enable IRQ 1.
+	 *
+	 * scan_keyboard() reads only ONE byte, but several may be queued and
+	 * more may arrive while we run.  We must not leave any byte undrained:
+	 * OBF stays set, so the 8042 holds IRQ 1 asserted and delivers no
+	 * further bytes or interrupts until port 0x60 is read.  Because IRQ 1
+	 * uses a non-IRQ_REENABLE policy (see kb_init), the line is left masked
+	 * while we run and we unmask it only AFTER draining -- re-enabling while
+	 * the line is still asserted would re-fire immediately under the IOAPIC
+	 * and storm (the bug this policy avoids).
+	 *
+	 * On a correct edge-triggered IOAPIC (e.g. QEMU) an edge that arrives
+	 * while the pin is masked is LOST, so unmasking with a byte still
+	 * pending would wedge the keyboard forever.  We therefore loop: drain
+	 * every pending byte, unmask, then re-check the status; if a byte
+	 * slipped into the buffer during the masked window (its edge lost), go
+	 * around again.  (VirtualBox re-fires a still-asserted line on unmask so
+	 * it never hit this, but the extra pass is harmless there.)
 	 */
-	(void) sys_irqenable(&irq_hook_id);
+	do {
+		while (scan_keyboard(&scode, &isaux)) {
+			if (!isaux) {
+				/* A keyboard key press or release. */
+				kbd_process(scode);
+			} else {
+				/* A mouse event. */
+				kbdaux_process(scode);
+			}
+		}
+
+		(void) sys_irqenable(&irq_hook_id);
+
+		if (sys_inb(KB_STATUS, &sb) != OK)
+			break;
+	} while (sb & KB_OUT_FULL);
 }
 
 /*

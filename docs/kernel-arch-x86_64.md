@@ -971,12 +971,76 @@ input is already low.
 ```
 
 With pckbd + at_wini fixed, i386 SMP **boots to `login:`** on VBox.  These live in
-driver files shared with amd64, so they also clear the amd64-on-VBox hang.  Still
-**latent**: `rs232` (tty serial), `dpeth`, and `vbox` also use `IRQ_REENABLE`;
-they only storm if their line happens to be asserted at boot before their driver
-runs (serial RX had none in testing).  Any future "boots to a point then wedges on
-IRQ N" under APIC is the same bug — apply the same drain-then-`sys_irqenable`
-pattern to driver N.  (See also the pointer in `docs/drivers-x86_64.md`.)
+driver files shared with amd64, so they also clear the amd64-on-VBox hang.
+`rs232` (tty serial) was later converted to the same policy `0` pattern to fix the
+VBox COM2 storm (commit a633fcad7).  Still **latent**: `dpeth` and `vbox` also use
+`IRQ_REENABLE`; they only storm if their line happens to be asserted at boot before
+their driver runs.  Any future "boots to a point then wedges on IRQ N" under APIC is
+the same bug — apply the same drain-then-`sys_irqenable` pattern to driver N.
+
+**But the naive drain-before-reenable pattern regresses QEMU — see #19.**
+(See also the pointer in `docs/drivers-x86_64.md`.)
+
+### #19 — the drain-before-reenable fix (#18) loses interrupts on a *correct* IOAPIC → dead keyboard/serial *(QEMU)*
+
+The #18 fix (policy `0` + `sys_irqenable()` after draining) shipped for pckbd /
+at_wini / rs232 and booted VBox to `login:` — but then **QEMU's keyboard went
+dead**: the amd64 SMP tree booted all the way to `login:` (see a clean run in
+`log/test-1.log`) yet accepted **no key input**.  The #18 fix, which cured VBox,
+*created* a QEMU bug — the two hypervisors fail in opposite directions.
+
+Mechanism.  With policy `0`, `irq_handle` masks the IOAPIC pin and — because
+`generic_handler` returns `hook->policy & IRQ_REENABLE == 0` — leaves the actids
+bit set, so the pin stays **masked** from the interrupt until the driver calls
+`sys_irqenable()`.  During that masked window the device can raise its line again
+(a second key byte, a serial RX char).  On a **correct edge-triggered IOAPIC
+(QEMU/real hardware)** an edge that arrives while the pin is masked is **lost** —
+edge pins have no remote-IRR latch.  When the driver finally unmasks, the line is
+still asserted (8042 `OBF`=1 / UART `INTR` high) but there is **no fresh edge**, so
+the interrupt never re-delivers; the device stops producing new edges (OBF blocks
+further bytes) → the input path wedges **permanently**.  VBox never hit this
+precisely because its IOAPIC *re-fires* a still-asserted line on unmask (the very
+misbehavior that caused the #18 storm) — which accidentally recovers the lost edge.
+So VBox's bug masked QEMU's.
+
+Two distinct defects had to be fixed:
+
+1. **pckbd read only one byte per interrupt.**  `scan_keyboard()` reads a single
+   byte from port 0x60; a second byte queued (or arriving in the masked window)
+   left `OBF`=1 with no future edge → dead keyboard.  Fix: drain in a **loop**
+   until the 8042 output buffer is empty, then close the masked-window race by
+   re-checking `KB_STATUS` **after** unmasking and looping if a byte slipped in.
+
+   ```c
+   /* pckbd_intr() — drivers/hid/pckbd/pckbd.c */
+   do {
+       while (scan_keyboard(&scode, &isaux)) { /* drain ALL queued bytes */
+           if (!isaux) kbd_process(scode); else kbdaux_process(scode);
+       }
+       (void) sys_irqenable(&irq_hook_id);         /* unmask (line now low) */
+       if (sys_inb(KB_STATUS, &sb) != OK) break;   /* did a byte race in? */
+   } while (sb & KB_OUT_FULL);                      /* its edge was lost — redo */
+   ```
+
+2. **rs232 only needed the race-closer.**  `rs232_handler()` already loops on IIR
+   until `IS_NOTPENDING` (full drain), so only the masked-window edge could be
+   lost.  Fix: after `sys_irqenable()` re-read the IIR (`int_id_port`); if an
+   interrupt is pending, drain + re-arm again (retry-bounded so a stuck-asserting
+   UART can't spin).  Applied to both arch copies.
+
+`at_wini` needed a **different** fix (no race — IDE is request/response, so it
+raises no interrupt while masked).  Its gap: `w_hw_int()` (the blockdriver
+`.bdr_intr` leftover-interrupt handler) acked + re-enabled **native** drives only;
+under policy `0` a leftover interrupt on a **compat** drive reaches `w_hw_int()`
+directly (not `w_intr_wait()`), so its IRQ 14/15 stayed masked forever.  Fix:
+`w_hw_int()` now reads `REG_STATUS` (ack) and `sys_irqenable()`s **all**
+non-`IGNORING` drives (the DMA-status dance stays native-only), and the redundant
+inline compat re-enable in `w_intr_wait()` was removed.
+
+Rule of thumb: any policy-`0` drain-before-reenable driver on a real
+edge-triggered IOAPIC must **drain the device fully** (loop, not one unit) *and*
+**re-check the device after unmask** to recover an edge lost in the masked window.
+Confirmed: amd64 SMP keyboard input works on QEMU with these fixes, VBox still boots.
 
 ## EFI64 boot bring-up — first successful boot (2026-06)
 

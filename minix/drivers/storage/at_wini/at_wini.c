@@ -1638,16 +1638,11 @@ static void w_intr_wait(void)
 						panic("sys_inb failed: %d", r);
 					w_wn->w_status= w_status;
 					/*
-					 * Compat (legacy) IRQs use a non-
-					 * IRQ_REENABLE policy to avoid an IOAPIC
-					 * re-fire storm on VBox; re-enable now
-					 * that the REG_STATUS read above cleared
-					 * the drive interrupt.  Native drives are
-					 * re-enabled by w_hw_int().
+					 * w_hw_int() acks and re-enables the
+					 * IRQ for both native and compat drives
+					 * (all use a non-IRQ_REENABLE policy to
+					 * avoid an IOAPIC re-fire storm on VBox).
 					 */
-					if (!w_wn->native)
-						(void) sys_irqenable(
-						    &w_wn->irq_hook_id);
 					w_hw_int(m.m_notify.interrupts);
 					break;
 				default:
@@ -2161,26 +2156,40 @@ static int w_ioctl(devminor_t minor, unsigned long request, endpoint_t endpt,
  *===========================================================================*/
 static void w_hw_int(unsigned int UNUSED(irqs))
 {
-  /* Leftover interrupt(s) received; ack it/them.  For native drives only. */
+  /* Leftover interrupt(s) received; ack it/them and re-enable the IRQ.
+   *
+   * All configured drives (native AND compat) use a non-IRQ_REENABLE policy
+   * (see w_init), so the kernel leaves the line masked after each interrupt
+   * and we must re-enable it here after acking the drive.  Reading REG_STATUS
+   * acks/clears the drive interrupt (drops the asserted IRQ line) so the
+   * subsequent unmask does not re-fire under the IOAPIC.  A leftover interrupt
+   * on a compat drive reaches this handler directly from the blockdriver loop
+   * (not w_intr_wait), so compat drives must be handled here too -- otherwise
+   * their IRQ 14/15 would stay masked forever and the drive would go dead.
+   */
   unsigned int drive;
   u32_t w_status;
 
   for (drive = 0; drive < MAX_DRIVES; drive++) {
-	if (!(wini[drive].state & IGNORING) && wini[drive].native) {
-		if (sys_inb((wini[drive].base_cmd + REG_STATUS),
-			&w_status) != OK)
-		{
-		  	panic("couldn't ack irq on drive: %d", drive);
+	if (wini[drive].state & IGNORING)
+		continue;
+
+	if (sys_inb((wini[drive].base_cmd + REG_STATUS), &w_status) != OK)
+		panic("couldn't ack irq on drive: %d", drive);
+	wini[drive].w_status= w_status;
+
+	/* Busmaster DMA status is only maintained for native drives (compat
+	 * drives never touched it, matching the pre-policy-0 behaviour). */
+	if (wini[drive].native) {
+		sys_inb(wini[drive].base_dma + DMA_STATUS, &w_status);
+		if(w_status & DMA_ST_INT) {
+			sys_outb(wini[drive].base_dma + DMA_STATUS, DMA_ST_INT);
+			wini[drive].dma_intseen = 1;
 		}
-		wini[drive].w_status= w_status;
-  		sys_inb(wini[drive].base_dma + DMA_STATUS, &w_status);
-  		if(w_status & DMA_ST_INT) {
-	  		sys_outb(wini[drive].base_dma + DMA_STATUS, DMA_ST_INT);
-	  		wini[drive].dma_intseen = 1;
-  		}
-	 	if (sys_irqenable(&wini[drive].irq_hook_id) != OK)
-		  	printf("couldn't re-enable drive %d\n", drive);
 	}
+
+	if (sys_irqenable(&wini[drive].irq_hook_id) != OK)
+		printf("couldn't re-enable drive %d\n", drive);
   }
 }
 

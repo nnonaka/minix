@@ -564,19 +564,38 @@ void rs_interrupt(message *m)
 	unsigned long irq_set;
 	int i;
 	rs232_t *rs;
+	u32_t v;
 
 	irq_set= m->m_notify.interrupts;
 	for (i= 0, rs = rs_lines; i<NR_RS_LINES; i++, rs++)
 	{
 		if (irq_set & (1 << rs->irq)) {
-			rs232_handler(rs);
-			/* Drain done (line dropped); now re-arm the IRQ.  With
-			 * policy 0 the kernel kept it masked, so this is the
-			 * only re-enable -- and it happens after the drain, so
-			 * no re-fire storm. */
-			if (sys_irqenable(&rs->irq_hook_id) != OK)
-				printf("RS232: sys_irqenable failed for irq %d\n",
-					rs->irq);
+			int retry = 16;
+			do {
+				rs232_handler(rs);
+				/* Drain done (line dropped); now re-arm the IRQ.
+				 * With policy 0 the kernel kept it masked, so
+				 * this is the only re-enable -- and it happens
+				 * after the drain, so no re-fire storm. */
+				if (sys_irqenable(&rs->irq_hook_id) != OK)
+					printf("RS232: sys_irqenable failed for "
+						"irq %d\n", rs->irq);
+				/*
+				 * Close the masked-window race: rs232_handler()
+				 * drained until IIR read "not pending", dropping
+				 * the UART INTR line, but a byte that arrived
+				 * between that last read and the unmask above
+				 * re-asserts INTR -- and on a correct edge-
+				 * triggered IOAPIC (QEMU) that edge is lost while
+				 * the pin is masked, leaving the line stuck high
+				 * with no fresh edge (serial input wedged for-
+				 * ever).  Re-read IIR; if an interrupt is pending
+				 * we lost its edge, so drain and re-arm again.
+				 * Bounded so a stuck-asserting UART can't spin us.
+				 */
+				if (sys_inb(rs->int_id_port, &v) != OK)
+					break;
+			} while (!(v & IS_NOTPENDING) && --retry > 0);
 		}
 	}
 }
