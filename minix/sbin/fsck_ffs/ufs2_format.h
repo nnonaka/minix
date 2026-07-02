@@ -65,6 +65,11 @@ struct ufs2_dinode {
 
 #define DINODE2_SIZE	(sizeof(struct ufs2_dinode))
 
+/* On-disk UFS1 inode size.  fsck only inspects di_mode/di_nlink, which sit at
+ * the same offsets (0/2) in the UFS1 and UFS2 dinodes; only the inode stride
+ * within an inode block differs (128 vs 256 bytes). */
+#define DINODE1_SIZE	((size_t)128)
+
 /* File type bits in di_mode (identical to MINIX's I_* values). */
 #define IFMT		0170000
 #define IFIFO		0010000

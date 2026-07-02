@@ -42,6 +42,60 @@ static int read_chunked(dev_t dev, u64_t pos, char *buf, size_t size)
   return(OK);
 }
 
+/*===========================================================================*
+ *                      ffs_oldfscompat_read / _write                        *
+ *===========================================================================*/
+/* UFS1 keeps several fields (size, data size, cg-summary address and totals,
+ * and the last-written time) in narrow "fs_old_*" slots that UFS2 replaced
+ * with wider ones.  The rest of the server reads only the wide fields, so on
+ * read we copy the UFS1 legacy values up into them, and on write we copy them
+ * back down.  Derived masks and the maximum file size are recomputed so the
+ * server does not depend on their on-disk correctness.  UFS2 images are left
+ * untouched.  Modelled on NetBSD ffs_oldfscompat_read/write. */
+static void ffs_oldfscompat_read(struct fs *fs)
+{
+  u_int64_t sizepb;
+  int i;
+
+  if (fs->fs_magic != FS_UFS1_MAGIC)
+	return;
+
+  fs->fs_size = fs->fs_old_size;
+  fs->fs_dsize = fs->fs_old_dsize;
+  fs->fs_csaddr = fs->fs_old_csaddr;
+  fs->fs_time = fs->fs_old_time;
+  fs->fs_cstotal.cs_ndir = fs->fs_old_cstotal.cs_ndir;
+  fs->fs_cstotal.cs_nbfree = fs->fs_old_cstotal.cs_nbfree;
+  fs->fs_cstotal.cs_nifree = fs->fs_old_cstotal.cs_nifree;
+  fs->fs_cstotal.cs_nffree = fs->fs_old_cstotal.cs_nffree;
+
+  /* Recompute the derived fields (cheap, and independent of the on-disk
+   * copy which older UFS1 formats do not maintain). */
+  fs->fs_qbmask = ~fs->fs_bmask;
+  fs->fs_qfmask = ~fs->fs_fmask;
+  sizepb = fs->fs_bsize;
+  fs->fs_maxfilesize = fs->fs_bsize * UFS_NDADDR - 1;
+  for (i = 0; i < UFS_NIADDR; i++) {
+	sizepb *= FFS_NINDIR(fs);
+	fs->fs_maxfilesize += sizepb;
+  }
+}
+
+static void ffs_oldfscompat_write(struct fs *fs)
+{
+  if (fs->fs_magic != FS_UFS1_MAGIC)
+	return;
+
+  fs->fs_old_size = fs->fs_size;
+  fs->fs_old_dsize = fs->fs_dsize;
+  fs->fs_old_csaddr = fs->fs_csaddr;
+  fs->fs_old_time = fs->fs_time;
+  fs->fs_old_cstotal.cs_ndir = fs->fs_cstotal.cs_ndir;
+  fs->fs_old_cstotal.cs_nbfree = fs->fs_cstotal.cs_nbfree;
+  fs->fs_old_cstotal.cs_nifree = fs->fs_cstotal.cs_nifree;
+  fs->fs_old_cstotal.cs_nffree = fs->fs_cstotal.cs_nffree;
+}
+
 /* Counterpart of read_chunked() for writing. */
 static int write_chunked(dev_t dev, u64_t pos, char *buf, size_t size)
 {
@@ -96,7 +150,8 @@ int read_super(struct super_block *sp)
   char *sbbuf;
   size_t cssize;
   dev_t dev;
-  int i, r, found, saw_ufs1;
+  size_t dsize;
+  int i, r, found;
 
   sp->s_csp = NULL;		/* so free_super() is safe on early failure */
   sp->s_csp_size = 0;
@@ -115,19 +170,16 @@ int read_super(struct super_block *sp)
   fs = &sp->s_fs;
 
   /* Search the candidate superblock locations.  Accept native-little-endian
-   * UFS2 in either the plain or the extended-attribute (EA) flavour; both use
-   * the same on-disk inode and block layout. */
+   * UFS1 (FFSv1) and UFS2 (plain or extended-attribute EA flavour).  The
+   * fs_sblockloc guard rejects stale/aliased superblocks. */
   found = FALSE;
-  saw_ufs1 = FALSE;
   for (i = 0; sblocksearch[i] != -1; i++) {
 	r = read_chunked(dev, (u64_t) sblocksearch[i], sbbuf, SBLOCKSIZE);
 	if (r != OK)
 		continue;
 	memcpy(fs, sbbuf, sizeof(struct fs));
-	if (fs->fs_magic == FS_UFS1_MAGIC)
-		saw_ufs1 = TRUE;	/* note it for an accurate message */
-	if (fs->fs_magic == FS_UFS2_MAGIC || fs->fs_magic == FS_UFS2EA_MAGIC) {
-		/* Guard against picking up a stale/aliased superblock. */
+	if (fs->fs_magic == FS_UFS2_MAGIC || fs->fs_magic == FS_UFS2EA_MAGIC ||
+	    fs->fs_magic == FS_UFS1_MAGIC) {
 		if (fs->fs_sblockloc == sblocksearch[i]) {
 			sp->s_sboff = sblocksearch[i];
 			found = TRUE;
@@ -138,13 +190,13 @@ int read_super(struct super_block *sp)
   munmap(sbbuf, SBLOCKSIZE);
 
   if (!found) {
-	if (saw_ufs1)
-		printf("ffs: UFS1 (FFSv1) is not supported; "
-		    "create the filesystem with newfs -O2 (UFS2)\n");
-	else
-		printf("ffs: no supported UFS2 superblock found\n");
+	printf("ffs: no supported UFS1/UFS2 superblock found\n");
 	return(EINVAL);
   }
+
+  /* Normalize UFS1's legacy fields into the 64-bit in-core fields (no-op for
+   * UFS2) so the rest of the server is format-agnostic. */
+  ffs_oldfscompat_read(fs);
 
   /* Sanity-check the geometry fields newfs computed for us. */
   if (fs->fs_bsize < MINBSIZE || fs->fs_bsize > MAXBSIZE ||
@@ -161,7 +213,8 @@ int read_super(struct super_block *sp)
 	printf("ffs: inconsistent frag count\n");
 	return(EINVAL);
   }
-  if (fs->fs_inopb != (u_int32_t)(fs->fs_bsize / (int)DINODE2_SIZE)) {
+  dsize = (fs->fs_magic == FS_UFS1_MAGIC) ? DINODE1_SIZE : DINODE2_SIZE;
+  if (fs->fs_inopb != (u_int32_t)(fs->fs_bsize / (int)dsize)) {
 	printf("ffs: inconsistent inopb\n");
 	return(EINVAL);
   }
@@ -233,6 +286,10 @@ void write_super(struct super_block *sp)
 
   if (sp->s_rd_only)
 	return;
+
+  /* Push the in-core 64-bit fields back down into UFS1's legacy slots so the
+   * on-disk UFS1 superblock stays self-consistent (no-op for UFS2). */
+  ffs_oldfscompat_write(fs);
 
   /* Write the superblock from a sector-rounded bounce buffer. */
   wsize = (size_t) roundup(sizeof(struct fs), DEV_BSIZE);

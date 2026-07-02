@@ -240,6 +240,89 @@ void update_times(struct inode *rip)
 }
 
 /*===========================================================================*
+ *                ufs1_to_ufs2 / ufs2_to_ufs1                                *
+ *===========================================================================*/
+/* The in-core inode always holds a (wide) UFS2 dinode.  On a UFS1 file system
+ * the on-disk inode is the narrower struct ufs1_dinode (32-bit block pointers
+ * and times), so rw_inode widens it on read and narrows it back on write.
+ *
+ * Inline ("fast") symlinks store the target bytes in the block-pointer area
+ * rather than block numbers; those bytes are copied verbatim, since a numeric
+ * widen/narrow of di_db[]/di_ib[] would corrupt the string.  Every other file
+ * type stores block numbers, converted per element (block numbers are small
+ * non-negative frag numbers, so the widening is loss-free). */
+static int is_shortlink(const struct fs *fs, u_int16_t mode, u_int64_t size,
+	u_int64_t blocks)
+{
+  return ((mode & IFMT) == IFLNK &&
+	size < (u_int64_t) fs->fs_maxsymlinklen && blocks == 0);
+}
+
+static void ufs1_to_ufs2(const struct fs *fs, const struct ufs1_dinode *d1,
+	struct ufs2_dinode *d2)
+{
+  int i;
+
+  memset(d2, 0, sizeof(*d2));
+  d2->di_mode = d1->di_mode;
+  d2->di_nlink = d1->di_nlink;
+  d2->di_uid = d1->di_uid;
+  d2->di_gid = d1->di_gid;
+  d2->di_size = d1->di_size;
+  d2->di_blocks = d1->di_blocks;
+  d2->di_atime = d1->di_atime;
+  d2->di_atimensec = d1->di_atimensec;
+  d2->di_mtime = d1->di_mtime;
+  d2->di_mtimensec = d1->di_mtimensec;
+  d2->di_ctime = d1->di_ctime;
+  d2->di_ctimensec = d1->di_ctimensec;
+  d2->di_flags = d1->di_flags;
+  d2->di_gen = d1->di_gen;
+  d2->di_modrev = d1->di_modrev;
+
+  if (is_shortlink(fs, d1->di_mode, d1->di_size, d1->di_blocks)) {
+	memcpy(d2->di_db, d1->di_db, UFS1_MAXSYMLINKLEN);
+  } else {
+	for (i = 0; i < UFS_NDADDR; i++)
+		d2->di_db[i] = d1->di_db[i];
+	for (i = 0; i < UFS_NIADDR; i++)
+		d2->di_ib[i] = d1->di_ib[i];
+  }
+}
+
+static void ufs2_to_ufs1(const struct fs *fs, const struct ufs2_dinode *d2,
+	struct ufs1_dinode *d1)
+{
+  int i;
+
+  memset(d1, 0, sizeof(*d1));
+  d1->di_mode = d2->di_mode;
+  d1->di_nlink = d2->di_nlink;
+  d1->di_uid = d2->di_uid;
+  d1->di_gid = d2->di_gid;
+  d1->di_size = d2->di_size;
+  d1->di_blocks = (u_int32_t) d2->di_blocks;
+  d1->di_atime = (int32_t) d2->di_atime;
+  d1->di_atimensec = d2->di_atimensec;
+  d1->di_mtime = (int32_t) d2->di_mtime;
+  d1->di_mtimensec = d2->di_mtimensec;
+  d1->di_ctime = (int32_t) d2->di_ctime;
+  d1->di_ctimensec = d2->di_ctimensec;
+  d1->di_flags = d2->di_flags;
+  d1->di_gen = d2->di_gen;
+  d1->di_modrev = d2->di_modrev;
+
+  if (is_shortlink(fs, d2->di_mode, d2->di_size, d2->di_blocks)) {
+	memcpy(d1->di_db, d2->di_db, UFS1_MAXSYMLINKLEN);
+  } else {
+	for (i = 0; i < UFS_NDADDR; i++)
+		d1->di_db[i] = (int32_t) d2->di_db[i];
+	for (i = 0; i < UFS_NIADDR; i++)
+		d1->di_ib[i] = (int32_t) d2->di_ib[i];
+  }
+}
+
+/*===========================================================================*
  *                rw_inode                                                   *
  *===========================================================================*/
 void rw_inode(struct inode *rip, int rw_flag)
@@ -248,36 +331,47 @@ void rw_inode(struct inode *rip, int rw_flag)
   struct buf *bp;
   struct super_block *sp;
   struct fs *fs;
-  struct ufs2_dinode *dip;
+  char *diskino;
   block64_t fsba;
   off_t byteoff;
-  unsigned int fragidx, inoff;
+  unsigned int fragidx, inoff, dsize;
+  int is_ufs1;
 
   sp = get_super(rip->i_dev);
   rip->i_sp = sp;
   fs = &sp->s_fs;
+  is_ufs1 = (fs->fs_magic == FS_UFS1_MAGIC);
+  dsize = is_ufs1 ? (unsigned int) DINODE1_SIZE : (unsigned int) DINODE2_SIZE;
 
   /* Locate the fragment of the inode block that holds this inode, and the
    * byte offset of the inode within that fragment.  A full inode block spans
    * fs_frag fragments; the cache addresses fragments individually.
    */
   fsba = (block64_t) ino_to_fsba(fs, rip->i_num);
-  byteoff = (off_t) ino_to_fsbo(fs, rip->i_num) * (off_t) DINODE2_SIZE;
+  byteoff = (off_t) ino_to_fsbo(fs, rip->i_num) * (off_t) dsize;
   fragidx = (unsigned int) (byteoff / fs->fs_fsize);
   inoff = (unsigned int) (byteoff % fs->fs_fsize);
 
   bp = get_block(rip->i_dev, fsba + fragidx, NORMAL);
-  dip = (struct ufs2_dinode *) (b_data(bp) + inoff);
+  diskino = b_data(bp) + inoff;
 
   if (rw_flag == WRITING) {
 	if (rip->i_update)
 		update_times(rip);
 	if (sp->s_rd_only == FALSE) {
-		memcpy(dip, &rip->i_din, sizeof(struct ufs2_dinode));
+		if (is_ufs1)
+			ufs2_to_ufs1(fs, &rip->i_din,
+				(struct ufs1_dinode *) diskino);
+		else
+			memcpy(diskino, &rip->i_din,
+				sizeof(struct ufs2_dinode));
 		lmfs_markdirty(bp);
 	}
   } else {
-	memcpy(&rip->i_din, dip, sizeof(struct ufs2_dinode));
+	if (is_ufs1)
+		ufs1_to_ufs2(fs, (struct ufs1_dinode *) diskino, &rip->i_din);
+	else
+		memcpy(&rip->i_din, diskino, sizeof(struct ufs2_dinode));
   }
 
   put_block(bp);

@@ -114,14 +114,19 @@ static ino_t ffs_nodealloccg(struct fs *fs, u_int cg, ino_t ipref, mode_t mode)
   }
 
 gotit:
-  /* Initialize the inode block(s) up to and including this inode if needed. */
-  initediblk = cgp->cg_initediblk;
-  while (ipref >= (ino_t) initediblk &&
-      initediblk < (int32_t) cgp->cg_niblk) {
-	init_inode_block(fs, cg, initediblk);
-	initediblk += FFS_INOPB(fs);
+  /* Initialize the inode block(s) up to and including this inode if needed.
+   * This is a UFS2-only optimization: UFS1 initializes every inode block at
+   * newfs time and has no cg_initediblk counter (the field would be garbage),
+   * so skip it there. */
+  if (fs->fs_magic != FS_UFS1_MAGIC) {
+	initediblk = cgp->cg_initediblk;
+	while (ipref >= (ino_t) initediblk &&
+	    initediblk < (int32_t) cgp->cg_niblk) {
+		init_inode_block(fs, cg, initediblk);
+		initediblk += FFS_INOPB(fs);
+	}
+	cgp->cg_initediblk = initediblk;
   }
-  cgp->cg_initediblk = initediblk;
 
   setbit(inosused, ipref);
   if (ipref >= cgp->cg_irotor)

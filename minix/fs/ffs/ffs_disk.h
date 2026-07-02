@@ -1,10 +1,12 @@
-/* On-disk format of the Berkeley Fast File System (UFS2 variant).
+/* On-disk format of the Berkeley Fast File System (UFS1 / UFS2).
  *
- * This header is a trimmed, native-little-endian, UFS2-only distillation of
- * the NetBSD on-disk definitions found in sys/ufs/ffs/fs.h,
- * sys/ufs/ufs/dinode.h and sys/ufs/ufs/dir.h.  All UFS1, big-endian and
- * byte-swapping support has been removed: this server only handles native
- * little-endian UFS2 images (see CLAUDE.md "Endianness").
+ * This header is a trimmed, native-little-endian distillation of the NetBSD
+ * on-disk definitions found in sys/ufs/ffs/fs.h, sys/ufs/ufs/dinode.h and
+ * sys/ufs/ufs/dir.h.  Big-endian and byte-swapping support has been removed:
+ * this server only handles native little-endian images (see CLAUDE.md
+ * "Endianness").  Both UFS1 (FFSv1) and UFS2 (FFSv2) on-disk layouts are
+ * described; the server keeps a widened UFS2 dinode in core and converts
+ * to/from the narrower UFS1 dinode at the rw_inode boundary (see inode.c).
  *
  * The structures below describe on-disk layout and therefore use fixed-width
  * types and must match the NetBSD/amd64 (LP64) layout exactly.
@@ -64,6 +66,43 @@ struct ufs2_dinode {
 #define UFS2_MAXSYMLINKLEN	((UFS_NDADDR + UFS_NIADDR) * sizeof(int64_t))
 
 #define DINODE2_SIZE	(sizeof(struct ufs2_dinode))
+
+/*
+ * UFS1 on-disk inode (128 bytes).  Block pointers (di_db/di_ib) and the time
+ * fields are 32-bit, unlike UFS2.  The server never stores this struct in
+ * core: rw_inode() widens it into a struct ufs2_dinode on read and narrows it
+ * back on write (inode.c: ufs1_to_ufs2 / ufs2_to_ufs1).
+ */
+struct ufs1_dinode {
+	u_int16_t	di_mode;	/*   0: IFMT, permissions */
+	int16_t		di_nlink;	/*   2: file link count */
+	u_int16_t	di_oldids[2];	/*   4: obsolete (was uid/gid) */
+	u_int64_t	di_size;	/*   8: file byte count */
+	int32_t		di_atime;	/*  16: last access time */
+	int32_t		di_atimensec;	/*  20: last access time */
+	int32_t		di_mtime;	/*  24: last modified time */
+	int32_t		di_mtimensec;	/*  28: last modified time */
+	int32_t		di_ctime;	/*  32: last inode change time */
+	int32_t		di_ctimensec;	/*  36: last inode change time */
+	int32_t		di_db[UFS_NDADDR];  /* 40: direct disk blocks */
+	int32_t		di_ib[UFS_NIADDR];  /* 88: indirect disk blocks */
+	u_int32_t	di_flags;	/* 100: status flags (chflags) */
+	u_int32_t	di_blocks;	/* 104: blocks actually held */
+	int32_t		di_gen;		/* 108: generation number */
+	u_int32_t	di_uid;		/* 112: file owner */
+	u_int32_t	di_gid;		/* 116: file group */
+	u_int64_t	di_modrev;	/* 120: i_modrev for NFSv4 */
+};
+
+#define UFS1_MAXSYMLINKLEN	((UFS_NDADDR + UFS_NIADDR) * sizeof(int32_t))
+
+#define DINODE1_SIZE	(sizeof(struct ufs1_dinode))
+
+/* fs_old_inodefmt: file systems at FS_44INODEFMT or newer use the modern
+ * cylinder-group (cg_*off) and directory (d_type) layouts.  newfs and makefs
+ * always write this format, for both UFS1 and UFS2. */
+#define FS_42INODEFMT	(-1)
+#define FS_44INODEFMT	2
 
 /* File type bits in di_mode (identical to MINIX's I_* values). */
 #define IFMT		0170000
@@ -335,6 +374,34 @@ struct cg {
 /* Number of inodes / indirects in a file-system block. */
 #define FFS_INOPB(fs)	((fs)->fs_inopb)
 #define FFS_NINDIR(fs)	((fs)->fs_nindir)
+
+/*
+ * On-disk block-pointer / indirect-entry width.  UFS1 stores 32-bit block
+ * addresses in di_ib[] targets and indirect blocks; UFS2 stores 64-bit ones.
+ * These helpers read and write a single entry from a buffer at native width so
+ * the shared read/write/truncate code stays format-agnostic.  Block numbers
+ * are non-negative frag numbers (NO_BLOCK == 0), so the widening is a plain
+ * sign-extend of a positive value.
+ */
+#define FFS_DADDRSIZE(fs) \
+	(((fs)->fs_magic == FS_UFS1_MAGIC) ? sizeof(int32_t) : sizeof(int64_t))
+
+static __inline int64_t
+ffs_getdaddr(const struct fs *fs, const void *p)
+{
+	if (fs->fs_magic == FS_UFS1_MAGIC)
+		return (int64_t) *(const int32_t *) p;
+	return *(const int64_t *) p;
+}
+
+static __inline void
+ffs_putdaddr(const struct fs *fs, void *p, int64_t v)
+{
+	if (fs->fs_magic == FS_UFS1_MAGIC)
+		*(int32_t *) p = (int32_t) v;
+	else
+		*(int64_t *) p = v;
+}
 
 /* Convert a byte count to a number of DEV_BSIZE (512-byte) blocks; di_blocks
  * is maintained in these units. */

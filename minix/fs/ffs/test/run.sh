@@ -78,6 +78,29 @@ if [ -n "$nbmakefs" ] && [ -x "$nbmakefs" ]; then
 		"$work/c.img" "$work/seed" >/dev/null
 	"$work/ufs2dump" "$work/c.img" | sed -n '/directory entries/,$p'
 	"$work/fsck_ffs" "$work/c.img"
+
+	echo
+	echo "== 3b. UFS1 (FFSv1): server mounts makefs version=1 images r/w =="
+	# Build empty UFS1 file systems with makefs and run the real handlers on
+	# them.  This exercises the UFS1 dinode conversion, the old<->new
+	# superblock field sync, and -- via bigfile/sparse -- the 32-bit indirect
+	# block entries.  Each run is followed by fsck to prove the write path
+	# keeps a UFS1 image fsck-consistent.
+	rm -rf "$work/empty"; mkdir -p "$work/empty"
+	mku1() { "$nbmakefs" -t ffs -o version=1,bsize=16384,fsize=2048 -s 32m \
+		"$1" "$work/empty" >/dev/null; }
+
+	mku1 "$work/u1.img";  "$work/fsck_ffs" "$work/u1.img"
+	"$work/harness" "$work/u1.img";  "$work/fsck_ffs" "$work/u1.img"
+	echo "-- UFS1 indirect blocks (direct+single) --"
+	mku1 "$work/u1big.img"
+	"$work/bigfile" "$work/u1big.img";  "$work/fsck_ffs" "$work/u1big.img"
+	echo "-- UFS1 sparse (double/triple indirect) --"
+	mku1 "$work/u1sp.img"
+	"$work/sparse" "$work/u1sp.img";  "$work/fsck_ffs" "$work/u1sp.img"
+	echo "-- UFS1 symlinks (fast+slow) --"
+	mku1 "$work/u1sl.img"
+	"$work/slink" "$work/u1sl.img";  "$work/fsck_ffs" "$work/u1sl.img"
 fi
 
 echo

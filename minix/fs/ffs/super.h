@@ -2,8 +2,9 @@
  * this process, so there is exactly one in-core super block.
  *
  * The on-disk superblock (struct fs) is embedded directly; since this server
- * is native-little-endian and UFS2-only, no field-by-field byte swapping is
- * needed (see CLAUDE.md "Endianness").
+ * is native-little-endian, no field-by-field byte swapping is needed (see
+ * CLAUDE.md "Endianness").  UFS1's legacy "fs_old_*" fields are normalized
+ * into the wide UFS2 fields on read and back on write (super.c).
  */
 
 #ifndef FFS_SUPER_H

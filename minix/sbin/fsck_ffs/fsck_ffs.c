@@ -8,7 +8,7 @@
  * checks the root inode.
  *
  * It does NOT repair anything; it reports inconsistencies and exits non-zero
- * if any are found (like "fsck -n").  Native little-endian UFS2 only.
+ * if any are found (like "fsck -n").  Native little-endian UFS1 and UFS2.
  */
 #include <sys/types.h>
 #include <sys/param.h>
@@ -67,7 +67,8 @@ int main(int argc, char **argv)
 	struct ufs2_dinode root;
 	char *cgbuf;
 	off_t sboff = -1;
-	int i, found = 0;
+	size_t dinosize;
+	int i, found = 0, is_ufs1 = 0;
 	uint32_t cg;
 
 	if (argc != 2) {
@@ -80,7 +81,8 @@ int main(int argc, char **argv)
 	/* Locate and validate the superblock. */
 	for (i = 0; search[i] != -1; i++) {
 		rd(&sb, search[i], sizeof(sb), "superblock");
-		if ((sb.fs_magic == FS_UFS2_MAGIC || sb.fs_magic == FS_UFS2EA_MAGIC) &&
+		if ((sb.fs_magic == FS_UFS2_MAGIC || sb.fs_magic == FS_UFS2EA_MAGIC ||
+		    sb.fs_magic == FS_UFS1_MAGIC) &&
 		    sb.fs_sblockloc == search[i]) {
 			sboff = search[i];
 			found = 1;
@@ -88,16 +90,28 @@ int main(int argc, char **argv)
 		}
 	}
 	if (!found) {
-		problem("no UFS2 superblock found");
+		problem("no UFS1/UFS2 superblock found");
 		return 8;
 	}
-	printf("** superblock at byte %lld (magic 0x%x)\n",
-	    (long long)sboff, sb.fs_magic);
+	is_ufs1 = (sb.fs_magic == FS_UFS1_MAGIC);
+	dinosize = is_ufs1 ? DINODE1_SIZE : DINODE2_SIZE;
+
+	/* UFS1 keeps the cg-summary address and the global free-count totals in
+	 * narrow "fs_old_*" slots; copy them up into the fields we check. */
+	if (is_ufs1) {
+		sb.fs_csaddr = sb.fs_old_csaddr;
+		sb.fs_cstotal.cs_ndir = sb.fs_old_cstotal.cs_ndir;
+		sb.fs_cstotal.cs_nbfree = sb.fs_old_cstotal.cs_nbfree;
+		sb.fs_cstotal.cs_nifree = sb.fs_old_cstotal.cs_nifree;
+		sb.fs_cstotal.cs_nffree = sb.fs_old_cstotal.cs_nffree;
+	}
+	printf("** superblock at byte %lld (magic 0x%x, %s)\n",
+	    (long long)sboff, sb.fs_magic, is_ufs1 ? "UFS1" : "UFS2");
 
 	if (sb.fs_bsize <= 0 || sb.fs_fsize <= 0 ||
 	    sb.fs_bsize / sb.fs_fsize != sb.fs_frag)
 		problem("inconsistent block/frag/fragcount geometry");
-	if (sb.fs_inopb != (u_int32_t)(sb.fs_bsize / (int)DINODE2_SIZE))
+	if (sb.fs_inopb != (u_int32_t)(sb.fs_bsize / (int)dinosize))
 		problem("inconsistent inopb");
 	if (sb.fs_ncg < 1 || sb.fs_ipg < 1)
 		problem("degenerate cylinder-group geometry");
@@ -196,8 +210,10 @@ int main(int argc, char **argv)
 	/* Root inode sanity. */
 	{
 		off_t pos = (off_t)ino_to_fsba(&sb, UFS_ROOTINO) * sb.fs_fsize +
-		    (off_t)ino_to_fsbo(&sb, UFS_ROOTINO) * DINODE2_SIZE;
-		rd(&root, pos, sizeof(root), "root inode");
+		    (off_t)ino_to_fsbo(&sb, UFS_ROOTINO) * dinosize;
+		/* di_mode/di_nlink are at the same offsets in both dinode
+		 * formats, so only 'dinosize' (the inode stride) differs. */
+		rd(&root, pos, dinosize, "root inode");
 		if ((root.di_mode & IFMT) != IFDIR)
 			problem("root inode is not a directory (mode 0%o)",
 			    root.di_mode);

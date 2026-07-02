@@ -74,18 +74,19 @@ static void zero_block_range(struct inode *rip, block64_t base, off_t from,
  *			read_indir_entry / write_indir_entry		     *
  *===========================================================================*/
 /* An indirect block is a full fs_bsize block spanning fs_frag cache fragments;
- * the 64-bit entry 'index' lives in exactly one of them. */
+ * the entry 'index' (32-bit on UFS1, 64-bit on UFS2) lives in exactly one of
+ * them. */
 static block64_t read_indir_entry(struct inode *rip, block64_t base, int index)
 {
   struct fs *fs = &rip->i_sp->s_fs;
   struct buf *bp;
-  off_t byteoff = (off_t) index * (off_t) sizeof(int64_t);
+  off_t byteoff = (off_t) index * (off_t) FFS_DADDRSIZE(fs);
   unsigned int fragidx = (unsigned int) (byteoff / fs->fs_fsize);
   unsigned int inoff = (unsigned int) (byteoff % fs->fs_fsize);
   block64_t res;
 
   bp = get_block(fs_dev, base + fragidx, NORMAL);
-  res = (block64_t) *((int64_t *) (b_data(bp) + inoff));
+  res = (block64_t) ffs_getdaddr(fs, b_data(bp) + inoff);
   put_block(bp);
   return(res);
 }
@@ -95,12 +96,12 @@ static void write_indir_entry(struct inode *rip, block64_t base, int index,
 {
   struct fs *fs = &rip->i_sp->s_fs;
   struct buf *bp;
-  off_t byteoff = (off_t) index * (off_t) sizeof(int64_t);
+  off_t byteoff = (off_t) index * (off_t) FFS_DADDRSIZE(fs);
   unsigned int fragidx = (unsigned int) (byteoff / fs->fs_fsize);
   unsigned int inoff = (unsigned int) (byteoff % fs->fs_fsize);
 
   bp = get_block(fs_dev, base + fragidx, NORMAL);
-  *((int64_t *) (b_data(bp) + inoff)) = (int64_t) val;
+  ffs_putdaddr(fs, b_data(bp) + inoff, (int64_t) val);
   lmfs_markdirty(bp);
   put_block(bp);
 }

@@ -3,8 +3,9 @@
  * cases the file system itself needs the inode to, for example, search a
  * directory for a path name.
  *
- * The on-disk inode (struct ufs2_dinode) is embedded directly: native-endian,
- * UFS2-only, so all disk fields are reached as rip->i_din.di_*.
+ * The in-core inode always holds a (wide) UFS2 dinode, reached as
+ * rip->i_din.di_*.  On a UFS1 file system the narrower on-disk struct
+ * ufs1_dinode is converted to/from this form in rw_inode() (inode.c).
  */
 
 #ifndef FFS_INODE_H

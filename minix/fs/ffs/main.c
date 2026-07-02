@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 
   le_CPU = (*(unsigned char *) &test_endian == 0 ? 0 : 1);
 
-  /* This server only supports native-little-endian UFS2 images. */
+  /* This server only supports native-little-endian images (UFS1 and UFS2). */
   ASSERT(le_CPU == 1);
 
   /* The fsdriver library does the actual work here. */

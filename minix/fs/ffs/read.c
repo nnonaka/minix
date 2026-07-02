@@ -167,7 +167,7 @@ static block64_t indir_get(struct inode *rip, block64_t indir, off_t index,
 {
 /* Return entry 'index' of the indirect block that starts at fragment 'indir'.
  * An indirect block is fs_bsize bytes and spans fs_frag cache fragments; the
- * wanted 64-bit entry lives in exactly one of them.
+ * wanted entry (32-bit on UFS1, 64-bit on UFS2) lives in exactly one of them.
  */
   struct fs *fs = &rip->i_sp->s_fs;
   struct buf *bp;
@@ -178,7 +178,7 @@ static block64_t indir_get(struct inode *rip, block64_t indir, off_t index,
   if (indir == NO_BLOCK)
 	return(NO_BLOCK);
 
-  byteoff = index * (off_t) sizeof(int64_t);
+  byteoff = index * (off_t) FFS_DADDRSIZE(fs);
   fragidx = (unsigned int) (byteoff / fs->fs_fsize);
   inoff = (unsigned int) (byteoff % fs->fs_fsize);
 
@@ -186,7 +186,7 @@ static block64_t indir_get(struct inode *rip, block64_t indir, off_t index,
   if (bp == NULL)
 	return(NO_BLOCK);	/* PEEK miss */
 
-  res = (block64_t) *((int64_t *) (b_data(bp) + inoff));
+  res = (block64_t) ffs_getdaddr(fs, b_data(bp) + inoff);
   put_block(bp);
 
   return(res);

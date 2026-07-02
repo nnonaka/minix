@@ -28,15 +28,16 @@ static char super[SUPER_BLOCK_BYTES];
 #define MAGIC_OFFSET_ISO9660	0x8000
 #define MAGIC_VALUE_EXT2	0xef53
 
-/* UFS2/FFS (native little-endian only, as used by the MINIX ffs server).
- * The superblock lives at byte offset 65536 (standard newfs) or 8192
- * (nbmakefs -t ffs -o version=2); fs_magic is at offset 1372 and
- * fs_sblockloc at offset 1000 within "struct fs".
+/* UFS1/UFS2 FFS (native little-endian only, as used by the MINIX ffs server).
+ * The UFS2 superblock lives at byte offset 65536 (standard newfs) or 8192
+ * (nbmakefs -t ffs -o version=2); the UFS1 superblock lives at 8192.  fs_magic
+ * is at offset 1372 and fs_sblockloc at offset 1000 within "struct fs".
  */
 #define SBLOCK_UFS2		65536
 #define SBLOCK_UFS1		8192
 #define FFS_MAGIC_OFFSET	1372
 #define FFS_SBLOCKLOC_OFFSET	1000
+#define FS_UFS1_MAGIC		0x011954
 #define FS_UFS2_MAGIC		0x19540119
 #define FS_UFS2EA_MAGIC		0x19012038
 
@@ -59,7 +60,8 @@ static int check_ffs(int fd)
 			continue;
 		if (read(fd, &magic, sizeof(magic)) != sizeof(magic))
 			continue;
-		if (magic != FS_UFS2_MAGIC && magic != FS_UFS2EA_MAGIC)
+		if (magic != FS_UFS2_MAGIC && magic != FS_UFS2EA_MAGIC &&
+		    magic != FS_UFS1_MAGIC)
 			continue;
 
 		/* Confirm by checking that fs_sblockloc records this offset,
