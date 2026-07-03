@@ -1108,6 +1108,86 @@ Result: the suite runs clean through test84, stopping at the known non-arch-spec
 `test85` vnd deadlock (below). VM still creates the now-unused user-half LAPIC/IOAPIC
 mapping (`lapic_addr_vaddr`, `u32_t`, is dead) — harmless, a follow-up cleanup.
 
+### #21 — `runqueues_ok_cpu` false-positives during an in-flight cross-CPU sync *(test79 whole-suite reboot)*
+
+A full POSIX run **rebooted at test79** (PM signal stress):
+
+```
+Test 79 sched error: ready proc 0 not on queue
+proc.c:1747: assert "runqueues_ok_local()" failed, function "enqueue"
+kernel panic: assert failed
+kernel on CPU 0: ... enqueue ... mini_send ... ipc_entry_common
+```
+
+`ready proc 0` = **PM** (`PM_PROC_NR`): PM was found runnable (`p_rts_flags == 0`) with
+`p_cpu == 0` but not on any of CPU 0's run queues, during the `DEBUG_SANITYCHECKS` walk
+at the tail of `enqueue`. Running `test79` in isolation instead **hangs** — same churn,
+the intermittent assert just does not always land.
+
+Two independent SMP characteristics were tangled here; only the second is a bug:
+
+1. **Not a bug — inherent slowness.** Instrumenting the hang (per-CPU clock heartbeat +
+   per-`SYS_*`-call rates) showed the machine fully alive: clock ticking, ~20k
+   dispatches/s, dominated by `RUNCTL` (~35k/interval) + `SIGSEND`/`SIGRET` (~16k each) —
+   the PM cross-CPU signal-delivery handshake, *progressing* (fork-child endpoints
+   advance, `SIGSEND ≡ SIGRET`, no `e(0)` desync abort). Cutting `NR_SIGNALS` 20000→200
+   made test79 finish (`ok`) in ~40 s; ×100 for the real count ≈ 65 min, which reads as a
+   hang. Root cause is the **big kernel lock**: test79 is kernel/IPC-bound, only one CPU
+   is in the kernel at a time, so 2 CPUs get no parallelism yet pay cross-CPU wake-IPI +
+   BKL-handoff overhead → *slower* than UP (which passes). A per-signal micro-opt in
+   `smp_schedule_stop_proc` (skip the stop-IPI when the target is queued-not-running) was
+   tried and **measured to do nothing** — the stops were already cheap (target almost
+   always blocked, no IPI); the IPI was never the bottleneck. Reverted. Accepted as an
+   architectural BKL limitation, not chased further.
+
+2. **The bug — the sanity check is not SMP-race-safe.** `runqueues_ok_local()` =
+   `runqueues_ok_cpu(cpuid)` scans the *whole* proc table for procs that are runnable,
+   `p_cpu == cpuid`, and not on a queue. That invariant holds under the BKL — **except**
+   inside `smp_schedule_sync()`, which `BKL_UNLOCK()`s and spin-waits for the target CPU
+   to ack a STOP/VMINHIBIT/SAVE_CTX/migrate (`smp.c`). During that window another CPU
+   enters the kernel, does an `enqueue`, and runs the check while the run queues are
+   legitimately mid-transition — PM momentarily runnable yet not (yet) re-queued. Same
+   class as the `p_cpu == cpu` filter added in #9; that filter only covers procs owned by
+   *another* CPU, not this transient. (Reasoning could not statically prove the exact
+   interleaving, so the fix was shipped with a `dump_scheddump()` net on the failure path;
+   the full-suite run then reached the last test with the assert gone.)
+
+Fix: skip the whole-table "not on queue" flag while any cross-CPU sync is in flight.
+`smp.c` exposes the predicate; `debug.c` consults it (the queue-*integrity* checks above
+it are local-CPU and stay):
+
+```c
+/* smp.c */
+int smp_sched_ipi_pending(void)
+{
+	unsigned c;
+	for (c = 0; c < ncpus; c++)
+		if (sched_ipi_data[c].flags != 0)
+			return 1;
+	return 0;
+}
+```
+```diff
+  /* debug.c runqueues_ok_cpu(), whole-table scan */
+  if(proc_is_runnable(xp) && xp->p_cpu == cpu && !xp->p_found) {
++#ifdef CONFIG_SMP
++     /* smp_schedule_sync() dropped the BKL and is spin-waiting for an ack;
++      * the run queues are transiently inconsistent as seen from this CPU.
++      * A proc off-queue for any OTHER reason still has no sync pending. */
++     if (smp_sched_ipi_pending())
++         continue;
++#endif
+      printf("sched error: ready proc %d not on queue\n", xp->p_nr);
+      return 0;
+  }
+```
+
+`DEBUG_SANITYCHECKS` is on in this tree (`debug.h`), so this check is live; a production
+build (checks off) never panicked, it only ever ran slow. With the guard the **full POSIX
+suite reaches the last test on SMP**; test79 is still slow (BKL, above) but no longer
+aborts the run. See CLAUDE.md ("`runqueues_ok_cpu` … must filter by `xp->p_cpu == cpu`")
+and #9/#10 for the earlier instances of this same not-SMP-safe-check theme.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one

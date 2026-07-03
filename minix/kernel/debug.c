@@ -104,6 +104,19 @@ int runqueues_ok_cpu(unsigned cpu)
 	 * process has p_cpu == 0, so this is a no-op there.)
 	 */
 	if(proc_is_runnable(xp) && xp->p_cpu == cpu && !xp->p_found) {
+#ifdef CONFIG_SMP
+		/*
+		 * A cross-CPU scheduling request in flight (smp_schedule_sync
+		 * has dropped the BKL and is spin-waiting for the target CPU to
+		 * ack a STOP/VMINHIBIT/SAVE_CTX/migrate) legitimately leaves the
+		 * run queues in a transient state as seen from this CPU: a proc
+		 * can be momentarily runnable yet not (yet) on a queue.  Do not
+		 * treat that as an error.  If the proc is off-queue for any
+		 * other reason, no sync is pending and we still catch it below.
+		 */
+		if (smp_sched_ipi_pending())
+			continue;
+#endif
 		printf("sched error: ready proc %d not on queue\n", xp->p_nr);
 		return 0;
 	}

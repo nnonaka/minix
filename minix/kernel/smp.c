@@ -19,6 +19,24 @@ struct sched_ipi_data {
 
 static struct sched_ipi_data  sched_ipi_data[CONFIG_MAX_CPUS];
 
+/*
+ * True while any cross-CPU scheduling request (STOP_PROC / VM_INHIBIT /
+ * SAVE_CTX / migrate) is in flight.  smp_schedule_sync() drops the BKL and
+ * spin-waits for the target CPU to ack, so during that window another CPU can
+ * enter the kernel and observe the run queues / proc table mid-transition.
+ * The DEBUG_SANITYCHECKS run-queue walk must not treat that transient as an
+ * error.
+ */
+int smp_sched_ipi_pending(void)
+{
+	unsigned c;
+
+	for (c = 0; c < ncpus; c++)
+		if (sched_ipi_data[c].flags != 0)
+			return 1;
+	return 0;
+}
+
 #define SCHED_IPI_STOP_PROC	1
 #define SCHED_IPI_VM_INHIBIT	2
 #define SCHED_IPI_SAVE_CTX	4
