@@ -15,6 +15,9 @@ USE_GPTMBR=		no
 EFIMB=			64
 SWAPMB= 		0
 LIVEIMAGEMB=	2048
+ROOTSIZEMB=     128
+HOMESIZEMB=     128
+USRSIZEMB=      1536
 
 # for using grub as efiboot
 USE_GRUB=		no
