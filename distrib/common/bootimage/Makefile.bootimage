@@ -263,6 +263,8 @@ TARGETFS?=      imgroot.fs
 .if defined(__MINIX)
 TOOL_MKFSMFS=	${TOOLDIR}/bin/${_TOOL_PREFIX}mkfs.mfs
 TOOL_TOPROTO=	${TOOLDIR}/bin/${_TOOL_PREFIX}toproto
+# -d: give every file mkfs's own mtime, for reproducible images
+MKMFS=		${TOOL_MKFSMFS} -d
 WORKPROTO=		work.proto
 WRKMTREE=		work.mtree
 GPTFS=			mfs
@@ -271,25 +273,28 @@ MBRFS=			${MBRMINIX}
 
 # Optionally split the Minix root FS into three mfs sub-partitions
 # (root, usr, home) matching /etc/fstab (c0d0p1=/, c0d0p2=/usr, c0d0p3=/home).
-# This is enabled only when the including Makefile defines the partition sizes
-# in MB (ROOTSIZEMB/USRSIZEMB/HOMESIZEMB) -- e.g. distrib/amd64/liveimage.
-# Otherwise (i386 liveimage, installimage, ...) a single-partition root is
-# built, as before.
+# Enabled only when the including Makefile defines the partition sizes in MB
+# (e.g. distrib/amd64/liveimage); otherwise (i386 liveimage, installimage, ...)
+# a single-partition root is built, as before.
 .if defined(ROOTSIZEMB) && defined(USRSIZEMB) && defined(HOMESIZEMB)
 MFS_SUBPART=	yes
+# mkfs.mfs -b block counts (block = 4096 B): sizeMB * 1024 * 1024 / 512 / 8
+MFS_ROOT_BLKS!=	expr ${ROOTSIZEMB} \* 1024 \* 1024 / 512 / 8
+MFS_USR_BLKS!=	expr ${USRSIZEMB}  \* 1024 \* 1024 / 512 / 8
+MFS_HOME_BLKS!=	expr ${HOMESIZEMB} \* 1024 \* 1024 / 512 / 8
+WORKPROTOROOT=	proto.root
+WORKPROTOUSR=	proto.usr
+WORKPROTOHOME=	proto.home
+# per-partition sizes (512-byte sectors), captured during the fs build and
+# consumed by the GPT partition-table step.
+WORKROOTSIZE=	work.rootsize
+WORKUSRSIZE=	work.usrsize
+WORKHOMESIZE=	work.homesize
+CLEANFILES+=	${WORKPROTOROOT} ${WORKPROTOUSR} ${WORKPROTOHOME}
+CLEANFILES+=	${WORKROOTSIZE} ${WORKUSRSIZE} ${WORKHOMESIZE}
 .else
 MFS_SUBPART=	no
 .endif
-WORKPROTOROOT?=	proto.root
-WORKPROTOUSR?=	proto.usr
-WORKPROTOHOME?=	proto.home
-# per-partition sizes (in 512-byte sectors) captured while building the fs
-# blob, consumed by the GPT partition-table step.
-WORKROOTSIZE?=	work.rootsize
-WORKUSRSIZE?=	work.usrsize
-WORKHOMESIZE?=	work.homesize
-CLEANFILES+=	${WORKPROTOROOT} ${WORKPROTOUSR} ${WORKPROTOHOME}
-CLEANFILES+=	${WORKROOTSIZE} ${WORKUSRSIZE} ${WORKHOMESIZE}
 .else
 MFS_SUBPART=	no
 GPTFS=			ffs
@@ -326,6 +331,9 @@ WORKSWAP?=	work.swap
 WORKEFI?=	work.efi
 WORKGPT?=	work.gpt
 WORKLABEL?=	work.diskproto
+
+# gpt(8) acting on the work image (the partition-table blob)
+GPT=		${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR}
 WORKIMG?=	work.img
 EFIWORKDIR?=	work.efidir
 WORKFAT?=	work.fat
@@ -466,60 +474,34 @@ ${TARGETFS}: prepare_md_post ${WORKFSTAB}
 	    ${WORKFS} ${WORKDIR}
 .else
 	@echo Creating Minix mfs rootfs...
-	@echo ${FSSIZE}
-	${RM} -f ${WRKMTREE}
-	${RM} -f ${WORKFS}
+	${RM} -f ${WRKMTREE} ${WORKFS}
 	${TOOL_MTREE} -C -S -K device -f ${WORKSPEC} -N ${WORKDIR}/etc | \
 		grep -v '/boot/minix/\.temp' > ${WRKMTREE}
 	dd if=/dev/zero bs=${FSSIZE} count=1 > ${WORKFS}
 .  if ${MFS_SUBPART} == "yes"
 	@echo Splitting mtree into root/usr/home protos...
-	#
-	# create_protos(): split the reference mtree (${WRKMTREE}) into one proto
-	# per partition.  Embedded from distrib/common/bootimage/create.mfs.protos.sh
-	# (a.k.a. releasetools/image.functions).  Runs as a single shell so the
-	# function definition and the mkfs sizes below share one environment.
-	#	arg 1: input mtree	arg 2: root dir	 args 3..: partition names
-	#
+	# proto.root: whole tree minus the /usr and /home contents (their mount
+	# points stay); proto.usr / proto.home: only that subtree, re-rooted to ".".
+	grep -v "^./usr/" ${WRKMTREE} | grep -v "^./home/" | \
+	    ${TOOL_TOPROTO} -b ${WORKDIR} -o ${WORKPROTOROOT}
+	grep "^\./usr/\|^. "  ${WRKMTREE} | sed "s,\./usr,\.,g"  | \
+	    ${TOOL_TOPROTO} -b ${WORKDIR}/usr  -o ${WORKPROTOUSR}
+	grep "^\./home/\|^. " ${WRKMTREE} | sed "s,\./home,\.,g" | \
+	    ${TOOL_TOPROTO} -b ${WORKDIR}/home -o ${WORKPROTOHOME}
+	@echo Packing root/usr/home mfs partitions into ${WORKFS}...
+	# mkfs each proto into the blob back-to-back (root at offset 0); each
+	# mkfs -I prints its byte size, chained into the next offset and saved
+	# (in 512-B sectors) for the GPT partition table.
 	@set -e; \
-	create_protos() { \
-		_input="$$1"; _root="$$2"; shift 2; \
-		_filter="cat $$_input"; \
-		for _p in "$$@"; do \
-			_filter="$$_filter | grep -v \"^./$$_p/\""; \
-		done; \
-		eval $$_filter | ${TOOL_TOPROTO} -b $$_root -o ${WORKPROTOROOT}; \
-		for _p in "$$@"; do \
-			cat $$_input | grep "^\./$$_p/\|^. " | sed "s,\./$$_p,\.,g" | \
-			    ${TOOL_TOPROTO} -b $$_root/$$_p -o proto.$$_p; \
-		done; \
-	}; \
-	create_protos ${WRKMTREE} ${WORKDIR} usr home; \
-	ROOTSIZEARG="-b $$(( ${ROOTSIZEMB} * 1024 * 1024 / 512 / 8 ))"; \
-	USRSIZEARG="-b $$(( ${USRSIZEMB} * 1024 * 1024 / 512 / 8 ))"; \
-	HOMESIZEARG="-b $$(( ${HOMESIZEMB} * 1024 * 1024 / 512 / 8 ))"; \
-	ROOT_START=0; \
-	echo " * ROOT"; \
-	_ROOT_SIZE=$$(${TOOL_MKFSMFS} -d $$ROOTSIZEARG -I $$(( $$ROOT_START * 512 )) ${WORKFS} ${WORKPROTOROOT}); \
-	_ROOT_SIZE=$$(( $$_ROOT_SIZE / 512 )); \
-	USR_START=$$(( $$ROOT_START + $$_ROOT_SIZE )); \
-	echo " * USR"; \
-	_USR_SIZE=$$(${TOOL_MKFSMFS} -d $$USRSIZEARG -I $$(( $$USR_START * 512 )) ${WORKFS} ${WORKPROTOUSR}); \
-	_USR_SIZE=$$(( $$_USR_SIZE / 512 )); \
-	HOME_START=$$(( $$USR_START + $$_USR_SIZE )); \
-	echo " * HOME"; \
-	_HOME_SIZE=$$(${TOOL_MKFSMFS} -d $$HOMESIZEARG -I $$(( $$HOME_START * 512 )) ${WORKFS} ${WORKPROTOHOME}); \
-	_HOME_SIZE=$$(( $$_HOME_SIZE / 512 )); \
-	echo " root=$$_ROOT_SIZE usr=$$_USR_SIZE home=$$_HOME_SIZE (512-byte sectors)"; \
-	echo $$_ROOT_SIZE > ${WORKROOTSIZE}; \
-	echo $$_USR_SIZE > ${WORKUSRSIZE}; \
-	echo $$_HOME_SIZE > ${WORKHOMESIZE}
+	r=$$(${MKMFS} -b ${MFS_ROOT_BLKS} -I 0               ${WORKFS} ${WORKPROTOROOT}); r=$$((r / 512)); \
+	u=$$(${MKMFS} -b ${MFS_USR_BLKS}  -I $$((r * 512))   ${WORKFS} ${WORKPROTOUSR});  u=$$((u / 512)); \
+	h=$$(${MKMFS} -b ${MFS_HOME_BLKS} -I $$(((r + u) * 512)) ${WORKFS} ${WORKPROTOHOME}); h=$$((h / 512)); \
+	echo $$r > ${WORKROOTSIZE}; echo $$u > ${WORKUSRSIZE}; echo $$h > ${WORKHOMESIZE}; \
+	echo " sizes (512-B sectors): root=$$r usr=$$u home=$$h"
 .  else
 	# single-partition root: one proto for the whole tree, one mfs
 	${TOOL_TOPROTO} -i ${WRKMTREE} -b ${WORKDIR} -o ${WORKPROTO}
-	${TOOL_MKFSMFS} -d -x 50 \
-		${WORKFS} \
-		${WORKPROTO}
+	${MKMFS} -x 50 ${WORKFS} ${WORKPROTO}
 .  endif
 .endif #!defined(__MINIX)
 .if !empty(PRIMARY_BOOT) && ${INSTALLBOOT_AFTER_DISKLABEL} == "no"
@@ -629,30 +611,23 @@ ${WORKMBR}:
 	@echo creating GPT header and partition entries...
 	${RM} -f ${WORKMBR}
 	${DD} if=/dev/zero of=${WORKMBR} seek=$$((${IMAGESECTORS} - 1)) count=1
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} create
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add -a 1m -s ${EFISECTORS} -t efi -l "EFI system"
+	${GPT} create
+	${GPT} add -a 1m -s ${EFISECTORS} -t efi -l "EFI system"
 .  if ${MFS_SUBPART} == "yes"
-	# The root/usr/home MFS filesystems were packed consecutively into
-	# ${TARGETFS} by mkfs.mfs (root at offset 0), and ${TARGETFS} itself is
-	# concatenated into the image at sector ${FSOFFSET}.  Describe each with
-	# a GPT entry at its exact start block (no -a alignment, so the entries
-	# match the on-disk mkfs offsets); sizes come from the fs-build step.
-	# GPT entry order maps to MINIX device names: 0=ESP, 1=c0d0p1 (root),
-	# 2=c0d0p2 (usr), 3=c0d0p3 (home).
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add				\
-	    -b ${FSOFFSET}							\
-	    -s `cat ${WORKROOTSIZE}` -t ${GPTFS} -l ${GPTLABEL}-root
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add				\
-	    -b $$(( ${FSOFFSET} + `cat ${WORKROOTSIZE}` ))			\
-	    -s `cat ${WORKUSRSIZE}` -t ${GPTFS} -l ${GPTLABEL}-usr
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add				\
-	    -b $$(( ${FSOFFSET} + `cat ${WORKROOTSIZE}` + `cat ${WORKUSRSIZE}` )) \
-	    -s `cat ${WORKHOMESIZE}` -t ${GPTFS} -l ${GPTLABEL}-home
+	# One GPT entry per MFS sub-partition, at the exact start block where
+	# mkfs.mfs packed it: ${TARGETFS} lands at sector ${FSOFFSET} in the image
+	# and holds root/usr/home back-to-back, so no -a alignment here.  Entry
+	# order maps to MINIX device names: 0=ESP, 1=c0d0p1(root), 2=p2(usr),
+	# 3=p3(home).  Sizes come from the fs-build step.
+	@r=`cat ${WORKROOTSIZE}`; u=`cat ${WORKUSRSIZE}`; h=`cat ${WORKHOMESIZE}`; \
+	${GPT} add -b ${FSOFFSET}                -s $$r -t ${GPTFS} -l ${GPTLABEL}-root; \
+	${GPT} add -b $$(( ${FSOFFSET} + r ))     -s $$u -t ${GPTFS} -l ${GPTLABEL}-usr; \
+	${GPT} add -b $$(( ${FSOFFSET} + r + u )) -s $$h -t ${GPTFS} -l ${GPTLABEL}-home
 .  else
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add -a 1m -s ${FSSECTORS} -t ${GPTFS} -l ${GPTLABEL}
+	${GPT} add -a 1m -s ${FSSECTORS} -t ${GPTFS} -l ${GPTLABEL}
 .  endif
 .  if ${SWAPSECTORS} != 0
-	${TOOL_GPT} ${GPT_TIMESSTAMP} ${WORKMBR} add -a 1m -s ${SWAPSECTORS} -t swap
+	${GPT} add -a 1m -s ${SWAPSECTORS} -t swap
 .  endif
 .elif ${USE_MBR} != "no"
 	@echo creating MBR labels...
