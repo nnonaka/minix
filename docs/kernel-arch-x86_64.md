@@ -1042,6 +1042,72 @@ edge-triggered IOAPIC must **drain the device fully** (loop, not one unit) *and*
 **re-check the device after unmask** to recover an edge lost in the masked window.
 Confirmed: amd64 SMP keyboard input works on QEMU with these fixes, VBox still boots.
 
+### #20 — LAPIC EOI faults on an AP because its mapping lives in the (per-process) user half *(SMP test42 reboot)*
+
+`cpu=4`, POSIX **test42 (ptrace)** rebooted:
+
+```
+Test 42 pagefault in kernel at pc 0xffffffff804cf59a address 0xf00060b0
+cpu 1 is_nested = 1 vec_nr=14 trap_errno=0x2   (write, page not-present)
+```
+
+`0x804cf59a` is the EOI store in `lapic_timer_int_handler`
+(`movq lapic_eoi_addr(%rip),%rax; movl $0,(%rax)`); `%rax = 0xf00060b0` = LAPIC
+`+0xb0` (EOI register). `0xf0006000` is a **user-half** address: on x86_64 VM maps
+the kernel device windows (LAPIC/IOAPIC/video) at `VM_DATATOP` (`user_end`) inside
+**PML4[0]** so the `usermapped` region stays user-reachable (see
+`servers/vm/pagetable.c`). But the LAPIC EOI is written by the kernel on **every
+timer tick on every CPU**, in whatever process address space is current at the
+time — and a user-half mapping is subject to per-process page-table churn. Under
+test42's heavy `SYSTEM`-task (endpoint `-2`) activity a tick landed on an AP whose
+current CR3 lacked the LAPIC page → not-present kernel write → the nested-fault
+handler re-faulted (`memcpy`, addr `0x8`) → triple-fault reboot.
+
+Fix: reach the LAPIC/IOAPIC through the kernel **physical direct map** instead.
+`pg_identity()` already maps the low ≥4 GB (incl. LAPIC `0xFEE00000` / IOAPIC
+`0xFEC00000`) at `PHYS_DIRECTMAP_BASE` under the shared **PML4[511]**
+(`pg_pdpt_high`/`pg_pd_dm`, wired into every address space via `kern_pml4_hi`).
+`phys_to_kacc(pa) = PHYS_DIRECTMAP_BASE + pa` is that alias — kernel-only and
+unconditionally present. In `arch_enable_paging()`:
+
+```diff
+ #ifdef USE_APIC
+     if (lapic_addr) {
+-        lapic_addr = lapic_addr_vaddr;      /* VM user-half vaddr (PML4[0]) */
++        lapic_addr = phys_to_kacc(LOCAL_APIC_DEF_ADDR);   /* direct map, PML4[511] */
+         lapic_eoi_addr = LAPIC_EOI;
+     }
+     if (ioapic_enabled)
+         for (i = 0; i < nioapics; i++)
+-            io_apic[i].addr = io_apic[i].vaddr;
++            io_apic[i].addr = phys_to_kacc(io_apic[i].paddr);
+ #endif
+```
+
+`pg_identity()` gained a `PG_APIC_MMIO(phys)` guard (`[0xFEC00000,0xFF000000)`)
+forcing `PG_PWT|PG_PCD` on those direct-map/identity leaves, so the alias is
+uncached even when RAM extends past the 4 GB hole (`mem_high_phys > 4 GB`).
+
+**Idempotency gotcha (cost a boot cycle).** `arch_enable_paging()` runs on **every**
+`VMCTL_ENABLE_PAGING` (`arch_do_vmctl.c`), not once. A first attempt used the
+in-place form `lapic_addr = phys_to_kacc(lapic_addr)`; the second call re-aliased
+an already-aliased value:
+
+```
+0xFFFFFF8000000000 + 0xFFFFFF80FEE00000 = 0x1FFFFFF00FEE00000
+                          → truncates to  0xFFFFFF00FEE00000   (bit 39 gone → PML4[510], unmapped)
+```
+
+which faulted in `lapic_restart_timer` at `+0x390` (`LAPIC_TIMER_CCR`) during init
+(`address 0xffffff00fee00390`). Always derive the alias from the **fixed physical
+base** (`LOCAL_APIC_DEF_ADDR`), never transform `lapic_addr` in place — the old
+`lapic_addr = lapic_addr_vaddr` was idempotent, which hid the multiple-call path.
+`io_apic[].addr` reads `.paddr` (stable phys), so it is idempotent as written.
+
+Result: the suite runs clean through test84, stopping at the known non-arch-specific
+`test85` vnd deadlock (below). VM still creates the now-unused user-half LAPIC/IOAPIC
+mapping (`lapic_addr_vaddr`, `u32_t`, is dead) — harmless, a follow-up cleanup.
+
 ## EFI64 boot bring-up — first successful boot (2026-06)
 
 The UEFI/multiboot2 path had never run to completion; fixing it surfaced one

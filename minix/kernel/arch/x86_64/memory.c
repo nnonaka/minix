@@ -860,14 +860,28 @@ int arch_enable_paging(struct proc *caller)
 	video_mem = (char *)video_mem_vaddr;
 
 #ifdef USE_APIC
+	/* Reach the LAPIC/IOAPIC MMIO through the kernel physical direct map
+	 * (PML4[511], shared into every address space via kern_pml4_hi) rather
+	 * than the VM-supplied user-half (PML4[0], VM_DATATOP) mapping.  The
+	 * kernel stores to the LAPIC EOI register on every timer tick on every
+	 * CPU, in whatever process address space is current at the time; a
+	 * user-half mapping is subject to per-process page-table churn and can be
+	 * absent — that was the test42/SMP "pagefault in kernel ... address
+	 * 0xf00060b0" reboot, where the EOI store on an AP faulted because the
+	 * current CR3 lacked the user-half LAPIC page.  The direct-map alias
+	 * (phys_to_kacc) is kernel-only and unconditionally present. */
+	/* Idempotent: arch_enable_paging() runs once per VMCTL_ENABLE_PAGING, so
+	 * derive the alias from the fixed LAPIC physical base — never transform
+	 * lapic_addr in place, or a second call would re-alias the already-aliased
+	 * value (phys_to_kacc twice overflows bit 39 -> PML4[510], unmapped). */
 	if (lapic_addr) {
-		lapic_addr = lapic_addr_vaddr;
+		lapic_addr = phys_to_kacc(LOCAL_APIC_DEF_ADDR);
 		lapic_eoi_addr = LAPIC_EOI;
 	}
 	if (ioapic_enabled) {
 		int i;
 		for (i = 0; i < nioapics; i++)
-			io_apic[i].addr = io_apic[i].vaddr;
+			io_apic[i].addr = phys_to_kacc(io_apic[i].paddr);
 	}
 #endif
 

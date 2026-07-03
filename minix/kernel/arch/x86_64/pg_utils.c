@@ -33,6 +33,14 @@ static phys_bytes kern_kernlen    = (phys_bytes) &_kern_size;
 #define PAGE_2MB  (2UL * 1024 * 1024)
 #define PAGE_4KB  (4096UL)
 
+/* Standard local-APIC / IOAPIC MMIO window (IOAPIC 0xFEC00000, LAPIC
+ * 0xFEE00000).  These 2MB direct-map/identity leaves must be uncacheable even
+ * on machines whose RAM extends past the hole (mem_high_phys > 4GB), so the
+ * kernel's direct-map alias of the LAPIC (used for the timer EOI, see
+ * arch_enable_paging) is not cached. */
+#define PG_APIC_MMIO(phys) \
+	((phys) >= 0xFEC00000ULL && (phys) < 0xFF000000ULL)
+
 /*
  * Static 4-level page-table storage.
  * Compiled twice: as an unpaged object (physical addresses) and as a
@@ -223,7 +231,7 @@ void pg_identity(kinfo_t *cbi)
 
 		for (j = 0; j < 512; j++) {
 			u64_t flags = PG_PRESENT | PG_WRITE | PG_PS;
-			if (phys >= cbi->mem_high_phys)
+			if (phys >= cbi->mem_high_phys || PG_APIC_MMIO(phys))
 				flags |= PG_PWT | PG_PCD;
 			pg_pd_ident[i][j] = phys | flags;
 			phys += PAGE_2MB;
@@ -242,7 +250,7 @@ void pg_identity(kinfo_t *cbi)
 		pg_pdpt_high[i] = vir2phys(pg_pd_dm[i]) | PG_PRESENT | PG_WRITE;
 		for (j = 0; j < 512; j++) {
 			u64_t flags = PG_PRESENT | PG_WRITE | PG_PS;
-			if (phys >= cbi->mem_high_phys)
+			if (phys >= cbi->mem_high_phys || PG_APIC_MMIO(phys))
 				flags |= PG_PWT | PG_PCD;
 			pg_pd_dm[i][j] = phys | flags;
 			phys += PAGE_2MB;
