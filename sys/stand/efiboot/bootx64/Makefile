@@ -32,11 +32,6 @@ CWARNFLAGS.clang+=	-Wno-unknown-warning-option
 
 .include "${.CURDIR}/../Makefile.efiboot"
 
-# MINIX cross-objcopy lacks PE/COFF support; override after bsd includes
-.if defined(__MINIX)
-OBJCOPY= objcopy
-.endif
-
 release: check_RELEASEDIR
 	${HOST_INSTALL_FILE} -m ${BINMODE} ${PROG} \
 		${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/misc
