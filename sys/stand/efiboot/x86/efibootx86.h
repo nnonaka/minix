@@ -1,4 +1,4 @@
-/*	$NetBSD: bootinfo.h,v 1.12 2018/01/27 22:25:23 pgoyette Exp $	*/
+/*	$NetBSD$	*/
 
 /*
  * Copyright (c) 1997
@@ -26,7 +26,14 @@
  *
  */
 
+/*
+ * x86 (ia32/x64) machine dependent layer: NetBSD bootinfo and
+ * EFI memory map helpers.  Include after efiboot.h.
+ */
+
 #include <machine/bootinfo.h>
+
+/* bootinfo.c */
 
 struct bootinfo {
 	uint32_t nentries;
@@ -46,5 +53,28 @@ extern struct bootinfo *bootinfo;
 #define BI_ADD(x, type, size) bi_add((struct btinfo_common *)(x), type, size)
 
 void bi_add(struct btinfo_common *, int, int);
-void bi_getbiosgeom(void);
-void bi_getmemmap(void);
+
+/*
+ * Kernel entry arguments: howto, bootdev (obsolete), bootinfo pa,
+ * esym, extmem, basemem; see the "Load parameters" block in locore.S.
+ * Filled by efi_md_prepare_netbsd, consumed by efi_boot_kernel.
+ */
+#define BOOT_NARGS	6
+extern uint32_t boot_argv[BOOT_NARGS];
+
+/* efibootx86.c */
+
+void command_consdev(char *);
+void command_memmap(char *);
+void command_root(char *);
+
+/* efimemory.c */
+
+physaddr_t vtophys(void *);
+EFI_MEMORY_DESCRIPTOR *efi_memory_get_map(UINTN *, UINTN *, UINTN *,
+    UINT32 *, bool);
+EFI_MEMORY_DESCRIPTOR *efi_memory_compact_map(EFI_MEMORY_DESCRIPTOR *,
+    UINTN *, UINTN);
+void efi_memory_show_map(bool, bool);
+int getbasemem(void);
+int getextmemx(void);

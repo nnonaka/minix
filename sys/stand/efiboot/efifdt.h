@@ -1,4 +1,4 @@
-/* $NetBSD: efifdt.h,v 1.12 2022/03/25 21:23:00 jmcneill Exp $ */
+/* $NetBSD: efifdt.h,v 1.14 2024/08/15 15:57:36 riastradh Exp $ */
 
 /*-
  * Copyright (c) 2018 Jared McNeill <jmcneill@invisible.ca>
@@ -44,13 +44,14 @@ void efi_fdt_initrd(u_long, u_long);
 void efi_fdt_rndseed(u_long, u_long);
 void efi_fdt_efirng(u_long, u_long);
 void efi_fdt_module(const char *, u_long, u_long);
+void efi_fdt_module_foreach(void (*fn)(const char *, const uint64_t, const uint64_t, void *, void *), void *, void *);
 void efi_fdt_userconf(void);
 void efi_fdt_init(u_long, u_long);
 void efi_fdt_fini(void);
-int efi_fdt_chosen(void);
 void efi_fdt_system_table(void);
-const void *efi_fdt_get_prop(int, const char *, int *);
-const char *efi_fdt_get_string(int, const char *);
-const char *efi_fdt_get_string_index(int, const char *, u_int);
-int efi_fdt_get_index(int, const char *, const char *, u_int *);
 
+int efi_fdt_prepare_boot(const char *, const char *, u_long *);
+void efi_fdt_cleanup_boot(void);
+size_t efi_fdt_alloc_size(void);
+void efi_fdt_set_virtual_address_map(EFI_MEMORY_DESCRIPTOR *, UINTN, UINTN,
+    UINTN, UINT32);

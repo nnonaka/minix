@@ -27,6 +27,7 @@
  */
 
 #include "../efiboot.h"
+#include "../x86/efibootx86.h"
 
 #include <sys/bootblock.h>
 
@@ -79,12 +80,22 @@ efi_dcache_flush(u_long start, u_long size)
 void
 efi_boot_kernel(u_long marks[MARK_MAX])
 {
-	physaddr_t kernel_start = marks[MARK_START];
-	physaddr_t kernel_entry = marks[MARK_ENTRY];
+	physaddr_t kernel_start = marks[MARK_START] - load_offset;
+	physaddr_t load_start = marks[MARK_START];
+	physaddr_t kernel_entry = marks[MARK_ENTRY] - load_offset;
 	u_long kernel_size = marks[MARK_END] - marks[MARK_START];
+	uint32_t *newsp;
 
-	(*startprog64)(kernel_start, kernel_start,
-	    (physaddr_t)((char *)startprog64 + startprog64_size),
+	/*
+	 * The trampoline embeds its own stack; the kernel picks the
+	 * arguments up from it (its entry is a call, so they end up at
+	 * 4(%esp) as locore expects).
+	 */
+	newsp = (uint32_t *)((char *)startprog64 + startprog64_size);
+	newsp -= BOOT_NARGS;
+	memcpy(newsp, boot_argv, sizeof(boot_argv));
+
+	(*startprog64)(kernel_start, load_start, (physaddr_t)newsp,
 	    kernel_size, startprog64, kernel_entry);
 }
 
@@ -93,6 +104,11 @@ efi_md_show(void)
 {
 }
 
+int
+efi_md_prepare_boot(const char *fname, const char *args, u_long *marks)
+{
+	return 0;
+}
 void
 multiboot2(physaddr_t entry, physaddr_t header, uint32_t magic)
 {

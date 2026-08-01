@@ -1,7 +1,7 @@
-/*	$NetBSD: efiboot_machdep.h,v 1.1 2017/01/24 11:09:14 nonaka Exp $	*/
+/* $NetBSD: efiboot_machdep.h,v 1.5 2024/08/15 06:15:16 skrll Exp $ */
 
 /*-
- * Copyright (c) 2016 Kimihiro Nonaka <nonaka@netbsd.org>
+ * Copyright (c) 2018 Jared McNeill <jmcneill@invisible.ca>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,21 +25,30 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
- 
+
+#ifndef EFIBOOT_ALIGN
+#define	EFIBOOT_ALIGN 0
+#endif
+
 typedef unsigned long physaddr_t;
 
-
-void startprog(physaddr_t, uint32_t, uint32_t *, physaddr_t);
-void multiboot2(physaddr_t, physaddr_t, uint32_t);
-
-int exec_multiboot2(const char *, const char *);
-
-/* multiboot */
-
-void *probe_multiboot2(const char *);
-
 void efi_dcache_flush(u_long, u_long);
-void efi_boot_kernel(u_long[]);
-void efi_md_init(void);
+void efi_boot_kernel(u_long[MARK_MAX]);
 void efi_md_show(void);
+void efi_md_init(void);
+int efi_md_prepare_boot(const char *, const char *, u_long *);
 
+/*
+ * Hooks for the native NetBSD boot path (exec.c).  On success,
+ * efi_md_prepare_netbsd has called efi_cleanup() (ExitBootServices);
+ * efi_boot_kernel then only transfers control.
+ */
+size_t efi_md_boot_alloc_size(const char *);
+int efi_md_prepare_netbsd(const char *, const char *, u_long *);
+void efi_md_cleanup_boot(void);
+
+/* multiboot2 */
+
+void multiboot2(physaddr_t, physaddr_t, uint32_t);
+int exec_multiboot2(const char *, const char *);
+void *probe_multiboot2(const char *);

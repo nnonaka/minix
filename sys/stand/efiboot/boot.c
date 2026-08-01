@@ -1,4 +1,4 @@
-/*	$NetBSD: boot.c,v 1.44 2022/08/14 11:26:41 jmcneill Exp $	*/
+/*	$NetBSD: boot.c,v 1.45 2023/06/14 00:42:21 rin Exp $	*/
 
 /*-
  * Copyright (c) 2016 Kimihiro Nonaka <nonaka@netbsd.org>
@@ -41,6 +41,10 @@
 
 #ifdef EFIBOOT_ACPI
 #include "efiacpi.h"
+#endif
+
+#ifdef EFIBOOT_X86
+#include "x86/efibootx86.h"
 #endif
 
 #include <sys/bootblock.h>
@@ -101,6 +105,8 @@ void	command_boot(char *);
 void	command_multiboot2(char *);
 #endif
 void	command_dev(char *);
+void	command_devpath(char *);
+void	command_efivar(char *);
 void	command_initrd(char *);
 void	command_rndseed(char *);
 #ifdef EFIBOOT_FDT
@@ -110,6 +116,7 @@ void	command_dtoverlays(char *);
 #endif
 void	command_modules(char *);
 void	command_load(char *);
+void	command_load_mods(char *);
 void	command_unload(char *);
 void	command_ls(char *);
 void	command_gop(char *);
@@ -126,7 +133,12 @@ const struct boot_command commands[] = {
 	{ "acpi",	command_acpi,		"acpi [{on|off}]" },
 #endif
 	{ "boot",	command_boot,		"boot [dev:][filename] [args]\n     (ex. \"hd0a:\\netbsd.old -s\"" },
+#ifdef EFIBOOT_X86
+	{ "consdev",	command_consdev,	"consdev {pc|com[0123][,speed]}" },
+#endif
 	{ "dev",	command_dev,		"dev" },
+	{ "devpath",	command_devpath,	"devpath" },
+	{ "efivar",	command_efivar,		"efivar" },
 #ifdef EFIBOOT_FDT
 	{ "dtb",	command_dtb,		"dtb [dev:][filename]" },
 	{ "dtoverlay",	command_dtoverlay,	"dtoverlay [dev:][filename]" },
@@ -137,16 +149,23 @@ const struct boot_command commands[] = {
 	{ "rndseed",	command_rndseed,	"rndseed [dev:][filename]" },
 	{ "modules",	command_modules,	"modules [{on|off|reset}]" },
 	{ "load",	command_load,		"load <module_name>" },
+	{ "load_mods",	command_load_mods,	"load_mods <pattern>" },
 	{ "unload",	command_unload,		"unload <module_name>" },
 	{ "ls",		command_ls,		"ls [hdNn:/path]" },
 	{ "gop",	command_gop,		"gop [mode]" },
 	{ "mem",	command_mem,		"mem" },
+#ifdef EFIBOOT_X86
+	{ "memmap",	command_memmap,		"memmap [{sorted|unsorted|compact}]" },
+#endif
 	{ "menu",	command_menu,		"menu" },
 #ifdef EFIBOOT_MULTIBOOT2
 	{ "multiboot2",	command_multiboot2,	"multiboot2 [dev:][filename] [<args>]" },
 #endif
 	{ "reboot",	command_reset,		"reboot|reset" },
 	{ "reset",	command_reset,		NULL },
+#ifdef EFIBOOT_X86
+	{ "root",	command_root,		"root {spec}" },
+#endif
 	{ "setup",	command_setup,		"setup" },
 	{ "userconf",	command_userconf,	"userconf <command>" },
 	{ "version",	command_version,	"version" },
@@ -154,7 +173,7 @@ const struct boot_command commands[] = {
 	{ "help",	command_help,		"help|?" },
 	{ "?",		command_help,		NULL },
 	{ "quit",	command_quit,		"quit" },
-	{ NULL,		NULL },
+	{ NULL,		NULL,			NULL },
 };
 
 static int
@@ -209,13 +228,10 @@ command_acpi(char *arg)
 void
 command_boot(char *arg)
 {
-#ifndef __minix
 	char *fname = arg;
 	const char *kernel = *fname ? fname : bootfile;
 	char *bootargs = gettrailer(arg);
-#endif
 
-#ifndef __minix
 	if (!kernel || !*kernel)
 		kernel = DEFFILENAME;
 
@@ -225,9 +241,6 @@ command_boot(char *arg)
 	efi_block_set_readahead(true);
 	exec_netbsd(kernel, bootargs);
 	efi_block_set_readahead(false);
-#else
-	printf("boot NetBSD is not supported.\n");
-#endif
 }
 
 #ifdef EFIBOOT_MULTIBOOT2
@@ -261,6 +274,175 @@ command_dev(char *arg)
 		printf("\n");
 		printf("default: %s\n", default_device);
 	}
+}
+
+void
+command_devpath(char *arg)
+{
+	EFI_STATUS status;
+	UINTN i, nhandles;
+	EFI_HANDLE *handles;
+	EFI_DEVICE_PATH *dp0, *dp;
+	CHAR16 *path;
+	char *upath;
+	UINTN cols, rows, row = 0;
+	int rv;
+
+	status = uefi_call_wrapper(ST->ConOut->QueryMode, 4, ST->ConOut,
+	    ST->ConOut->Mode->Mode, &cols, &rows);
+	if (EFI_ERROR(status) || rows <= 2)
+		rows = 0;
+	else
+		rows -= 2;
+
+	/*
+	 * all devices.
+	 */
+	status = LibLocateHandle(ByProtocol, &DevicePathProtocol, NULL,
+	    &nhandles, &handles);
+	if (EFI_ERROR(status))
+		return;
+
+	for (i = 0; i < nhandles; i++) {
+		status = uefi_call_wrapper(BS->HandleProtocol, 3, handles[i],
+		    &DevicePathProtocol, (void **)&dp0);
+		if (EFI_ERROR(status))
+			break;
+
+		printf("DevicePathType %d\n", DevicePathType(dp0));
+		if (++row >= rows) {
+			row = 0;
+			printf("Press Any Key to continue :");
+			(void) awaitkey(-1, 0);
+			printf("\n");
+		}
+		for (dp = dp0;
+		     !IsDevicePathEnd(dp);
+		     dp = NextDevicePathNode(dp)) {
+
+			path = DevicePathToStr(dp);
+			upath = NULL;
+			rv = ucs2_to_utf8(path, &upath);
+			FreePool(path);
+			if (rv) {
+				printf("convert failed\n");
+				break;
+			}
+
+			printf("%d:%d:%s\n", DevicePathType(dp),
+			    DevicePathSubType(dp), upath);
+			FreePool(upath);
+
+			if (++row >= rows) {
+				row = 0;
+				printf("Press Any Key to continue :");
+				(void) awaitkey(-1, 0);
+				printf("\n");
+			}
+		}
+	}
+}
+
+void
+command_efivar(char *arg)
+{
+	static const char header[] =
+	 "GUID                                 Variable Name        Value\n"
+	 "==================================== ==================== ========\n";
+	EFI_STATUS status;
+	UINTN sz = 64, osz;
+	CHAR16 *name = NULL, *tmp, *val, guid[128];
+	char *uname, *uval, *uguid;
+	EFI_GUID vendor;
+	UINTN cols, rows, row = 0;
+	int rv;
+
+	status = uefi_call_wrapper(ST->ConOut->QueryMode, 4, ST->ConOut,
+	    ST->ConOut->Mode->Mode, &cols, &rows);
+	if (EFI_ERROR(status) || rows <= 2)
+		rows = 0;
+	else
+		rows -= 2;
+
+	name = AllocatePool(sz);
+	if (name == NULL) {
+		printf("memory allocation failed: %" PRIuMAX" bytes\n",
+		    (uintmax_t)sz);
+		return;
+	}
+
+	SetMem(name, sz, 0);
+	vendor = NullGuid;
+
+	printf("%s", header);
+	for (;;) {
+		osz = sz;
+		status = uefi_call_wrapper(RT->GetNextVariableName, 3,
+		    &sz, name, &vendor);
+		if (EFI_ERROR(status)) {
+			if (status == EFI_NOT_FOUND)
+				break;
+			if (status != EFI_BUFFER_TOO_SMALL) {
+				printf("GetNextVariableName failed: %" PRIxMAX "\n",
+				    (uintmax_t)status);
+				break;
+			}
+
+			tmp = AllocatePool(sz);
+			if (tmp == NULL) {
+				printf("memory allocation failed: %" PRIuMAX
+				    "bytes\n", (uintmax_t)sz);
+				break;
+			}
+			SetMem(tmp, sz, 0);
+			CopyMem(tmp, name, osz);
+			FreePool(name);
+			name = tmp;
+			continue;
+		}
+
+		val = LibGetVariable(name, &vendor);
+		if (val != NULL) {
+			uval = NULL;
+			rv = ucs2_to_utf8(val, &uval);
+			FreePool(val);
+			if (rv) {
+				printf("value convert failed\n");
+				break;
+			}
+		} else
+			uval = NULL;
+		uname = NULL;
+		rv = ucs2_to_utf8(name, &uname);
+		if (rv) {
+			printf("name convert failed\n");
+			FreePool(uval);
+			break;
+		}
+		GuidToString(guid, &vendor);
+		uguid = NULL;
+		rv = ucs2_to_utf8(guid, &uguid);
+		if (rv) {
+			printf("GUID convert failed\n");
+			FreePool(uval);
+			FreePool(uname);
+			break;
+		}
+		printf("%-35s %-20s %s\n", uguid, uname, uval ? uval : "(null)");
+		FreePool(uguid);
+		FreePool(uname);
+		if (uval != NULL)
+			FreePool(uval);
+
+		if (++row >= rows) {
+			row = 0;
+			printf("Press Any Key to continue :");
+			(void) awaitkey(-1, 0);
+			printf("\n");
+		}
+	}
+
+	FreePool(name);
 }
 
 void
@@ -342,6 +524,17 @@ command_load(char *arg)
 	}
 
 	module_add(arg);
+}
+
+void
+command_load_mods(char *arg)
+{
+	if (!arg || !*arg) {
+		command_help("");
+		return;
+	}
+
+	module_add_glob(arg);
 }
 
 void

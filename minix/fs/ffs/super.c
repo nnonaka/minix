@@ -25,7 +25,7 @@
  * chunks (the block driver requires contiguous, page-granular transfers).
  * Returns OK or an error code.
  */
-static int read_chunked(dev_t dev, u64_t pos, char *buf, size_t size)
+static int read_chunked(dev_t dev, uint64_t pos, char *buf, size_t size)
 {
   size_t off, chunk;
   int r;
@@ -97,7 +97,7 @@ static void ffs_oldfscompat_write(struct fs *fs)
 }
 
 /* Counterpart of read_chunked() for writing. */
-static int write_chunked(dev_t dev, u64_t pos, char *buf, size_t size)
+static int write_chunked(dev_t dev, uint64_t pos, char *buf, size_t size)
 {
   size_t off, chunk;
   int r;
@@ -174,7 +174,7 @@ int read_super(struct super_block *sp)
    * fs_sblockloc guard rejects stale/aliased superblocks. */
   found = FALSE;
   for (i = 0; sblocksearch[i] != -1; i++) {
-	r = read_chunked(dev, (u64_t) sblocksearch[i], sbbuf, SBLOCKSIZE);
+	r = read_chunked(dev, (uint64_t) sblocksearch[i], sbbuf, SBLOCKSIZE);
 	if (r != OK)
 		continue;
 	memcpy(fs, sbbuf, sizeof(struct fs));
@@ -242,7 +242,7 @@ int read_super(struct super_block *sp)
 	panic("can't allocate cylinder-group summary buffer");
 
   sp->s_csp_size = cssize;
-  r = read_chunked(dev, (u64_t) fs->fs_csaddr * fs->fs_fsize,
+  r = read_chunked(dev, (uint64_t) fs->fs_csaddr * fs->fs_fsize,
 	(char *) sp->s_csp, cssize);
   if (r != OK) {
 	munmap(sp->s_csp, cssize);
@@ -307,7 +307,7 @@ void write_super(struct super_block *sp)
 	d->fs_active = NULL;
 	d->fs_fmod = 0;
   }
-  r = write_chunked(sp->s_dev, (u64_t) sp->s_sboff, buf, wsize);
+  r = write_chunked(sp->s_dev, (uint64_t) sp->s_sboff, buf, wsize);
   munmap(buf, wsize);
   if (r != OK) {
 	printf("ffs: failed to write superblock\n");
@@ -316,7 +316,7 @@ void write_super(struct super_block *sp)
 
   /* Write the cylinder-group summary array. */
   cssize = (size_t) ffs_fragroundup(fs, (off_t) fs->fs_cssize);
-  r = write_chunked(sp->s_dev, (u64_t) fs->fs_csaddr * fs->fs_fsize,
+  r = write_chunked(sp->s_dev, (uint64_t) fs->fs_csaddr * fs->fs_fsize,
 	(char *) sp->s_csp, cssize);
   if (r != OK)
 	printf("ffs: failed to write cylinder-group summary\n");

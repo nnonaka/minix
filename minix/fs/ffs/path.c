@@ -118,7 +118,7 @@ int search_dir(struct inode *ldir_ptr, const char *string, ino_t *numb,
 
   /* Scan the directory one 512-byte chunk at a time. */
   for (pos = 0; pos < dir_size; pos += UFS_DIRBLKSIZ) {
-	bp = get_block_map(ldir_ptr, (u64_t) pos);
+	bp = get_block_map(ldir_ptr, (uint64_t) pos);
 	assert(bp != NULL);
 	base = (unsigned int) (pos % block_size);
 	prev_dp = NULL;

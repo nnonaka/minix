@@ -30,7 +30,7 @@ AFLAGS.start.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 .PATH: ${EFIDIR}/gnuefi
 SOURCES=	crt0-efi-${GNUEFIARCH}.S reloc_${GNUEFIARCH}.c
 SOURCES+=	boot.c bootmenu.c conf.c console.c dev_net.c devopen.c exec.c \
-		module.c panic.c prompt.c userconf.c
+		lsext.c module.c panic.c prompt.c userconf.c
 SOURCES+=	efiboot.c efichar.c efidev.c efigetsecs.c \
 		efifile.c efiblock.c efinet.c efipxe.c efirng.c \
 		efiwatchdog.c efigop.c smbios.c
@@ -72,7 +72,7 @@ BINMODE=444
 .PATH:	${.CURDIR} ${.CURDIR}/..
 .PATH:	${.CURDIR}/../../lib
 
-LDFLAGS+= --no-dynamic-linker --noinhibit-exec -z nocombreloc
+LDFLAGS+= --no-dynamic-linker --noinhibit-exec
 LDFLAGS+= -nostdlib -T${LDSCRIPT} -Bsymbolic -shared
 CPPFLAGS+= -I$S -I${.CURDIR} -I${.CURDIR}/../common -I$S/lib/libsa
 CPPFLAGS+= -I${.OBJDIR}
@@ -106,7 +106,9 @@ CPPFLAGS+= -DSUPPORT_TFTP
 CPPFLAGS+= -DLIBSA_ENABLE_LS_OP
 CPPFLAGS+= -DLIBSA_FFS_EI
 CPPFLAGS+= -DLIBSA_DISKLABEL_EI
-CPPFLAGS+= -DDEFAULT_TIMEOUT=5
+
+EFIBOOT_TIMEOUT?=5
+CPPFLAGS+= -DDEFAULT_TIMEOUT=${EFIBOOT_TIMEOUT}
 
 #CPPFLAGS+= -DEFIBOOT_DEBUG
 #CPPFLAGS+= -DARP_DEBUG
@@ -143,11 +145,13 @@ KERN_AS= library
 LIBKERN_ARCH?= ${MACHINE_ARCH}
 KERNMISCMAKEFLAGS+="LIBKERN_ARCH=${LIBKERN_ARCH}"
 .include "${S}/lib/libkern/Makefile.inc"
+CPPFLAGS+= -I${S}/../common/include/libc
 LIBKERN= ${KERNLIB}
 
 ### find out what to use for libz
 Z_AS= library
 .include "${S}/lib/libz/Makefile.inc"
+CPPFLAGS+=	-I${S}/lib/libz -I${S}/../common/dist/zlib
 LIBZ= ${ZLIB}
 
 ### find out what to use for libgnuefi

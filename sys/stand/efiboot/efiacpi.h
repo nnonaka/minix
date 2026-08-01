@@ -33,18 +33,6 @@
 #error ACPI support not enabled
 #endif
 
-struct acpi_rdsp {
-	char signature[8];
-	uint8_t checksum;
-	char oemid[6];
-	uint8_t revision;
-	uint32_t rsdtphys;
-	uint32_t length;
-	uint64_t xsdtphys;
-	uint8_t extcsum;
-	uint8_t reserved[3];
-};
-
 int efi_acpi_probe(void);
 void efi_acpi_show(void);
 int efi_acpi_available(void);
@@ -53,4 +41,5 @@ void efi_acpi_enable(int);
 int efi_acpi_create_fdt(void);
 const char *efi_acpi_get_model(void);
 void *efi_acpi_root(void);
+uint32_t efi_acpi_length(void);
 void *efi_acpi_smbios(void);

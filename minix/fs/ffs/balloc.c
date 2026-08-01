@@ -119,7 +119,7 @@ static daddr_t ffs_hashalloc(struct inode *rip, u_int cg, daddr_t bpref,
 	int size, daddr_t (*allocator)(struct inode *, u_int, daddr_t, int));
 static int ffs_mapsearch(struct fs *fs, struct cg *cgp, daddr_t bpref,
 	int allocsiz);
-static void ffs_fragacct(struct fs *fs, int fragmap, int32_t fraglist[],
+static void ffs_fragacct(struct fs *fs, int fragmap, uint32_t fraglist[],
 	int cnt);
 
 /*===========================================================================*
@@ -222,7 +222,7 @@ void ffs_write_cg(u_int cg, struct cg *cgp)
  *===========================================================================*/
 /* Update the fragment summary counts (cg_frsum) to reflect a change of 'cnt'
  * (+1 or -1) free fragments described by the block-map byte 'fragmap'. */
-static void ffs_fragacct(struct fs *fs, int fragmap, int32_t fraglist[],
+static void ffs_fragacct(struct fs *fs, int fragmap, uint32_t fraglist[],
 	int cnt)
 {
   int inblk;
@@ -269,10 +269,19 @@ static int ffs_mapsearch(struct fs *fs, struct cg *cgp, daddr_t bpref,
   else
 	start = (int) (cgp->cg_frotor / NBBY);
 
+  /* The per-byte table lookup mask: for fs_frag < NBBY, a fragtbl byte packs
+   * the run lengths of two (or more) sub-blocks, and the "run of allocsiz
+   * exists" bits start at bit fs_frag, not bit 0 (see ffs_tables.c and the
+   * scanc() call in NetBSD's ffs_mapsearch).  Using bit (allocsiz - 1) alone
+   * is correct only for fs_frag == 8, which is what all the newfs_ffs test
+   * images happen to use; makefs images with fsize=4096/bsize=16384 have
+   * fs_frag == 4 and failed every fragment allocation with ENOSPC.
+   */
   loc = -1;
   for (i = 0; i < totbytes; i++) {
 	int b = (start + i) % totbytes;
-	if (fragtbl[fs->fs_frag][blksfree[b]] & (1 << (allocsiz - 1))) {
+	if (fragtbl[fs->fs_frag][blksfree[b]] &
+	    (1 << (allocsiz - 1 + (fs->fs_frag & (NBBY - 1))))) {
 		loc = b;
 		break;
 	}
@@ -560,6 +569,11 @@ daddr_t ffs_realloccg(struct inode *rip, daddr_t lbn, daddr_t bprev,
   u_int cg;
   int i, request;
 
+  if (!(osize > 0 && nsize > 0 && osize < nsize && nsize <= fs->fs_bsize))
+	printf("ffs: realloccg ino=%llu lbn=%lld bprev=%lld osize=%d nsize=%d "
+	    "size=%llu\n", (unsigned long long) rip->i_num, (long long) lbn,
+	    (long long) bprev, osize, nsize,
+	    (unsigned long long) rip->i_din.di_size);
   assert(osize > 0 && nsize > 0 && osize < nsize && nsize <= fs->fs_bsize);
 
   cg = (u_int) dtog(fs, bprev);

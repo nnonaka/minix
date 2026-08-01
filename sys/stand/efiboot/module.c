@@ -115,6 +115,61 @@ module_add(const char *module_name)
 	TAILQ_INSERT_TAIL(&boot_modules, bm, entries);
 }
 
+/*
+ * Glob expansion for load_mods: the pattern's directory part is kept
+ * as prefix, the last component is matched by dir_foreach (fnmatch).
+ * Entries come back in name order, which is what keeps the MINIX
+ * mod01..modNN boot order.
+ */
+static char module_glob_prefix[256];
+static int module_glob_nadded;
+
+static void
+module_add_glob_cb(const char *name, const char *type)
+{
+	char path[512];
+
+	if (strcmp(type, "DIR") == 0)
+		return;
+
+	snprintf(path, sizeof(path), "%s%s", module_glob_prefix, name);
+	module_add(path);
+	module_glob_nadded++;
+}
+
+void
+module_add_glob(const char *pattern)
+{
+	const char *sep;
+	size_t len;
+
+	/* Trim leading whitespace */
+	while (*pattern == ' ' || *pattern == '\t')
+		++pattern;
+
+	/* keep the prefix up to and including the last separator */
+	sep = strrchr(pattern, '/');
+	if (sep == NULL)
+		sep = strrchr(pattern, ':');
+	if (sep != NULL) {
+		len = sep - pattern + 1;
+		if (len >= sizeof(module_glob_prefix)) {
+			printf("load_mods: %s: %s\n", pattern,
+			    strerror(ENAMETOOLONG));
+			return;
+		}
+		memcpy(module_glob_prefix, pattern, len);
+	} else {
+		len = 0;
+	}
+	module_glob_prefix[len] = '\0';
+
+	module_glob_nadded = 0;
+	dir_foreach(pattern, module_add_glob_cb);
+	if (module_glob_nadded == 0)
+		printf("load_mods: no match for %s\n", pattern);
+}
+
 void
 module_remove(const char *module_name)
 {

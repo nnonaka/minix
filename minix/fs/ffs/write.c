@@ -222,7 +222,8 @@ block64_t ffs_balloc(struct inode *rip, off_t off, int size)
   /* If the file currently ends in a fragment and we are extending it into a
    * later block, that fragment must first be rounded up to a full block. */
   lastlbn = ffs_lblkno(fs, rip->i_din.di_size);
-  if (lastlbn < UFS_NDADDR && lastlbn < lbn) {
+  if (lastlbn < UFS_NDADDR && lastlbn < lbn &&
+      (block64_t) rip->i_din.di_db[lastlbn] != NO_BLOCK) {
 	osize = (int) ffs_blksize(fs, rip->i_din.di_size, lastlbn);
 	if (osize < fs->fs_bsize && osize > 0) {
 		newb = (block64_t) ffs_realloccg(rip, lastlbn,
@@ -533,6 +534,22 @@ int truncate_inode(struct inode *rip, off_t length)
 	}
   }
 
+  /*
+   * If the new end of a regular file landed inside a hole, materialize the
+   * EOF fragment.  ffs_balloc() and this function derive the physical size
+   * of the EOF block from di_size, so leaving the EOF block unallocated
+   * would make a later write to it under-allocate and a later truncate
+   * over-free its fragments (double-frees corrupting cs_nffree).  NetBSD's
+   * ffs_truncate() maintains the same invariant with ufs_balloc_range().
+   */
+  if (length != 0 && lbn < UFS_NDADDR && S_ISREG(rip->i_din.di_mode) &&
+      ffs_blkoff(fs, length) != 0 &&
+      (block64_t) rip->i_din.di_db[lbn] == NO_BLOCK) {
+	(void) ffs_balloc(rip, length - 1, 1);
+	if (err_code != OK)
+		return(err_code);
+  }
+
   rip->i_update |= CTIME | MTIME;
   rip->i_dirt = IN_DIRTY;
   return(OK);
@@ -547,7 +564,6 @@ int fs_trunc(ino_t ino_nr, off_t start, off_t end)
  * [start, end) by zeroing it (a minimal implementation that does not free
  * whole blocks in the interior). */
   struct inode *rip;
-  int r;
 
   if ((rip = find_inode(fs_dev, ino_nr)) == NULL)
 	return(EINVAL);
@@ -559,7 +575,6 @@ int fs_trunc(ino_t ino_nr, off_t start, off_t end)
   {
 	struct fs *fs = &rip->i_sp->s_fs;
 	off_t pos = start;
-	r = OK;
 	while (pos < end) {
 		block64_t base = read_map(rip, pos, 0);
 		off_t boff = pos % fs->fs_fsize;

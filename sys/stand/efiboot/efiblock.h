@@ -53,6 +53,12 @@ struct efi_block_dev {
 struct efi_block_part_disklabel {
 	uint32_t secsize;
 	struct partition part;
+	daddr_t labelsector;
+	struct {
+		uint16_t type;
+		uint16_t checksum;
+		char packname[16];
+	} label;
 };
 
 struct efi_block_part_gpt {
@@ -76,6 +82,7 @@ struct efi_block_part {
 void efi_block_probe(void);
 void efi_block_show(void);
 struct efi_block_part *efi_block_boot_part(void);
+EFI_STATUS efi_block_read(struct efi_block_dev *, UINT64, void *, UINTN);
 
 int efi_block_open(struct open_file *, ...);
 int efi_block_close(struct open_file *);

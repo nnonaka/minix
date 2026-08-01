@@ -80,7 +80,7 @@ ssize_t fs_readwrite(ino_t ino_nr, struct fsdriver_data *data, size_t bytes,
 ssize_t fs_getdents(ino_t ino_nr, struct fsdriver_data *data, size_t bytes,
 	off_t *posp);
 block64_t read_map(struct inode *rip, off_t pos, int opportunistic);
-struct buf *get_block_map(struct inode *rip, u64_t position);
+struct buf *get_block_map(struct inode *rip, uint64_t position);
 
 /* stadir.c */
 int fs_stat(ino_t ino_nr, struct stat *statbuf);

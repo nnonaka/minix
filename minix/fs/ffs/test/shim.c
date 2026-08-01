@@ -22,12 +22,12 @@ time_t clock_time(clock_t *p) { (void)p; return time(NULL); }
 /* ---- bdev: direct pread/pwrite on the image ---- */
 int bdev_open(dev_t dev, int access) { (void)dev; (void)access; return OK; }
 int bdev_close(dev_t dev) { (void)dev; return OK; }
-ssize_t bdev_read(dev_t dev, u64_t pos, char *buf, size_t count, int flags) {
+ssize_t bdev_read(dev_t dev, uint64_t pos, char *buf, size_t count, int flags) {
 	(void)dev; (void)flags;
 	ssize_t r = pread(g_fd, buf, count, (off_t)pos);
 	return r;
 }
-ssize_t bdev_write(dev_t dev, u64_t pos, char *buf, size_t count, int flags) {
+ssize_t bdev_write(dev_t dev, uint64_t pos, char *buf, size_t count, int flags) {
 	(void)dev; (void)flags;
 	return pwrite(g_fd, buf, count, (off_t)pos);
 }
@@ -43,7 +43,7 @@ void lmfs_set_blocksize(size_t bs) {
 	if (!g_cache) panic("cache alloc");
 }
 unsigned int lmfs_fs_block_size(void) { return (unsigned int)g_bs; }
-void lmfs_set_blockusage(u64_t t, u64_t u) { (void)t; (void)u; }
+void lmfs_set_blockusage(uint64_t t, uint64_t u) { (void)t; (void)u; }
 void lmfs_may_use_vmcache(int n) { (void)n; }
 void lmfs_buf_pool(int n) { (void)n; }
 void lmfs_invalidate(dev_t dev) { (void)dev; }
@@ -59,7 +59,7 @@ static void flush_buf(struct buf *bp) {
 }
 
 int lmfs_get_block_ino(struct buf **bpp, dev_t dev, block64_t block, int how,
-	ino_t ino, u64_t off) {
+	ino_t ino, uint64_t off) {
 	(void)dev; (void)ino; (void)off;
 	if (block >= g_ncache) panic("block %llu out of range (ncache=%zu)",
 		(unsigned long long)block, g_ncache);
@@ -92,7 +92,7 @@ void lmfs_put_block(struct buf *bp) {
 	if (bp->refcount > 0) bp->refcount--;
 	flush_buf(bp);			/* write-through so the image stays current */
 }
-void lmfs_zero_block_ino(dev_t dev, ino_t ino, u64_t off) {
+void lmfs_zero_block_ino(dev_t dev, ino_t ino, uint64_t off) {
 	(void)dev; (void)ino; (void)off;
 }
 void lmfs_flushall(void) {

@@ -27,6 +27,7 @@
  */
 
 #include "../efiboot.h"
+#include "../x86/efibootx86.h"
 
 #include <sys/bootblock.h>
 
@@ -62,6 +63,12 @@ void efi_md_show(void)
 {
 }
 
+int
+efi_md_prepare_boot(const char *fname, const char *args, u_long *marks)
+{
+	return 0;
+}
+
 void
 efi_dcache_flush(u_long start, u_long size)
 {
@@ -70,27 +77,14 @@ efi_dcache_flush(u_long start, u_long size)
 void
 efi_boot_kernel(u_long marks[MARK_MAX])
 {
-	/* TODO
-	 * booting NetBSD is not supported.
-	 * This function is NOT working.
-	 */
-	 
-	physaddr_t entry, kernel_start, loadaddr;
-	u_long kernel_size;
-	uint32_t argc;
-	uint32_t *argv;
+	physaddr_t kernel_start = marks[MARK_START] - load_offset;
+	physaddr_t load_start = marks[MARK_START];
+	physaddr_t kernel_entry = marks[MARK_ENTRY] - load_offset;
+	u_long kernel_size = marks[MARK_END] - marks[MARK_START];
 
-	entry = marks[MARK_ENTRY];
-	kernel_start = entry;
-	loadaddr = 0;
-	kernel_size = marks[MARK_END] - marks[MARK_START];
-	argc = 0;
-	argv = NULL;
-
-	(*startprog32)(entry, argc, argv,
+	(*startprog32)(kernel_entry, BOOT_NARGS, boot_argv,
 	    (physaddr_t)startprog32 + startprog32_size,
-	    kernel_start, kernel_start + loadaddr,
-	    kernel_size, startprog32);
+	    kernel_start, load_start, kernel_size, startprog32);
 }
 
 /* ARGSUSED */

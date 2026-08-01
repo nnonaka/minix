@@ -27,11 +27,12 @@
  */
 
 #include "efiboot.h"
-#include "efifdt.h"
 #include "efiacpi.h"
 #include "smbios.h"
+#include "module.h"
 
 #include <sys/bootblock.h>
+#include <sys/queue.h>
 
 #include <loadfile.h>
 
@@ -535,47 +536,127 @@ mbi_boot_loader_name(struct multiboot_package *mbp, void *buf)
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
 }
 
+/*
+ * Boot modules for the multiboot2 info, loaded from the "load"
+ * command list (module_foreach).  Names with a path or device prefix
+ * are opened as given (the MINIX mod01_ds... convention); bare names
+ * use the NetBSD kernel module path.  Module addresses are 32-bit in
+ * multiboot2, so allocate below 4GB regardless of platform.
+ */
+struct mb2_module {
+	char *path;
+	EFI_PHYSICAL_ADDRESS addr;
+	u_long size;
+	TAILQ_ENTRY(mb2_module) entries;
+};
+static TAILQ_HEAD(, mb2_module) mb2_modules =
+    TAILQ_HEAD_INITIALIZER(mb2_modules);
+static int mb2_module_nfail;
+
+static void
+mb2_load_module_cb(const char *name)
+{
+	struct mb2_module *m;
+	EFI_PHYSICAL_ADDRESS addr;
+	EFI_STATUS status;
+	struct stat st;
+	char path[512];
+	ssize_t len;
+	int fd;
+
+	if (strchr(name, '/') != NULL || strchr(name, ':') != NULL)
+		snprintf(path, sizeof(path), "%s", name);
+	else
+		snprintf(path, sizeof(path), "%s/%s/%s.kmod",
+		    module_prefix, name, name);
+
+	fd = open(path, 0);
+	if (fd < 0 || fstat(fd, &st) < 0 || st.st_size <= 0) {
+		printf("multiboot2: %s: %s\n", path, strerror(errno));
+		if (fd >= 0)
+			close(fd);
+		mb2_module_nfail++;
+		return;
+	}
+
+	addr = 0xFFFFFFFFULL;
+	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
+	    EfiLoaderData, EFI_SIZE_TO_PAGES(st.st_size), &addr);
+	if (EFI_ERROR(status)) {
+		printf("multiboot2: %s: allocation of %" PRIdMAX
+		    " bytes failed\n", path, (intmax_t)st.st_size);
+		close(fd);
+		mb2_module_nfail++;
+		return;
+	}
+
+	printf("multiboot2: loading %s ", path);
+	len = read(fd, (void *)(uintptr_t)addr, st.st_size);
+	close(fd);
+	if (len < st.st_size) {
+		printf("FAILED\n");
+		uefi_call_wrapper(BS->FreePages, 2, addr,
+		    EFI_SIZE_TO_PAGES(st.st_size));
+		mb2_module_nfail++;
+		return;
+	}
+	printf("done.\n");
+
+	m = alloc(sizeof(*m));
+	m->path = alloc(strlen(path) + 1);
+	strcpy(m->path, path);
+	m->addr = addr;
+	m->size = len;
+	TAILQ_INSERT_TAIL(&mb2_modules, m, entries);
+}
+
+static void
+mb2_load_modules(const char *kernel_path)
+{
+	if (!module_enabled)
+		return;
+
+	mb2_module_nfail = 0;
+	module_init(kernel_path);
+	module_foreach(mb2_load_module_cb);
+	if (mb2_module_nfail > 0)
+		printf("multiboot2: WARNING: %d module%s failed to load\n",
+		    mb2_module_nfail, mb2_module_nfail == 1 ? "" : "s");
+}
+
+static void
+mb2_free_modules(void)
+{
+	struct mb2_module *m;
+
+	while ((m = TAILQ_FIRST(&mb2_modules)) != NULL) {
+		TAILQ_REMOVE(&mb2_modules, m, entries);
+		uefi_call_wrapper(BS->FreePages, 2, m->addr,
+		    EFI_SIZE_TO_PAGES(m->size));
+		dealloc(m->path, strlen(m->path) + 1);
+		dealloc(m, sizeof(*m));
+	}
+}
+
 static size_t
 mbi_modules(struct multiboot_package *mbp, void *buf)
 {
 	struct multiboot_tag_module *mbt = buf;
-	size_t len = 0;
+	struct mb2_module *m;
+	size_t len = 0, mbt_len, mbt_len_align, pathlen;
 
-	const int chosen = efi_fdt_chosen();
-	const char *module_name;
-	const uint64_t *data;
-	int dlen;
-	u_int index;
-
-	if (chosen == -1)
-		return 0;
-
-	data = efi_fdt_get_prop(chosen, "netbsd,modules", &dlen);
-	if (data == NULL)
-		return 0;
-
-	len = 0;
-
-	for (index = 0; index < dlen / 16; index++, data += 2) {
-		module_name = efi_fdt_get_string_index(chosen,
-		    "netbsd,module-names", index);
-		if (module_name == NULL)
-			break;
-
-		const paddr_t startpa = (paddr_t)be64dec(data + 0);
-		const size_t size = (size_t)be64dec(data + 1);
-				
-		size_t pathlen = strlen(module_name) + 1;
-		size_t mbt_len = sizeof(*mbt) + pathlen;
-		size_t mbt_len_align = roundup(mbt_len, MULTIBOOT_TAG_ALIGN);
+	TAILQ_FOREACH(m, &mb2_modules, entries) {
+		pathlen = strlen(m->path) + 1;
+		mbt_len = sizeof(*mbt) + pathlen;
+		mbt_len_align = roundup(mbt_len, MULTIBOOT_TAG_ALIGN);
 		len += mbt_len_align;
-		
-		if (mbt) {
+
+		if (mbt != NULL) {
 			mbt->type = MULTIBOOT_TAG_TYPE_MODULE;
 			mbt->size = mbt_len;
-			mbt->mod_start = startpa;
-			mbt->mod_end = startpa + size;
-			strncpy(mbt->cmdline, module_name, pathlen);
+			mbt->mod_start = m->addr;
+			mbt->mod_end = m->addr + m->size;
+			memcpy(mbt->cmdline, m->path, pathlen);
 			mbt = (struct multiboot_tag_module *)
 			    ((char *)mbt + mbt_len_align);
 		}
@@ -744,54 +825,22 @@ mbi_framebuffer(struct multiboot_package *mbp, void *buf)
 }
 
 static size_t
-mbi_acpi_old(struct multiboot_package *mbp, void *buf)
-{
-	size_t len = 0;
-	struct multiboot_tag_new_acpi *mbt = buf;
-	void *rsdp_phys;
-	struct acpi_rdsp *rsdp_p;
-
-	rsdp_phys = efi_acpi_root();
-	if (rsdp_phys == NULL)
-		goto out;
-
-	rsdp_p = (struct acpi_rdsp *)rsdp_phys;
-	if (rsdp_p->revision != 0)
-		goto out;
-		
-	len = sizeof(*mbt) + sizeof(struct acpi_rdsp);
-
-	if (mbt) {
-		mbt->type = MULTIBOOT_TAG_TYPE_ACPI_OLD;
-		mbt->size = len;
-		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, sizeof(struct acpi_rdsp));
-	}
-out:
-	return roundup(len, MULTIBOOT_TAG_ALIGN);
-}
-
-static size_t
 mbi_acpi_new(struct multiboot_package *mbp, void *buf)
 {
 	size_t len = 0;
 	struct multiboot_tag_new_acpi *mbt = buf;
 	void *rsdp_phys;
-	struct acpi_rdsp *rsdp_p;
 
 	rsdp_phys = efi_acpi_root();
 	if (rsdp_phys == NULL)
 		goto out;
 
-	rsdp_p = (struct acpi_rdsp *)rsdp_phys;
-	if (rsdp_p->revision != 2)
-		goto out;
-		
-	len = sizeof(*mbt) + rsdp_p->length;
+	len = sizeof(*mbt) + efi_acpi_length();
 		
 	if (mbt) {
 		mbt->type = MULTIBOOT_TAG_TYPE_ACPI_NEW;
 		mbt->size = len;
-		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, rsdp_p->length);
+		bcopy((void *)(vaddr_t)rsdp_phys, mbt->rsdp, efi_acpi_length());
 	}
 out:
 	return roundup(len, MULTIBOOT_TAG_ALIGN);
@@ -881,7 +930,10 @@ mbi_elf_sections(struct multiboot_package *mbp, void *buf)
 {
 	size_t len = 0;
 	struct multiboot_tag_elf_sections *mbt = buf;
-	Elf_Ehdr ehdr;
+	union {
+	    Elf32_Ehdr e32;
+	    Elf64_Ehdr e64;
+	} ehdr;
 	Elf32_Ehdr *ehdr32 = NULL;
 	Elf64_Ehdr *ehdr64 = NULL;
 	uint32_t shnum, shentsize, shstrndx, shoff;
@@ -895,19 +947,19 @@ mbi_elf_sections(struct multiboot_package *mbp, void *buf)
 	/*
 	 * Check this is a ELF header
 	 */
-	if (memcmp(&ehdr.e_ident, ELFMAG, SELFMAG) != 0)
+	if (memcmp(&ehdr.e32.e_ident, ELFMAG, SELFMAG) != 0)
 		goto out;
 
-	switch (ehdr.e_ident[EI_CLASS]) {
+	switch (ehdr.e32.e_ident[EI_CLASS]) {
 	case ELFCLASS32:
-		ehdr32 = (Elf32_Ehdr *)&ehdr;
+		ehdr32 = (Elf32_Ehdr *)&ehdr.e32;
 		shnum = ehdr32->e_shnum;
 		shentsize = ehdr32->e_shentsize;
 		shstrndx = ehdr32->e_shstrndx;
 		shoff = ehdr32->e_shoff;
 		break;
 	case ELFCLASS64:
-		ehdr64 = (Elf64_Ehdr *)&ehdr;
+		ehdr64 = (Elf64_Ehdr *)&ehdr.e64;
 		shnum = ehdr64->e_shnum;
 		shentsize = ehdr64->e_shentsize;
 		shstrndx = ehdr64->e_shstrndx;
@@ -1130,9 +1182,6 @@ mbi_dispatch(struct multiboot_package *mbp, uint16_t type,
 		break;
 	case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
 		len = mbi_framebuffer(mbp, bp);
-		break;
-	case MULTIBOOT_TAG_TYPE_ACPI_OLD:
-		len = mbi_acpi_old(mbp, bp);
 		break;
 	case MULTIBOOT_TAG_TYPE_ACPI_NEW:
 		len = mbi_acpi_new(mbp, bp);
@@ -1506,7 +1555,9 @@ exec_multiboot2(const char *fname, const char *args)
 	show_marks(marks);
 #endif
 
-	if (arch_prepare_boot(fname, args, marks) != 0) {
+	mb2_load_modules(fname);
+
+	if (efi_md_prepare_boot(fname, args, marks) != 0) {
 		goto cleanup;
 	}
 
@@ -1521,7 +1572,8 @@ exec_multiboot2(const char *fname, const char *args)
 	printf("boot returned\n");
 
 cleanup:
-	arch_cleanup_boot();
+	mb2_free_modules();
+	efi_md_cleanup_boot();
 
 	return EIO;
 }

@@ -101,6 +101,18 @@ if [ -n "$nbmakefs" ] && [ -x "$nbmakefs" ]; then
 	echo "-- UFS1 symlinks (fast+slow) --"
 	mku1 "$work/u1sl.img"
 	"$work/slink" "$work/u1sl.img";  "$work/fsck_ffs" "$work/u1sl.img"
+
+	echo
+	echo "== 3c. UFS2 fs_frag=4: fragment allocation on makefs images =="
+	# Regression test for the ffs_mapsearch byte-scan mask: with
+	# bsize=16384/fsize=4096 (fs_frag == 4, the live-image geometry), the
+	# fragtbl availability bits start at bit fs_frag, not bit 0.  The old
+	# bit-(allocsiz-1) mask made every fragment allocation return ENOSPC
+	# on such images while fs_frag == 8 images (all the other tests here)
+	# worked fine.
+	"$nbmakefs" -t ffs -o version=2,bsize=16384,fsize=4096 -s 32m \
+		"$work/u2f4.img" "$work/empty" >/dev/null
+	"$work/harness" "$work/u2f4.img";  "$work/fsck_ffs" "$work/u2f4.img"
 fi
 
 echo
