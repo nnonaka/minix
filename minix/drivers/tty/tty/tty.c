@@ -842,15 +842,33 @@ int select_try(struct tty *tp, int ops)
 	return ready_ops;
 }
 
+/* Recompute the union of pending select operations over all watches. */
+static void selwatch_aggregate(struct tty *tp)
+{
+	unsigned int ops;
+	int i;
+
+	ops = 0;
+	for (i = 0; i < TTY_SELWATCH; i++)
+		ops |= tp->tty_selw[i].tsw_ops;
+	tp->tty_select_ops = ops;
+}
+
 int select_retry(struct tty *tp)
 {
-	int ops;
+	struct tty_selwatch *w;
+	int i, ops;
 
-	if (tp->tty_select_ops && (ops = select_try(tp, tp->tty_select_ops))) {
-		chardriver_reply_select(tp->tty_select_proc,
-			tp->tty_select_minor, ops);
-		tp->tty_select_ops &= ~ops;
+	for (i = 0; i < TTY_SELWATCH; i++) {
+		w = &tp->tty_selw[i];
+		if (w->tsw_ops == 0)
+			continue;
+		if ((ops = select_try(tp, w->tsw_ops)) == 0)
+			continue;
+		chardriver_reply_select(w->tsw_proc, w->tsw_minor, ops);
+		w->tsw_ops &= ~ops;
 	}
+	selwatch_aggregate(tp);
 	return OK;
 }
 
@@ -860,7 +878,8 @@ int select_retry(struct tty *tp)
 static int do_select(devminor_t minor, unsigned int ops, endpoint_t endpt)
 {
   tty_t *tp;
-  int ready_ops, watch;
+  struct tty_selwatch *w, *free_w;
+  int i, ready_ops, watch;
 
   if ((tp = line2tty(minor)) == NULL)
 	return ENXIO;
@@ -872,19 +891,33 @@ static int do_select(devminor_t minor, unsigned int ops, endpoint_t endpt)
 
   ops &= ~ready_ops;
   if (ops && watch) {
-	/* Translated minor numbers are a problem with late select replies. We
-	 * have to save the minor number used to do the select, since otherwise
-	 * VFS won't be able to make sense of those late replies. We do not
-	 * support selecting on two different minors for the same object.
+	/* Late select replies must carry the minor number used to start the
+	 * select, or VFS cannot make sense of them.  Since console alias
+	 * minors share one tty object, watches are tracked per minor: merge
+	 * with an existing watch on this minor, or claim a free slot.
 	 */
-	if (tp->tty_select_ops != 0 && tp->tty_select_minor != minor) {
-		printf("TTY: select on one object with two minors (%d, %d)\n",
-			tp->tty_select_minor, minor);
-		return EBADF;
+	free_w = NULL;
+	for (i = 0; i < TTY_SELWATCH; i++) {
+		w = &tp->tty_selw[i];
+		if (w->tsw_ops != 0 && w->tsw_minor == minor)
+			break;
+		if (w->tsw_ops == 0 && free_w == NULL)
+			free_w = w;
 	}
+	if (i == TTY_SELWATCH) {
+		if ((w = free_w) == NULL) {
+			/* More distinct minors than console aliases exist;
+			 * this should not happen in practice.
+			 */
+			printf("TTY: out of select watches on minor %d\n",
+				minor);
+			return EBADF;
+		}
+		w->tsw_minor = minor;
+	}
+	w->tsw_ops |= ops;
+	w->tsw_proc = endpt;
 	tp->tty_select_ops |= ops;
-	tp->tty_select_proc = endpt;
-	tp->tty_select_minor = minor;
   }
 
   return ready_ops;
