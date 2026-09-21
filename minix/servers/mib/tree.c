@@ -1632,7 +1632,16 @@ int mib_mount(const int * mib, unsigned int miblen, unsigned int eid, uint32_t r
 	 * converted to a mount point.  If the target node does not exist, we
 	 * have to allocate a temporary node as mount point.
 	 */
-	if ((node = mib_find(parent, id, NULL /*prevp*/)) != NULL) {
+	/*
+	 * If the mount point is held by a service that no longer exists,
+	 * evict the stale mounts first; the node may be deallocated as a
+	 * result, so look it up again afterwards.
+	 */
+	if ((node = mib_find(parent, id, NULL /*prevp*/)) != NULL &&
+	    mib_remote_evict_stale(node))
+		node = mib_find(parent, id, NULL /*prevp*/);
+
+	if (node != NULL) {
 		/*
 		 * We are about to mount on an existing node.  As stated above,
 		 * the node flags must match the given flags exactly.
