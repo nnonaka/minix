@@ -274,6 +274,7 @@ static void dump_notes(struct filp *f, Elf_Nhdr nhdrs[], int csig,
 	printf("VFS: Could not read registers\n");
 
   memset(&regs, 0, sizeof(regs));
+#if defined(__x86_64__)
   regs.regs[_REG_RDI] = frame.di;
   regs.regs[_REG_RSI] = frame.si;
   regs.regs[_REG_RDX] = frame.dx;
@@ -298,6 +299,33 @@ static void dump_notes(struct filp *f, Elf_Nhdr nhdrs[], int csig,
   regs.regs[_REG_RFLAGS] = frame.psw;
   regs.regs[_REG_RSP] = frame.sp;
   regs.regs[_REG_SS] = frame.ss;
+#elif defined(__i386__)
+  /*
+   * i386's struct reg has named members rather than a regs[] array
+   * indexed by _REG_*, and its stackframe_s is a different shape: the
+   * segment registers are 16-bit and there is no r8..r15.  The two
+   * commented-out holes in the frame (st, retadr) have no counterpart
+   * here either.
+   */
+  regs.r_edi = frame.di;
+  regs.r_esi = frame.si;
+  regs.r_ebp = frame.fp;
+  regs.r_ebx = frame.bx;
+  regs.r_edx = frame.dx;
+  regs.r_ecx = frame.cx;
+  regs.r_eax = frame.retreg;
+  regs.r_eip = frame.pc;
+  regs.r_cs = frame.cs;
+  regs.r_eflags = frame.psw;
+  regs.r_esp = frame.sp;
+  regs.r_ss = frame.ss;
+  regs.r_ds = frame.ds;
+  regs.r_es = frame.es;
+  regs.r_fs = frame.fs;
+  regs.r_gs = frame.gs;
+#else
+#error "no register mapping for this architecture"
+#endif
 
   /* Dump second note entry - the general registers */
   write_buf(f, (char *) &nhdrs[1], sizeof(Elf_Nhdr));
