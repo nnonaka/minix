@@ -9,8 +9,9 @@
  * bad descriptors too, not a bad argument.
  *
  * The last subtest is about the other end of the same question: when a pipe
- * is writable.  A full one is not, however much select(2) used to say
- * otherwise, and something has to wake a waiter once it stops being full.
+ * is writable.  It is not whenever a byte would fit, but when a whole
+ * atomic write would -- and something has to wake a waiter once that
+ * becomes true.
  *
  * An alarm guards every wait: a regression here is as likely to hang as to
  * answer wrongly.
@@ -287,7 +288,7 @@ test99e(void)
 	static char buf[PIPE_BUF];
 	struct timeval tv;
 	fd_set wr;
-	int fd[2], status;
+	int fd[2], flags, i, n, status;
 	pid_t pid;
 
 	subtest = 5;
@@ -297,28 +298,50 @@ test99e(void)
 	/* An empty pipe is writable. */
 	if (writable(fd[1], 0) != 1) e(0);
 
-	/* A pipe with something in it still is: a MINIX pipe holds exactly
-	 * PIPE_BUF bytes, so the promise select(2) can make about it is
-	 * that a byte will fit, not that an atomic write will. */
+	/* So is one with something in it but room for a whole write -- the
+	 * state a pipe of exactly PIPE_BUF bytes could never be in.
+	 */
 	if (write(fd[1], buf, 1) != 1) e(0);
 	if (writable(fd[1], 0) != 1) e(0);
+	if (read(fd[0], buf, 1) != 1) e(0);
 
-	/* A full one is not writable at all. */
-	if (write(fd[1], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
+	/* Find out how much it holds, counted in atomic writes.  This has to
+	 * be more than one, or "is there room for a whole write" would be
+	 * the same question as "is the pipe empty".
+	 */
+	if ((flags = fcntl(fd[1], F_GETFL)) == -1) e(0);
+	if (fcntl(fd[1], F_SETFL, flags | O_NONBLOCK) != 0) e(0);
+
+	errno = 0;
+	for (n = 0; write(fd[1], buf, PIPE_BUF) == PIPE_BUF; n++)
+		/* nothing */;
+	if (errno != EAGAIN) e(0);
+	if (n < 2) efmt("pipe holds %d atomic writes, want at least 2", n);
+
+	if (fcntl(fd[1], F_SETFL, flags) != 0) e(0);
+
+	/* A full pipe is not writable. */
 	if (writable(fd[1], 0) != 0) e(0);
 
-	/* Taking a single byte out is enough to make it writable again. */
+	/* Taking one byte out does not make room for an atomic write. */
 	if (read(fd[0], buf, 1) != 1) e(0);
-	if (writable(fd[1], 0) != 1) e(0);
+	if (writable(fd[1], 0) != 0) e(0);
 
-	/* Drain it. */
+	/* Taking out the rest of one does. */
 	if (read(fd[0], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
 	if (writable(fd[1], 0) != 1) e(0);
 
+	/* Empty the pipe again: it holds n writes, one of which is gone. */
+	for (i = 1; i < n; i++)
+		if (read(fd[0], buf, PIPE_BUF) != PIPE_BUF) e(0);
+	if (writable(fd[1], 0) != 1) e(0);
+
 	/* A blocking wait is woken by the reader that makes room -- not one
-	 * read later, and not never.  The child takes a single byte, which
-	 * is all it takes to make the pipe writable again. */
-	if (write(fd[1], buf, PIPE_BUF) != PIPE_BUF) e(0);
+	 * read later, and not never.
+	 */
+	for (i = 0; i < n; i++)
+		if (write(fd[1], buf, PIPE_BUF) != PIPE_BUF) e(0);
+	if (writable(fd[1], 0) != 0) e(0);
 
 	switch (pid = fork()) {
 	case -1:
@@ -326,7 +349,7 @@ test99e(void)
 		break;
 	case 0:
 		usleep(WAIT_USECS);
-		if (read(fd[0], buf, 1) != 1) exit(1);
+		if (read(fd[0], buf, PIPE_BUF) != PIPE_BUF) exit(1);
 		exit(0);
 	default:
 		break;
@@ -344,14 +367,13 @@ test99e(void)
 	if (waitpid(pid, &status, 0) != pid) e(0);
 	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
 
-	/* The child took one byte; take the rest, or the refill below has
-	 * nowhere to go. */
-	if (read(fd[0], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
-
-	/* And by the last reader going away: a write would fail with EPIPE
-	 * rather than block, which counts as ready. */
+	/* Fill it up again for the next case: the child took one write. */
 	if (write(fd[1], buf, PIPE_BUF) != PIPE_BUF) e(0);
+	if (writable(fd[1], 0) != 0) e(0);
 
+	/* The other thing that makes a full pipe ready is the last reader
+	 * going away: a write then fails with EPIPE rather than blocking.
+	 */
 	switch (pid = fork()) {
 	case -1:
 		e(0);
@@ -379,6 +401,76 @@ test99e(void)
 	if (close(fd[1]) != 0) e(0);
 }
 
+/*
+ * A write larger than the pipe has to be split up, which is the one place
+ * the pipe's size arithmetic is exercised for real: what comes out the far
+ * end must be all of it, in order.
+ */
+#define BIG_SIZE	65536
+
+static void
+test99f(void)
+{
+	static unsigned char buf[BIG_SIZE];
+	size_t off, i;
+	ssize_t n;
+	int fd[2], status;
+	pid_t pid;
+
+	subtest = 6;
+
+	if (pipe(fd) != 0) e(0);
+
+	for (i = 0; i < BIG_SIZE; i++)
+		buf[i] = (unsigned char)(i % 251);
+
+	switch (pid = fork()) {
+	case -1:
+		e(0);
+		break;
+	case 0:
+		if (close(fd[0]) != 0) exit(1);
+		if (write(fd[1], buf, BIG_SIZE) != BIG_SIZE) exit(2);
+		if (close(fd[1]) != 0) exit(3);
+		exit(0);
+	default:
+		break;
+	}
+
+	if (close(fd[1]) != 0) e(0);
+
+	memset(buf, 0, sizeof(buf));
+	for (off = 0; off < BIG_SIZE; off += (size_t)n) {
+		guard(30);
+		n = read(fd[0], buf + off, BIG_SIZE - off);
+		alarm(0);
+		if (n <= 0) {
+			efmt("read %zd at offset %zu", n, off);
+			break;
+		}
+	}
+	if (off != BIG_SIZE) e(0);
+
+	/* And nothing after it. */
+	guard(30);
+	if (read(fd[0], buf, 1) != 0) e(0);
+	alarm(0);
+
+	for (i = 0; i < BIG_SIZE; i++)
+		if (buf[i] != (unsigned char)(i % 251)) {
+			efmt("byte %zu is %u, want %u", i, buf[i],
+			    (unsigned)(i % 251));
+			break;
+		}
+
+	if (close(fd[0]) != 0) e(0);
+
+	if (waitpid(pid, &status, 0) != pid) e(0);
+	if (!WIFEXITED(status)) e(0);
+	if (WEXITSTATUS(status) != 0) efmt("writer exited %d",
+	    WEXITSTATUS(status));
+}
+
 int
 main(int argc, char **argv)
 {
@@ -388,13 +480,14 @@ main(int argc, char **argv)
 
 	if (pipe(pipefd) != 0) e(0);
 
-	m = (argc == 2) ? atoi(argv[1]) : 0x1F;
+	m = (argc == 2) ? atoi(argv[1]) : 0x3F;
 
 	for (i = 0; i < 2; i++) {
 		if (m & 0x01) test99a();
 		if (m & 0x02) test99b();
 		if (m & 0x04) test99c();
 		if (m & 0x10) test99e();
+		if (m & 0x20) test99f();
 	}
 
 	if (close(pipefd[0]) != 0) e(0);

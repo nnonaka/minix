@@ -374,19 +374,23 @@ int rw_pipe(int rw_flag, endpoint_t usr_e, struct filp *f, int callnr, int fd,
   buf += cum_io_incr;
   nbytes -= cum_io_incr;
 
-  was_full = (rw_flag == READING && vp->v_size >= PIPE_BUF);
+  /* A pipe is writable once an atomic write fits in what is left of it.
+   * Note whether it was not, before the read below changes that.
+   */
+  was_full = (rw_flag == READING &&
+	      vp->v_size + PIPE_BUF > PIPE_SIZE);
 
   if (rw_flag == READING)
 	vp->v_size -= cum_io_incr;
   else
 	vp->v_size += cum_io_incr;
 
-  /* A read that takes anything out of a full pipe makes it writable, and
-   * anyone waiting for that has to be told here rather than one read
-   * later: pipe_check() gets around to it only when a reader *finds* the
-   * pipe empty, and a reader may never come back to look.
+  /* A read that makes room for an atomic write is what makes the pipe
+   * writable again, and anyone waiting for that has to be told here rather
+   * than one read later: pipe_check() gets around to it only when a reader
+   * *finds* the pipe empty, and a reader may never come back to look.
    */
-  if (was_full && vp->v_size < PIPE_BUF)
+  if (was_full && vp->v_size + PIPE_BUF <= PIPE_SIZE)
 	release(vp, VFS_WRITE, susp_count);
 
   if (partial_pipe) {

@@ -612,18 +612,15 @@ static int select_request_pipe(struct filp *f, int *ops, int block,
   }
 
   if ((*ops & (SEL_WR|SEL_ERR))) {
-	/* Check if we can write 1 byte.
-	 *
-	 * Ideally this would ask whether an atomic write of PIPE_BUF bytes
-	 * would go through, which is the size a caller may write in one
-	 * piece and therefore the size select(2) ought to promise about.
-	 * But a MINIX pipe holds exactly PIPE_BUF bytes, so that question
-	 * has only one answer -- "is it completely empty" -- and a pipe
-	 * with a single byte in it would be unwritable.  Until a pipe can
-	 * hold more than one atomic write, the useful promise is the
-	 * smaller one: that a byte will fit.
+	/* Check whether an atomic write would go through without blocking.
+	 * That, and not room for a single byte, is what makes a pipe
+	 * writable: a caller told otherwise may write PIPE_BUF bytes in one
+	 * piece, and would block on the very call select(2) promised would
+	 * not.  A pipe holds several times PIPE_BUF, so there is room
+	 * between "empty" and "cannot take a whole write" for this to be a
+	 * useful answer.
 	 */
-	err = pipe_check(f, WRITING, f->filp_flags & ~O_NONBLOCK, 1,
+	err = pipe_check(f, WRITING, f->filp_flags & ~O_NONBLOCK, PIPE_BUF,
 			 1 /* Check only */);
 
 	if (err != SUSPEND)

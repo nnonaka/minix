@@ -140,7 +140,7 @@ static int pfs_newnode(mode_t mode, uid_t uid, gid_t gid, dev_t dev,
 
 	/* For pipes, we need a buffer.  Try to allocate one. */
 	data = NULL;
-	if (isfifo && (data = malloc(PIPE_BUF)) == NULL)
+	if (isfifo && (data = malloc(PIPE_SIZE)) == NULL)
 		return ENOSPC;
 
 	/* Nothing can go wrong now.  Take an inode off the free list. */
@@ -221,7 +221,7 @@ static ssize_t pfs_read(ino_t ino_nr, struct fsdriver_data * data, size_t bytes,
 		return EINVAL;
 
 	/* We can't read beyond the maximum file position. */
-	if (bytes > PIPE_BUF)
+	if (bytes > PIPE_SIZE)
 		return EFBIG;
 
 	/* Limit the request to how much is in the pipe. */
@@ -256,7 +256,7 @@ static ssize_t pfs_write(ino_t ino_nr, struct fsdriver_data * data, size_t bytes
 		return EINVAL;
 
 	/* Check in advance to see if file will grow too big. */
-	if (rip->i_size + bytes > PIPE_BUF)
+	if (rip->i_size + bytes > PIPE_SIZE)
 		return EFBIG;
 
 	/*
