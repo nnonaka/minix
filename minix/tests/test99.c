@@ -8,6 +8,10 @@
  * process can only have OPEN_MAX descriptors, so the bits in between are
  * bad descriptors too, not a bad argument.
  *
+ * The last subtest is about the other end of the same question: when a pipe
+ * is writable.  A full one is not, however much select(2) used to say
+ * otherwise, and something has to wake a waiter once it stops being full.
+ *
  * An alarm guards every wait: a regression here is as likely to hang as to
  * answer wrongly.
  */
@@ -57,6 +61,34 @@ closed_fd(void)
 
 	e(0);
 	return -1;
+}
+
+/*
+ * Is the given descriptor writable right now?  Returns 1, 0, or -1.
+ */
+static int
+writable(int fd, int secs)
+{
+	struct timeval tv;
+	fd_set wr;
+
+	FD_ZERO(&wr);
+	FD_SET(fd, &wr);
+	tv.tv_sec = secs;
+	tv.tv_usec = 0;
+
+	guard(10);
+	switch (select(fd + 1, NULL, &wr, NULL, &tv)) {
+	case -1:
+		alarm(0);
+		return -1;
+	case 0:
+		alarm(0);
+		return 0;
+	default:
+		alarm(0);
+		return FD_ISSET(fd, &wr) ? 1 : -1;
+	}
 }
 
 /*
@@ -243,6 +275,110 @@ test99c(void)
 	if (pfd[0].revents != 0) e(0);
 }
 
+#define WAIT_USECS	200000		/* time for a child to get ready */
+
+/*
+ * How full a pipe has to be before it stops being writable, and that a
+ * select(2) waiting for that is actually woken.
+ */
+static void
+test99e(void)
+{
+	static char buf[PIPE_BUF];
+	struct timeval tv;
+	fd_set wr;
+	int fd[2], status;
+	pid_t pid;
+
+	subtest = 5;
+
+	if (pipe(fd) != 0) e(0);
+
+	/* An empty pipe is writable. */
+	if (writable(fd[1], 0) != 1) e(0);
+
+	/* A pipe with something in it still is: a MINIX pipe holds exactly
+	 * PIPE_BUF bytes, so the promise select(2) can make about it is
+	 * that a byte will fit, not that an atomic write will. */
+	if (write(fd[1], buf, 1) != 1) e(0);
+	if (writable(fd[1], 0) != 1) e(0);
+
+	/* A full one is not writable at all. */
+	if (write(fd[1], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
+	if (writable(fd[1], 0) != 0) e(0);
+
+	/* Taking a single byte out is enough to make it writable again. */
+	if (read(fd[0], buf, 1) != 1) e(0);
+	if (writable(fd[1], 0) != 1) e(0);
+
+	/* Drain it. */
+	if (read(fd[0], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
+	if (writable(fd[1], 0) != 1) e(0);
+
+	/* A blocking wait is woken by the reader that makes room -- not one
+	 * read later, and not never.  The child takes a single byte, which
+	 * is all it takes to make the pipe writable again. */
+	if (write(fd[1], buf, PIPE_BUF) != PIPE_BUF) e(0);
+
+	switch (pid = fork()) {
+	case -1:
+		e(0);
+		break;
+	case 0:
+		usleep(WAIT_USECS);
+		if (read(fd[0], buf, 1) != 1) exit(1);
+		exit(0);
+	default:
+		break;
+	}
+
+	FD_ZERO(&wr);
+	FD_SET(fd[1], &wr);
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
+	guard(10);
+	if (select(fd[1] + 1, NULL, &wr, NULL, &tv) != 1) e(0);
+	alarm(0);
+	if (!FD_ISSET(fd[1], &wr)) e(0);
+
+	if (waitpid(pid, &status, 0) != pid) e(0);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
+
+	/* The child took one byte; take the rest, or the refill below has
+	 * nowhere to go. */
+	if (read(fd[0], buf, PIPE_BUF - 1) != PIPE_BUF - 1) e(0);
+
+	/* And by the last reader going away: a write would fail with EPIPE
+	 * rather than block, which counts as ready. */
+	if (write(fd[1], buf, PIPE_BUF) != PIPE_BUF) e(0);
+
+	switch (pid = fork()) {
+	case -1:
+		e(0);
+		break;
+	case 0:
+		usleep(WAIT_USECS);
+		exit(0);		/* closes the last read end */
+	default:
+		break;
+	}
+
+	if (close(fd[0]) != 0) e(0);	/* the child holds the only one now */
+
+	FD_ZERO(&wr);
+	FD_SET(fd[1], &wr);
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
+	guard(10);
+	if (select(fd[1] + 1, NULL, &wr, NULL, &tv) != 1) e(0);
+	alarm(0);
+
+	if (waitpid(pid, &status, 0) != pid) e(0);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
+
+	if (close(fd[1]) != 0) e(0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -252,12 +388,13 @@ main(int argc, char **argv)
 
 	if (pipe(pipefd) != 0) e(0);
 
-	m = (argc == 2) ? atoi(argv[1]) : 0x7;
+	m = (argc == 2) ? atoi(argv[1]) : 0x1F;
 
 	for (i = 0; i < 2; i++) {
 		if (m & 0x01) test99a();
 		if (m & 0x02) test99b();
 		if (m & 0x04) test99c();
+		if (m & 0x10) test99e();
 	}
 
 	if (close(pipefd[0]) != 0) e(0);

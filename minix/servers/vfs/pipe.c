@@ -202,15 +202,17 @@ int notouch		/* check only */
 
   vp = filp->filp_vno;
 
-  /* Reads start at the beginning; writes append to pipes */
-  if (notouch) /* In this case we don't actually care whether data transfer
-		* would succeed. See POSIX 1003.1-2008 */
+  /* Reads start at the beginning; writes append to pipes.  This holds for
+   * a check-only call as well: what POSIX 1003.1-2008 lets select(2) stop
+   * caring about is whether the transfer would *succeed* -- a pipe with no
+   * reader left is ready, because the write returns EPIPE rather than
+   * blocking -- not whether there is room for it.  Answering from position
+   * zero would have said that a pipe is always writable, however full.
+   */
+  if (rw_flag == READING)
 	pos = 0;
-  else if (rw_flag == READING)
-	pos = 0;
-  else {
+  else
 	pos = vp->v_size;
-  }
 
   /* If reading, check for empty pipe. */
   if (rw_flag == READING) {
