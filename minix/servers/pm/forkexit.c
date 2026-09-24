@@ -494,7 +494,7 @@ int do_wait4(void)
    */
   children = 0;
   for (rp = &mproc[0]; rp < &mproc[NR_PROCS]; rp++) {
-	if ((rp->mp_flags & (IN_USE | TOLD_PARENT)) != IN_USE) continue;
+	if (!LIVE_PROC(rp)) continue;
 	if (rp->mp_parent != who_p && rp->mp_tracer != who_p) continue;
 	if (rp->mp_parent != who_p && (rp->mp_flags & ZOMBIE)) continue;
 
