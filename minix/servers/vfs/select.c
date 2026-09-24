@@ -114,8 +114,11 @@ int do_select(void)
   nfds = job_m_in.m_lc_vfs_select.nfds;
   vtimeout = job_m_in.m_lc_vfs_select.timeout;
 
-  /* Sane amount of file descriptors? */
-  if (nfds < 0 || nfds > OPEN_MAX) return(EINVAL);
+  /* Sane amount of file descriptors?  An fd_set is FD_SETSIZE wide, and a
+   * program is entitled to hand us the whole of one, even though a process
+   * can have only OPEN_MAX descriptors; the excess is dealt with below.
+   */
+  if (nfds < 0 || nfds > FD_SETSIZE) return(EINVAL);
 
   /* Find a slot to store this select request */
   for (s = 0; s < MAXSELECTS; s++)
@@ -171,6 +174,19 @@ int do_select(void)
    * the incoming results must not cause the select call to finish prematurely.
    */
   se->starting = TRUE;
+
+  /* No bit above OPEN_MAX can name an open file.  If the caller set one,
+   * the call fails with EBADF, exactly as it does for any other descriptor
+   * that is not open; if it set none, the excess is simply ignored.  (This
+   * is what a program that passes FD_SETSIZE as nfds relies on.)
+   */
+  for (fd = OPEN_MAX; fd < nfds; fd++) {
+	if (tab2ops(fd, se)) {
+		se->requestor = NULL;
+		return(EBADF);
+	}
+  }
+  if (nfds > OPEN_MAX) nfds = OPEN_MAX;
 
   /* Verify that file descriptors are okay to select on */
   for (fd = 0; fd < nfds; fd++) {
@@ -667,7 +683,7 @@ static int copy_fdsets(struct selectentry *se, int nfds, int direction)
   endpoint_t src_e, dst_e;
   fd_set *src_fds, *dst_fds;
 
-  if (nfds < 0 || nfds > OPEN_MAX)
+  if (nfds < 0 || nfds > FD_SETSIZE)
 	panic("select copy_fdsets: nfds wrong: %d", nfds);
 
   /* Only copy back as many bits as the user expects. */
