@@ -422,6 +422,25 @@ int truncate_inode(struct inode *rip, off_t length)
       S_ISFIFO(rip->i_din.di_mode) || S_ISSOCK(rip->i_din.di_mode))
 	return(OK);
 
+  /*
+   * An inline symlink has its target in the block-pointer area and owns no
+   * blocks at all, so there is nothing to free: walking di_db[]/di_ib[] below
+   * would free the target's own bytes as if they were block numbers, which
+   * lands on whatever the text happens to spell.  The only length this can be
+   * asked for is 0, from the last unlink; NetBSD's ffs_truncate() treats the
+   * case the same way, by clearing the target and the size.
+   */
+  if (inline_symlink(rip)) {
+	if (length != 0)
+		return(EINVAL);
+	memset(rip->i_din.di_db, 0, sizeof(rip->i_din.di_db));
+	memset(rip->i_din.di_ib, 0, sizeof(rip->i_din.di_ib));
+	rip->i_din.di_size = 0;
+	rip->i_update |= CTIME | MTIME;
+	rip->i_dirt = IN_DIRTY;
+	return(OK);
+  }
+
   if (length < 0)
 	return(EINVAL);
   if ((u_int64_t) length > (u_int64_t) rip->i_sp->s_max_size)

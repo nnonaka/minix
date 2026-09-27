@@ -33,6 +33,7 @@ struct inode *find_inode(dev_t dev, ino_t numb);
 void put_inode(struct inode *rip);
 void dup_inode(struct inode *ip);
 void update_times(struct inode *rip);
+int inline_symlink(const struct inode *rip);
 void rw_inode(struct inode *rip, int rw_flag);
 int fs_putnode(ino_t ino_nr, unsigned int count);
 void fs_seek(ino_t ino_nr);
