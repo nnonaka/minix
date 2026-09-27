@@ -121,7 +121,10 @@ int fs_slink(ino_t dir_nr, char *name, uid_t uid, gid_t gid,
 
   if ((r = err_code) == OK) {
 	fs = &sip->i_sp->s_fs;
-	if (bytes + 1 > (size_t) fs->fs_bsize) {
+	/* The target and its terminator are written into one cache block, and
+	 * this file system's cache blocks are fragments (s_block_size ==
+	 * fs_fsize), not whole file-system blocks. */
+	if (bytes + 1 > (size_t) sip->i_sp->s_block_size) {
 		r = ENAMETOOLONG;
 	} else if ((int) bytes < fs->fs_maxsymlinklen) {
 		/* Fast symlink: store the target in the inode itself. */
@@ -129,22 +132,38 @@ int fs_slink(ino_t dir_nr, char *name, uid_t uid, gid_t gid,
 		r = fsdriver_copyin(data, 0, target, bytes);
 		sip->i_dirt = IN_DIRTY;
 	} else {
-		/* Slow symlink: store the target in the first data block. */
-		if ((bp = new_block(sip, (off_t) 0)) != NULL) {
+		/* Slow symlink: store the target in the first data block,
+		 * asking for as much space as the target needs the way a write
+		 * of that many bytes would.  new_block() would serve here too,
+		 * but it allocates a whole file-system block (it exists for
+		 * directories, which are always whole blocks), and since
+		 * di_size is the target's length, truncate_inode() would free
+		 * only the fragment that length covers when the link is
+		 * removed, leaving the rest of the block allocated and
+		 * unreachable.  ffs_balloc() zeroes what it allocates, so the
+		 * bytes after the target do not expose stale data. */
+		block64_t base = ffs_balloc(sip, (off_t) 0, (int) bytes + 1);
+
+		if (base == NO_BLOCK) {
+			r = err_code;
+		} else {
+			bp = get_block(fs_dev, base, NO_READ);
 			target = b_data(bp);
 			r = fsdriver_copyin(data, 0, target, bytes);
 			lmfs_markdirty(bp);
-		} else {
-			r = err_code;
 		}
 	}
 
 	if (r == OK) {
 		assert(target != NULL);
 		target[bytes] = '\0';
-		sip->i_din.di_size = (off_t) strlen(target);
+		/* The size is what was asked for even when the target turns out
+		 * to be malformed below: it is what the space allocated above
+		 * was sized from, and what truncate_inode() frees by when the
+		 * failed link is removed again. */
+		sip->i_din.di_size = (u_int64_t) bytes;
 		sip->i_dirt = IN_DIRTY;
-		if (sip->i_din.di_size != (u_int64_t) bytes)
+		if (strlen(target) != bytes)
 			r = ENAMETOOLONG;	/* embedded NUL in the target */
 	}
 
