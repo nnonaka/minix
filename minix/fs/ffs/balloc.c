@@ -681,6 +681,14 @@ void ffs_blkfree(struct inode *rip, daddr_t bno, long size)
   rip->i_din.di_blocks -= btodb(size);
   rip->i_dirt = IN_DIRTY;
   ffs_write_cg(cg, cgp);
+
+  /* These fragments are no longer part of any file, so say so: VM caches
+   * file pages by inode and offset, and a page that keeps the association it
+   * had here would be mapped in later as the contents of whatever file --
+   * or hole -- comes to own this position next.  lmfs_free_block() breaks
+   * that association and drops the block from the caches. */
+  for (i = 0; i < numfrags(fs, size); i++)
+	lmfs_free_block(fs_dev, (block64_t) bno + i);
 }
 
 /*===========================================================================*
