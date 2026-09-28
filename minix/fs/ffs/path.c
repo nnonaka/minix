@@ -94,7 +94,6 @@ int search_dir(struct inode *ldir_ptr, const char *string, ino_t *numb,
  *   DELETE  : remove 'string';
  *   IS_EMPTY: return OK if the dir holds only . and .., else ENOTEMPTY.
  */
-  struct fs *fs = &ldir_ptr->i_sp->s_fs;
   struct buf *bp;
   struct direct *dp, *prev_dp;
   off_t pos, dir_size;
@@ -212,11 +211,13 @@ enter_here:
   if (flag != ENTER)
 	return(flag == IS_EMPTY ? OK : ENOENT);
 
-  /* No room in any existing chunk: grow the directory by one block. */
+  /* No room in any existing chunk: grow the directory by one chunk.  A
+   * directory's size is a multiple of UFS_DIRBLKSIZ, not of fs_bsize, so this
+   * chunk may share a block -- and a cache block -- with earlier ones. */
   if ((bp = new_block(ldir_ptr, dir_size)) == NULL)
 	return(err_code);
 
-  dp = (struct direct *) b_data(bp);	/* first chunk of the new block */
+  dp = (struct direct *) (b_data(bp) + (unsigned int) (dir_size % block_size));
   dp->d_ino = (u_int32_t) *numb;
   dp->d_reclen = UFS_DIRBLKSIZ;
   dp->d_namlen = (u_int8_t) string_len;
@@ -226,7 +227,7 @@ enter_here:
   lmfs_markdirty(bp);
   put_block(bp);
 
-  ldir_ptr->i_din.di_size = dir_size + fs->fs_bsize;
+  ldir_ptr->i_din.di_size = dir_size + UFS_DIRBLKSIZ;
   ldir_ptr->i_update |= CTIME | MTIME;
   ldir_ptr->i_dirt = IN_DIRTY;
   return(OK);

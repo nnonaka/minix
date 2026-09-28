@@ -4,9 +4,9 @@
  * Fragments occur only in the direct-block range: ffs_blksize() yields a full
  * block for every logical block >= UFS_NDADDR, so indirect-addressed blocks
  * (and all indirect metadata blocks) are always whole blocks.  Directories are
- * likewise allocated in whole blocks, subdivided into UFS_DIRBLKSIZ entry
- * chunks so that no entry ever crosses a 512-byte boundary (required for
- * fsck-clean images).
+ * allocated one UFS_DIRBLKSIZ chunk at a time (see new_block()), so that no
+ * entry ever crosses a 512-byte boundary -- required for fsck-clean images --
+ * and their last block may be a fragment like any other file's.
  */
 
 #include "fs.h"
@@ -306,37 +306,44 @@ block64_t ffs_balloc(struct inode *rip, off_t off, int size)
  *===========================================================================*/
 struct buf *new_block(struct inode *rip, off_t position)
 {
-/* Allocate and initialize a fresh directory block at the (block-aligned) byte
- * offset 'position', dividing it into empty UFS_DIRBLKSIZ entry chunks.
- * Returns the cache buffer for the first fragment, or NULL with err_code set.
+/* Allocate and initialize a fresh UFS_DIRBLKSIZ directory chunk at the (chunk-
+ * aligned) byte offset 'position', as one empty entry spanning it.  Returns the
+ * cache buffer holding that chunk -- which starts 'position' modulo the cache
+ * block size into the buffer, not necessarily at its beginning -- or NULL with
+ * err_code set.
+ *
+ * A directory grows one chunk at a time rather than one file-system block at a
+ * time, because that is how the file systems this server is handed are laid
+ * out: makefs(8) and newfs(8) both leave a directory's last block partial (a
+ * fresh directory is one chunk), so a directory's size is a multiple of
+ * UFS_DIRBLKSIZ and not of fs_bsize.  It is also how NetBSD's ufs_direnter()
+ * extends one.  Asking ffs_balloc() for a whole block at an offset that is not
+ * block-aligned cannot work at all: it sizes the request from the offset within
+ * the block, so the request would run past the end of that block.
  */
-  struct fs *fs = &rip->i_sp->s_fs;
   struct buf *bp;
   struct direct *dp;
-  block64_t base;
-  unsigned int c;
-  int i;
+  unsigned int off;
 
-  base = ffs_balloc(rip, position, fs->fs_bsize);
-  if (base == NO_BLOCK)
+  assert(position % UFS_DIRBLKSIZ == 0);
+
+  if (ffs_balloc(rip, position, UFS_DIRBLKSIZ) == NO_BLOCK)
 	return(NULL);
 
-  /* Initialize every UFS_DIRBLKSIZ chunk of the block as one empty entry. */
-  for (i = 0; i < fs->fs_frag; i++) {
-	bp = get_block(fs_dev, base + i, NO_READ);
-	memset(b_data(bp), 0, fs->fs_fsize);
-	for (c = 0; c < (unsigned int) fs->fs_fsize; c += UFS_DIRBLKSIZ) {
-		dp = (struct direct *) (b_data(bp) + c);
-		dp->d_ino = 0;
-		dp->d_reclen = UFS_DIRBLKSIZ;
-		dp->d_type = 0;
-		dp->d_namlen = 0;
-	}
-	lmfs_markdirty(bp);
-	put_block(bp);
+  /* ffs_balloc() zeroed whatever it added, and the rest of this cache block
+   * holds earlier chunks of the same directory, so read it as it is. */
+  if ((bp = get_block_map(rip, (uint64_t) position)) == NULL) {
+	err_code = EIO;
+	return(NULL);
   }
 
-  return(get_block_map(rip, position));
+  off = (unsigned int) (position % rip->i_sp->s_block_size);
+  dp = (struct direct *) (b_data(bp) + off);
+  memset(dp, 0, UFS_DIRBLKSIZ);
+  dp->d_reclen = UFS_DIRBLKSIZ;
+  lmfs_markdirty(bp);
+
+  return(bp);
 }
 
 /*===========================================================================*
