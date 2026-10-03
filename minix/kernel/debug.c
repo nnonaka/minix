@@ -273,7 +273,16 @@ void print_proc(struct proc *pp)
 		pp->p_priority, pp->p_user_time,
 		pp->p_sys_time, ex64hi(pp->p_cycles),
 		ex64lo(pp->p_cycles), pp->p_cpu,
-#if defined(__i386__)
+		/*
+		 * x86_64 has a p_cr3 as well, and used to match neither arm
+		 * nor i386 here: "pdbr 0x%lx" was then left without an
+		 * argument, so every field after it in this line reported the
+		 * value of the one before, and the last read past the end of
+		 * the argument list.  Deadlock and panic dumps on amd64 named
+		 * the scheduler as the misc flags and printed stack garbage as
+		 * the scheduler.
+		 */
+#if defined(__i386__) || defined(__x86_64__)
 		pp->p_seg.p_cr3,
 #elif defined(__arm__)
 		pp->p_seg.p_ttbr,
