@@ -410,6 +410,34 @@ static void indir_free(struct inode *rip, block64_t ind, int level, off_t first,
   }
 }
 
+/*
+ * Zero the bytes in [start, end) that are backed by allocated blocks, leaving
+ * holes as they are.  Used both to punch a range and to clear what is left of
+ * the block that survives a truncation.
+ */
+static void zero_range(struct inode *rip, off_t start, off_t end)
+{
+  struct fs *fs = &rip->i_sp->s_fs;
+  off_t pos = start;
+
+  while (pos < end) {
+	block64_t base = read_map(rip, pos, 0);
+	off_t boff = pos % fs->fs_fsize;
+	size_t n = fs->fs_fsize - boff;
+
+	if ((off_t) n > end - pos)
+		n = (size_t) (end - pos);
+	if (base != NO_BLOCK) {
+		struct buf *bp = get_block(fs_dev, base, NORMAL);
+
+		memset(b_data(bp) + boff, 0, n);
+		lmfs_markdirty(bp);
+		put_block(bp);
+	}
+	pos += n;
+  }
+}
+
 /*===========================================================================*
  *				truncate_inode				     *
  *===========================================================================*/
@@ -491,15 +519,57 @@ int truncate_inode(struct inode *rip, off_t length)
 		}
 	}
 	rip->i_din.di_size = length;
+
+	/*
+	 * Zero the stale bytes between the old end of file and the end of the
+	 * block that held it.  Those bytes are allocated but were never part
+	 * of the file, and growing past them must show zeroes rather than
+	 * whatever the block last held -- which, with blocks coming straight
+	 * off the free list, is often the file that was just deleted.  Blocks
+	 * past that one are holes and read as zero by themselves, so the range
+	 * stops at the old end-of-file block; zero_range() skips anything
+	 * unallocated within it anyway.  NetBSD gets this from
+	 * ufs_balloc_range(), which zero-fills what it extends into.
+	 */
+	if (osize > 0 && ffs_blkoff(fs, osize) != 0) {
+		off_t oldlbn = ffs_lblkno(fs, osize);
+		off_t zend = (off_t) ffs_lblktosize(fs, oldlbn + 1);
+
+		if (zend > length)
+			zend = length;
+		if (zend > osize)
+			zero_range(rip, osize, zend);
+	}
+
 	rip->i_update |= CTIME | MTIME;
 	rip->i_dirt = IN_DIRTY;
 	return(OK);
   }
 
   /*
-   * Shrinking the file.  Commit the new size first, then free everything that
-   * is no longer reachable.
+   * Shrinking the file.  First zero what is left of the block that keeps the
+   * new end of file, from that end to wherever the block stops.  Those bytes
+   * are still allocated and still reachable: a truncation back up to the old
+   * size, or a write past the new end, has to find zeroes there rather than
+   * what the file used to hold.  Freeing whole blocks below is not enough --
+   * the block holding the new end is not freed.  NetBSD's ffs_truncate() does
+   * the same with ubc_zerorange(), also before it frees anything, and test50
+   * is what notices when it is missing.
+   *
+   * This reads the old size, so it has to happen before di_size is committed.
    */
+  if (S_ISREG(rip->i_din.di_mode) && ffs_blkoff(fs, length) != 0) {
+	off_t eoflbn = ffs_lblkno(fs, length);
+	off_t eoz = (off_t) ffs_lblktosize(fs, eoflbn) +
+	    (off_t) ffs_blksize(fs, osize, eoflbn);
+
+	if (eoz > osize)
+		eoz = osize;
+	if (eoz > length)
+		zero_range(rip, length, eoz);
+  }
+
+  /* Commit the new size, then free everything that is no longer reachable. */
   rip->i_din.di_size = length;
 
   /* lastblock is the highest logical block to keep (-1 if length == 0). */
@@ -598,26 +668,10 @@ int fs_trunc(ino_t ino_nr, off_t start, off_t end)
 	return(truncate_inode(rip, start));
 
   /* Range punch: zero the affected bytes in place. */
-  {
-	struct fs *fs = &rip->i_sp->s_fs;
-	off_t pos = start;
-	while (pos < end) {
-		block64_t base = read_map(rip, pos, 0);
-		off_t boff = pos % fs->fs_fsize;
-		size_t n = fs->fs_fsize - boff;
-		if ((off_t) n > end - pos)
-			n = (size_t) (end - pos);
-		if (base != NO_BLOCK) {
-			struct buf *bp = get_block(fs_dev, base, NORMAL);
-			memset(b_data(bp) + boff, 0, n);
-			lmfs_markdirty(bp);
-			put_block(bp);
-		}
-		pos += n;
-	}
-	rip->i_update |= CTIME | MTIME;
-	rip->i_dirt = IN_DIRTY;
-  }
+  zero_range(rip, start, end);
+
+  rip->i_update |= CTIME | MTIME;
+  rip->i_dirt = IN_DIRTY;
 
   return(OK);
 }
