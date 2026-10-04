@@ -47,6 +47,7 @@ void lmfs_set_blockusage(uint64_t t, uint64_t u) { (void)t; (void)u; }
 void lmfs_may_use_vmcache(int n) { (void)n; }
 void lmfs_buf_pool(int n) { (void)n; }
 void lmfs_invalidate(dev_t dev) { (void)dev; }
+void lmfs_free_block(dev_t dev, block64_t block) { (void)dev; (void)block; }
 
 static void flush_buf(struct buf *bp) {
 	if (bp->dirty) {
