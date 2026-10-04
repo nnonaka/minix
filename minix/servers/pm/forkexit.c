@@ -87,6 +87,16 @@ int do_fork(void)
   rmc->mp_sigact = mpsigact[next_child];	/* restore mp_sigact ptr */
   memcpy(rmc->mp_sigact, rmp->mp_sigact, sizeof(mpsigact[next_child]));
   rmc->mp_parent = who_p;			/* record child's parent */
+  /*
+   * "The set of signals pending for the child process shall be initialized to
+   * the empty set" (POSIX fork(2)).  The slot was copied wholesale above, so
+   * without this the child inherits whatever had been raised for the parent
+   * and not yet delivered, and that signal is then handled twice: once in each
+   * process.  In a program whose handler answers the sender -- test79 does
+   * exactly this -- the child answers too, before exiting.
+   */
+  (void) sigemptyset(&rmc->mp_sigpending);
+  (void) sigemptyset(&rmc->mp_ksigpending);
   if (!(rmc->mp_trace_flags & TO_TRACEFORK)) {
 	rmc->mp_tracer = NO_TRACER;		/* no tracer attached */
 	rmc->mp_trace_flags = 0;
@@ -189,6 +199,16 @@ int do_srv_fork(void)
   rmc->mp_sigact = mpsigact[next_child];	/* restore mp_sigact ptr */
   memcpy(rmc->mp_sigact, rmp->mp_sigact, sizeof(mpsigact[next_child]));
   rmc->mp_parent = who_p;			/* record child's parent */
+  /*
+   * "The set of signals pending for the child process shall be initialized to
+   * the empty set" (POSIX fork(2)).  The slot was copied wholesale above, so
+   * without this the child inherits whatever had been raised for the parent
+   * and not yet delivered, and that signal is then handled twice: once in each
+   * process.  In a program whose handler answers the sender -- test79 does
+   * exactly this -- the child answers too, before exiting.
+   */
+  (void) sigemptyset(&rmc->mp_sigpending);
+  (void) sigemptyset(&rmc->mp_ksigpending);
   if (!(rmc->mp_trace_flags & TO_TRACEFORK)) {
 	rmc->mp_tracer = NO_TRACER;		/* no tracer attached */
 	rmc->mp_trace_flags = 0;
