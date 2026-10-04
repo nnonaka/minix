@@ -36,7 +36,8 @@ CPPFLAGS+=	-I. -I${.CURDIR}/../../lib -I${S}
 
 .if ${MACHINE_ARCH} == "x86_64"
 LDFLAGS+=	-Wl,-m,elf_i386
-AFLAGS+=	-m32
+# MINIX's clang ignores -m32 and warns that it is unused.
+AFLAGS+=	${${ACTIVE_CC} == "clang":?:-m32}
 .endif
 
 BUILDSYMLINKS+=	$S/arch/i386/include	machine \
