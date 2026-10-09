@@ -1,4 +1,4 @@
-/* $NetBSD: exec.c,v 1.23 2021/10/06 10:13:19 jmcneill Exp $ */
+/* $NetBSD: exec.c,v 1.26 2024/09/19 06:26:11 mlelstv Exp $ */
 
 /*-
  * Copyright (c) 2019 Jason R. Thorpe
@@ -101,6 +101,7 @@ load_file(const char *path, u_long extra, bool quiet_errors,
 		return ENOMEM;
 	}
 
+	printf("boot: loading %s ", path);
 	len = read(fd, (void *)(uintptr_t)*paddr, expectedlen);
 	close(fd);
 
@@ -113,6 +114,8 @@ load_file(const char *path, u_long extra, bool quiet_errors,
 		}
 		return EIO;
 	}
+
+	printf("done.\n");
 
 	efi_dcache_flush(*paddr, *psize);
 
@@ -151,7 +154,8 @@ generate_efirng(void)
 
 	/* Fill the page with whatever the EFI RNG will do.  */
 	if (efi_rng((void *)(uintptr_t)addr, size)) {
-		uefi_call_wrapper(BS->FreePages, 2, addr, EFI_SIZE_TO_PAGES(size));
+		uefi_call_wrapper(BS->FreePages, 2, addr,
+		    EFI_SIZE_TO_PAGES(size));
 		return;
 	}
 
@@ -164,7 +168,7 @@ int
 exec_netbsd(const char *fname, const char *args)
 {
 	EFI_PHYSICAL_ADDRESS addr;
-	u_long marks[MARK_MAX], alloc_size;
+	u_long marks[MARK_MAX], alloc_size, kernel_base;
 	EFI_STATUS status;
 	int fd, ohowto;
 
@@ -183,7 +187,8 @@ exec_netbsd(const char *fname, const char *args)
 	}
 	close(fd);
 	marks[MARK_END] = (((u_long) marks[MARK_END] + sizeof(int) - 1)) & -sizeof(int);
-	alloc_size = marks[MARK_END] - marks[MARK_START] + arch_alloc_size() + EFIBOOT_ALIGN;
+	alloc_size = marks[MARK_END] - marks[MARK_START] + efi_md_boot_alloc_size(fname) + EFIBOOT_ALIGN;
+	kernel_base = marks[MARK_START];
 
 #ifdef EFIBOOT_ALLOCATE_MAX_ADDRESS
 	addr = EFIBOOT_ALLOCATE_MAX_ADDRESS;
@@ -200,17 +205,24 @@ exec_netbsd(const char *fname, const char *args)
 		return ENOMEM;
 	}
 
+	/*
+	 * Load into the allocated buffer.  LOADADDR maps the kernel's
+	 * link address to its physical load address; kernel_base is that
+	 * physical base (0 on the FDT platforms by choice of address
+	 * mask), so the image starts right at the aligned buffer.
+	 * load_offset stays valid until cleanup: the MD code needs it to
+	 * translate marks[] back to kernel physical addresses.
+	 */
 	memset(marks, 0, sizeof(marks));
-	load_offset = (addr + EFIBOOT_ALIGN - 1) & -EFIBOOT_ALIGN;
+	load_offset = ((addr + EFIBOOT_ALIGN - 1) & -EFIBOOT_ALIGN) - kernel_base;
 	fd = loadfile(fname, marks, LOAD_KERNEL);
 	if (fd < 0) {
 		printf("boot: %s: %s\n", fname, strerror(errno));
 		goto cleanup;
 	}
 	close(fd);
-	load_offset = 0;
 
-	if (arch_prepare_boot(fname, args, marks) != 0) {
+	if (efi_md_prepare_netbsd(fname, args, marks) != 0) {
 		goto cleanup;
 	}
 
@@ -220,10 +232,9 @@ exec_netbsd(const char *fname, const char *args)
 	printf("boot returned\n");
 
 cleanup:
+	load_offset = 0;
 	uefi_call_wrapper(BS->FreePages, 2, addr, EFI_SIZE_TO_PAGES(alloc_size));
-	arch_cleanup_boot();
+	efi_md_cleanup_boot();
 
 	return EIO;
 }
-
-

@@ -1,4 +1,4 @@
-/*	$NetBSD: efiboot.h,v 1.20 2022/08/14 11:26:41 jmcneill Exp $	*/
+/*	$NetBSD: efiboot.h,v 1.22 2024/08/15 06:01:40 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2016 Kimihiro Nonaka <nonaka@netbsd.org>
@@ -37,28 +37,11 @@
 
 #include "efiboot_machdep.h"
 
-#ifdef _LP64
-#define PRIdUINTN "ld"
-#define PRIxUINTN "lx"
-#define PRIxEFIPTR "lX"
-#define PRIxEFISIZE "lX"
-#else
-#define PRIdUINTN "d"
-#define PRIxUINTN "x"
-#define PRIxEFIPTR "X"
-#define PRIxEFISIZE "X"
-#endif
-
 struct boot_command {
 	const char *c_name;
 	void (*c_fn)(char *);
 	const char *c_help;
 };
-
-int arch_prepare_boot(const char *, const char *, u_long *);
-void arch_cleanup_boot(void);
-size_t arch_alloc_size(void);
-void arch_set_virtual_address_map(EFI_MEMORY_DESCRIPTOR *, UINTN, UINTN, UINTN, UINT32);
 
 /* conf.c */
 extern struct fs_ops null_fs_ops;
@@ -84,7 +67,6 @@ char *get_rndseed_path(void);
 
 /* console.c */
 int ischar(void);
-void cninit(void);
 
 /* efiboot.c */
 extern EFI_HANDLE IH;
@@ -135,8 +117,11 @@ void *efi_gop_found(void);
 
 /* exec.c */
 int load_file(const char *, u_long, bool, EFI_PHYSICAL_ADDRESS *, u_long *);
-void generate_efirng(void);
 int exec_netbsd(const char *, const char *);
+void generate_efirng(void);
+
+/* lsext.c */
+void dir_foreach(const char *, void (*)(const char *, const char *));
 
 /* panic.c */
 __dead VOID Panic(IN CHAR16 *, ...);

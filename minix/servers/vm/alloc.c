@@ -272,7 +272,7 @@ phys_clicks alloc_mem(phys_clicks clicks, u32_t memflags)
  * always on a click boundary.  This procedure is called when memory is
  * needed for FORK or EXEC.
  */
-  phys_clicks mem = NO_MEM, align_clicks = 0;
+  phys_clicks mem = NO_MEM, align_clicks = 0, wanted = clicks;
 
   if(memflags & PAF_ALIGN64K) {
   	align_clicks = (64 * 1024) / CLICK_SIZE;
@@ -290,14 +290,26 @@ phys_clicks alloc_mem(phys_clicks clicks, u32_t memflags)
   	return mem;
 
   if(align_clicks) {
-  	phys_clicks o;
-  	o = mem % align_clicks;
-  	if(o > 0) {
-  		phys_clicks e;
-  		e = align_clicks - o;
-	  	free_mem(mem, e);
-	  	mem += e;
+	phys_clicks head, tail;
+
+	/*
+	 * An aligned request is served by taking align_clicks more than was
+	 * asked for and placing the result inside it.  Every page of that
+	 * headroom which the alignment did not need has to be given back
+	 * here, at both ends: the caller is told only where its own pages
+	 * begin and how many it asked for, so anything else is memory
+	 * nothing can ever free again.  Returning the pages below the
+	 * aligned start but not the ones above the end leaked the rest of
+	 * the 64 kB on every such allocation.
+	 */
+	head = (align_clicks - (mem % align_clicks)) % align_clicks;
+	if(head > 0) {
+		free_mem(mem, head);
+		mem += head;
 	}
+	tail = align_clicks - head;
+	if(tail > 0)
+		free_mem(mem + wanted, tail);
   }
 
   return mem;

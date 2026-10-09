@@ -416,7 +416,7 @@ int close_filp(struct filp * f, int may_suspend)
  * cases, this function will always return OK.  It will never return another
  * error code, for reasons explained below.
  */
-  int r, rw;
+  int r, rw, fifo;
   dev_t dev;
   struct vnode *vp;
 
@@ -483,14 +483,22 @@ int close_filp(struct filp * f, int may_suspend)
 	}
   }
 
-  /* If the inode being closed is a pipe, release everyone hanging on it. */
-  if (S_ISFIFO(vp->v_mode)) {
-	rw = (f->filp_mode & R_BIT ? VFS_WRITE : VFS_READ);
-	release(vp, rw, susp_count);
-  }
+  /* Note which end of a pipe is going, while the filp still says so. */
+  fifo = S_ISFIFO(vp->v_mode);
+  rw = (f->filp_mode & R_BIT) ? VFS_WRITE : VFS_READ;
 
-  if (--f->filp_count == 0) {
-	if (S_ISFIFO(vp->v_mode)) {
+  f->filp_count--;
+
+  /* If the inode being closed is a pipe, release everyone hanging on it.
+   * This happens after the count has been dropped, so that this filp no
+   * longer counts as a partner: what makes the other end ready is that
+   * there is nobody left to wait for, and find_filp() has to agree.
+   */
+  if (fifo)
+	release(vp, rw, susp_count);
+
+  if (f->filp_count == 0) {
+	if (fifo) {
 		/* Last reader or writer is going. Tell PFS about latest
 		 * pipe size.
 		 */

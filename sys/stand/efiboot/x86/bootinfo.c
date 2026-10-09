@@ -1,8 +1,8 @@
-/*	$NetBSD: biosmem.S,v 1.10 2016/12/04 08:21:08 maxv Exp $	*/
+/*	$NetBSD$	*/
 
 /*
- * Copyright (c) 1996
- * 	Perry E. Metzger.  All rights reserved.
+ * Copyright (c) 1997
+ *	Matthias Drochner.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -12,12 +12,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgements:
- *	This product includes software developed for the NetBSD Project
- *	by Perry E. Metzger.
- * 4. The names of the authors may not be used to endorse or promote products
- *    derived from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -32,49 +26,23 @@
  *
  */
 
-#include <machine/asm.h>
+#include "../efiboot.h"
 
-	.text
+#include "efibootx86.h"
 
-/*
- * Get mem below 1M, in kByte.
- */
-ENTRY(getbasemem)
-	pusha
+struct bootinfo *bootinfo;
 
-	call	_C_LABEL(prot_to_real)
-	.code16
+void
+bi_add(struct btinfo_common *what, int type, int size)
+{
+	what->len = size;
+	what->type = type;
 
-	int	$0x12
-	/* Zero-extend 16-bit result to 32 bits */
-	movzwl	%ax,%eax
-
-	calll	_C_LABEL(real_to_prot)
-	.code32
-
-	movl	%eax,28(%esp)
-	popa
-	ret
-
-/*
- * Get mem above 1M, in kByte.
- */
-ENTRY(getextmem1)
-	pusha
-
-	call	_C_LABEL(prot_to_real)
-	.code16
-
-	movb	$0x88,%ah
-	int	$0x15
-
-	/* Zero-extend 16-bit result to 32 bits */
-	movzwl	%ax,%eax
-
-	calll	_C_LABEL(real_to_prot)
-	.code32
-
-	movl	%eax,28(%esp)
-	popa
-	ret
-
+	if (bootinfo == NULL) {
+		return;
+	}
+	if (bootinfo->nentries >= BTINFO_MAX) {
+		panic("bootinfo too big");
+	}
+	bootinfo->entry[bootinfo->nentries++] = vtophys(what);
+}

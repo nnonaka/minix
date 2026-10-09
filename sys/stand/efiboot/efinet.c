@@ -1,4 +1,4 @@
-/*	$NetBSD: efinet.c,v 1.6 2019/03/31 22:24:41 jmcneill Exp $	*/
+/*	$NetBSD: efinet.c,v 1.9 2024/01/01 13:38:57 rin Exp $	*/
 
 /*-
  * Copyright (c) 2001 Doug Rabson
@@ -346,7 +346,15 @@ efi_net_probe(void)
 	memset(enis, 0, nhandles * sizeof(*enis));
 
 	if (efi_bootdp) {
+		/*
+		 * Either Hardware or Messaging Device Paths can be used
+		 * here, see Sec 10.4.4 of UEFI Spec 2.10. Try both.
+		 */
 		depth = efi_device_path_depth(efi_bootdp, HARDWARE_DEVICE_PATH);
+		if (depth == -1) {
+			depth = efi_device_path_depth(efi_bootdp,
+			    MESSAGING_DEVICE_PATH);
+		}
 		if (depth == 0)
 			depth = 1;
 	}

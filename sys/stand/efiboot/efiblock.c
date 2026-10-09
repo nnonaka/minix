@@ -136,12 +136,12 @@ efi_block_do_read_blockio(struct efi_block_dev *bdev, UINT64 off, void *buf,
 	blkbuf_offset = off % bdev->bio->Media->BlockSize;
 	blkbuf_size = (lba_end - lba_start + 1) * bdev->bio->Media->BlockSize;
 
-	/* Reserve room for both the alignment shift and the full transfer.
-	 * roundup2(blkbuf, IoAlign) can advance blkbuf_start by up to
-	 * IoAlign-1 bytes, so the allocation must be blkbuf_size + IoAlign-1. */
 	alloc_size = blkbuf_size;
-	if (bdev->bio->Media->IoAlign > 1)
-		alloc_size = blkbuf_size + bdev->bio->Media->IoAlign - 1;
+	if (bdev->bio->Media->IoAlign > 1) {
+		alloc_size = (blkbuf_size + bdev->bio->Media->IoAlign - 1) /
+		    bdev->bio->Media->IoAlign *
+		    bdev->bio->Media->IoAlign;
+	}
 
 	blkbuf = AllocatePool(alloc_size);
 	if (blkbuf == NULL) {
@@ -228,7 +228,7 @@ efi_block_readahead(struct efi_block_dev *bdev, UINT64 off, void *buf,
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS
+EFI_STATUS
 efi_block_read(struct efi_block_dev *bdev, UINT64 off, void *buf,
     UINTN bufsize)
 {
@@ -323,6 +323,11 @@ efi_block_find_partitions_disklabel(struct efi_block_dev *bdev,
 		bpart->type = EFI_BLOCK_PART_DISKLABEL;
 		bpart->disklabel.secsize = d.d_secsize;
 		bpart->disklabel.part = *p;
+		bpart->disklabel.labelsector = (daddr_t)start + LABELSECTOR;
+		bpart->disklabel.label.type = le16toh(d.d_type);
+		bpart->disklabel.label.checksum = le16toh(d.d_checksum);
+		memcpy(bpart->disklabel.label.packname, d.d_packname,
+		    sizeof(bpart->disklabel.label.packname));
 		efi_block_generate_hash_mbr(bpart, mbr);
 		TAILQ_INSERT_TAIL(&bdev->partitions, bpart, entries);
 	}
@@ -444,7 +449,7 @@ efi_block_find_partitions_gpt(struct efi_block_dev *bdev)
 	}
 
 	for (entry = 0; entry < le32toh(hdr.hdr_entries); entry++) {
-		memcpy(&ent, buf + (entry * le32toh(hdr.hdr_entsz)),
+		memcpy(&ent, (UINT8 *)buf + (entry * le32toh(hdr.hdr_entsz)),
 			sizeof(ent));
 		efi_block_find_partitions_gpt_entry(bdev, &hdr, &ent, entry);
 	}

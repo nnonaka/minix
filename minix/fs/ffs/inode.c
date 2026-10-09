@@ -258,6 +258,20 @@ static int is_shortlink(const struct fs *fs, u_int16_t mode, u_int64_t size,
 	size < (u_int64_t) fs->fs_maxsymlinklen && blocks == 0);
 }
 
+/*===========================================================================*
+ *                inline_symlink                                             *
+ *===========================================================================*/
+int inline_symlink(const struct inode *rip)
+{
+/* Does this inode keep its symlink target in the block-pointer area instead of
+ * block numbers?  Anything that walks di_db[]/di_ib[] must ask first.  This is
+ * the same test the on-disk conversion above makes, so the two cannot disagree
+ * about what those bytes mean.
+ */
+  return is_shortlink(&rip->i_sp->s_fs, rip->i_din.di_mode,
+	rip->i_din.di_size, rip->i_din.di_blocks);
+}
+
 static void ufs1_to_ufs2(const struct fs *fs, const struct ufs1_dinode *d1,
 	struct ufs2_dinode *d2)
 {

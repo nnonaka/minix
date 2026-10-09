@@ -33,5 +33,6 @@ void		module_init(const char *);
 void		module_foreach(void (*)(const char *));
 void		module_enable(int);
 void		module_add(const char *);
+void		module_add_glob(const char *);
 void		module_remove(const char *);
 void		module_remove_all(void);

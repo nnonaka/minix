@@ -4,9 +4,9 @@
  * Fragments occur only in the direct-block range: ffs_blksize() yields a full
  * block for every logical block >= UFS_NDADDR, so indirect-addressed blocks
  * (and all indirect metadata blocks) are always whole blocks.  Directories are
- * likewise allocated in whole blocks, subdivided into UFS_DIRBLKSIZ entry
- * chunks so that no entry ever crosses a 512-byte boundary (required for
- * fsck-clean images).
+ * allocated one UFS_DIRBLKSIZ chunk at a time (see new_block()), so that no
+ * entry ever crosses a 512-byte boundary -- required for fsck-clean images --
+ * and their last block may be a fragment like any other file's.
  */
 
 #include "fs.h"
@@ -222,7 +222,8 @@ block64_t ffs_balloc(struct inode *rip, off_t off, int size)
   /* If the file currently ends in a fragment and we are extending it into a
    * later block, that fragment must first be rounded up to a full block. */
   lastlbn = ffs_lblkno(fs, rip->i_din.di_size);
-  if (lastlbn < UFS_NDADDR && lastlbn < lbn) {
+  if (lastlbn < UFS_NDADDR && lastlbn < lbn &&
+      (block64_t) rip->i_din.di_db[lastlbn] != NO_BLOCK) {
 	osize = (int) ffs_blksize(fs, rip->i_din.di_size, lastlbn);
 	if (osize < fs->fs_bsize && osize > 0) {
 		newb = (block64_t) ffs_realloccg(rip, lastlbn,
@@ -305,37 +306,44 @@ block64_t ffs_balloc(struct inode *rip, off_t off, int size)
  *===========================================================================*/
 struct buf *new_block(struct inode *rip, off_t position)
 {
-/* Allocate and initialize a fresh directory block at the (block-aligned) byte
- * offset 'position', dividing it into empty UFS_DIRBLKSIZ entry chunks.
- * Returns the cache buffer for the first fragment, or NULL with err_code set.
+/* Allocate and initialize a fresh UFS_DIRBLKSIZ directory chunk at the (chunk-
+ * aligned) byte offset 'position', as one empty entry spanning it.  Returns the
+ * cache buffer holding that chunk -- which starts 'position' modulo the cache
+ * block size into the buffer, not necessarily at its beginning -- or NULL with
+ * err_code set.
+ *
+ * A directory grows one chunk at a time rather than one file-system block at a
+ * time, because that is how the file systems this server is handed are laid
+ * out: makefs(8) and newfs(8) both leave a directory's last block partial (a
+ * fresh directory is one chunk), so a directory's size is a multiple of
+ * UFS_DIRBLKSIZ and not of fs_bsize.  It is also how NetBSD's ufs_direnter()
+ * extends one.  Asking ffs_balloc() for a whole block at an offset that is not
+ * block-aligned cannot work at all: it sizes the request from the offset within
+ * the block, so the request would run past the end of that block.
  */
-  struct fs *fs = &rip->i_sp->s_fs;
   struct buf *bp;
   struct direct *dp;
-  block64_t base;
-  unsigned int c;
-  int i;
+  unsigned int off;
 
-  base = ffs_balloc(rip, position, fs->fs_bsize);
-  if (base == NO_BLOCK)
+  assert(position % UFS_DIRBLKSIZ == 0);
+
+  if (ffs_balloc(rip, position, UFS_DIRBLKSIZ) == NO_BLOCK)
 	return(NULL);
 
-  /* Initialize every UFS_DIRBLKSIZ chunk of the block as one empty entry. */
-  for (i = 0; i < fs->fs_frag; i++) {
-	bp = get_block(fs_dev, base + i, NO_READ);
-	memset(b_data(bp), 0, fs->fs_fsize);
-	for (c = 0; c < (unsigned int) fs->fs_fsize; c += UFS_DIRBLKSIZ) {
-		dp = (struct direct *) (b_data(bp) + c);
-		dp->d_ino = 0;
-		dp->d_reclen = UFS_DIRBLKSIZ;
-		dp->d_type = 0;
-		dp->d_namlen = 0;
-	}
-	lmfs_markdirty(bp);
-	put_block(bp);
+  /* ffs_balloc() zeroed whatever it added, and the rest of this cache block
+   * holds earlier chunks of the same directory, so read it as it is. */
+  if ((bp = get_block_map(rip, (uint64_t) position)) == NULL) {
+	err_code = EIO;
+	return(NULL);
   }
 
-  return(get_block_map(rip, position));
+  off = (unsigned int) (position % rip->i_sp->s_block_size);
+  dp = (struct direct *) (b_data(bp) + off);
+  memset(dp, 0, UFS_DIRBLKSIZ);
+  dp->d_reclen = UFS_DIRBLKSIZ;
+  lmfs_markdirty(bp);
+
+  return(bp);
 }
 
 /*===========================================================================*
@@ -402,6 +410,34 @@ static void indir_free(struct inode *rip, block64_t ind, int level, off_t first,
   }
 }
 
+/*
+ * Zero the bytes in [start, end) that are backed by allocated blocks, leaving
+ * holes as they are.  Used both to punch a range and to clear what is left of
+ * the block that survives a truncation.
+ */
+static void zero_range(struct inode *rip, off_t start, off_t end)
+{
+  struct fs *fs = &rip->i_sp->s_fs;
+  off_t pos = start;
+
+  while (pos < end) {
+	block64_t base = read_map(rip, pos, 0);
+	off_t boff = pos % fs->fs_fsize;
+	size_t n = fs->fs_fsize - boff;
+
+	if ((off_t) n > end - pos)
+		n = (size_t) (end - pos);
+	if (base != NO_BLOCK) {
+		struct buf *bp = get_block(fs_dev, base, NORMAL);
+
+		memset(b_data(bp) + boff, 0, n);
+		lmfs_markdirty(bp);
+		put_block(bp);
+	}
+	pos += n;
+  }
+}
+
 /*===========================================================================*
  *				truncate_inode				     *
  *===========================================================================*/
@@ -420,6 +456,25 @@ int truncate_inode(struct inode *rip, off_t length)
   if (S_ISCHR(rip->i_din.di_mode) || S_ISBLK(rip->i_din.di_mode) ||
       S_ISFIFO(rip->i_din.di_mode) || S_ISSOCK(rip->i_din.di_mode))
 	return(OK);
+
+  /*
+   * An inline symlink has its target in the block-pointer area and owns no
+   * blocks at all, so there is nothing to free: walking di_db[]/di_ib[] below
+   * would free the target's own bytes as if they were block numbers, which
+   * lands on whatever the text happens to spell.  The only length this can be
+   * asked for is 0, from the last unlink; NetBSD's ffs_truncate() treats the
+   * case the same way, by clearing the target and the size.
+   */
+  if (inline_symlink(rip)) {
+	if (length != 0)
+		return(EINVAL);
+	memset(rip->i_din.di_db, 0, sizeof(rip->i_din.di_db));
+	memset(rip->i_din.di_ib, 0, sizeof(rip->i_din.di_ib));
+	rip->i_din.di_size = 0;
+	rip->i_update |= CTIME | MTIME;
+	rip->i_dirt = IN_DIRTY;
+	return(OK);
+  }
 
   if (length < 0)
 	return(EINVAL);
@@ -464,15 +519,57 @@ int truncate_inode(struct inode *rip, off_t length)
 		}
 	}
 	rip->i_din.di_size = length;
+
+	/*
+	 * Zero the stale bytes between the old end of file and the end of the
+	 * block that held it.  Those bytes are allocated but were never part
+	 * of the file, and growing past them must show zeroes rather than
+	 * whatever the block last held -- which, with blocks coming straight
+	 * off the free list, is often the file that was just deleted.  Blocks
+	 * past that one are holes and read as zero by themselves, so the range
+	 * stops at the old end-of-file block; zero_range() skips anything
+	 * unallocated within it anyway.  NetBSD gets this from
+	 * ufs_balloc_range(), which zero-fills what it extends into.
+	 */
+	if (osize > 0 && ffs_blkoff(fs, osize) != 0) {
+		off_t oldlbn = ffs_lblkno(fs, osize);
+		off_t zend = (off_t) ffs_lblktosize(fs, oldlbn + 1);
+
+		if (zend > length)
+			zend = length;
+		if (zend > osize)
+			zero_range(rip, osize, zend);
+	}
+
 	rip->i_update |= CTIME | MTIME;
 	rip->i_dirt = IN_DIRTY;
 	return(OK);
   }
 
   /*
-   * Shrinking the file.  Commit the new size first, then free everything that
-   * is no longer reachable.
+   * Shrinking the file.  First zero what is left of the block that keeps the
+   * new end of file, from that end to wherever the block stops.  Those bytes
+   * are still allocated and still reachable: a truncation back up to the old
+   * size, or a write past the new end, has to find zeroes there rather than
+   * what the file used to hold.  Freeing whole blocks below is not enough --
+   * the block holding the new end is not freed.  NetBSD's ffs_truncate() does
+   * the same with ubc_zerorange(), also before it frees anything, and test50
+   * is what notices when it is missing.
+   *
+   * This reads the old size, so it has to happen before di_size is committed.
    */
+  if (S_ISREG(rip->i_din.di_mode) && ffs_blkoff(fs, length) != 0) {
+	off_t eoflbn = ffs_lblkno(fs, length);
+	off_t eoz = (off_t) ffs_lblktosize(fs, eoflbn) +
+	    (off_t) ffs_blksize(fs, osize, eoflbn);
+
+	if (eoz > osize)
+		eoz = osize;
+	if (eoz > length)
+		zero_range(rip, length, eoz);
+  }
+
+  /* Commit the new size, then free everything that is no longer reachable. */
   rip->i_din.di_size = length;
 
   /* lastblock is the highest logical block to keep (-1 if length == 0). */
@@ -533,6 +630,22 @@ int truncate_inode(struct inode *rip, off_t length)
 	}
   }
 
+  /*
+   * If the new end of a regular file landed inside a hole, materialize the
+   * EOF fragment.  ffs_balloc() and this function derive the physical size
+   * of the EOF block from di_size, so leaving the EOF block unallocated
+   * would make a later write to it under-allocate and a later truncate
+   * over-free its fragments (double-frees corrupting cs_nffree).  NetBSD's
+   * ffs_truncate() maintains the same invariant with ufs_balloc_range().
+   */
+  if (length != 0 && lbn < UFS_NDADDR && S_ISREG(rip->i_din.di_mode) &&
+      ffs_blkoff(fs, length) != 0 &&
+      (block64_t) rip->i_din.di_db[lbn] == NO_BLOCK) {
+	(void) ffs_balloc(rip, length - 1, 1);
+	if (err_code != OK)
+		return(err_code);
+  }
+
   rip->i_update |= CTIME | MTIME;
   rip->i_dirt = IN_DIRTY;
   return(OK);
@@ -547,7 +660,6 @@ int fs_trunc(ino_t ino_nr, off_t start, off_t end)
  * [start, end) by zeroing it (a minimal implementation that does not free
  * whole blocks in the interior). */
   struct inode *rip;
-  int r;
 
   if ((rip = find_inode(fs_dev, ino_nr)) == NULL)
 	return(EINVAL);
@@ -556,27 +668,10 @@ int fs_trunc(ino_t ino_nr, off_t start, off_t end)
 	return(truncate_inode(rip, start));
 
   /* Range punch: zero the affected bytes in place. */
-  {
-	struct fs *fs = &rip->i_sp->s_fs;
-	off_t pos = start;
-	r = OK;
-	while (pos < end) {
-		block64_t base = read_map(rip, pos, 0);
-		off_t boff = pos % fs->fs_fsize;
-		size_t n = fs->fs_fsize - boff;
-		if ((off_t) n > end - pos)
-			n = (size_t) (end - pos);
-		if (base != NO_BLOCK) {
-			struct buf *bp = get_block(fs_dev, base, NORMAL);
-			memset(b_data(bp) + boff, 0, n);
-			lmfs_markdirty(bp);
-			put_block(bp);
-		}
-		pos += n;
-	}
-	rip->i_update |= CTIME | MTIME;
-	rip->i_dirt = IN_DIRTY;
-  }
+  zero_range(rip, start, end);
+
+  rip->i_update |= CTIME | MTIME;
+  rip->i_dirt = IN_DIRTY;
 
   return(OK);
 }

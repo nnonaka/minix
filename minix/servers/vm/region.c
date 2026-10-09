@@ -1117,7 +1117,12 @@ int map_unmap_region(struct vmproc *vmp, struct vir_region *r,
 		USE(r,
 		r->vaddr += len;);
 
-		remslots = phys_slot(r->length);
+		/* Slots that remain after the shrink.  r->length still holds
+		 * the pre-shrink length here; using it as-is would make the
+		 * memmove below read phys_slot(len) entries past the end of
+		 * the physblocks array.
+		 */
+		remslots = phys_slot(r->length - len);
 
 		region_insert(&vmp->vm_regions_avl, r);
 

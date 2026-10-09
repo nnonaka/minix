@@ -16,7 +16,8 @@ LIBC=		# nothing
 # Make sure we override any optimization options specified by the
 # user.
 .if ${MACHINE_ARCH} == "x86_64"
-CPUFLAGS= -m32 -march=i386 -mtune=i386
+# MINIX's clang ignores -m32 and warns that it is unused.
+CPUFLAGS= ${${ACTIVE_CC} == "clang":?:-m32} -march=i386 -mtune=i386
 .else
 CPUFLAGS=  -march=i386 -mtune=i386
 .endif
@@ -43,7 +44,7 @@ LDFLAGS+=  -nostdlib
 
 # XXX
 .if ${MACHINE_ARCH} == "x86_64"
-CPPFLAGS+=-m32
+CPPFLAGS+=${${ACTIVE_CC} == "clang":?:-m32}
 LDFLAGS+=-Wl,-m,elf_i386
 LIBKERN_ARCH=i386
 KERNMISCMAKEFLAGS="LIBKERN_ARCH=i386"

@@ -33,6 +33,7 @@ struct inode *find_inode(dev_t dev, ino_t numb);
 void put_inode(struct inode *rip);
 void dup_inode(struct inode *ip);
 void update_times(struct inode *rip);
+int inline_symlink(const struct inode *rip);
 void rw_inode(struct inode *rip, int rw_flag);
 int fs_putnode(ino_t ino_nr, unsigned int count);
 void fs_seek(ino_t ino_nr);
@@ -80,7 +81,7 @@ ssize_t fs_readwrite(ino_t ino_nr, struct fsdriver_data *data, size_t bytes,
 ssize_t fs_getdents(ino_t ino_nr, struct fsdriver_data *data, size_t bytes,
 	off_t *posp);
 block64_t read_map(struct inode *rip, off_t pos, int opportunistic);
-struct buf *get_block_map(struct inode *rip, u64_t position);
+struct buf *get_block_map(struct inode *rip, uint64_t position);
 
 /* stadir.c */
 int fs_stat(ino_t ino_nr, struct stat *statbuf);

@@ -590,7 +590,7 @@ int check_sig(pid_t proc_id, int signo, int ksig)
   count = 0;
   error_code = ESRCH;
   for (rmp = &mproc[NR_PROCS-1]; rmp >= &mproc[0]; rmp--) {
-	if (!(rmp->mp_flags & IN_USE)) continue;
+	if (!LIVE_PROC(rmp)) continue;
 
 	/* Check for selection. */
 	if (proc_id > 0 && proc_id != rmp->mp_pid) continue;

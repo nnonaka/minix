@@ -218,15 +218,17 @@ static int rs_write(register tty_t *tp, int try)
 	/* While there is something to do. */
 	for (;;) {
 		ocount = buflen(rs->obuf) - rs->ocount;
+		/* Readiness probe: a write can proceed iff the output
+		 * buffer has room.  Do not clamp by tty_outleft here:
+		 * with no write in progress that is zero, which would
+		 * deny select/POLLOUT readiness on an idle line.
+		 */
+		if (try) return (ocount > 0 && !tp->tty_inhibited);
 		count = bufend(rs->obuf) - rs->ohead;
 		if (count > ocount) count = ocount;
 		if (count > tp->tty_outleft) count = tp->tty_outleft;
-		if (count == 0 || tp->tty_inhibited) {
-			if (try) return 0;
+		if (count == 0 || tp->tty_inhibited)
 			break;
-		}
-
-		if (try) return 1;
 
 		/* Copy from user space to the RS232 output buffer. */
 		if (tp->tty_outcaller == KERNEL) {

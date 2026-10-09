@@ -2,6 +2,8 @@
 
 #include "mib.h"
 
+#include <minix/ds.h>
+
 /*
  * TODO: the main feature that is missing here is a more active way to
  * determine that a particular service has died, so that its mount points can
@@ -69,6 +71,37 @@ static void mib_down(unsigned int eid)
 	/* Mark the entry itself as no longer in use. */
 	endpts[eid].endpt = NONE;
 	endpts[eid].nodes = NULL;
+}
+
+/*
+ * If the given node is a remote mount point whose owning service no
+ * longer exists (it died or was brought down without deregistering;
+ * this service receives no notification of either), unmount all of
+ * the owner's subtrees.  Return TRUE if an eviction took place, FALSE
+ * otherwise.  This allows a new service to take over mount points
+ * held by a dead predecessor (e.g., rumpnet replacing lwip).
+ */
+int mib_remote_evict_stale(struct mib_node * node)
+{
+	endpoint_t endpt;
+	unsigned int eid;
+
+	if (!(node->node_flags & CTLFLAG_REMOTE))
+		return FALSE;
+
+	eid = node->node_eid;
+	if (eid >= __arraycount(endpts) || endpts[eid].endpt == NONE)
+		return FALSE;
+
+	if (ds_retrieve_label_endpt(endpts[eid].label, &endpt) == OK &&
+	    endpt == endpts[eid].endpt)
+		return FALSE;		/* the owner is alive and well */
+
+	MIB_DEBUG_MOUNT(("MIB: evicting stale mounts of '%s'\n",
+	    endpts[eid].label));
+
+	mib_down(eid);
+	return TRUE;
 }
 
 /*

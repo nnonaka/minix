@@ -78,7 +78,7 @@ struct mproc *find_proc(pid_t lpid)
   register struct mproc *rmp;
 
   for (rmp = &mproc[0]; rmp < &mproc[NR_PROCS]; rmp++)
-	if ((rmp->mp_flags & IN_USE) && rmp->mp_pid == lpid)
+	if (LIVE_PROC(rmp) && rmp->mp_pid == lpid)
 		return(rmp);
 
   return(NULL);

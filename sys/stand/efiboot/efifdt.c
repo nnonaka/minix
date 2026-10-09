@@ -1,4 +1,4 @@
-/* $NetBSD: efifdt.c,v 1.35 2022/08/14 11:26:41 jmcneill Exp $ */
+/* $NetBSD: efifdt.c,v 1.38 2024/12/07 19:29:04 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2019 Jason R. Thorpe
@@ -56,6 +56,13 @@ static EFI_GUID FdtTableGuid = FDT_TABLE_GUID;
 #define	FDT_SPACE	(4 * 1024 * 1024)
 #define	FDT_ALIGN	(2 * 1024 * 1024)
 
+#ifdef _LP64
+#define PRIdUINTN "ld"
+#define PRIxUINTN "lx"
+#else
+#define PRIdUINTN "d"
+#define PRIxUINTN "x"
+#endif
 static void *fdt_data = NULL;
 static size_t fdt_data_size = 512*1024;
 
@@ -75,30 +82,11 @@ int
 efi_fdt_probe(void)
 {
 	EFI_STATUS status;
-	EFI_PHYSICAL_ADDRESS fdt_start;
-	u_int sz;
 
-#ifndef __minix
 	status = LibGetSystemConfigurationTable(&FdtTableGuid, &fdt_data);
 	if (EFI_ERROR(status))
 		return EIO;
-#else
-	status = LibGetSystemConfigurationTable(&FdtTableGuid, &fdt_data);
-	if (EFI_ERROR(status)) {
-		sz = EFI_SIZE_TO_PAGES(FDT_SPACE);
-		status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, 
-			EfiLoaderData, sz, &fdt_start);
-		if (EFI_ERROR(status))
-			panic("%s: AllocatePages() failed: %d page(s): %" PRIxMAX,
-			    __func__, sz, (uintmax_t)status);
-		fdt_data = (void *)(uintptr_t)fdt_start;
-		fdt_create_empty_tree(fdt_data, FDT_SPACE);
-	}
-#endif
 
-#ifdef EFIBOOT_DEBUG
-	Print(L"FDT Table      : 0x%" PRIxEFIPTR "\n", fdt_data);
-#endif
 	if (fdt_check_header(fdt_data) != 0) {
 		fdt_data = NULL;
 		return EINVAL;
@@ -194,15 +182,11 @@ efi_fdt_init(u_long addr, u_long len)
 {
 	int error;
 
-	printf("efi_fdt_init: addr=%lx, len=%lx\n", addr, len);
 	error = fdt_open_into(fdt_data, (void *)addr, len);
 	if (error < 0)
 		panic("fdt_open_into failed: %d", error);
 
 	fdt_data = (void *)addr;
-	if (fdt_check_header(fdt_data) != 0) {
-		printf("efi_fdt_init: check failed\n");
-	}
 }
 
 void
@@ -238,7 +222,7 @@ efi_fdt_show(void)
 	printf("]\n");
 }
 
-int
+static int
 efi_fdt_chosen(void)
 {
 	int chosen;
@@ -252,96 +236,6 @@ efi_fdt_chosen(void)
 		panic("FDT: Failed to create " FDT_CHOSEN_NODE_PATH " node");
 
 	return chosen;
-}
-
-const void *
-efi_fdt_get_prop(int off, const char *prop, int *plen)
-{
-	return fdt_getprop(fdt_data, off, prop, plen);
-}
-
-const char *
-efi_fdt_get_string(int off, const char *prop)
-{
-	if (strcmp(prop, "name") == 0)
-		return fdt_get_name(fdt_data, off, NULL);
-	else
-		return fdt_getprop(fdt_data, off, prop, NULL);
-}
-
-static int
-efi_of_getproplen(int off, const char *prop)
-{
-	const char *name;
-	const void *val;
-	int len;
-
-	if (strcmp(prop, "name") == 0) {
-		val = fdt_get_name(fdt_data, off, &len);
-		if (val) {
-			const char *p = strchr(val, '@');
-			if (p) {
-				len = (uintptr_t)p - (uintptr_t)val + 1;
-			} else {
-				len += 1;
-			}
-		}
-	} else {
-		off = fdt_first_property_offset(fdt_data, off);
-		if (off < 0) {
-			return -1;
-		}
-		while (off >= 0) {
-			val = fdt_getprop_by_offset(fdt_data, off, &name, &len);
-			if (val == NULL) {
-				return -1;
-			}
-			if (strcmp(name, prop) == 0) {
-				break;
-			}
-			off = fdt_next_property_offset(fdt_data, off);
-			if (off < 0) {
-				return -1;
-			}
-		}
-	}
-	if (val == NULL) {
-		return -1;
-	}
-
-	return len;
-}
-
-const char *
-efi_fdt_get_string_index(int off, const char *prop, u_int index)
-{
-	const char *names;
-	int len;
-
-	if ((len = efi_of_getproplen(off, prop)) < 0)
-		return NULL;
-
-	names = efi_fdt_get_string(off, prop);
-
-	return strlist_string(names, len, index);
-}
-
-int
-efi_fdt_get_index(int off, const char *prop, const char *name, u_int *idx)
-{
-	const char *p;
-	int len, index;
-
-	p = efi_fdt_get_prop(off, prop, &len);
-	if (p == NULL || len <= 0)
-		return -1;
-
-	index = strlist_index(p, len, name);
-	if (index == -1)
-		return -1;
-
-	*idx = index;
-	return 0;
 }
 
 void
@@ -622,6 +516,101 @@ efi_fdt_module(const char *module_name, u_long module_addr, u_long module_size)
 	fdt_appendprop_u64(fdt_data, chosen, "netbsd,modules", module_size);
 }
 
+static const char *
+efi_fdt_get_string(int off, const char *prop)
+{
+	if (strcmp(prop, "name") == 0)
+		return fdt_get_name(fdt_data, off, NULL);
+	else
+		return fdt_getprop(fdt_data, off, prop, NULL);
+}
+
+static int
+efi_of_getproplen(int off, const char *prop)
+{
+	const char *name;
+	const void *val;
+	int len;
+
+	if (strcmp(prop, "name") == 0) {
+		val = fdt_get_name(fdt_data, off, &len);
+		if (val) {
+			const char *p = strchr(val, '@');
+			if (p) {
+				len = (uintptr_t)p - (uintptr_t)val + 1;
+			} else {
+				len += 1;
+			}
+		}
+	} else {
+		off = fdt_first_property_offset(fdt_data, off);
+		if (off < 0) {
+			return -1;
+		}
+		while (off >= 0) {
+			val = fdt_getprop_by_offset(fdt_data, off, &name, &len);
+			if (val == NULL) {
+				return -1;
+			}
+			if (strcmp(name, prop) == 0) {
+				break;
+			}
+			off = fdt_next_property_offset(fdt_data, off);
+			if (off < 0) {
+				return -1;
+			}
+		}
+	}
+	if (val == NULL) {
+		return -1;
+	}
+
+	return len;
+}
+
+static const char *
+efi_fdt_get_string_index(int off, const char *prop, u_int index)
+{
+	const char *names;
+	int len;
+
+	if ((len = efi_of_getproplen(off, prop)) < 0)
+		return NULL;
+
+	names = efi_fdt_get_string(off, prop);
+
+	return strlist_string(names, len, index);
+}
+
+/* pass out module information */
+void
+efi_fdt_module_foreach(void (*fn)(const char *, const uint64_t, const uint64_t, void *, void *), void *p1, void *p2)
+{
+	int chosen;
+	const char *module_name;
+	const uint64_t *data;
+	int dlen;
+	u_int index;
+
+	chosen = efi_fdt_chosen();
+	if (chosen == -1)
+		return;
+	data = fdt_getprop(fdt_data, chosen, "netbsd,modules", &dlen);
+	if (data == NULL)
+		return;
+		
+	for (index = 0; index < dlen / 16; index++, data += 2) {
+		module_name = efi_fdt_get_string_index(chosen,
+		    "netbsd,module-names", index);
+		if (module_name == NULL)
+			break;
+
+		const uint64_t addr = be64dec(data + 0);
+		const uint64_t size = be64dec(data + 1);
+		fn(module_name, addr, size, p1, p2);
+	}
+}
+
 static void
 apply_overlay(const char *path, void *dtbo)
 {
@@ -678,12 +667,9 @@ load_module(const char *module_name)
 	u_long size;
 	char path[PATH_MAX];
 
-#ifndef __minix
 	snprintf(path, sizeof(path), "%s/%s/%s.kmod", module_prefix,
 	    module_name, module_name);
-#else
-	snprintf(path, sizeof(path), "%s", module_name);
-#endif
+
 	if (load_file(path, 0, false, &addr, &size) != 0 || addr == 0 || size == 0)
 	    return;
 
@@ -705,15 +691,21 @@ load_modules(const char *kernel_name)
  * Prepare kernel arguments and shutdown boot services.
  */
 int
-arch_prepare_boot(const char *fname, const char *args, u_long *marks)
+efi_fdt_prepare_boot(const char *fname, const char *args, u_long *marks)
 {
+	int error;
+
 	load_file(get_initrd_path(), 0, false, &initrd_addr, &initrd_size);
 	load_file(get_dtb_path(), 0, false, &dtb_addr, &dtb_size);
 
+	error = efi_md_prepare_boot(fname, args, marks);
+	if (error) {
+		return error;
+	}
 #ifdef EFIBOOT_ACPI
 	/* ACPI support only works for little endian kernels */
 	if (efi_acpi_available() && netbsd_elf_data == ELFDATA2LSB) {
-		int error = efi_fdt_create_acpifdt();
+		error = efi_fdt_create_acpifdt();
 		if (error != 0) {
 			return error;
 		}
@@ -733,9 +725,7 @@ arch_prepare_boot(const char *fname, const char *args, u_long *marks)
 		load_file(get_rndseed_path(), 0, false,
 		    &rndseed_addr, &rndseed_size);
 
-#ifndef __minix
 		efi_fdt_init((marks[MARK_END] + FDT_ALIGN - 1) & -FDT_ALIGN, FDT_ALIGN);
-#endif
 		load_modules(fname);
 		load_fdt_overlays();
 		efi_fdt_initrd(initrd_addr, initrd_size);
@@ -748,9 +738,7 @@ arch_prepare_boot(const char *fname, const char *args, u_long *marks)
 		efi_fdt_memory_map();
 	}
 
-#ifndef EFIBOOT_MULTIBOOT2
 	efi_cleanup();
-#endif
 
 	if (efi_fdt_size() > 0) {
 		efi_fdt_fini();
@@ -763,7 +751,7 @@ arch_prepare_boot(const char *fname, const char *args, u_long *marks)
  * Free memory after a failed boot.
  */
 void
-arch_cleanup_boot(void)
+efi_fdt_cleanup_boot(void)
 {
 	if (rndseed_addr) {
 		uefi_call_wrapper(BS->FreePages, 2, rndseed_addr, EFI_SIZE_TO_PAGES(rndseed_size));
@@ -783,9 +771,31 @@ arch_cleanup_boot(void)
 }
 
 size_t
-arch_alloc_size(void)
+efi_fdt_alloc_size(void)
 {
 	return FDT_SPACE;
+}
+
+/*
+ * Native NetBSD boot hooks (exec.c); on FDT platforms the kernel
+ * hand-off state is the device tree.
+ */
+size_t
+efi_md_boot_alloc_size(const char *fname)
+{
+	return efi_fdt_alloc_size();
+}
+
+int
+efi_md_prepare_netbsd(const char *fname, const char *args, u_long *marks)
+{
+	return efi_fdt_prepare_boot(fname, args, marks);
+}
+
+void
+efi_md_cleanup_boot(void)
+{
+	efi_fdt_cleanup_boot();
 }
 
 #ifdef EFIBOOT_ACPI
@@ -829,8 +839,9 @@ efi_fdt_create_acpifdt(void)
 
 #ifdef EFIBOOT_RUNTIME_ADDRESS
 static uint64_t
-efi_fdt_runtime_alloc_va(uint64_t npages)
+efi_fdt_runtime_alloc_va(uint64_t pa, uint64_t npages)
 {
+#if EFIBOOT_RUNTIME_ADDRESS != 0
 	static uint64_t va = EFIBOOT_RUNTIME_ADDRESS;
 	static uint64_t sz = EFIBOOT_RUNTIME_SIZE;
 	uint64_t nva;
@@ -845,10 +856,13 @@ efi_fdt_runtime_alloc_va(uint64_t npages)
 	sz -= (npages * EFI_PAGE_SIZE);
 
 	return nva;
+#else
+	return pa;
+#endif
 }
 
 void
-arch_set_virtual_address_map(EFI_MEMORY_DESCRIPTOR *memmap, UINTN nentries,
+efi_fdt_set_virtual_address_map(EFI_MEMORY_DESCRIPTOR *memmap, UINTN nentries,
     UINTN mapkey, UINTN descsize, UINT32 descver)
 {
 	EFI_MEMORY_DESCRIPTOR *md, *vmd, *vmemmap;
@@ -870,7 +884,8 @@ arch_set_virtual_address_map(EFI_MEMORY_DESCRIPTOR *memmap, UINTN nentries,
 			continue;
 		}
 
-		md->VirtualStart = efi_fdt_runtime_alloc_va(md->NumberOfPages);
+		md->VirtualStart =
+		    efi_fdt_runtime_alloc_va(md->PhysicalStart, md->NumberOfPages);
 
 		switch (md->Type) {
 		case EfiRuntimeServicesCode:

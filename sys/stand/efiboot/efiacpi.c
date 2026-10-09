@@ -33,6 +33,18 @@
 #include "efiacpi.h"
 #include "smbios.h"
 
+struct acpi_rdsp {
+	char signature[8];
+	uint8_t checksum;
+	char oemid[6];
+	uint8_t revision;
+	uint32_t rsdtphys;
+	uint32_t length;
+	uint64_t xsdtphys;
+	uint8_t extcsum;
+	uint8_t reserved[3];
+};
+
 static EFI_GUID Acpi20TableGuid = ACPI_20_TABLE_GUID;
 static EFI_GUID Smbios3TableGuid = SMBIOS3_TABLE_GUID;
 static EFI_GUID SmbiosTableGuid = SMBIOS_TABLE_GUID;
@@ -78,6 +90,14 @@ void *
 efi_acpi_root(void)
 {
 	return acpi_root;
+}
+
+uint32_t
+efi_acpi_length(void)
+{
+    if (acpi_root != NULL && acpi_enabled)
+        return ((struct acpi_rdsp *)acpi_root)->length;
+    return 0;
 }
 
 void *

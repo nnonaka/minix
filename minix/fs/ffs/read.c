@@ -112,13 +112,27 @@ static int rw_chunk(struct inode *rip, off_t position, unsigned off,
   block64_t b;
   dev_t dev = rip->i_dev;
   ino_t ino = rip->i_num;
-  u64_t ino_off = rounddown(position, block_size);
+  uint64_t ino_off = rounddown(position, block_size);
   int r, getmode;
+  static char wbuf[65536];	/* single-threaded server; >= max fs_fsize */
 
   if (call == FSC_WRITE) {
+	block64_t base;
+
+	/* Fetch the user data BEFORE allocating.  The copy can fail with
+	 * EFAULT as part of the normal VM grant-fault protocol (VFS resolves
+	 * the fault and retries the whole call); if that happened after
+	 * ffs_balloc had extended the file, the inode would be left with a
+	 * block allocated beyond di_size, which a later ffs_balloc would
+	 * mis-size (fragment bookkeeping corruption and double frees).
+	 */
+	assert(chunk <= sizeof(wbuf));
+	if ((r = fsdriver_copyin(data, buf_off, wbuf, chunk)) != OK)
+		return(r);
+
 	/* Make sure the block holding this position is allocated (and large
 	 * enough); ffs_balloc zeroes freshly allocated blocks. */
-	block64_t base = ffs_balloc(rip, position, (int) chunk);
+	base = ffs_balloc(rip, position, (int) chunk);
 	if (base == NO_BLOCK)
 		return(err_code);
 	b = base + (block64_t) (ffs_blkoff(fs, position) >> fs->fs_fshift);
@@ -147,9 +161,9 @@ static int rw_chunk(struct inode *rip, off_t position, unsigned off,
   if (call == FSC_READ) {
 	r = fsdriver_copyout(data, buf_off, b_data(bp) + off, chunk);
   } else if (call == FSC_WRITE) {
-	r = fsdriver_copyin(data, buf_off, b_data(bp) + off, chunk);
-	if (r == OK)
-		lmfs_markdirty(bp);
+	memcpy(b_data(bp) + off, wbuf, chunk);
+	lmfs_markdirty(bp);
+	r = OK;
   } else {
 	r = OK;			/* FSC_PEEK: block is now resident in the cache */
   }
@@ -255,7 +269,7 @@ block64_t read_map(struct inode *rip, off_t position, int opportunistic)
 /*===========================================================================*
  *				get_block_map				     *
  *===========================================================================*/
-struct buf *get_block_map(struct inode *rip, u64_t position)
+struct buf *get_block_map(struct inode *rip, uint64_t position)
 {
 /* Return the cache buffer holding the (block-aligned) file position, or NULL
  * for a hole.  Used to walk directory blocks, which never contain holes.
@@ -321,7 +335,7 @@ ssize_t fs_getdents(ino_t ino_nr, struct fsdriver_data *data, size_t bytes,
   for (chunk_pos = rounddown(pos, UFS_DIRBLKSIZ); chunk_pos < dir_size;
        chunk_pos += UFS_DIRBLKSIZ) {
 	/* Directories have no holes, so the block is always present. */
-	bp = get_block_map(rip, (u64_t) chunk_pos);
+	bp = get_block_map(rip, (uint64_t) chunk_pos);
 	assert(bp != NULL);
 
 	for (coff = 0; coff < UFS_DIRBLKSIZ; coff += reclen) {

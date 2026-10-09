@@ -30,13 +30,13 @@
 #define	_MACHINE_ELF_H_ 1
 
 /*
- * ELF definitions for the i386 architecture.
+ * ELF definitions for the x86_64 architecture.
  */
 
 /* Define "machine" characteristics */
-#define	ELF_TARG_CLASS	ELFCLASS32
+#define	ELF_TARG_CLASS	ELFCLASS64
 #define	ELF_TARG_DATA	ELFDATA2LSB
-#define	ELF_TARG_MACH	EM_386
+#define	ELF_TARG_MACH	EM_X86_64
 #define	ELF_TARG_VER	1
 
 #endif /* !_MACHINE_ELF_H_ */

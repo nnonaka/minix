@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <minix/vfsif.h>
 #include <minix/bdev.h>
+#include <machine/param.h>
+#include <machine/vmparam.h>
 
 /*===========================================================================*
  *				fs_mount				     *
@@ -21,7 +23,7 @@ int fs_mount(dev_t dev, unsigned int flags, struct fsdriver_node *root_node,
   struct inode *root_ip;
   struct fs *fs;
   int r, readonly;
-  u64_t freefrags;
+  uint64_t freefrags;
 
   fs_dev = dev;
   readonly = (flags & REQ_RDONLY) ? 1 : 0;
@@ -51,10 +53,22 @@ int fs_mount(dev_t dev, unsigned int flags, struct fsdriver_node *root_node,
   /* The cache block size is the fragment size; report block usage in those
    * units so the VM second-level cache can be sized correctly.
    */
+  /* Enable the VM (inode-keyed) cache: mmap support -- which the
+   * dynamically linked userland depends on for exec -- requires
+   * publishing cache pages to VM.  This must be set before
+   * lmfs_set_blocksize(), which latches the decision (and itself
+   * requires page-multiple cache blocks, so a file system with
+   * sub-page fragments still runs without the VM cache).
+   * Caveat: the write path's fragment reallocation moves data between
+   * device blocks; until it explicitly forgets the affected VM pages,
+   * writing to a file that is also mmapped can leave stale data in
+   * the VM cache (TODO). */
+  lmfs_may_use_vmcache(1);
+
   lmfs_set_blocksize(superblock->s_block_size);
-  freefrags = (u64_t) fs->fs_cstotal.cs_nbfree * fs->fs_frag +
-	(u64_t) fs->fs_cstotal.cs_nffree;
-  lmfs_set_blockusage((u64_t) fs->fs_size, (u64_t) fs->fs_size - freefrags);
+  freefrags = (uint64_t) fs->fs_cstotal.cs_nbfree * fs->fs_frag +
+	(uint64_t) fs->fs_cstotal.cs_nffree;
+  lmfs_set_blockusage((uint64_t) fs->fs_size, (uint64_t) fs->fs_size - freefrags);
 
   /* Get the root inode of the mounted file system. */
   if ((root_ip = get_inode(fs_dev, ROOT_INODE)) == NULL) {

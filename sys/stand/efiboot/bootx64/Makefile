@@ -13,26 +13,24 @@ EFIBOOT_ACPI=	yes
 EFIBOOT_FDT=	yes
 EFIBOOT_MULTIBOOT2=	yes
 
+.PATH:		${.CURDIR}/../x86
 EXTRA_SOURCES=	efibootx64.c
+EXTRA_SOURCES+=	efibootx86.c bootinfo.c efimemory.c
 EXTRA_SOURCES+=	startprog64.S
 EXTRA_SOURCES+=	multiboot64.S
 
 COPTS+=		-mno-red-zone
 CPPFLAGS+=	-DEFI_FUNCTION_WRAPPER
+CPPFLAGS+=	-DEFIBOOT_X86
 
 CPPFLAGS+=	-DEFIBOOT_ALLOCATE_MAX_ADDRESS=0x100000000ULL
 CFLAGS+=	-DACPI_64BIT_PHYSICAL_ADDRESS
 CFLAGS+=	-DEFIBOOT_ALIGN=0x200000
-CFLAGS+=	-DEFIBOOT_MODULE_MACHINE=\"x86_64\"
+CFLAGS+=	-DEFIBOOT_MODULE_MACHINE=\"amd64\"
 
 CWARNFLAGS.clang+=	-Wno-unknown-warning-option
 
 .include "${.CURDIR}/../Makefile.efiboot"
-
-# MINIX cross-objcopy lacks PE/COFF support; override after bsd includes
-.if defined(__MINIX)
-OBJCOPY= objcopy
-.endif
 
 release: check_RELEASEDIR
 	${HOST_INSTALL_FILE} -m ${BINMODE} ${PROG} \

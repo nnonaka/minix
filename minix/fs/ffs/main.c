@@ -51,11 +51,9 @@ static int sef_cb_init_fresh(int UNUSED(type), sef_init_info_t *UNUSED(info))
 {
 /* Initialize the file server. */
 
-  /* The VM second-level (inode-keyed) cache is disabled: the fragment
-   * reallocation done by the write path moves data between device blocks, and
-   * device-block-keyed caching keeps that coherent without per-block VM cache
-   * invalidation. */
-  lmfs_may_use_vmcache(0);
+  /* Whether the VM second-level (inode-keyed) cache can be used is
+   * decided at mount time, when the block (fragment) size is known;
+   * see fs_mount(). */
 
   init_inode_cache();
 
